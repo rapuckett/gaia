@@ -31,8 +31,7 @@ final class NotificationService: UNNotificationServiceExtension {
     }
     let payload: PushPayload
     do {
-      let plain = try PushCrypto.open(ciphertext: sealed, nonce: nonce, keys: try PushKeychain.allKeys())
-      payload = try PushPayload(json: plain)
+      payload = try PushCrypto.openFresh(ciphertext: sealed, nonce: nonce)
     } catch {
       // Never log the payload: only which step failed.
       Self.log.error("Couldn't open a push (\(String(describing: type(of: error)), privacy: .public)); showing the generic alert.")

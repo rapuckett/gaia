@@ -6,7 +6,7 @@ package ai.amd.gaia.push
 import org.json.JSONException
 import org.json.JSONObject
 
-/** The decrypted payload, `{v:1, kind, params, route, session_id?, approval_id?, badge}`; its route rules match src/features/push/pushRoutes.ts. */
+/** The decrypted payload, `{v:1, kind, params, route, session_id?, approval_id?, badge, ts, seq}`, space-padded; its route rules match src/features/push/pushRoutes.ts. */
 internal data class PushPayload(
   val kind: String,
   val chatTitle: String?,
@@ -16,6 +16,10 @@ internal data class PushPayload(
   val route: String,
   val sessionId: String?,
   val badge: Int?,
+  /** The PC's counter for this phone, only ever increasing. */
+  val seq: Long,
+  /** When the PC sent it, unix milliseconds; for display only. */
+  val ts: Long?,
 ) {
   companion object {
     private val KINDS = setOf("approval", "finished", "failed", "needs_you", "badge")
@@ -26,8 +30,9 @@ internal data class PushPayload(
 
     /** Null for anything that isn't a version-1 payload of a known kind. */
     fun parse(bytes: ByteArray): PushPayload? {
+      // The PC pads the JSON with trailing spaces to a size bucket.
       val root = try {
-        JSONObject(String(bytes, Charsets.UTF_8))
+        JSONObject(String(bytes, Charsets.UTF_8).trimEnd(' '))
       } catch (e: JSONException) {
         return null
       }
@@ -37,6 +42,7 @@ internal data class PushPayload(
       val params = root.optJSONObject("params") ?: JSONObject()
       val sessionId = text(root, "session_id")
       val badge = if (root.has("badge")) root.optInt("badge", -1).takeIf { it in 0..9999 } else null
+      val seq = whole(root, "seq") ?: return null
       return PushPayload(
         kind,
         text(params, "chat_title"),
@@ -46,7 +52,16 @@ internal data class PushPayload(
         safeRoute(root.optString("route").ifEmpty { null }, sessionId),
         sessionId,
         badge,
+        seq,
+        whole(root, "ts"),
       )
+    }
+
+    /** A non-negative whole JSON number as a Long; null for anything else. */
+    private fun whole(obj: JSONObject, name: String): Long? {
+      val value = obj.opt(name)
+      if (value !is Number || value is Double && value != Math.floor(value)) return null
+      return value.toLong().takeIf { it >= 0 }
     }
 
     /** `/chat/<id>`, `/approvals/<id>` (opened as its chat) or `/`; anything else opens `/`. */

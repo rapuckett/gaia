@@ -34,10 +34,11 @@ internal object PushCrypto {
   }
 
   /** Tries each paired PC's key; the GCM tag tells them apart. Null when none opens it. */
-  fun open(ciphertext: String, nonce: String, records: List<PushRecord>): ByteArray? {
+  fun open(ciphertext: String, nonce: String, records: List<PushRecord>): Pair<PushRecord, ByteArray>? {
     for (record in records) {
+      if (record.key.isEmpty()) continue
       try {
-        return open(ciphertext, nonce, record.key, record.handle)
+        return record to open(ciphertext, nonce, record.key, record.handle)
       } catch (e: GeneralSecurityException) {
         continue
       } catch (e: IllegalArgumentException) {

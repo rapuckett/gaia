@@ -3,7 +3,8 @@
 
 import Foundation
 
-/// The decrypted payload, `{v:1, kind, params, route, session_id?, approval_id?, badge}`; its route rules match src/features/push/pushRoutes.ts.
+/// The decrypted payload, `{v:1, kind, params, route, session_id?, approval_id?, badge, ts, seq}`, space-padded;
+/// its route rules match src/features/push/pushRoutes.ts.
 struct PushPayload {
   let kind: String
   let chatTitle: String?
@@ -14,14 +15,24 @@ struct PushPayload {
   let sessionId: String?
   let approvalId: String?
   let badge: Int?
+  /// The PC's counter for this phone, only ever increasing; about 1.8e12, so 64-bit.
+  let seq: Int64
+  /// When the PC sent it, unix milliseconds; for display only.
+  let ts: Int64?
 
   static let kinds: Set<String> = ["approval", "finished", "failed", "needs_you", "badge"]
 
   init(json data: Data) throws {
-    guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+    // The PC pads the JSON with trailing spaces to a size bucket.
+    var end = data.endIndex
+    while end > data.startIndex, data[data.index(before: end)] == 0x20 { end = data.index(before: end) }
+    guard let root = try JSONSerialization.jsonObject(with: data[data.startIndex..<end]) as? [String: Any],
       root["v"] as? Int == Int(PushCrypto.version),
-      let kind = root["kind"] as? String, PushPayload.kinds.contains(kind)
+      let kind = root["kind"] as? String, PushPayload.kinds.contains(kind),
+      let seq = PushPayload.whole(root["seq"])
     else { throw PushCryptoError.malformed }
+    self.seq = seq
+    ts = PushPayload.whole(root["ts"])
     let params = root["params"] as? [String: Any] ?? [:]
     func text(_ value: Any?) -> String? {
       guard let s = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
@@ -36,6 +47,14 @@ struct PushPayload {
     approvalId = text(root["approval_id"])
     route = PushPayload.safeRoute(root["route"] as? String, sessionId: sessionId)
     if let n = root["badge"] as? Int, (0...9999).contains(n) { badge = n } else { badge = nil }
+  }
+
+  /// A non-negative whole JSON number as 64 bits; nil for anything else (a fraction, a bool, a string).
+  static func whole(_ value: Any?) -> Int64? {
+    guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+    let double = number.doubleValue
+    guard double >= 0, double < 9.0e15, double == double.rounded() else { return nil }
+    return number.int64Value
   }
 
   /// `/chat/<id>`, `/approvals/<id>` (opened as its chat) or `/`; anything else opens `/`.

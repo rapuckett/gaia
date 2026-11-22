@@ -14,19 +14,25 @@ public class GaiaPushModule: Module {
     AsyncFunction("save") { (pcId: String, handle: String, secret: String, sendToken: String, key: String) throws in
       try guarded("save") {
         try PushKeychain.saveKey(pcId, PushKeychain.Key(handle: handle, key: key))
-        try PushKeychain.saveCredentials(pcId, PushKeychain.Credentials(secret: secret, sendToken: sendToken))
+        try PushKeychain.saveCredentials(pcId, PushKeychain.Credentials(handle: handle, secret: secret, sendToken: sendToken))
       }
     }
 
     AsyncFunction("load") { (pcId: String) throws -> [String: String]? in
       try guarded("read") {
-        guard let entry = try PushKeychain.key(pcId), let credentials = try PushKeychain.credentials(pcId) else { return nil }
-        return ["handle": entry.handle, "secret": credentials.secret, "sendToken": credentials.sendToken, "key": entry.key]
+        guard let credentials = try PushKeychain.credentials(pcId) else { return nil }
+        // An empty key: the PC was unpaired and its handle still waits to be deleted at the relay.
+        let key = try PushKeychain.key(pcId)?.key ?? ""
+        return ["handle": credentials.handle, "secret": credentials.secret, "sendToken": credentials.sendToken, "key": key]
       }
     }
 
     AsyncFunction("pcIds") { () throws -> [String] in
       try guarded("read") { try PushKeychain.pcIds() }
+    }
+
+    AsyncFunction("dropKey") { (pcId: String) throws in
+      try guarded("delete") { try PushKeychain.deleteKey(pcId) }
     }
 
     AsyncFunction("remove") { (pcId: String) throws in

@@ -17,8 +17,12 @@ import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONException
 import org.json.JSONObject
 
-/** One paired PC's push handle, relay secret (kept here), send token (given to the PC) and payload key. */
-internal data class PushRecord(val pcId: String, val handle: String, val secret: String, val sendToken: String, val key: String)
+/**
+ * One paired PC's push handle, relay secret (kept here), send token (given to the PC) and payload key. An empty key
+ * means the PC was unpaired and the handle still waits to be deleted at the relay. `lastSeq` is the newest payload
+ * `seq` accepted under this key (about 1.8e12, so a Long); null for a key that has opened none.
+ */
+internal data class PushRecord(val pcId: String, val handle: String, val secret: String, val sendToken: String, val key: String, val lastSeq: Long? = null)
 
 /**
  * One sealed file per paired PC in noBackupFilesDir, under an Android Keystore key that never leaves this phone.
@@ -31,6 +35,7 @@ internal class PushVault(context: Context) {
   fun save(record: PushRecord) = guard("save") {
     if (!dir.isDirectory && !dir.mkdirs()) throw IOException("couldn't create ${dir.name}")
     val json = JSONObject().put("handle", record.handle).put("secret", record.secret).put("send_token", record.sendToken).put("key", record.key)
+    if (record.lastSeq != null) json.put("last_seq", record.lastSeq)
     val cipher = Cipher.getInstance(TRANSFORMATION)
     cipher.init(Cipher.ENCRYPT_MODE, keystoreKey())
     cipher.updateAAD(aad(record.pcId))
@@ -56,6 +61,23 @@ internal class PushVault(context: Context) {
     (dir.listFiles { f -> f.name.endsWith(SUFFIX) } ?: emptyArray()).map { open(it, idOf(it)) }
   }
 
+  /** Takes a payload's `seq` if it's newer than the last accepted under that PC's current key, and records it. False for a replay. */
+  @Synchronized
+  fun accept(record: PushRecord, seq: Long): Boolean {
+    val current = load(record.pcId) ?: return false
+    if (current.key != record.key) return false
+    if (current.lastSeq != null && seq <= current.lastSeq) return false
+    save(current.copy(lastSeq = seq))
+    return true
+  }
+
+  /** Stops this phone opening that PC's pushes, keeping the relay credentials until the handle is deleted there. */
+  @Synchronized
+  fun dropKey(pcId: String) {
+    val record = load(pcId) ?: return
+    save(record.copy(key = "", lastSeq = null))
+  }
+
   @Synchronized
   fun remove(pcId: String) = guard("delete") { delete(fileFor(pcId)) }
 
@@ -69,7 +91,8 @@ internal class PushVault(context: Context) {
     cipher.init(Cipher.DECRYPT_MODE, keystoreKey(), GCMParameterSpec(TAG_BITS, bytes, 1, IV_BYTES))
     cipher.updateAAD(aad(pcId))
     val json = JSONObject(String(cipher.doFinal(bytes, 1 + IV_BYTES, bytes.size - 1 - IV_BYTES), Charsets.UTF_8))
-    return PushRecord(pcId, json.getString("handle"), json.getString("secret"), json.getString("send_token"), json.getString("key"))
+    val lastSeq = if (json.has("last_seq")) json.getLong("last_seq") else null
+    return PushRecord(pcId, json.getString("handle"), json.getString("secret"), json.getString("send_token"), json.getString("key"), lastSeq)
   }
 
   // The PC id, hex-encoded, names the file, so all() knows each file's AAD; ids aren't secret.

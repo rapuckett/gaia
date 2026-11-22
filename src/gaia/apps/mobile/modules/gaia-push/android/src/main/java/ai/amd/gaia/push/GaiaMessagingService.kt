@@ -26,11 +26,26 @@ class GaiaMessagingService : FirebaseMessagingService() {
   override fun onMessageReceived(message: RemoteMessage) {
     val sealed = message.data["c"] ?: return
     val nonce = message.data["n"] ?: return
-    val payload = try {
-      PushCrypto.open(sealed, nonce, PushVault(this).all())?.let(PushPayload::parse)
+    val vault = PushVault(this)
+    val opened = try {
+      PushCrypto.open(sealed, nonce, vault.all())
     } catch (e: PushException) {
       Log.e(TAG, "Couldn't read this phone's push keys (${e.code}); showing the generic alert.")
       null
+    }
+    val payload = opened?.let { PushPayload.parse(it.second) }
+    if (opened != null && payload != null) {
+      val fresh = try {
+        vault.accept(opened.first, payload.seq)
+      } catch (e: PushException) {
+        Log.e(TAG, "Couldn't record a push as seen (${e.code}); not showing it.")
+        false
+      }
+      // A replayed push shows nothing.
+      if (!fresh) {
+        Log.w(TAG, "Dropped a push whose seq isn't newer than the last one from its PC.")
+        return
+      }
     }
     if (payload == null) {
       Log.w(TAG, "A push didn't open with any paired PC's key; showing the generic alert.")

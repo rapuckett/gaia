@@ -39,6 +39,8 @@ class GaiaPushModule : Module() {
 
     AsyncFunction("pcIds") { guarded { vault().all().map { it.pcId } } }
 
+    AsyncFunction("dropKey") { pcId: String -> guarded { vault().dropKey(pcId) } }
+
     AsyncFunction("remove") { pcId: String -> guarded { vault().remove(pcId) } }
 
     AsyncFunction("removeAll") { guarded { vault().removeAll() } }

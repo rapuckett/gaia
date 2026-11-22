@@ -20,9 +20,12 @@ export interface GaiaPushNative {
     /** False in a build without push (no relay URL at build time). */
     readonly available: boolean;
     save(pcId: string, handle: string, secret: string, sendToken: string, key: string): Promise<void>;
+    /** `key` is empty for a PC that was unpaired whose handle still waits to be deleted at the relay. */
     load(pcId: string): Promise<PushSecrets | null>;
     /** The PCs that have a push registration on this phone. */
     pcIds(): Promise<string[]>;
+    /** Stops this phone opening that PC's pushes now, keeping the relay credentials until the handle is deleted there. */
+    dropKey(pcId: string): Promise<void>;
     remove(pcId: string): Promise<void>;
     removeAll(): Promise<void>;
     /** The app's own language for the iOS notification extension, or null to follow the phone; Android ignores it. */

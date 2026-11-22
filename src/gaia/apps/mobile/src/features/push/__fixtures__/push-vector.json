@@ -1,9 +1,10 @@
 {
-  "_comment": "Test-only values. AES-256-GCM; aad = utf8(handle) || 0x01; ciphertext = ct || 16-byte tag; all base64url without padding. See pushCrypto.ts.",
+  "_comment": "Test-only values. AES-256-GCM; aad = utf8(handle) || 0x01; plaintext is the JSON right-padded with spaces to padded_length; ciphertext = ct || 16-byte tag; all base64url without padding. See pushCrypto.ts.",
   "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
   "handle": "EBESExQVFhcYGRobHB0eHw",
   "nonce": "oKGio6Slpqeoqaqr",
   "aad_hex": "45424553457851564668635947526f6248423065487701",
-  "plaintext": "{\"v\":1,\"kind\":\"approval\",\"params\":{\"chat_title\":\"Weekly report\",\"ask\":\"approval\"},\"route\":\"/approvals/ap_1\",\"session_id\":\"s_42\",\"approval_id\":\"ap_1\",\"badge\":2}",
-  "ciphertext": "nToKD3_6Lp0JDOm3JUDivwDcK3_k1i5OsCxW5w3KGHLwTDzdzEoySQDobbxlH6HDZUwjLQm8Y14zO3sx1gSnnJbd9gQSn8aBhJKNd_mvoJiwJ4nWqrTtH8xPHLXQ6j3m4PJKx3CB7uvB6iR8p_uIW1c5DsCBXP8eFe2t-4Bn0GHncMAPoS32dlsGl-8wcLO3-IacSZLymO2ZqtjXlfVJWVXzE2NO_fZIhQZYw6Et7Q"
+  "plaintext": "{\"v\":1,\"kind\":\"approval\",\"params\":{\"chat_title\":\"Weekly report\",\"ask\":\"approval\"},\"route\":\"/approvals/ap_1\",\"session_id\":\"s_42\",\"approval_id\":\"ap_1\",\"badge\":2,\"ts\":1795000000000,\"seq\":1795000000001}",
+  "padded_length": 256,
+  "ciphertext": "nToKD3_6Lp0JDOm3JUDivwDcK3_k1i5OsCxW5w3KGHLwTDzdzEoySQDobbxlH6HDZUwjLQm8Y14zO3sx1gSnnJbd9gQSn8aBhJKNd_mvoJiwJ4nWqrTtH8xPHLXQ6j3m4PJKx3CB7uvB6iR8p_uIW1c5DsCBXP8eFe2t-4Bn0GHncMAPoS32dlsGl-8wcLO3-IacSZLymO2ZqtjXlfUYCbJrPYuHXXkjsjobEl_ihtFHCt_rZxeMBLO1Twxssi9nBAZ8-VGsm83TfWDvaQQSlXLJxMgfQ_iYzeF4xX3m-kdIcRIBmU35H-CcYn9iK2BfK53iH6lyUKdLjY1KRRMIsnzNGe0XxWn9PH6N5c4LTZQ"
 }

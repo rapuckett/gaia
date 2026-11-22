@@ -5,7 +5,7 @@ import { createCipheriv, webcrypto } from 'node:crypto';
 import { TextDecoder, TextEncoder } from 'node:util';
 
 import vector from './__fixtures__/push-vector.json';
-import { fromBase64Url, newPushKey, openPush, pushAad, sealPush, toBase64Url } from './pushCrypto';
+import { fromBase64Url, newPushKey, openPush, padPlaintext, pushAad, sealPush, toBase64Url } from './pushCrypto';
 
 // Hermes has both; the web project's jsdom doesn't.
 Object.assign(globalThis, { TextEncoder: globalThis.TextEncoder ?? TextEncoder, TextDecoder: globalThis.TextDecoder ?? TextDecoder });
@@ -35,7 +35,9 @@ describe('push payload crypto', () => {
 
         const cipher = createCipheriv('aes-256-gcm', fromBase64Url(vector.key), nonce);
         cipher.setAAD(pushAad(vector.handle));
-        const node = Buffer.concat([cipher.update(vector.plaintext, 'utf8'), cipher.final(), cipher.getAuthTag()]);
+        const padded = Buffer.alloc(vector.padded_length, ' ');
+        padded.write(vector.plaintext, 'utf8');
+        const node = Buffer.concat([cipher.update(padded), cipher.final(), cipher.getAuthTag()]);
         expect(node.toString('base64url')).toBe(vector.ciphertext);
 
         await expect(openPush(subtle, { key: vector.key, handle: vector.handle, sealed })).resolves.toEqual(payload);
@@ -49,6 +51,22 @@ describe('push payload crypto', () => {
         const bytes = fromBase64Url(vector.ciphertext);
         bytes[3] ^= 1;
         await expect(openPush(subtle, { key: vector.key, handle: vector.handle, sealed: { ...sealed, ciphertext: toBase64Url(bytes) } })).rejects.toThrow();
+    });
+
+    it('pads with spaces to the smallest bucket, and a padded payload still parses', async () => {
+        expect(padPlaintext('{}')).toHaveLength(256);
+        expect(padPlaintext('x'.repeat(256))).toHaveLength(256);
+        expect(padPlaintext('x'.repeat(257))).toHaveLength(512);
+        expect(padPlaintext('é'.repeat(600))).toHaveLength(2048);
+        expect(() => padPlaintext('x'.repeat(2049))).toThrow(/drop its summary/);
+        const tail = padPlaintext('{"v":1}');
+        expect(Array.from(tail.slice(7)).every((b) => b === 0x20)).toBe(true);
+
+        // The vector's 198-byte JSON travels as 256 bytes, and seq survives as a 64-bit value.
+        expect(fromBase64Url(vector.ciphertext)).toHaveLength(256 + 16);
+        const opened = (await openPush(subtle, { key: vector.key, handle: vector.handle, sealed: { ciphertext: vector.ciphertext, nonce: vector.nonce } })) as { seq: number; ts: number };
+        expect(opened.seq).toBe(1795000000001);
+        expect(Number.isSafeInteger(opened.seq)).toBe(true);
     });
 
     it('makes a 32-byte key and refuses a short random source', () => {

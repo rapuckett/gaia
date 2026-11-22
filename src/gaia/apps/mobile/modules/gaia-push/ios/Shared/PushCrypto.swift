@@ -7,6 +7,7 @@ import Foundation
 enum PushCryptoError: Error {
   case malformed
   case noKey
+  case replay
 }
 
 /// Opens what the PC sealed for this phone; the layout is documented in src/features/push/pushCrypto.ts.
@@ -36,11 +37,19 @@ enum PushCrypto {
   }
 
   /// Tries each of this phone's push keys: one per paired PC, and the GCM tag tells them apart.
-  static func open(ciphertext: String, nonce: String, keys: [PushKeychain.Key]) throws -> Data {
+  static func open(ciphertext: String, nonce: String, keys: [(pcId: String, key: PushKeychain.Key)]) throws -> (pcId: String, key: PushKeychain.Key, plain: Data) {
     for entry in keys {
-      if let plain = try? open(ciphertext: ciphertext, nonce: nonce, key: entry.key, handle: entry.handle) { return plain }
+      if let plain = try? open(ciphertext: ciphertext, nonce: nonce, key: entry.key.key, handle: entry.key.handle) { return (entry.pcId, entry.key, plain) }
     }
     throw PushCryptoError.noKey
+  }
+
+  /// Opens a push and checks it isn't a replay: its `seq` must be newer than the last one accepted from that PC.
+  static func openFresh(ciphertext: String, nonce: String) throws -> PushPayload {
+    let opened = try open(ciphertext: ciphertext, nonce: nonce, keys: try PushKeychain.allKeys())
+    let payload = try PushPayload(json: opened.plain)
+    guard try PushKeychain.accept(opened.pcId, opened.key, seq: payload.seq) else { throw PushCryptoError.replay }
+    return payload
   }
 
   static func base64url(_ text: String) -> Data? {

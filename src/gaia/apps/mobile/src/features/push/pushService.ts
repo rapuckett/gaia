@@ -36,6 +36,7 @@ async function buildDeps(): Promise<{ deps: PushDeps; pairedIds: string[] } | nu
         vault: {
             load: (pcId) => vault.load(pcId),
             save: (pcId, s) => vault.save(pcId, s.handle, s.secret, s.sendToken, s.key),
+            dropKey: (pcId) => vault.dropKey(pcId),
             remove: (pcId) => vault.remove(pcId),
             pcIds: () => vault.pcIds(),
         },

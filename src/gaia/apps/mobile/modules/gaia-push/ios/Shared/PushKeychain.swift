@@ -12,13 +12,16 @@ enum PushKeychainError: Error {
 /// The push items in the Keychain group the app shares with its notification extension. Each paired PC's
 /// handle and key sit there; the relay credentials, which only the app needs, stay in the app's own group.
 enum PushKeychain {
+  /// `lastSeq` is the newest payload `seq` accepted under this key; nil for a key that has opened none yet.
   struct Key: Codable {
     let handle: String
     let key: String
+    var lastSeq: Int64?
   }
 
-  /// The relay's secret (token rotation, delete) and the send token the PC was given.
+  /// The relay handle with its secret (token rotation, delete) and the send token the PC was given; kept after the key is dropped, until the relay deletes the handle.
   struct Credentials: Codable {
+    let handle: String
     let secret: String
     let sendToken: String
   }
@@ -53,14 +56,33 @@ enum PushKeychain {
     return try JSONDecoder().decode(Credentials.self, from: data)
   }
 
-  /// Every paired PC's handle and key, for the extension to try in turn.
-  static func allKeys() throws -> [Key] {
-    try all(keyService).compactMap { try? JSONDecoder().decode(Key.self, from: $0.data) }
+  /// Every paired PC's handle and key, by PC id, for the extension to try in turn.
+  static func allKeys() throws -> [(pcId: String, key: Key)] {
+    try all(try base(keyService)).compactMap { item in
+      guard let key = try? JSONDecoder().decode(Key.self, from: item.data) else { return nil }
+      return (item.account, key)
+    }
   }
 
-  /// The PC ids that have a push key on this phone.
+  /// The PC ids with a push registration on this phone, including one whose key is gone but whose relay handle isn't deleted yet.
   static func pcIds() throws -> [String] {
-    try all(keyService).map(\.account)
+    let keys = try all(try base(keyService)).map(\.account)
+    let credentials = try all([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: secretService]).map(\.account)
+    return Array(Set(keys + credentials)).sorted()
+  }
+
+  /// Stops this phone opening that PC's pushes, keeping the relay credentials until the handle is deleted there.
+  static func deleteKey(_ pcId: String) throws {
+    try remove(shared(keyService, pcId))
+  }
+
+  /// Takes a payload's `seq` for a PC if it's newer than the last one accepted under its key, and records it. False for a replay.
+  static func accept(_ pcId: String, _ key: Key, seq: Int64) throws -> Bool {
+    if let last = key.lastSeq, seq <= last { return false }
+    var next = key
+    next.lastSeq = seq
+    try saveKey(pcId, next)
+    return true
   }
 
   static func delete(_ pcId: String) throws {
@@ -126,8 +148,8 @@ enum PushKeychain {
     return data
   }
 
-  private static func all(_ service: String) throws -> [(account: String, data: Data)] {
-    var query = try base(service)
+  private static func all(_ base: [String: Any]) throws -> [(account: String, data: Data)] {
+    var query = base
     query[kSecReturnData as String] = true
     query[kSecReturnAttributes as String] = true
     query[kSecMatchLimit as String] = kSecMatchLimitAll
