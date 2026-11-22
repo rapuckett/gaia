@@ -201,6 +201,8 @@ def _secret_directories() -> Set[str]:
         and key files, ``~/.aws/credentials`` is the key itself, and neither has
         a name the extension/name denylists would catch.
     """
+    from gaia.home import default_gaia_home, devices_dir
+
     home = Path.home()
     candidates = [
         home / ".ssh",
@@ -211,6 +213,9 @@ def _secret_directories() -> Set[str]:
         home / ".docker",
         home / ".config" / "gcloud",
         home / "AppData" / "Roaming" / "gcloud",
+        # The paired-device listener's private key and the device table.
+        devices_dir(),
+        devices_dir(default_gaia_home()),
     ]
     return _with_resolved_forms(candidates)
 

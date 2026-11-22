@@ -100,6 +100,7 @@ from gaia.connectors.store import (
     retry_keyring,
 )
 
+from ..security import refuse_on_device_listener
 from ..security import require_ui_header as _require_ui_header
 
 logger = logging.getLogger(__name__)
@@ -711,7 +712,7 @@ async def connector_events() -> StreamingResponse:
     )
 
 
-@router.get("/_debug")
+@router.get("/_debug", dependencies=[Depends(refuse_on_device_listener)])
 async def debug_state() -> Dict[str, Any]:
     """Diagnostics endpoint, gated by ``GAIA_DEBUG=1``."""
     if os.environ.get("GAIA_DEBUG") != "1":
@@ -846,12 +847,15 @@ def _eval_mailbox_state() -> Dict[str, Any]:
     }
 
 
-@router.get("/eval-mailbox")
+@router.get("/eval-mailbox", dependencies=[Depends(refuse_on_device_listener)])
 async def get_eval_mailbox() -> Dict[str, Any]:
     return _eval_mailbox_state()
 
 
-@router.post("/eval-mailbox", dependencies=[Depends(_require_ui_header)])
+@router.post(
+    "/eval-mailbox",
+    dependencies=[Depends(_require_ui_header), Depends(refuse_on_device_listener)],
+)
 async def set_eval_mailbox(body: EvalMailboxRequest) -> Dict[str, Any]:
     """Attach or detach the fixture for sessions that start reading mail next."""
     from gaia.agents.tools._email import fixture
@@ -895,7 +899,10 @@ async def get_connector(connector_id: str) -> Dict[str, Any]:
 # ─────────────────────────────────────────────────────────────────
 
 
-@router.post("/{connector_id}/configure", dependencies=[Depends(_require_ui_header)])
+@router.post(
+    "/{connector_id}/configure",
+    dependencies=[Depends(_require_ui_header), Depends(refuse_on_device_listener)],
+)
 async def configure_connector(
     request: Request, connector_id: str, body: ConfigureRequest
 ) -> Dict[str, Any]:
@@ -933,7 +940,10 @@ async def configure_connector(
     return result
 
 
-@router.post("/{connector_id}/test", dependencies=[Depends(_require_ui_header)])
+@router.post(
+    "/{connector_id}/test",
+    dependencies=[Depends(_require_ui_header), Depends(refuse_on_device_listener)],
+)
 async def test_connector(connector_id: str) -> Dict[str, Any]:
     """Run the health check for a connector."""
     retry_keyring()
@@ -1102,7 +1112,10 @@ async def _set_connector_enabled(connector_id: str, enabled: bool) -> Dict[str, 
     return _connector_summary(connector_id)
 
 
-@router.post("/{connector_id}/enable", dependencies=[Depends(_require_ui_header)])
+@router.post(
+    "/{connector_id}/enable",
+    dependencies=[Depends(_require_ui_header), Depends(refuse_on_device_listener)],
+)
 async def enable_connector(connector_id: str) -> Dict[str, Any]:
     """Enable a previously-disabled MCP connector; open chats get it next message."""
     return await _set_connector_enabled(connector_id, True)
@@ -1114,7 +1127,10 @@ async def disable_connector(connector_id: str) -> Dict[str, Any]:
     return await _set_connector_enabled(connector_id, False)
 
 
-@router.post("/{connector_id}/authorize", dependencies=[Depends(_require_ui_header)])
+@router.post(
+    "/{connector_id}/authorize",
+    dependencies=[Depends(_require_ui_header), Depends(refuse_on_device_listener)],
+)
 async def authorize(
     request: Request, connector_id: str, body: AuthorizeRequest
 ) -> Dict[str, Any]:
@@ -1152,7 +1168,8 @@ _device_poll_tasks: set = set()
 
 
 @router.post(
-    "/{connector_id}/authorize-device", dependencies=[Depends(_require_ui_header)]
+    "/{connector_id}/authorize-device",
+    dependencies=[Depends(_require_ui_header), Depends(refuse_on_device_listener)],
 )
 async def authorize_device(
     request: Request, connector_id: str, body: AuthorizeRequest
@@ -1236,7 +1253,8 @@ async def cancel_flow_endpoint(flow_id: str) -> Response:
 
 
 @router.put(
-    "/{connector_id}/grants/{agent_id:path}", dependencies=[Depends(_require_ui_header)]
+    "/{connector_id}/grants/{agent_id:path}",
+    dependencies=[Depends(_require_ui_header), Depends(refuse_on_device_listener)],
 )
 async def put_grant(
     connector_id: str, agent_id: str, body: GrantRequest
@@ -1288,7 +1306,7 @@ async def delete_grant(connector_id: str, agent_id: str) -> Response:
 
 @router.put(
     "/{connector_id}/activations/{agent_id:path}",
-    dependencies=[Depends(_require_ui_header)],
+    dependencies=[Depends(_require_ui_header), Depends(refuse_on_device_listener)],
 )
 async def put_activation(
     connector_id: str, agent_id: str, body: ActivationRequest
@@ -1334,7 +1352,7 @@ async def put_activation(
 @router.delete(
     "/{connector_id}/activations/{agent_id:path}",
     status_code=204,
-    dependencies=[Depends(_require_ui_header)],
+    dependencies=[Depends(_require_ui_header), Depends(refuse_on_device_listener)],
 )
 async def delete_activation(connector_id: str, agent_id: str) -> Response:
     """Deactivate ``agent_id`` for ``connector_id``. Idempotent.
@@ -1378,7 +1396,9 @@ def _require_oauth_provider(provider: str) -> None:
 
 
 @forwarded_router.post(
-    "/{provider}", status_code=201, dependencies=[Depends(_require_ui_header)]
+    "/{provider}",
+    status_code=201,
+    dependencies=[Depends(_require_ui_header), Depends(refuse_on_device_listener)],
 )
 async def forward_connection(
     request: Request, provider: str, body: ForwardConnectionRequest
