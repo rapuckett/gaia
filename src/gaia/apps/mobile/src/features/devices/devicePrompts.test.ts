@@ -5,7 +5,7 @@ import { act, renderHook } from '@testing-library/react-native';
 
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
-import { ALREADY_WAITING_DETAIL, applyDevicePromptEvent, deviceHaptics, useDevicePrompt, useDevicePromptStore } from './devicePrompts';
+import { ALREADY_WAITING_CODE, ALREADY_WAITING_DETAIL, applyDevicePromptEvent, deviceHaptics, useDevicePrompt, useDevicePromptStore } from './devicePrompts';
 
 const denied = jest.spyOn(deviceHaptics, 'denied').mockImplementation(() => undefined);
 
@@ -85,7 +85,7 @@ describe('useDevicePrompt', () => {
     describe('report', () => {
         const hook = () => renderHook(() => useDevicePrompt({ kind: 'admin', action: 'gpuMemoryApply' }));
 
-        it('a 409 with the PC\'s busy sentence is busy and leaves the button; any other 409 is left to the caller', async () => {
+        it('a 409 prompt_already_waiting is busy and leaves the button; any other 409 is left to the caller', async () => {
             const { result } = await hook();
             let consumed = true;
             await act(async () => {
@@ -93,11 +93,25 @@ describe('useDevicePrompt', () => {
             });
             expect(consumed).toBe(false);
             await act(async () => {
-                consumed = result.current.report(new GaiaApiError(409, ALREADY_WAITING_DETAIL));
+                consumed = result.current.report(new GaiaApiError(409, 'msg', undefined, undefined, { code: ALREADY_WAITING_CODE, message: 'msg' }));
             });
             expect(consumed).toBe(true);
             expect(result.current.state).toBe('busy');
             expect(result.current.hideAction).toBe(false);
+        });
+
+        it('a PC from before the code is busy by its sentence alone, and only when it sends no code', async () => {
+            const { result } = await hook();
+            let consumed = true;
+            await act(async () => {
+                consumed = result.current.report(new GaiaApiError(409, ALREADY_WAITING_DETAIL, undefined, undefined, { code: 'other', message: ALREADY_WAITING_DETAIL }));
+            });
+            expect(consumed).toBe(false);
+            await act(async () => {
+                consumed = result.current.report(new GaiaApiError(409, ALREADY_WAITING_DETAIL));
+            });
+            expect(consumed).toBe(true);
+            expect(result.current.state).toBe('busy');
         });
 
         it('a 429 is tooSoon, leaves the button, and clears itself after Retry-After (10 s when absent)', async () => {
@@ -133,6 +147,33 @@ describe('useDevicePrompt', () => {
             await act(async () => applyDevicePromptEvent(event('waiting', 'admin', 'gpuMemoryApply')));
             await act(async () => void result.current.report(new GaiaApiError(504, 'timed out')));
             expect(result.current.state).toBe('timeout');
+        });
+
+        it('a key-store code is the outcome: locked is denied, waiting is waiting; a PC without codes is the caller\'s 423', async () => {
+            const { result } = await renderHook(() => useDevicePrompt({ kind: 'keyStore', action: 'connectorTest' }));
+            const coded = (status: number, code: string) => new GaiaApiError(status, 'msg', undefined, undefined, { code, message: 'msg' });
+            let consumed = false;
+            await act(async () => {
+                consumed = result.current.report(coded(423, 'key_store_locked'));
+            });
+            expect(consumed).toBe(true);
+            expect(result.current.state).toBe('denied');
+            await act(async () => result.current.begin());
+            await act(async () => void result.current.report(coded(409, 'key_store_waiting')));
+            expect(result.current.state).toBe('waiting');
+            await act(async () => result.current.dismiss());
+            await act(async () => {
+                consumed = result.current.report(new GaiaApiError(423, 'The OS credential store is locked.'));
+            });
+            expect(consumed).toBe(false);
+            expect(result.current.state).toBe('idle');
+        });
+
+        it('a late coded waiting reply never undoes the answer the PC already sent for this press', async () => {
+            const { result } = await renderHook(() => useDevicePrompt({ kind: 'keyStore', action: 'connectorTest' }));
+            await act(async () => applyDevicePromptEvent(event('denied', 'keyStore', 'connectorTest')));
+            await act(async () => void result.current.report(new GaiaApiError(409, 'msg', undefined, undefined, { code: 'key_store_waiting', message: 'msg' })));
+            expect(result.current.state).toBe('denied');
         });
 
         it('with no prompt up, an error is the caller\'s to show; settle ends a waiting the PC never closed', async () => {

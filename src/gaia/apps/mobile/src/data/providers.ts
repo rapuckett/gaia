@@ -4,6 +4,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { isKeyStoreWait } from '@webui/utils/keyStore';
+
 import type { CloudPriceList, ContextChoice, GatewayFields, ProviderConnected, ProviderId, ProviderSummary, ProviderSummaryList } from '@/api/client.types';
 import { CONNECT_RETRY_MS } from '@/api/constants';
 import { GaiaApiError, GaiaError } from '@/api/errors';
@@ -84,7 +86,7 @@ function useRefreshProviders() {
 
 /**
  * Reconnects a provider with the key the PC already holds; no key leaves the phone. While the PC's OS
- * holds the key read for permission (409) it asks again, telling `onWaiting`, until `stopped()`.
+ * holds the key read for permission (409 `key_store_waiting`) it asks again, telling `onWaiting`, until `stopped()`.
  */
 export function useReconnectProvider() {
     const client = useGaiaClient();
@@ -100,7 +102,7 @@ export function useReconnectProvider() {
                 try {
                     return await api.connectProvider(provider);
                 } catch (err) {
-                    if (!(err instanceof GaiaApiError) || err.status !== 409 || stopped()) throw err;
+                    if (!(err instanceof GaiaApiError) || !isKeyStoreWait(err.status, err.body) || stopped()) throw err;
                     onWaiting(err.detail);
                     await new Promise((resolve) => setTimeout(resolve, CONNECT_RETRY_MS));
                 }
@@ -137,9 +139,10 @@ export function secretFreeError(err: unknown, secret: string): unknown {
 }
 
 /**
- * Sends a key typed on this phone to the PC, waiting out the PC's OS key-store prompt (409) as Reconnect does.
- * Not a mutation, so the key is never a mutation variable or cache entry; nothing it returns or throws carries it.
- * `gateway` (AMD) goes in the same request as the key; a gateway move's 409 is the PC busy or refusing, so it is thrown, not waited out.
+ * Sends a key typed on this phone to the PC, waiting out the PC's OS key-store prompt (409 `key_store_waiting`) as
+ * Reconnect does. Not a mutation, so the key is never a mutation variable or cache entry; nothing it returns or throws
+ * carries it. `gateway` (AMD) goes in the same request as the key; a gateway move waits out only a coded key-store
+ * wait, and any other 409 (the PC busy or refusing the move, or a PC from before the codes) is thrown.
  */
 export function useSendProviderKey() {
     const client = useGaiaClient();
@@ -159,7 +162,7 @@ export function useSendProviderKey() {
                     const r = await api.connectProvider(provider, moves ? { apiKey, gateway } : { apiKey });
                     return r.remember_error ? { ...r, remember_error: withoutSecret(r.remember_error, apiKey) } : r;
                 } catch (err) {
-                    if (moves || !(err instanceof GaiaApiError) || err.status !== 409 || stopped()) throw err;
+                    if (!(err instanceof GaiaApiError) || !isKeyStoreWait(err.status, err.body, !moves) || stopped()) throw err;
                     onWaiting(withoutSecret(err.detail, apiKey));
                     await new Promise((resolve) => setTimeout(resolve, CONNECT_RETRY_MS));
                 }

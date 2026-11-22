@@ -614,9 +614,11 @@ def test_a_keychain_prompt_is_reported_as_waiting_not_as_no_key(
             _answered_with_the_dialog_open(keychain_prompt)
             fw = body["providers"][1]
             assert fw["key_state"] == "waiting_for_os_permission"
+            assert fw["key_store"] == "waiting"
             assert fw["key_source"] is None
             assert "Look for a system dialog" in fw["key_message"]
             assert body["providers"][2]["key_state"] == "read"
+            assert body["providers"][2]["key_store"] is None
     # One read in flight however often the UI polls, and one warning for it.
     assert keychain_prompt["reads"] == 1
     assert len(_credential_threads()) == 1
@@ -668,8 +670,14 @@ def test_a_dismissed_keyring_prompt_is_not_reopened_by_polling(
     assert asked == 1
     for view in body.json()["providers"][1:]:
         assert view["key_state"] == "store_locked"
+        assert view["key_store"] == "locked"
         assert view["key_source"] is None
         assert "won't ask again for 5 minutes" in view["key_message"]
+    # The summary never reads the store, but says it is held, in both fields.
+    for summary in client.get("/api/providers/list").json()["providers"][1:]:
+        assert summary["key_state"] == "store_locked"
+        assert summary["key_store"] == "locked"
+    assert dismissed_keyring["reads"] == asked
 
     assert client.post("/api/providers/key-store/retry").json() == {"retrying": True}
     client.get("/api/providers")
@@ -685,9 +693,69 @@ def test_connecting_with_a_locked_store_is_not_answered_as_a_wait(
     client.get("/api/providers")
     resp = client.post("/api/providers/fireworks/connect", json={})
     assert resp.status_code == 423, resp.text
-    assert "won't ask again for 5 minutes" in resp.json()["detail"]
+    assert resp.json()["detail"]["code"] == "key_store_locked"
+    assert "won't ask again for 5 minutes" in resp.json()["detail"]["message"]
     # Connect is the user's action: it asked the store once more.
     assert dismissed_keyring["reads"] == 2
+
+
+def _raises(error):
+    def raise_it(*args, **kwargs):
+        raise error
+
+    return raise_it
+
+
+@pytest.mark.parametrize(
+    "error, status, code",
+    [
+        (
+            credential_wait.CredentialStoreWaiting("Look for a system dialog."),
+            409,
+            "key_store_waiting",
+        ),
+        (
+            credential_wait.CredentialStoreLocked("The key store is locked."),
+            423,
+            "key_store_locked",
+        ),
+    ],
+    ids=["waiting", "locked"],
+)
+@pytest.mark.parametrize("route", ["connect", "select", "gateway_move"])
+def test_a_key_store_wait_or_lock_answers_with_its_code_and_the_same_message(
+    client, lemonade, keys, monkeypatch, route, error, status, code
+):
+    if route == "connect":
+        lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+        monkeypatch.setattr(cloud_keys, "ensure_authenticated", _raises(error))
+        resp = client.post("/api/providers/fireworks/connect", json={})
+    elif route == "select":
+        monkeypatch.setattr(providers, "_check_model_available", _raises(error))
+        resp = client.post(
+            "/api/providers/select",
+            json={"model": "fireworks.accounts/fireworks/models/glm-5p3-flash"},
+        )
+    else:
+        lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+        monkeypatch.setattr(providers, "_bounded_gateway_key", _raises(error))
+        resp = client.post(
+            "/api/providers/amd/connect", json={"base_url": "https://gw2.example/v1"}
+        )
+    assert resp.status_code == status, resp.text
+    assert resp.json()["detail"] == {"code": code, "message": str(error)}
+
+
+def test_other_409s_keep_a_plain_detail(client, lemonade, keys, monkeypatch):
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+    monkeypatch.setattr(
+        cloud_keys,
+        "ensure_authenticated",
+        _raises(providers.ProviderError("Lemonade is busy.", 409)),
+    )
+    resp = client.post("/api/providers/fireworks/connect", json={})
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"] == "Lemonade is busy."
 
 
 def test_restore_waits_for_a_keychain_prompt_then_restores(
@@ -720,7 +788,8 @@ def test_select_while_a_keychain_prompt_is_open_says_so(
     resp = client.post("/api/providers/select", json={"model": model})
     _answered_with_the_dialog_open(keychain_prompt)
     assert resp.status_code == 409, resp.text
-    assert "Look for a system dialog" in resp.json()["detail"]
+    assert resp.json()["detail"]["code"] == "key_store_waiting"
+    assert "Look for a system dialog" in resp.json()["detail"]["message"]
     assert db.get_setting("custom_model") is None
 
     keychain_prompt["answered"].set()
@@ -1262,6 +1331,7 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "network": None,
                 "key_source": None,
                 "key_state": None,
+                "key_store": None,
                 "key_hint": None,
                 "known_models": None,
                 "error": None,
@@ -1278,6 +1348,7 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "network": None,
                 "key_source": None,
                 "key_state": "unknown",
+                "key_store": None,
                 "key_hint": None,
                 "known_models": False,
                 "error": None,
@@ -1296,6 +1367,7 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 # Lemonade holds a key the user entered; the hint needs a store read.
                 "key_source": "lemonade",
                 "key_state": "read",
+                "key_store": None,
                 "key_hint": None,
                 "known_models": False,
                 "error": None,
@@ -1977,7 +2049,8 @@ def test_connect_blank_key_while_a_keychain_prompt_is_open_says_so(
     resp = client.post("/api/providers/fireworks/connect", json={})
     _answered_with_the_dialog_open(keychain_prompt)
     assert resp.status_code == 409, resp.text
-    assert "Look for a system dialog" in resp.json()["detail"]
+    assert resp.json()["detail"]["code"] == "key_store_waiting"
+    assert "Look for a system dialog" in resp.json()["detail"]["message"]
 
     keychain_prompt["answered"].set()
     _wait_for_reads_to_drain()

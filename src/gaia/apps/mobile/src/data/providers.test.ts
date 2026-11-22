@@ -1,6 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { keyStoreOf } from '@webui/utils/keyStore';
+
 import type { ProviderSummary, ProviderSummaryList } from '@/api/client.types';
 
 import { providerRows } from './providers';
@@ -33,5 +35,15 @@ describe('providerRows', () => {
         const { providers, lemonadeError } = providerRows({ providers: [summary({ id: 'local' }), summary({ id: 'other' })] });
         expect(providers.map((p) => p.id)).toEqual(['local']);
         expect(lemonadeError).toBeNull();
+    });
+});
+
+describe('keyStoreOf', () => {
+    it('reads key_store, and a PC that sends only key_state through the old values', () => {
+        expect(keyStoreOf(summary({ id: 'fireworks', key_state: 'read', key_store: 'locked' }))).toBe('locked');
+        expect(keyStoreOf(summary({ id: 'fireworks', key_state: 'store_locked', key_store: null }))).toBeNull();
+        expect(keyStoreOf(summary({ id: 'fireworks', key_state: 'store_locked' }))).toBe('locked');
+        expect(keyStoreOf({ key_state: 'waiting_for_os_permission' })).toBe('waiting');
+        expect(keyStoreOf(summary({ id: 'fireworks', key_state: 'unknown' }))).toBeNull();
     });
 });

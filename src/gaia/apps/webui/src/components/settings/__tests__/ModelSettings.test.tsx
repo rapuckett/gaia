@@ -246,6 +246,17 @@ describe('ModelSettings provider keys', () => {
         await waitFor(() => expect(mockedApi.listProviders.mock.calls.length).toBe(reads + 1));
     });
 
+    it('reads the key store from key_store, ahead of the deprecated key_state', async () => {
+        withProviders(fireworks({
+            key_state: 'read',
+            key_store: 'locked',
+            key_message: 'The OS credential store is locked: its unlock prompt was closed.',
+        }));
+        const card = await openFireworks();
+        expect(within(card).getByText(/key store is locked/)).toBeInTheDocument();
+        expect(within(card).queryByText('No key yet.')).not.toBeInTheDocument();
+    });
+
     it('connects with the typed key and clears the field', async () => {
         mockedApi.connectProviderWaitingForOs.mockResolvedValue({ ...fireworks(), remembered: true, remember_error: null });
         const card = await openFireworks();

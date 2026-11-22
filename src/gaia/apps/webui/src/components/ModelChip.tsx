@@ -16,6 +16,7 @@ import { InfoBubble } from './InfoBubble';
 import { formatPrice } from './settings/cloudPrice';
 import { useT, type Translate } from '../i18n/useT';
 import { isolate, keepTogether } from '../i18n/registry';
+import { keyStoreOf } from '../utils/keyStore';
 import { providerName, providerNotice } from '../utils/providerText';
 import { needsCloudConsent } from '../utils/cloudConsent.core';
 import { MarkedText, markLtr } from './MarkedText';
@@ -28,8 +29,6 @@ interface ProviderModels {
 }
 
 const DOWNLOAD_POLL_MS = 2000;
-const KEY_WAITING = 'waiting_for_os_permission';
-const KEY_LOCKED = 'store_locked';
 // How many polls a picked model may show no download before the pick is given up.
 const PICK_START_POLLS = 5;
 
@@ -257,7 +256,7 @@ export function ModelChip() {
     };
 
     const anyDownloading = !!groups?.some((g) => g.models.some(isDownloading));
-    const awaitingPermission = !!groups?.some((g) => g.provider.key_state === KEY_WAITING);
+    const awaitingPermission = !!groups?.some((g) => keyStoreOf(g.provider) === 'waiting');
     useEffect(() => {
         if (!(open || pickAfterDownload) || !(anyDownloading || pickAfterDownload || awaitingPermission)) return;
         const t = setInterval(() => { void load(true); }, DOWNLOAD_POLL_MS);
@@ -454,11 +453,11 @@ export function ModelChip() {
                     <div key={provider.id} role="group" aria-labelledby={`${listId}-${provider.id}`}>
                         <div className="popover-heading" id={`${listId}-${provider.id}`}>{providerName(t, provider)}</div>
                         {groupError && <div className="popover-message is-error">{groupError}</div>}
-                        {provider.key_state === KEY_WAITING ? (
+                        {keyStoreOf(provider) === 'waiting' ? (
                             <div className="popover-message" role="status">
                                 <Loader2 size={13} className="spin" aria-hidden="true" /> {provider.key_message}
                             </div>
-                        ) : provider.key_state === KEY_LOCKED ? (
+                        ) : keyStoreOf(provider) === 'locked' ? (
                             <button
                                 type="button"
                                 className="popover-item"

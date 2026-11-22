@@ -4,6 +4,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 import { isolate, isolateUnit } from '@webui/i18n/registry';
+import { isKeyStoreLocked, keyStoreOf } from '@webui/utils/keyStore';
 import { providerName } from '@webui/utils/providerText';
 
 import type { GatewayFields, ProviderConnected } from '@/api/client.types';
@@ -94,7 +95,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
             if (moved && err instanceof GaiaApiError) setRefusedDetail(err.detail || undefined);
             return;
         }
-        if (err instanceof GaiaApiError && err.status === 423) {
+        if (err instanceof GaiaApiError && isKeyStoreLocked(err.status, err.body)) {
             setOutcome({ tone: 'locked', detail: err.detail || undefined });
             return;
         }
@@ -190,7 +191,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
     const canChange = !fromEnv || provider.key_from_gaia_env === true;
     const providerError = provider.error || null;
     const showField = !refused && (replacing || (!connected && !hasKey));
-    const locked = outcome?.tone === 'locked' || (!hasKey && state === 'store_locked');
+    const locked = outcome?.tone === 'locked' || (!hasKey && keyStoreOf(provider) === 'locked');
     const lockedDetail = outcome?.tone === 'locked' ? outcome.detail : undefined;
 
     return (

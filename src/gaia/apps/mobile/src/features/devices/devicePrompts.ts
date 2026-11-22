@@ -3,6 +3,8 @@
 
 import { create } from 'zustand';
 
+import { keyStoreErrorOf } from '@webui/utils/keyStore';
+
 import type { DevicePromptEvent } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
@@ -29,8 +31,18 @@ interface DevicePromptsState {
 
 export const useDevicePromptStore = create<DevicePromptsState>(() => ({ states: {}, notes: {} }));
 
-/** The 409 detail while the PC already waits on this action: `ALREADY_WAITING` in gaia/ui/devices/prompts.py. Other 409s are ordinary errors. */
+/** The 409 detail's `code` while the PC already waits on this action: `ALREADY_WAITING_CODE` in gaia/ui/devices/prompts.py. Other 409s are ordinary errors. */
+export const ALREADY_WAITING_CODE = 'prompt_already_waiting';
+/** That 409's message (`ALREADY_WAITING`), as plain text from a PC that sends no code. */
 export const ALREADY_WAITING_DETAIL = 'GAIA is already waiting on the PC for this. Answer the prompt on the PC, then try again.';
+
+function isAlreadyWaiting(err: GaiaApiError): boolean {
+    if (err.status !== 409) return false;
+    const code = err.body?.code;
+    if (code === ALREADY_WAITING_CODE) return true;
+    // A PC from before the code sends the plain text: the versioned contract's fallback, read only with no code.
+    return typeof code !== 'string' && err.detail === ALREADY_WAITING_DETAIL;
+}
 
 /**
  * A device's connector Check while the PC's key store is locked: `DEVICE_KEY_STORE_LOCKED` in gaia/ui/routers/connectors.py.
@@ -103,9 +115,10 @@ export interface DevicePrompt {
     /** Call when the action's request succeeds: a prompt still shown as waiting (its event was missed) is over. */
     settle: () => void;
     /**
-     * Gives the notice the action's HTTP failure: a 409 `busy`, a 429 `tooSoon`, and while the PC's prompt is up or
-     * has just failed, the failure itself (its detail line; a 504 is the timeout). True when the notice now shows it,
-     * so the caller shows no error of its own; false for any other failure.
+     * Gives the notice the action's HTTP failure: a 409 `prompt_already_waiting` is `busy`, a 429 `tooSoon`, a key-store `code` (`key_store_locked`
+     * is `denied`, `key_store_waiting` is `waiting`), and while the PC's prompt is up or has just failed, the failure
+     * itself (its detail line; a 504 is the timeout). True when the notice now shows it, so the caller shows no error
+     * of its own; false for any other failure.
      */
     report: (err: unknown) => boolean;
     /** Stops waiting on the phone; the PC's prompt may still be up. */
@@ -133,7 +146,7 @@ export function settleDevicePrompt(kind: DevicePromptKind, action: string): void
 
 /** See `DevicePrompt.report`. */
 export function reportDevicePromptError(kind: DevicePromptKind, action: string, err: unknown): boolean {
-    if (err instanceof GaiaApiError && err.status === 409 && err.detail === ALREADY_WAITING_DETAIL) {
+    if (err instanceof GaiaApiError && isAlreadyWaiting(err)) {
         set(kind, action, 'busy');
         return true;
     }
@@ -153,7 +166,19 @@ export function reportDevicePromptError(kind: DevicePromptKind, action: string, 
         return true;
     }
     const now = useDevicePromptStore.getState().states[keyOf(kind, action)];
-    // The PC still waits on its prompt; its events say how it ends.
+    // The PC names a key-store outcome by its code: a closed or refused prompt, or one still open.
+    const store = kind === 'keyStore' && err instanceof GaiaApiError ? keyStoreErrorOf(err.body) : null;
+    if (store === 'locked') {
+        set(kind, action, 'denied');
+        if (now === 'waiting') deviceHaptics.denied();
+        return true;
+    }
+    if (store === 'waiting') {
+        // A late reply never undoes an answer the PC's event already gave for this press.
+        if (now === undefined || now === 'idle' || now === 'waiting') set(kind, action, 'waiting');
+        return true;
+    }
+    // A PC from before the code sends this text while its prompt is still up: the versioned fallback.
     if (kind === 'keyStore' && err instanceof GaiaApiError && err.status === 409 && err.detail === KEY_STORE_LOCKED_DETAIL) {
         if (now === undefined || now === 'idle') set(kind, action, 'waiting');
         return true;

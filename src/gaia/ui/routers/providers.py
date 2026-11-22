@@ -63,6 +63,12 @@ from gaia.logger import get_logger
 from ..database import ChatDatabase
 from ..dependencies import get_db
 from ..devices.changes import record_device_change
+from ..key_store import (
+    KEY_STORE_LOCKED,
+    KEY_STORE_WAITING,
+    KeyStoreState,
+    key_store_detail,
+)
 from ..local_models import DOWNLOADED, LOADED, NOT_DOWNLOADED
 from ..models import DownloadProgress, WireModel
 from ..security import (
@@ -344,6 +350,7 @@ _MIN_KEY_LENGTH_FOR_HINT = 16
 KEY_WAITING = "waiting_for_os_permission"
 #: ``key_state`` once the user closed the store's unlock prompt; GAIA holds off asking.
 KEY_LOCKED = "store_locked"
+_KEY_STORE_OF = {KEY_WAITING: KEY_STORE_WAITING, KEY_LOCKED: KEY_STORE_LOCKED}
 
 
 def _key_slot(provider: str) -> str:
@@ -612,6 +619,7 @@ def _provider_view(provider: str, entry: Optional[Dict[str, Any]]) -> Dict[str, 
             "key_source": key_source,
             "key_hint": _key_hint(provider, key_source, lemond_env),
             "key_state": key_state,
+            "key_store": _KEY_STORE_OF.get(key_state),
             "key_message": key_message,
             "models_discovered": bool(entry and entry.get("models_discovered")),
             "known_models": known_models,
@@ -1209,7 +1217,11 @@ class ProviderView(WireModel):
     blocked_reason: Optional[str] = None
     key_source: Optional[Literal["stored", "environment", "lemonade"]] = None
     key_hint: Optional[str] = None
+    #: ``read`` stays; its two key-store values are deprecated in favor of ``key_store``.
     key_state: Optional[Literal["read", KEY_WAITING, KEY_LOCKED]] = None
+    #: ``waiting`` while the OS key store's prompt is open, ``locked`` once it
+    #: was refused or closed; null when the store answered.
+    key_store: Optional[KeyStoreState] = None
     key_message: Optional[str] = None
     models_discovered: Optional[bool] = None
     known_models: Optional[bool] = None
@@ -1549,7 +1561,9 @@ def _raise(
         ) from e
     detail = surface_wording(str(e), "agent_ui")
     detail = _caller_detail(e, detail, request, key)
-    raise HTTPException(status_code=e.status, detail=detail) from e
+    raise HTTPException(
+        status_code=e.status, detail=key_store_detail(e, e.status, detail)
+    ) from e
 
 
 def _known(provider: str) -> None:
@@ -1601,6 +1615,7 @@ def list_providers(
                     view.update(
                         key_source=None,
                         key_state=KEY_LOCKED if locked else KEY_WAITING,
+                        key_store=KEY_STORE_LOCKED if locked else KEY_STORE_WAITING,
                         key_message=str(e),
                     )
                 except (ProviderError, CloudKeyError, requests.RequestException) as e:
@@ -1662,7 +1677,11 @@ class ProviderSummary(BaseModel):
     #: is known, including while ``key_state`` is not ``read``.
     key_source: Optional[Literal["stored", "environment", "lemonade"]] = None
     #: ``unknown`` until GAIA has read the credential store once since it started.
+    #: ``read`` and ``unknown`` stay; ``store_locked`` is deprecated in favor of ``key_store``.
     key_state: Optional[Literal["read", KEY_LOCKED, KEY_UNKNOWN]] = None
+    #: ``locked`` while the OS key store is held after its prompt was refused or
+    #: closed; never ``waiting``, since this route never reads the store.
+    key_store: Optional[KeyStoreState] = None
     #: The key's last characters, as the PC shows; null over mobile access.
     key_hint: Optional[str] = None
     #: GAIA's server is serving known models through a list outage (Fireworks).
@@ -1777,6 +1796,7 @@ def _summary_key_fields(
     return {
         "key_source": key_source,
         "key_state": key_state,
+        "key_store": _KEY_STORE_OF.get(key_state),
         "key_hint": (
             None if hide_hint else _seen_key_hint(provider, key_source, lemond_env)
         ),
@@ -3150,9 +3170,13 @@ def select_model(
     except _ServerNotReady as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except CredentialStoreLocked as e:
-        raise HTTPException(status_code=423, detail=str(e)) from e
+        raise HTTPException(
+            status_code=423, detail=key_store_detail(e, 423, str(e))
+        ) from e
     except CredentialStoreWaiting as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+        raise HTTPException(
+            status_code=409, detail=key_store_detail(e, 409, str(e))
+        ) from e
     except GaiaConfigError as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
     if reason is not None:
