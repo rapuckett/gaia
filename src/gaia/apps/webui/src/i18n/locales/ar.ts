@@ -1738,6 +1738,7 @@ const messages: Messages = {
     'chat.modelQueue.waitingInLine': 'في انتظار انتهاء محادثة أخرى، رقمك {position} من {length} في الطابور ({seconds} ث)',
     'chat.modelQueue.priority': 'في الانتظار بينما يُنفَّذ طلب أعلى أولوية أولًا ({seconds} ث)',
     'chat.modelQueue.granted': 'حصلت المحادثة على النموذج بعد انتظار {seconds} ث',
+    'chat.status.queuedGpu': 'في انتظار معالج الرسومات، رقم {position} في الدور',
     'chat.renameFailed': 'تعذّرت إعادة تسمية هذه المحادثة: {error}',
     'chat.privateFailed': 'تعذّر تغيير الوضع الخاص لهذه المحادثة: {error}',
     'chat.dropUploadFailed': 'تعذّرت إضافة {name} إلى مستنداتك: {error}',
