@@ -73,6 +73,36 @@ describeNative('ModelServerDownNotice offers', () => {
     });
 });
 
+describeNative('ModelServerDownNotice while the PC choice is unknown', () => {
+    it('says only that the server is down while the choice is still loading', async () => {
+        const client = createFakeClient({ status: RUNNING, ...scene('down-switch') });
+        client.getLemonadeTarget = () => new Promise(() => undefined);
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        await render(
+            <QueryClientProvider client={queryClient}>
+                <GaiaClientProvider client={client}>
+                    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                        <ThemeProvider><ModelServerDownNotice /></ThemeProvider>
+                    </SafeAreaProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>,
+        );
+        expect(await screen.findByText(t('serverDown.body'))).toBeTruthy();
+        expect(screen.queryByText(t('mobileApp.serverDown.notOurs'))).toBeNull();
+        expect(screen.queryByText(t('serverDown.useOwn'))).toBeNull();
+    });
+
+    it('shows the failed read, never the not-ours line, and Check again reads the target again', async () => {
+        const client = await mount(scene('down-target-failed'));
+        expect(await screen.findByTestId('server-down-target-failed')).toBeTruthy();
+        expect(screen.queryByText(t('mobileApp.serverDown.notOurs'))).toBeNull();
+        expect(screen.queryByText(t('serverDown.useOwn'))).toBeNull();
+        const read = jest.spyOn(client, 'getLemonadeTarget');
+        await fireEvent.press(screen.getByText(CHECK));
+        await waitFor(() => expect(read).toHaveBeenCalled());
+    });
+});
+
 describeNative('ModelServerDownNotice switching', () => {
     it('sends gaia only, then shows the success notice and announces it once on iOS', async () => {
         const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
