@@ -3,6 +3,7 @@
 
 """A paired device sees a document's path home-relative; the PC sees it whole."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -51,3 +52,40 @@ def test_listing_shows_the_pc_the_full_path_and_a_device_home_relative(
     phone = clients["phone"].get("/api/documents").json()["documents"][0]
     assert pc["filepath"] == path
     assert phone["filepath"] == "~/Documents/report.pdf"
+
+
+def test_chat_stream_shows_the_pc_the_full_path_and_a_device_home_relative(
+    fake_home, paired
+):
+    from gaia.ui.run_manager import Run, run_manager
+
+    app, _, clients, _, _ = paired
+    path = str(fake_home / "Documents" / "report.pdf")
+    run = Run("sess-docs")
+    run.emit(
+        "data: "
+        + json.dumps(
+            {
+                "type": "done",
+                "content": "ok",
+                "documents_added": [{"id": "d1", "filepath": path}],
+            }
+        )
+        + "\n\n"
+    )
+    run.finish()
+    run_manager._runs["sess-docs"] = run
+    try:
+        seen = {}
+        for who in ("pc", "phone"):
+            resp = clients[who].get(
+                "/api/chat/attach", params={"session_id": "sess-docs"}
+            )
+            assert resp.status_code == 200, resp.text
+            line = next(ln for ln in resp.text.splitlines() if "documents_added" in ln)
+            seen[who] = json.loads(line[len("data: ") :])["documents_added"][0][
+                "filepath"
+            ]
+    finally:
+        run_manager._runs.pop("sess-docs", None)
+    assert seen == {"pc": path, "phone": "~/Documents/report.pdf"}

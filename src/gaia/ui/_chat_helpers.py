@@ -6194,8 +6194,36 @@ async def _run_chat_lifecycle(
         logger.warning("Could not notify agent loop: %s", exc)
 
 
-async def _stream_chat_response(db: ChatDatabase, session: dict, request: ChatRequest):
+def _hide_pc_paths(frame: str) -> str:
+    """*frame* with each ``documents_added`` path shown home-relative.
+
+    One run buffer feeds every subscriber, so the PC form is built once and a
+    caller away from the PC gets this rewrite at send time.
+    """
+    if '"documents_added"' not in frame:
+        return frame
+    from .security import device_display_path
+
+    start = frame.find("data: ")
+    try:
+        event = json.loads(frame[start + len("data: ") :].split("\n\n", 1)[0])
+    except ValueError:
+        return frame
+    if not isinstance(event, dict) or not event.get("documents_added"):
+        return frame
+    for doc in event["documents_added"]:
+        doc["filepath"] = device_display_path(doc.get("filepath") or "")
+    from .run_manager import _padded
+
+    return _padded(_sse(event))
+
+
+async def _stream_chat_response(
+    db: ChatDatabase, session: dict, request: ChatRequest, away: bool = False
+):
     """Stream a chat turn as SSE for the ``/api/chat/send`` client.
+
+    *away* is a caller away from the PC: documents' paths are shown home-relative.
 
     Starts the run's detached lifecycle (the chat router guarantees no run
     is already active for this session — it returns 409 otherwise) and
@@ -6221,13 +6249,13 @@ async def _stream_chat_response(db: ChatDatabase, session: dict, request: ChatRe
             item = await get_or_shutdown(q)
             if item is DONE or item is SHUTDOWN:
                 break
-            yield item
+            yield _hide_pc_paths(item) if away else item
     finally:
         stream_closed()
         run.unsubscribe(q)
 
 
-async def _attach_chat_stream(session_id: str):
+async def _attach_chat_stream(session_id: str, away: bool = False):
     """Re-attach an SSE client to an already-running background run (#1580).
 
     Used by ``GET /api/chat/attach`` when the user revisits a session whose
@@ -6248,7 +6276,7 @@ async def _attach_chat_stream(session_id: str):
             item = await get_or_shutdown(q)
             if item is DONE or item is SHUTDOWN:
                 break
-            yield item
+            yield _hide_pc_paths(item) if away else item
     finally:
         stream_closed()
         run.unsubscribe(q)

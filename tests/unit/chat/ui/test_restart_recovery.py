@@ -78,7 +78,12 @@ def runtime(tmp_path):
     state = SimpleNamespace(
         session_locks={}, chat_semaphore=asyncio.BoundedSemaphore(1)
     )
-    request = SimpleNamespace(app=SimpleNamespace(state=state), headers={})
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=state),
+        headers={},
+        scope={},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
     server = SimpleNamespace(
         _stream_chat_response=helpers._stream_chat_response,
         _get_chat_response=helpers._get_chat_response,
