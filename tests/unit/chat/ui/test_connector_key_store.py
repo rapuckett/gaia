@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import threading
 import time
+from typing import get_args
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,6 +21,7 @@ from gaia.connectors.registry import REGISTRY
 from gaia.connectors.store import KeyringRefused
 from gaia.ui.devices.access import DeviceAccess
 from gaia.ui.devices.listener import DeviceGate
+from gaia.ui.key_store import KEY_STORE_LOCKED, KEY_STORE_WAITING, KeyStoreState
 from gaia.ui.routers import connectors as router
 from gaia.ui.security import ListenerScopeMiddleware
 from gaia.ui.server import create_app
@@ -171,3 +173,8 @@ def test_the_pc_lists_a_held_back_connector_instead_of_waiting(clients, reads):
     assert resp.json()["key_store"] == "locked"
     assert rows[OAUTH[0]]["key_store"] == "locked"
     assert rows[OAUTH[0]]["configured"] is None
+
+
+def test_key_store_state_literal_matches_constants():
+    assert get_args(KeyStoreState) == (KEY_STORE_WAITING, KEY_STORE_LOCKED)
+    assert router.KEY_STORE_WAITING is KEY_STORE_WAITING
