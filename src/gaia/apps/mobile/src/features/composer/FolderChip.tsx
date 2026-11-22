@@ -4,12 +4,13 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
+import { isolate } from '@webui/i18n/registry';
 import type { StartScreen } from '@webui/types';
 
 import { useSessionEnvironment } from '@/data';
 import { FolderPicker } from '@/features/chat/session-panel/FolderPicker';
 import { useT } from '@/i18n/useT';
-import { Chip, Icon, Ltr, Pressable, Row, Sheet, Stack, Text, useTheme } from '@/ui';
+import { Chip, Icon, Pressable, Row, Sheet, Stack, Text, useTheme } from '@/ui';
 import { Folder, Plus, X } from '@/ui/icons';
 
 import { ChipMeasure, useChipCollapsed } from './ChipFitContext';
@@ -83,13 +84,13 @@ export function FolderChip({ folder, initialPicking = false }: { folder: StartSc
                         </View>
                     </Pressable>
                 ) : (
-                    <Chip label={t('folderChip.add')} icon={Plus} onPress={() => setPicking(true)} testID="folder-add" />
+                    <Chip label={t('folderChip.add')} hint={t('folderChip.addHint')} icon={Plus} onPress={() => setPicking(true)} testID="folder-add" />
                 )}
             </Row>
             {picked ? (
-                <Row>
-                    <Ltr chip>{picked}</Ltr>
-                </Row>
+                <Text role="caption" tone="muted" testID="folder-picked-path">
+                    {isolate(picked, 'ltr')}
+                </Text>
             ) : null}
             <Sheet open={picking} onClose={() => setPicking(false)}>
                 {picking ? (
