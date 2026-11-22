@@ -1921,7 +1921,7 @@ def _apply_skills_absent(scenario_data: dict) -> Optional[str]:
     every attempt, including a re-run after an account switch. Refuses the
     machine's real ``~/.gaia``. Returns ``None`` on success, or an error string.
     """
-    from gaia.home import default_gaia_home, gaia_home
+    from gaia.home import default_gaia_home
     from gaia.skills.errors import SkillError, SkillNotFoundError
     from gaia.skills.install import remove_skill
     from gaia.skills.manager import SkillManager
