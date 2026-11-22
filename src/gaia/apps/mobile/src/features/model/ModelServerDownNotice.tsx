@@ -47,7 +47,8 @@ export function ModelServerDownNotice({
     const switching = switchOwn.isPending;
     const starting = restart.isPending || !!s?.restarting;
     const busy = starting || switching;
-    const { start, useOwn, notOurs } = serverDownOffer(s, target.data);
+    const targetRead = target.isError ? 'failed' : target.data ? 'read' : 'loading';
+    const { start, useOwn, notOurs } = serverDownOffer(s, target.data, targetRead);
     const down = !s || s.state === 'stopped';
 
     const switchToOwn = () => {
@@ -80,6 +81,7 @@ export function ModelServerDownNotice({
             : describeError(restart.error, t)
         : s?.restart_error;
     const switchError = switchOwn.error && !isPcRefusal(switchOwn.error) ? describeHttpFailure(switchOwn.error, t) : null;
+    const targetFailure = target.isError ? describeHttpFailure(target.error, t) : null;
     const stillDown = asked && !busy && !status.isFetching && down && !raw;
     return (
         <View
@@ -100,6 +102,7 @@ export function ModelServerDownNotice({
             </Row>
             <Text role="ui">{t('serverDown.body')}</Text>
             {notOurs ? <Text role="ui">{t('mobileApp.serverDown.notOurs')}</Text> : null}
+            {targetFailure ? <Notice tone="danger" message={targetFailure.text} detail={targetFailure.detail} testID="server-down-target-failed" /> : null}
             {stillDown ? <Text role="ui">{t('serverDown.stillDown')}</Text> : null}
             {raw ? <Text role="label" tone="secondary" mono dir="ltr">{raw}</Text> : null}
             {switchOwn.error && isPcRefusal(switchOwn.error) ? <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="server-down-pc-only" /> : null}
@@ -134,6 +137,7 @@ export function ModelServerDownNotice({
                     onPress={() => {
                         setAsked(true);
                         void status.refetch();
+                        void target.refetch();
                     }}
                 />
             </Row>
