@@ -653,6 +653,14 @@ async def set_permission_mode(
         session_id, body.mode == session_permissions.MODE_FULL_ACCESS
     )
     audit_approval(http_request, f"chat {session_id} set to {body.mode}")
+    record_device_change(
+        http_request,
+        (
+            "chatPermissionsFull"
+            if body.mode == session_permissions.MODE_FULL_ACCESS
+            else "chatPermissionsAsk"
+        ),
+    )
     return _permissions_view(session_id)
 
 

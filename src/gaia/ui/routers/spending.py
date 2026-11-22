@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from .. import spending
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import record_device_change
 from ..models import WireModel
 from ..security import audit_approval
 
@@ -172,6 +173,10 @@ def set_spending_limit(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     audit_approval(http_request, f"cloud spending limit set to {body.limit_usd} USD")
+    if body.limit_usd is None:
+        record_device_change(http_request, "spendingLimitCleared")
+    else:
+        record_device_change(http_request, "spendingLimitSet", limit=body.limit_usd)
     return _report(db)
 
 
@@ -186,6 +191,7 @@ def allow_spending_this_month(
     """Let cloud chats go on past the limit until the month ends."""
     spending.allow_this_month(db)
     audit_approval(http_request, "cloud spending allowed past the limit this month")
+    record_device_change(http_request, "spendingAllowedMonth")
     return _report(db)
 
 

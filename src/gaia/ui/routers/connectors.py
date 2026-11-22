@@ -116,6 +116,7 @@ from gaia.connectors.store import (
 )
 from gaia.ui.shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_opened
 
+from ..devices import DEVICE_CHANGE_PARAM_MAX
 from ..devices.changes import record_device_change
 from ..devices.prompts import DevicePromptTimeout, limit_device_rate, watch_key_store
 from ..key_store import (
@@ -187,6 +188,25 @@ async def _record_change(
         connector=REGISTRY.get(connector_id).display_name,
         connector_id=connector_id,
         **params,
+    )
+
+
+async def _record_removed(request: Request, connector_id: str) -> None:
+    """A device removed *connector_id*: an audit line and a row in its changes."""
+    if is_local_pc(request):
+        return
+    audit_approval(request, f"connector {connector_id} removed")
+    try:
+        name = REGISTRY.get(connector_id).display_name
+    except KeyError:
+        # A forwarded connection's provider need not be a catalog connector.
+        name = connector_id
+    await asyncio.to_thread(
+        record_device_change,
+        request,
+        "connectorRemoved",
+        connector=name[:DEVICE_CHANGE_PARAM_MAX],
+        connector_id=connector_id[:DEVICE_CHANGE_PARAM_MAX],
     )
 
 
@@ -1419,9 +1439,11 @@ async def test_connector(request: Request, connector_id: str) -> Dict[str, Any]:
 
 
 @router.delete(
-    "/{connector_id}", status_code=204, dependencies=[Depends(_require_ui_header)]
+    "/{connector_id}",
+    status_code=204,
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def disconnect_connector(connector_id: str) -> Response:
+async def disconnect_connector(request: Request, connector_id: str) -> Response:
     """Disconnect a connector — removes credentials and (for MCP) removes from mcp_servers.json."""
     try:
         revoke_result = await disconnect(connector_id)
@@ -1436,6 +1458,7 @@ async def disconnect_connector(connector_id: str) -> Response:
     # present a bare "disconnected" that reads as a full revoke when only
     # the local credential was cleared). ``revoke_result`` is ``None`` for
     # handler types with no remote-revoke concept (e.g. MCP servers).
+    await _record_removed(request, connector_id)
     await _emitter.emit(
         "connector.disconnected",
         {"connector_id": connector_id, **(revoke_result or {})},
@@ -2043,9 +2066,11 @@ def get_forwarded_connection(provider: str) -> Dict[str, Any]:
 
 
 @forwarded_router.delete(
-    "/{provider}", status_code=204, dependencies=[Depends(_require_ui_header)]
+    "/{provider}",
+    status_code=204,
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def revoke_forwarded_connection(provider: str) -> Response:
+async def revoke_forwarded_connection(request: Request, provider: str) -> Response:
     """Revoke a forwarded connection: clear the refresh token, the forwarded
     OAuth client credentials, every per-agent grant, and the cached provider /
     token state (AC4). Idempotent."""
@@ -2064,6 +2089,7 @@ async def revoke_forwarded_connection(provider: str) -> Response:
     for key in [k for k in _token_cache if k[0] == provider]:
         _token_cache.pop(key, None)
 
+    await _record_removed(request, provider)
     await _emitter.emit(
         "connector.disconnected", {"connector_id": provider, **revoke_result}
     )

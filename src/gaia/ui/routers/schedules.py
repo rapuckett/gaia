@@ -12,6 +12,7 @@ from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from ..devices.changes import name_label, record_device_change
 from ..models import WireModel
 from ..scheduler import DuplicateScheduleName, Scheduler
 from ..security import audit_approval, require_pc_or_allowed_device
@@ -212,6 +213,9 @@ async def create_schedule(
             tz=request.timezone,
         )
         audit_approval(http_request, f"schedule {request.name!r} created")
+        record_device_change(
+            http_request, "scheduleCreated", name=name_label(request.name)
+        )
         return task
     except DuplicateScheduleName as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -280,6 +284,7 @@ async def update_schedule(
         elif request.status == "active":
             resumed = await scheduler.resume_task(name)
             audit_approval(http_request, f"schedule {name!r} resumed")
+            record_device_change(http_request, "scheduleResumed", name=name_label(name))
             return resumed
         elif request.status == "cancelled":
             return await scheduler.cancel_task(name)
@@ -308,6 +313,7 @@ async def run_schedule_now(
     try:
         started = await scheduler.run_task_now(name)
         audit_approval(http_request, f"schedule {name!r} run now")
+        record_device_change(http_request, "scheduleRun", name=name_label(name))
         return started
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Schedule '{name}' not found")
