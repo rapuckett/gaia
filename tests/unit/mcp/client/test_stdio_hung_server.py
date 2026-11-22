@@ -1671,9 +1671,9 @@ def test_redaction_stays_linear_on_long_non_ascii_secrets():
     ]
     for secret, text in cases:
         t = StdioTransport(sys.executable, args=["--api-key", secret])
-        started = time.process_time()
+        started = time.thread_time()
         t.redact(text)
-        took = time.process_time() - started
+        took = time.thread_time() - started
         assert took < 0.25, f"{took:.2f}s for a {len(secret)}-character secret"
 
 
@@ -1814,10 +1814,10 @@ def test_a_secret_repeating_through_the_text_is_redacted_whole():
     t = StdioTransport(sys.executable, args=["--api-key", "abababab"])
     assert t.redact("x " + "ab" * 10 + "a y") == "x <redacted>a y"
     t = StdioTransport(sys.executable, args=["--api-key", "a" * 40])
-    started = time.process_time()
+    started = time.thread_time()
     assert t.redact("a" * 1_000_000) == "<redacted>"
     # In one step, not once per character.
-    assert time.process_time() - started < 0.2
+    assert time.thread_time() - started < 0.2
 
 
 def _dense_escapes(near: str, size: int) -> list:

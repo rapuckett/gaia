@@ -1286,9 +1286,9 @@ _LAUNCH_HEADER = "import os, subprocess, sys\n"
 def _parse_seconds(source: str) -> float:
     best = float("inf")
     for _ in range(3):
-        started = time.process_time()
+        started = time.thread_time()
         ast.parse(source)
-        best = min(best, time.process_time() - started)
+        best = min(best, time.thread_time() - started)
     return best
 
 
@@ -1298,9 +1298,9 @@ def _linear_bound(source: str) -> float:
 
 
 def _detect_seconds(source: str):
-    started = time.process_time()
+    started = time.thread_time()
     found = _detect_test_runner(source)
-    return found, time.process_time() - started
+    return found, time.thread_time() - started
 
 
 @pytest.mark.parametrize(
@@ -1657,9 +1657,9 @@ def test_a_python_run_with_a_summary_still_asks_the_detector():
 def _best_seconds(call) -> float:
     best = float("inf")
     for _ in range(3):
-        started = time.process_time()
+        started = time.thread_time()
         call()
-        best = min(best, time.process_time() - started)
+        best = min(best, time.thread_time() - started)
     return best
 
 

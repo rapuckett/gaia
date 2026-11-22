@@ -178,9 +178,9 @@ class TestStoreBoundary:
         ids=["fences", "tildes", "lone_tick", "ticks_one_line", "spaces", "pairs"],
     )
     def test_pathological_input_is_checked_in_linear_time(self, payload):
-        start = time.process_time()
+        start = time.thread_time()
         check_memory_content(payload)
-        assert time.process_time() - start < 1.0
+        assert time.thread_time() - start < 1.0
 
     def test_markup_after_an_unclosed_fence_is_still_found(self):
         with pytest.raises(MemoryContentError):

@@ -519,9 +519,9 @@ def test_non_claims_are_not_detected(answer):
 def _fastest_scan(answer: str, tries: int = 3) -> float:
     best = float("inf")
     for _ in range(tries):
-        started = time.process_time()
+        started = time.thread_time()
         _claims_file_write(answer)
-        best = min(best, time.process_time() - started)
+        best = min(best, time.thread_time() - started)
     return best
 
 
