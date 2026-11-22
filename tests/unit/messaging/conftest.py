@@ -51,6 +51,7 @@ def close_discord_adapters(monkeypatch, request):
         for t in threading.enumerate()
         if isinstance(t, threading.Timer)
         and getattr(t.function, "__func__", None) is da.DiscordAdapter._expire
+        and not t.finished.is_set()
     ]
     for t in leaked:
         t.cancel()
