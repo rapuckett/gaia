@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 
 from gaia import env as gaia_env
 from gaia.config import GaiaConfig
-from gaia.security import secret_read_refusal
+from gaia.security import read_block
 from gaia.ui.devices import (
     DEVICE_IDLE_DAYS,
     DEVICE_TOKEN_PREFIX,
@@ -123,7 +123,8 @@ def test_key_file_created_0600_atomically(tmp_path):
 
     # Agent tools can't read anything in the real device folder, whatever its name.
     real_table = Path.home() / ".gaia" / "devices" / "paired.db"
-    assert "holds credentials" in secret_read_refusal(real_table)
+    blocked, reason = read_block(real_table)
+    assert blocked and "holds credentials" in reason
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="real NTFS ACLs")
