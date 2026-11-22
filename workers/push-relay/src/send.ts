@@ -9,7 +9,7 @@
 
 import { apnsSender } from "./apns";
 import { onlyFields, readJsonObject } from "./body";
-import { limit } from "./config";
+import { allowedAppIds, limit } from "./config";
 import { BASE64URL } from "./encoding";
 import { fcmSender } from "./fcm";
 import { authenticate, shortId } from "./handles";
@@ -53,21 +53,22 @@ function windows(env: Env, delivery: Message["delivery"]): Window[] {
       ];
 }
 
+async function gone(env: Env, id: string, why: string): Promise<Response> {
+  await env.DB.prepare("DELETE FROM handles WHERE id = ?").bind(id).run();
+  console.log(`send h=${shortId(id)} ${why} -> 410`);
+  return json({ error: "gone" }, 410);
+}
+
 export async function sendToHandle(request: Request, env: Env, id: string): Promise<Response> {
   const row = await authenticate(request, env, id, "send_token");
+  if (!allowedAppIds(env).has(row.app_id)) return gone(env, row.id, "app_not_allowed");
   const message = parseMessage(await readJsonObject(request, env));
   const send = row.platform === "apns" ? apnsSender(env) : fcmSender(env);
   await hit(env.DB, row.id, windows(env, message.delivery));
-  await env.DB.prepare("UPDATE handles SET last_used_at = ? WHERE id = ?").bind(Date.now(), row.id).run();
 
   const outcome = await send(row, message);
   if (outcome.kind === "delivered") return new Response(null, { status: 202 });
-
-  if (outcome.kind === "dead_token") {
-    await env.DB.prepare("DELETE FROM handles WHERE id = ?").bind(row.id).run();
-    console.log(`send h=${shortId(row.id)} upstream=gone -> 410`);
-    return json({ error: "gone" }, 410);
-  }
+  if (outcome.kind === "dead_token") return gone(env, row.id, "upstream=gone");
   console.log(`send h=${shortId(row.id)} upstream=${outcome.status} -> 502`);
   if (outcome.kind === "unavailable") {
     const retry = outcome.retryAfter;

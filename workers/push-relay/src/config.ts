@@ -13,6 +13,7 @@ export const DEFAULT_LIMITS = {
   SILENT_PER_DAY: 300,
   REGISTER_PER_HOUR: 20,
   STALE_DAYS: 180,
+  PENDING_HOURS: 48,
   MAX_BODY_BYTES: 8192,
 } as const;
 
@@ -28,13 +29,22 @@ export function limit(env: Env, name: LimitName): number {
   return Number(raw);
 }
 
+/** The app ids this relay serves; an empty list is a deploy error, not "allow none". */
 export function allowedAppIds(env: Env): Set<string> {
-  return new Set(
+  const ids = new Set(
     (env.ALLOWED_APP_IDS ?? "")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean)
   );
+  if (!ids.size) {
+    throw new HttpError(
+      500,
+      "missing_config",
+      "ALLOWED_APP_IDS is empty; set it to the app ids this relay serves (see the push-relay README)."
+    );
+  }
+  return ids;
 }
 
 type SecretName = "APNS_KEY_P8" | "APNS_KEY_ID" | "APNS_TEAM_ID" | "FCM_SERVICE_ACCOUNT_JSON" | "IP_HASH_SALT";

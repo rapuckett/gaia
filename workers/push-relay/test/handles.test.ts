@@ -4,8 +4,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import worker from "../src/index";
+import { clientSubject } from "../src/clientip";
 import { base64urlDecode, base64urlEncode, sha256 } from "../src/encoding";
-import { APNS_TOKEN, APP_ID, call, FCM_TOKEN, makeEnv, register } from "./helpers";
+import { APNS_TOKEN, APP_ID, call, confirm, fakeLimiter, FCM_TOKEN, makeEnv, register } from "./helpers";
 
 afterEach(() => vi.useRealTimers());
 
@@ -26,7 +27,7 @@ describe("POST /v1/handles", () => {
     expect(JSON.stringify(row)).not.toContain(send_token);
   });
 
-  it("refuses an app id outside ALLOWED_APP_IDS, and every app id when it is empty", async () => {
+  it("refuses an app id outside ALLOWED_APP_IDS", async () => {
     const { env } = makeEnv({ ALLOWED_APP_IDS: "com.example.other, com.example.gaia " });
     const bad = await call(env, "POST", "/v1/handles", {
       body: { platform: "fcm", token: FCM_TOKEN, app_id: "com.evil.app", environment: "production" },
@@ -34,10 +35,35 @@ describe("POST /v1/handles", () => {
     expect(bad.status).toBe(400);
     expect(((await bad.json()) as any).error).toBe("app_not_allowed");
     await register(env); // the trimmed list still matches
+  });
 
-    const empty = makeEnv({ ALLOWED_APP_IDS: "" }).env;
-    const res = await call(empty, "POST", "/v1/handles", {
+  it("gives 500 naming ALLOWED_APP_IDS when it is empty, before counting the registration", async () => {
+    const { env, t } = makeEnv({ ALLOWED_APP_IDS: " , " });
+    const res = await call(env, "POST", "/v1/handles", {
       body: { platform: "apns", token: APNS_TOKEN, app_id: APP_ID, environment: "sandbox" },
+    });
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as any;
+    expect(body.error).toBe("missing_config");
+    expect(body.message).toContain("ALLOWED_APP_IDS");
+    expect(t.query("SELECT * FROM rate_counters")).toEqual([]);
+  });
+
+  it("stores APNs tokens lowercased, so case variants are one device", async () => {
+    const { env, t } = makeEnv({ MAX_HANDLES_PER_TOKEN: "1" });
+    await register(env, { token: APNS_TOKEN.toUpperCase() });
+    expect(t.query("SELECT token FROM handles")).toEqual([{ token: APNS_TOKEN }]);
+    const res = await call(env, "POST", "/v1/handles", {
+      body: { platform: "apns", token: APNS_TOKEN, app_id: APP_ID, environment: "sandbox" },
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it("caps FCM tokens at 512 characters", async () => {
+    const { env } = makeEnv();
+    await register(env, { platform: "fcm", token: "a".repeat(512) });
+    const res = await call(env, "POST", "/v1/handles", {
+      body: { platform: "fcm", token: "a".repeat(513), app_id: APP_ID, environment: "sandbox" },
     });
     expect(res.status).toBe(400);
   });
@@ -57,16 +83,35 @@ describe("POST /v1/handles", () => {
     expect(((await res.json()) as any).error).toBe(code);
   });
 
-  it("keeps at most MAX_HANDLES_PER_TOKEN handles per token, dropping the oldest", async () => {
-    vi.useFakeTimers();
+  it("refuses a registration past MAX_HANDLES_PER_TOKEN with 409 and evicts nothing", async () => {
     const { env, t } = makeEnv({ MAX_HANDLES_PER_TOKEN: "3" });
     const made = [];
-    for (let i = 0; i < 4; i++) {
-      vi.setSystemTime(1_800_000_000_000 + i * 1000);
-      made.push((await register(env)).handle);
-    }
-    const ids = t.query<{ id: string }>("SELECT id FROM handles ORDER BY created_at").map((r) => r.id);
-    expect(ids).toEqual(made.slice(1));
+    for (let i = 0; i < 3; i++) made.push((await register(env)).handle);
+    const res = await call(env, "POST", "/v1/handles", {
+      body: { platform: "apns", token: APNS_TOKEN, app_id: APP_ID, environment: "sandbox" },
+    });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as any).error).toBe("too_many_handles");
+    expect(t.query<{ id: string }>("SELECT id FROM handles").map((r) => r.id).sort()).toEqual(made.sort());
+  });
+
+  it("counts an IPv6 /64 as one client, and IPv4 by full address", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.UTC(2026, 10, 22, 10, 0));
+    const { env } = makeEnv({ REGISTER_PER_HOUR: "2" });
+    await register(env, {}, "2001:db8:1:2::1");
+    await register(env, {}, "2001:DB8:1:2:ffff:0:0:9");
+    const res = await call(env, "POST", "/v1/handles", {
+      ip: "2001:db8:1:2:abcd::",
+      body: { platform: "apns", token: APNS_TOKEN, app_id: APP_ID, environment: "sandbox" },
+    });
+    expect(res.status).toBe(429);
+    await register(env, {}, "2001:db8:1:3::1");
+
+    expect(clientSubject("2001:0db8:0001:0002:0:0:0:1")).toBe("2001:db8:1:2::/64");
+    expect(clientSubject("::ffff:192.0.2.5")).toBe("192.0.2.5");
+    expect(clientSubject("192.0.2.5")).toBe("192.0.2.5");
+    expect(() => clientSubject("not-an-ip")).toThrow();
   });
 
   it("limits registrations per client IP and stores no raw IP", async () => {
@@ -133,6 +178,20 @@ describe("handle auth", () => {
     expect(new Set(bodies)).toEqual(new Set(['{"error":"unauthorized"}']));
   });
 
+  it("puts every /v1/handles call under the global ceiling, and refuses them all without the binding", async () => {
+    const { env } = makeEnv({ HANDLES_LIMITER: fakeLimiter(1) });
+    const h = await register(env);
+    const over = await call(env, "DELETE", `/v1/handles/${h.handle}`, { secret: h.secret });
+    expect(over.status).toBe(429);
+    expect(over.headers.get("retry-after")).toBe("60");
+    expect((await call(env, "GET", "/v1/health")).status).toBe(200);
+
+    const unbound = makeEnv({ HANDLES_LIMITER: undefined }).env;
+    const res = await call(unbound, "POST", "/v1/handles", { body: {} });
+    expect(res.status).toBe(500);
+    expect(((await res.json()) as any).message).toContain("HANDLES_LIMITER");
+  });
+
   it("refuses the send token for PUT and DELETE, leaving the handle as it was", async () => {
     const { env, t } = makeEnv();
     const h = await register(env);
@@ -145,7 +204,7 @@ describe("handle auth", () => {
 });
 
 describe("PUT /v1/handles/{handle}", () => {
-  it("rotates the token and refreshes last_used_at", async () => {
+  it("rotates the token, confirms the handle and refreshes last_used_at", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_800_000_000_000);
     const { env, t } = makeEnv();
@@ -153,9 +212,24 @@ describe("PUT /v1/handles/{handle}", () => {
     vi.setSystemTime(1_800_000_060_000);
     const res = await call(env, "PUT", `/v1/handles/${handle}`, { secret, body: { token: "fcm:rotated" } });
     expect(res.status).toBe(204);
-    expect(t.query("SELECT token, last_used_at FROM handles")).toEqual([
-      { token: "fcm:rotated", last_used_at: 1_800_000_060_000 },
+    expect(t.query("SELECT token, last_used_at, confirmed_at FROM handles")).toEqual([
+      { token: "fcm:rotated", last_used_at: 1_800_000_060_000, confirmed_at: 1_800_000_060_000 },
     ]);
+  });
+
+  it("refuses a PUT onto a token at MAX_HANDLES_PER_TOKEN with 409, leaving the handle intact", async () => {
+    const { env, t } = makeEnv({ MAX_HANDLES_PER_TOKEN: "2" });
+    const other = "b2".repeat(32);
+    await register(env, { token: other });
+    await register(env, { token: other });
+    const h = await register(env);
+    const res = await call(env, "PUT", `/v1/handles/${h.handle}`, { secret: h.secret, body: { token: other } });
+    expect(res.status).toBe(409);
+    expect(t.query("SELECT token, confirmed_at FROM handles WHERE id = ?", h.handle)).toEqual([
+      { token: APNS_TOKEN, confirmed_at: null },
+    ]);
+    // Re-PUTting the token it already has always works, even at the cap.
+    await confirm(env, h, APNS_TOKEN);
   });
 
   it("validates the new token against the handle's platform", async () => {
@@ -177,20 +251,42 @@ describe("DELETE /v1/handles/{handle}", () => {
 });
 
 describe("daily cleanup", () => {
-  it("drops handles idle for STALE_DAYS and ended rate windows, keeping the rest", async () => {
+  it("drops handles with no PUT for STALE_DAYS, unconfirmed ones past PENDING_HOURS, and ended rate windows", async () => {
     vi.useFakeTimers();
-    const day = 86_400_000;
+    const hour = 3_600_000;
+    const day = 24 * hour;
     const start = Date.UTC(2026, 0, 1);
-    const { env, t } = makeEnv({ STALE_DAYS: "30" });
+    const { env, t } = makeEnv({ STALE_DAYS: "30", PENDING_HOURS: "48" });
+
     vi.setSystemTime(start);
-    const old = await register(env, {}, "192.0.2.1");
+    const stale = await register(env, {}, "192.0.2.1");
+    await confirm(env, stale, APNS_TOKEN);
     vi.setSystemTime(start + 20 * day);
-    const fresh = await register(env, {}, "192.0.2.2");
+    const kept = await register(env, {}, "192.0.2.2");
+    await confirm(env, kept, APNS_TOKEN);
+    vi.setSystemTime(start + 28 * day + 12 * hour);
+    const pending = await register(env, {}, "192.0.2.3");
+    vi.setSystemTime(start + 30 * day + 12 * hour);
+    const young = await register(env, {}, "192.0.2.4");
 
     await worker.scheduled({ scheduledTime: start + 31 * day, cron: "", noRetry() {} } as never, env);
-    expect(t.query<{ id: string }>("SELECT id FROM handles").map((r) => r.id)).toEqual([fresh.handle]);
+    expect(t.query<{ id: string }>("SELECT id FROM handles").map((r) => r.id).sort()).toEqual([kept.handle, young.handle].sort());
     expect(t.query("SELECT * FROM rate_counters")).toEqual([]);
-    expect(old.handle).not.toBe(fresh.handle);
+    expect([stale.handle, pending.handle]).not.toContain(kept.handle);
+  });
+
+  it("deletes in batches until nothing matches", async () => {
+    const { env, t } = makeEnv();
+    for (let i = 0; i < 1203; i++) {
+      t.query(
+        "INSERT INTO handles (id, secret_hash, send_hash, platform, token, app_id, environment, created_at, last_used_at, confirmed_at) VALUES (?, '', '', 'fcm', ?, ?, 'sandbox', 0, 0, 0)",
+        `h${i}`,
+        `t${i}`,
+        APP_ID
+      );
+    }
+    await worker.scheduled({ scheduledTime: Date.UTC(2026, 0, 1), cron: "", noRetry() {} } as never, env);
+    expect(t.query("SELECT COUNT(*) AS n FROM handles")).toEqual([{ n: 0 }]);
   });
 });
 

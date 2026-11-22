@@ -121,20 +121,50 @@ describe("APNs", () => {
     expect(JSON.parse(req.body)).toEqual({ aps: { "content-available": 1 }, c: CIPHERTEXT, n: NONCE });
   });
 
-  it("reuses the provider token for 50 minutes, then mints a new one", async () => {
+  it("shares the provider token through D1 for 40 minutes, then mints a new one", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(1_800_000_000_000);
-    const { env } = apnsEnv({ SEND_PER_MINUTE: "100" });
+    const { env, t } = apnsEnv({ SEND_PER_MINUTE: "100" });
     const h = await register(env);
     await send(env, h);
-    vi.setSystemTime(1_800_000_000_000 + 49 * 60_000);
+    const stored = () => t.query<{ token: string }>("SELECT token FROM apns_provider_tokens")[0]?.token;
+    expect(`bearer ${stored()}`).toBe(seen[0].headers.get("authorization"));
+    vi.setSystemTime(1_800_000_000_000 + 39 * 60_000);
     await send(env, h);
-    vi.setSystemTime(1_800_000_000_000 + 51 * 60_000);
+    vi.setSystemTime(1_800_000_000_000 + 41 * 60_000);
     await send(env, h);
     const [a, b, c] = seen.map((s) => s.headers.get("authorization"));
     expect(b).toBe(a);
     expect(c).not.toBe(a);
+    expect(`bearer ${stored()}`).toBe(c);
   });
+
+  it("uses a fresh token another isolate already stored instead of minting its own", async () => {
+    const { env, t } = apnsEnv();
+    t.query(
+      "INSERT INTO apns_provider_tokens (key_id, team_id, issued_at, token) VALUES (?, 'TEAM123456', ?, 'shared.jwt.value')",
+      env.APNS_KEY_ID!,
+      Date.now() - 5 * 60_000
+    );
+    const h = await register(env);
+    await send(env, h);
+    expect(seen[0].headers.get("authorization")).toBe("bearer shared.jwt.value");
+  });
+
+  it.each(["InvalidProviderToken", "ExpiredProviderToken"])(
+    "drops the shared provider token when APNs answers 403 %s",
+    async (reason) => {
+      const { env, t } = apnsEnv();
+      const h = await register(env);
+      reply = () => Response.json({ reason }, { status: 403 });
+      expect((await send(env, h)).status).toBe(502);
+      expect(t.query("SELECT * FROM apns_provider_tokens")).toEqual([]);
+
+      reply = () => new Response(null, { status: 200 });
+      expect((await send(env, h)).status).toBe(202);
+      expect(seen[1].headers.get("authorization")).not.toBe(seen[0].headers.get("authorization"));
+    }
+  );
 
   it.each([
     [410, { reason: "Unregistered" }],
@@ -309,6 +339,26 @@ describe("send validation and limits", () => {
     const h = await register(env);
     const res = await send(env, h, { ...ALERT, ciphertext: "A".repeat(300) });
     expect(res.status).toBe(413);
+    expect(seen).toEqual([]);
+  });
+
+  it("does not refresh last_used_at, so only the phone's PUTs keep a handle alive", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(1_800_000_000_000);
+    const { env, t } = apnsEnv();
+    const h = await register(env);
+    vi.setSystemTime(1_800_000_000_000 + 3_600_000);
+    expect((await send(env, h)).status).toBe(202);
+    expect(t.query("SELECT last_used_at FROM handles")).toEqual([{ last_used_at: 1_800_000_000_000 }]);
+  });
+
+  it("deletes the handle and gives 410 when its app id is no longer allowed", async () => {
+    const { env, t } = apnsEnv({ ALLOWED_APP_IDS: `${APP_ID},com.example.next` });
+    const h = await register(env);
+    env.ALLOWED_APP_IDS = "com.example.next";
+    const res = await send(env, h);
+    expect(res.status).toBe(410);
+    expect(t.query("SELECT id FROM handles")).toEqual([]);
     expect(seen).toEqual([]);
   });
 

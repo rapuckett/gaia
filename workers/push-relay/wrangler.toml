@@ -24,14 +24,35 @@ binding = "DB"
 database_name = "push-relay"
 migrations_dir = "migrations"
 
+# A ceiling on every /v1/handles call, counted per Cloudflare location. It caps
+# how fast anyone can fill D1, whatever the per-IP and per-handle limits allow.
+# namespace_id is any positive integer unique within the account (not an
+# account id); a deploy may change it.
+[[ratelimits]]
+name = "HANDLES_LIMITER"
+namespace_id = "7301"
+
+  [ratelimits.simple]
+  limit = 1000
+  period = 60
+
+# Workers Logs off: the relay's own logs carry only status codes and handle-id
+# prefixes, and nothing here needs request logs kept.
+[observability]
+enabled = false
+
+[observability.logs]
+enabled = false
+invocation_logs = false
+
 # Daily stale-handle and rate-counter cleanup, 04:23 UTC (off the hour on purpose).
 [triggers]
 crons = ["23 4 * * *"]
 
 [vars]
 # Comma-separated app ids (iOS bundle id, which is also the APNs topic, or the
-# Android package name). Empty rejects every registration, so an unconfigured
-# deploy is never an open relay.
+# Android package name). Required: empty fails registration and every send
+# with a 500 naming it, so an unconfigured deploy is never an open relay.
 ALLOWED_APP_IDS = ""
 MAX_HANDLES_PER_TOKEN = "8"
 SEND_PER_MINUTE = "10"
@@ -40,4 +61,5 @@ SILENT_PER_MINUTE = "2"
 SILENT_PER_DAY = "300"
 REGISTER_PER_HOUR = "20"
 STALE_DAYS = "180"
+PENDING_HOURS = "48"
 MAX_BODY_BYTES = "8192"

@@ -10,7 +10,8 @@
  *   POST   /v1/handles/{handle}/send  push an encrypted blob          (Bearer send_token)
  *   GET    /v1/health                 liveness, no auth
  *
- * A daily cron drops idle handles and ended rate windows.
+ * Every /v1/handles call first passes a per-location ceiling (HANDLES_LIMITER).
+ * A daily cron drops stale and unconfirmed handles and ended rate windows.
  */
 
 import { cleanup, deleteHandle, registerHandle, rotateToken } from "./handles";
@@ -19,6 +20,25 @@ import { sendToHandle } from "./send";
 import type { Env } from "./types";
 
 const methodNotAllowed = () => new HttpError(405, "method_not_allowed");
+// The binding reports no reset time; 60 s is the longest period it supports.
+const CEILING_RETRY_AFTER = 60;
+
+async function globalCeiling(env: Env): Promise<void> {
+  if (!env.HANDLES_LIMITER) {
+    throw new HttpError(
+      500,
+      "missing_config",
+      "HANDLES_LIMITER is not bound; add the [[ratelimits]] binding (see the push-relay README)."
+    );
+  }
+  const { success } = await env.HANDLES_LIMITER.limit({ key: "handles" });
+  if (!success) {
+    throw new HttpError(429, "rate_limited", undefined, {
+      extra: { retry_after: CEILING_RETRY_AFTER },
+      headers: { "retry-after": String(CEILING_RETRY_AFTER) },
+    });
+  }
+}
 
 async function route(request: Request, env: Env): Promise<Response> {
   const { pathname } = new URL(request.url);
@@ -28,6 +48,8 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (method !== "GET") throw methodNotAllowed();
     return json({ ok: true });
   }
+  if (pathname === "/v1/handles" || pathname.startsWith("/v1/handles/")) await globalCeiling(env);
+
   if (pathname === "/v1/handles") {
     if (method !== "POST") throw methodNotAllowed();
     return registerHandle(request, env);
@@ -59,6 +81,6 @@ export default {
 
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     const removed = await cleanup(env, controller.scheduledTime);
-    console.log(`cleanup handles=${removed.handles} counters=${removed.counters}`);
+    console.log(`cleanup stale=${removed.stale} pending=${removed.pending} counters=${removed.counters}`);
   },
 } satisfies ExportedHandler<Env>;

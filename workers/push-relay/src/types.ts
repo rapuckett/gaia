@@ -4,6 +4,8 @@
 /** Bindings, vars and secrets. Every value is a string as Cloudflare delivers it. */
 export interface Env {
   DB: D1Database;
+  /** Workers rate-limiting binding: a per-location ceiling on every /v1/handles call. */
+  HANDLES_LIMITER?: RateLimit;
 
   ALLOWED_APP_IDS?: string;
   MAX_HANDLES_PER_TOKEN?: string;
@@ -13,6 +15,7 @@ export interface Env {
   SILENT_PER_DAY?: string;
   REGISTER_PER_HOUR?: string;
   STALE_DAYS?: string;
+  PENDING_HOURS?: string;
   MAX_BODY_BYTES?: string;
 
   APNS_KEY_P8?: string;
@@ -37,6 +40,7 @@ export interface HandleRow {
   environment: Environment;
   created_at: number;
   last_used_at: number;
+  confirmed_at: number | null;
 }
 
 /** What a provider needs to deliver one message. */

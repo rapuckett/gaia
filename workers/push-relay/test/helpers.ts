@@ -9,9 +9,30 @@ export const APP_ID = "com.example.gaia";
 export const APNS_TOKEN = "a1".repeat(32);
 export const FCM_TOKEN = "fcm-token:APA91b_example-registration-token";
 
+/** A stand-in for the Workers rate-limiting binding: allows `allow` calls, then refuses. */
+export function fakeLimiter(allow = Infinity): RateLimit & { keys: string[] } {
+  const keys: string[] = [];
+  return {
+    keys,
+    async limit({ key }: RateLimitOptions) {
+      keys.push(key);
+      return { success: keys.length <= allow };
+    },
+  };
+}
+
 export function makeEnv(overrides: Partial<Env> = {}): { env: Env; t: TestDb } {
   const t = memoryD1();
-  return { t, env: { DB: t.db, ALLOWED_APP_IDS: APP_ID, IP_HASH_SALT: "test-salt", ...overrides } };
+  return {
+    t,
+    env: { DB: t.db, HANDLES_LIMITER: fakeLimiter(), ALLOWED_APP_IDS: APP_ID, IP_HASH_SALT: "test-salt", ...overrides },
+  };
+}
+
+/** PUT the handle's current token back, as the phone does right after registering. */
+export async function confirm(env: Env, h: { handle: string; secret: string }, token: string): Promise<void> {
+  const res = await call(env, "PUT", `/v1/handles/${h.handle}`, { secret: h.secret, body: { token } });
+  if (res.status !== 204) throw new Error(`confirm failed: ${res.status} ${await res.text()}`);
 }
 
 export function call(
