@@ -158,9 +158,9 @@ def test_nothing_is_flagged_when_it_ran_or_was_not_asked(query, answer, records)
     ids=["please", "spaces", "shell", "can-you", "this", "ok"],
 )
 def test_long_input_is_checked_quickly(query):
-    start = time.perf_counter()
+    start = time.process_time()
     request_findings("Done.", query, [])
-    assert time.perf_counter() - start < 1.0
+    assert time.process_time() - start < 1.0
 
 
 def test_the_gate_reaches_the_loops_check():

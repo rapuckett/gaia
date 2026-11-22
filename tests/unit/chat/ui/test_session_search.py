@@ -241,9 +241,9 @@ def test_snippet_shows_words_not_markdown_syntax():
 
 
 def _fast_snippet(text, needle):
-    started = time.perf_counter()
+    started = time.process_time()
     s = snippet(text, needle)
-    assert time.perf_counter() - started < 1.0
+    assert time.process_time() - started < 1.0
     return s
 
 
