@@ -60,11 +60,20 @@ describeNative('/dev/composer new-chat scenes', () => {
         expect(screen.getByText(/Use a cloud model, or pick a smaller one/)).toBeTruthy();
     });
 
-    it('new-chat-folder-refused keeps the picked folder and the message when the PC refuses it', async () => {
+    it('new-chat-folder-refused words the withheld folder itself and keeps the PC\'s reason on the detail line', async () => {
         await mount('new-chat-folder-refused');
-        expect((await screen.findAllByText(/holds credentials or keys/)).length).toBeGreaterThan(0);
+        expect(await screen.findByText(/^.?GAIA can't use this folder from a phone because it holds passwords or keys\. Pick another folder\..?$/)).toBeTruthy();
+        const detail = screen.getByText("GAIA doesn't give a paired device this folder: it holds credentials or keys.");
+        expect(StyleSheet.flatten(detail.props.style).writingDirection).toBe('ltr');
+        expect(screen.queryByText(/GAIA answered with an error/)).toBeNull();
         expect(screen.getByTestId('folder-picked')).toBeTruthy();
         expect(screen.getByDisplayValue('Review the site copy for typos')).toBeTruthy();
+    });
+
+    it('new-chat-folder-outside-home words a folder outside the home folder itself', async () => {
+        await mount('new-chat-folder-outside-home');
+        expect(await screen.findByText(/^.?GAIA can only use folders inside your home folder on the PC from a phone\. Pick a folder there\..?$/)).toBeTruthy();
+        expect(screen.getByText(/browses only your home folder on the PC/)).toBeTruthy();
     });
 });
 
