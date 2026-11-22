@@ -18,10 +18,10 @@ const POST_NOTIFICATIONS = 'android.permission.POST_NOTIFICATIONS';
 // The link a tapped notification opens, read by GaiaMessagingService; pairing links use the same scheme.
 const SCHEME_KEY = 'ai.amd.gaia.push.SCHEME';
 const STRINGS_FILE = 'gaia_push_strings.xml';
-// The status-bar icon: the GAIA mark's monochrome template from the desktop tray (32 px), the only silhouette of it in
-// the repo; at hdpi it shows near the 24 dp the status bar asks for.
-const ICON_SOURCE = path.resolve(__dirname, '../../../webui/assets/tray-iconTemplate@2x.png');
+// The status-bar icon, 24 dp in each density: the desktop tray's GAIA template, scaled smooth and made white on transparent.
 const ICON_FILE = 'ic_stat_gaia.png';
+const ICON_DENSITIES = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi'];
+const iconSource = (density) => path.join(__dirname, 'assets', `ic_stat_gaia-${density}.png`);
 
 function ensureTools(manifest) {
     manifest.manifest.$ = { ...manifest.manifest.$, 'xmlns:tools': 'http://schemas.android.com/tools' };
@@ -49,9 +49,11 @@ function withPushAndroid(config, { scheme }) {
         'android',
         (mod) => {
             const res = path.join(mod.modRequest.platformProjectRoot, 'app/src/main/res');
-            fs.mkdirSync(path.join(res, 'drawable-hdpi'), { recursive: true });
+            for (const density of ICON_DENSITIES) {
+                fs.mkdirSync(path.join(res, `drawable-${density}`), { recursive: true });
+                fs.copyFileSync(iconSource(density), path.join(res, `drawable-${density}`, ICON_FILE));
+            }
             fs.mkdirSync(path.join(res, 'values'), { recursive: true });
-            fs.copyFileSync(ICON_SOURCE, path.join(res, 'drawable-hdpi', ICON_FILE));
             fs.writeFileSync(
                 path.join(res, 'values', 'gaia_push_colors.xml'),
                 `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="gaia_push_accent">${NOTIFICATION_ACCENT}</color>\n</resources>\n`,
