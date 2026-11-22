@@ -193,7 +193,18 @@ _EXIT_WITH_PID_ENV = "GAIA_DAEMON_EXIT_WITH_PID"
 #: (_isolate_user_home) or any test patches ``Path.home``. A pytest-xdist worker
 #: inherits the tmp HOME, so it reads the real one from the controller.
 _REAL_HOME_ENV = "_GAIA_TEST_REAL_HOME"
-_REAL_USER_HOME = Path(os.environ.get(_REAL_HOME_ENV) or Path.home())
+
+
+def _account_home() -> Path:
+    """The OS account's home, never a HOME a caller set by hand."""
+    if os.name != "nt":
+        import pwd
+
+        return Path(pwd.getpwuid(os.getuid()).pw_dir)
+    return Path.home()
+
+
+_REAL_USER_HOME = Path(os.environ.get(_REAL_HOME_ENV) or _account_home())
 _REAL_GAIA_HOME = _REAL_USER_HOME / ".gaia"
 
 #: Bound before any test patches ``os.path.realpath``: a test that breaks it
