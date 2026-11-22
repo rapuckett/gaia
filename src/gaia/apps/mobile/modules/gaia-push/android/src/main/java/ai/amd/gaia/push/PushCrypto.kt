@@ -3,7 +3,6 @@
 
 package ai.amd.gaia.push
 
-import android.util.Base64
 import java.security.GeneralSecurityException
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
@@ -48,8 +47,25 @@ internal object PushCrypto {
     return null
   }
 
-  private fun base64url(text: String): ByteArray {
-    if (text.contains('=')) throw IllegalArgumentException("padded base64url")
-    return Base64.decode(text, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+  private const val ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+  /** Unpadded base64url, the only form the PC and relay send; plain Kotlin, so it runs in JVM unit tests and on API 24. */
+  fun base64url(text: String): ByteArray {
+    if (text.length % 4 == 1) throw IllegalArgumentException("not unpadded base64url")
+    val out = ByteArray(text.length * 6 / 8)
+    var acc = 0
+    var bits = 0
+    var o = 0
+    for (ch in text) {
+      val v = ALPHABET.indexOf(ch)
+      if (v < 0) throw IllegalArgumentException("not unpadded base64url")
+      acc = (acc shl 6) or v
+      bits += 6
+      if (bits >= 8) {
+        bits -= 8
+        out[o++] = (acc shr bits).toByte()
+      }
+    }
+    return out
   }
 }

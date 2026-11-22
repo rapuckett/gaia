@@ -15,10 +15,18 @@ android {
     versionCode 1
     versionName '0.1.0'
   }
+  sourceSets {
+    // The JS test vectors, so the Kotlin decrypt is checked against the same bytes as pushCrypto.test.ts.
+    test.resources.srcDirs += ['../../../src/features/push/__fixtures__']
+  }
 }
 
 dependencies {
   // The versions expo-notifications already brings, so the app carries one copy of each.
   implementation 'com.google.firebase:firebase-messaging:25.0.1'
   implementation 'androidx.core:core:1.17.0'
+
+  testImplementation 'junit:junit:4.13.2'
+  // android.jar's org.json is stubs only in local unit tests.
+  testImplementation 'org.json:json:20240303'
 }

@@ -4,6 +4,7 @@
 import { createCipheriv, webcrypto } from 'node:crypto';
 import { TextDecoder, TextEncoder } from 'node:util';
 
+import parity from './__fixtures__/push-vector-parity.json';
 import vector from './__fixtures__/push-vector.json';
 import { fromBase64Url, newPushKey, openPush, padPlaintext, pushAad, sealPush, toBase64Url } from './pushCrypto';
 
@@ -41,6 +42,19 @@ describe('push payload crypto', () => {
         expect(node.toString('base64url')).toBe(vector.ciphertext);
 
         await expect(openPush(subtle, { key: vector.key, handle: vector.handle, sealed })).resolves.toEqual(payload);
+    });
+
+    it("matches Parity's vector from the PC's encryptor", async () => {
+        expect(Buffer.from(pushAad(parity.handle)).toString('hex')).toBe(parity.aad_hex);
+        const sealed = { ciphertext: parity.ciphertext, nonce: parity.nonce };
+        await expect(openPush(subtle, { key: parity.key, handle: parity.handle, sealed })).resolves.toEqual(JSON.parse(parity.plaintext));
+        const cipher = createCipheriv('aes-256-gcm', fromBase64Url(parity.key), fromBase64Url(parity.nonce));
+        cipher.setAAD(pushAad(parity.handle));
+        const node = Buffer.concat([cipher.update(parity.plaintext, 'utf8'), cipher.final(), cipher.getAuthTag()]);
+        expect(node.toString('base64url')).toBe(parity.ciphertext);
+        // The PC takes exactly 22-character handles and 43-character keys, unpadded.
+        expect(parity.handle).toHaveLength(22);
+        expect(newPushKey((n) => new Uint8Array(n).fill(9))).toHaveLength(43);
     });
 
     it('refuses another handle, another key or a changed byte', async () => {
