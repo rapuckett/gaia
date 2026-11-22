@@ -27,7 +27,7 @@ export function call(
     body = typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body);
     headers["content-type"] = "application/json";
   }
-  return worker.fetch(new Request(`https://relay.example${path}`, { method, headers, body }), env, {} as never);
+  return worker.fetch(new Request(`https://relay.example${path}`, { method, headers, body }), env);
 }
 
 export async function register(

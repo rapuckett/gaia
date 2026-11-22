@@ -112,7 +112,7 @@ describe("POST /v1/handles", () => {
       duplex: "half",
     } as RequestInit);
     expect(req.headers.get("content-length")).toBeNull();
-    expect((await worker.fetch(req, env, {} as never)).status).toBe(413);
+    expect((await worker.fetch(req, env)).status).toBe(413);
   });
 });
 
@@ -173,7 +173,7 @@ describe("daily cleanup", () => {
     vi.setSystemTime(start + 20 * day);
     const fresh = await register(env, {}, "192.0.2.2");
 
-    await worker.scheduled({ scheduledTime: start + 31 * day, cron: "", noRetry() {} } as never, env, {} as never);
+    await worker.scheduled({ scheduledTime: start + 31 * day, cron: "", noRetry() {} } as never, env);
     expect(t.query<{ id: string }>("SELECT id FROM handles").map((r) => r.id)).toEqual([fresh.handle]);
     expect(t.query("SELECT * FROM rate_counters")).toEqual([]);
     expect(old.handle).not.toBe(fresh.handle);
