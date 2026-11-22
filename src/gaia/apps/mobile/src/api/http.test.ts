@@ -38,6 +38,14 @@ describe('createHttpClient requests', () => {
         expect(calls[1]!.rawBody).toBe(blob);
     });
 
+    it("setLemonadeTarget: switching back to GAIA's own server posts mode gaia and nothing else", async () => {
+        const { fetch, calls } = createRecordingFetch(() => jsonResponse({ mode: 'gaia', daemon: null }));
+        const client = createHttpClient({ baseUrl: BASE, token: null, fetch });
+        await client.setLemonadeTarget({ mode: 'gaia' });
+        expect(calls[0]).toMatchObject({ url: `${BASE}/api/lemonade/target`, method: 'POST', headers: UI_HEADERS });
+        expect(JSON.parse(calls[0]!.body as string)).toEqual({ mode: 'gaia' });
+    });
+
     it('reads a PC file as bytes through the client, with the chat named and no body', async () => {
         const { fetch, calls } = createRecordingFetch(() => streamResponse([new Uint8Array([1, 2]), new Uint8Array([3])]));
         const client = createHttpClient({ baseUrl: BASE, token: 'tok-1', fetch });
