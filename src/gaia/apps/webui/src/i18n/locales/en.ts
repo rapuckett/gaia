@@ -4420,6 +4420,8 @@ export const enMessages = {
     'mobileApp.yourPc.settings.connectors.firstSetup': 'First-time setup — provide your OAuth client credentials below. They’re stored encrypted in your PC’s keyring and reused for future connections.',
     'mobileApp.yourPc.settings.errors.notInstalledTitle': "Models on your PC aren't set up yet",
     'mobileApp.yourPc.settings.key.setIn': 'From your environment on your PC: {name}',
+    'mobileApp.yourPc.settings.key.storeLocked': "Your PC's key store is locked, so GAIA can't read your saved key.",
+    'mobileApp.yourPc.settings.key.waitingOs': 'Waiting for your PC to allow reading the saved key.',
     'mobileApp.yourPc.settings.messaging.takeOver': 'Answer from your PC',
     'mobileApp.yourPc.settings.skills.link.codeHint': 'Their scripts can run on your PC with your permissions.',
     'mobileApp.yourPc.setup.backend.hintNoNpu': "Chat runs on your PC's graphics (GPU).",
