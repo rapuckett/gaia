@@ -6,12 +6,12 @@ import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
 import type { ActiveModel, LocalModelStatus, Session, StreamEvent } from '@/api/client.types';
-import { GaiaApiError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { jumpToMessage } from './messages/jumpToMessage';
 import { IDLE_TURN, useChatStreamStore, writeTurn } from '@/state/chatStreams';
-import { useComposerQueueStore } from '@/features/composer/composerQueue';
+import { failureOf, useComposerQueueStore } from '@/features/composer/composerQueue';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
 import { ChatScreen } from './ChatScreen';
@@ -86,7 +86,7 @@ const QUESTION = {
 const CONFIRMATION = { type: 'needs_confirmation', action: 'send_email', summary: 'Send the report to the whole team.' } as StreamEvent;
 const QUEUED = [
     { id: 9001, text: 'Also check the budget sheet', state: 'queued' as const },
-    { id: 9002, text: 'Then email me the summary', state: 'failed' as const, error: 'Could not reach your PC' },
+    { id: 9002, text: 'Then email me the summary', state: 'failed' as const, ...failureOf(new GaiaNetworkError('http://pc.local:4200', new Error('Network request failed'))) },
 ];
 
 const PERMISSION = {

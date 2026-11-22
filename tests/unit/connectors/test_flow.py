@@ -567,7 +567,7 @@ class TestBrowserOpenNonBlocking:
         import time as time_mod
 
         def slow_open(url):
-            time_mod.sleep(0.5)
+            time_mod.sleep(2.0)
             return True
 
         monkeypatch.setattr("webbrowser.open", slow_open)
@@ -584,7 +584,7 @@ class TestBrowserOpenNonBlocking:
         # peer should run essentially immediately because the browser
         # open is dispatched to run_in_executor — the event loop keeps
         # spinning.
-        assert results[1] - t0 < 0.4, (
+        assert results[1] - t0 < 1.0, (
             f"event loop was blocked during webbrowser.open "
             f"(peer ran at +{results[1] - t0:.3f}s)"
         )

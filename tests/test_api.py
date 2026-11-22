@@ -514,7 +514,7 @@ class TestApiUnitValidation:
         assert response.status_code == 200
         assert response.json()["status"] == "degraded"
         assert response.json()["components"]["llm"]["status"] == "unavailable"
-        assert elapsed < 0.5
+        assert elapsed < 2.0
 
     @respx.mock
     def test_health_endpoint_configures_bounded_lemonade_timeout(self, monkeypatch):

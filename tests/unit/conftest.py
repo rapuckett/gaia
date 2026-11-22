@@ -419,6 +419,11 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
+        "real_port_listeners: keep the real gaia.ports.listeners_on_port "
+        "(its lsof/netstat call is mocked by the test)",
+    )
+    config.addinivalue_line(
+        "markers",
         "failure_records: save real problem reports (see _no_failure_records)",
     )
 
@@ -733,6 +738,32 @@ def _forbid_real_lemonade(request, monkeypatch):
     caught = _REAL_LEMONADE_ATTEMPTS[before:]
     if caught:
         pytest.fail(_REAL_LEMONADE_MESSAGE.format(action=caught[0][1]), pytrace=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_port_listeners(request, monkeypatch):
+    """Make port lookups find nothing, so no test is handed a real process to stop.
+
+    A test that exercises the real lookup marks itself real_port_listeners (or
+    real_lemonade / integration / real_model); its own patches run later and win.
+    """
+    if any(
+        request.node.get_closest_marker(m)
+        for m in ("real_port_listeners", *_REAL_LEMONADE_MARKERS)
+    ):
+        return
+    # Import the by-name importers first: one first imported mid-test would
+    # keep the stand-in for the rest of the session.
+    from gaia import cli, ports  # noqa: F401
+    from gaia.llm import lemonade_client  # noqa: F401
+
+    real = ports.listeners_on_port
+    for name, module in list(sys.modules.items()):
+        if (
+            name.startswith("gaia")
+            and getattr(module, "listeners_on_port", None) is real
+        ):
+            monkeypatch.setattr(module, "listeners_on_port", lambda port: [])
 
 
 @pytest.fixture

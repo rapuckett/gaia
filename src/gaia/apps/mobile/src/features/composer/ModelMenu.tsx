@@ -325,7 +325,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
     const cloudGroup = (p: ProviderRow) => <CloudGroup key={p.id} provider={p} open={open} row={row} />;
 
     return (
-        <Sheet open={open} onClose={onClose} title={t('modelMenu.label')}>
+        <Sheet open={open} onClose={onClose} title={t('modelMenu.label')} footer={<Button variant="secondary" full label={t('modelMenu.cancel')} onPress={onClose} />}>
             <Stack gap="sm">
                 {queued ? (
                     <Text role="caption" tone="secondary" testID="model-menu-queued">
@@ -403,7 +403,6 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
                 ) : null}
                 <ListRow title={t('modelMenu.addFromLink')} subtitle={t('modelMenu.addFromLinkNote')} subtitleLines={3} onPress={() => toSettings()} testID="model-menu-link" />
                 <ListRow title={t('modelMenu.providers')} onPress={() => toSettings()} testID="model-menu-providers" />
-                <Button variant="secondary" label={t('modelMenu.cancel')} onPress={onClose} />
             </Stack>
         </Sheet>
     );
