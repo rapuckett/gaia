@@ -12,6 +12,7 @@ after it is removed. Pruning runs whenever a row is written or the list read.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import Request
@@ -73,6 +74,12 @@ def record_device_change(request: Request, kind: str, **params: Any) -> None:
     paired = [d.id for d in access.devices()]
     db.prune_device_changes(paired, now, now - _RETENTION_SECONDS)
     logger.info("Device %s changed %s on the PC", device.device_id, kind)
+
+
+def record_folder_added(request: Request, path: str) -> None:
+    """Note that the device behind *request* gave a chat the folder *path*, by name."""
+    name = Path(path).name or path
+    record_device_change(request, "folderAdded", folder=name[:DEVICE_CHANGE_PARAM_MAX])
 
 
 def prune_device_changes(request: Request, paired: Optional[List[str]]) -> None:

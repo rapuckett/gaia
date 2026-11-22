@@ -27,6 +27,7 @@ const KEYS = {
     profileScanOff: `${P}profileScanOff`,
     pairingClosed: `${P}pairingClosed`,
     npuMemlockFixed: `${P}npuMemlockFixed`,
+    folderAdded: `${P}folderAdded`,
 } as const satisfies Record<string, MessageKey>;
 
 const DISCORD_ACTIONS = {

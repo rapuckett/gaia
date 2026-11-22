@@ -593,9 +593,9 @@ export const AGENT_EVENT_TYPES: ReadonlySet<string> = new Set([
 export const RESOLVES_PROMPTS: ReadonlySet<string> = new Set(['tool_start', 'tool_end', 'tool_result']);
 
 /** The PC's folder listing; a phone names the chat whose folders it may see. */
-export function filesBrowsePath(sessionId: string, path?: string): string {
+export function filesBrowsePath(sessionId: string | null, path?: string): string {
     const query = new URLSearchParams(path ? { path } : {});
-    query.set('session_id', sessionId);
+    if (sessionId) query.set('session_id', sessionId);
     return `${ENDPOINTS.filesBrowse}?${query}`;
 }
 

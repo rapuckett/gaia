@@ -5,6 +5,7 @@ export { useAttachments, type Attachments } from './useAttachments';
 export { ContextMeter, ContextWarning } from './ContextMeter';
 export { SpendMeter } from './SpendMeter';
 export { FolderChip, SessionFolderChip } from './FolderChip';
+export { useNextChatFolder } from './nextChatFolder';
 export { ModelChip } from './ModelChip';
 export { PermissionChip } from './PermissionChip';
 export { PrivateChip } from './PrivateChip';

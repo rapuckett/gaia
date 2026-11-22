@@ -59,6 +59,7 @@ const CHANGE_KINDS = {
     localOnlyOn: ['settings.devices.change.localOnlyOn', []],
     agentInstalled: ['settings.devices.change.agentInstalled', []],
     npuMemlockFixed: ['settings.devices.change.npuMemlockFixed', []],
+    folderAdded: ['settings.devices.change.folderAdded', ['folder']],
     skillAdded: ['settings.devices.change.skillAdded', ['name']],
     skillAddedCode: ['settings.devices.change.skillAddedCode', ['name']],
     connectorSetup: ['settings.devices.change.connectorSetup', ['connector']],
