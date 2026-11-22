@@ -3,7 +3,7 @@
 
 import type { SetupCatalogEntry, SetupModelProgress, SetupRole, SetupTest } from '@webui/types';
 
-import { GaiaNetworkError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { GaiaClient, GpuMemoryStatus, PreflightReport, SetupPlan, SetupRunStatus } from '@/api/client.types';
 
@@ -22,6 +22,8 @@ export interface SetupScene {
     chip?: boolean;
     /** Optional models already added, so their buttons read Added (FR-DL-08). */
     queued?: string[];
+    /** The existing-server offer with this picked and typed, and its confirm sheet up when `confirming` (FR-CHECK-03). */
+    offer?: { pick: 'gaia' | 'external'; key?: string; confirming?: boolean };
 }
 
 export type ConfirmScene = 'low-disk' | 'no-fit-many' | 'no-fit-one' | 'server-low-disk' | 'server-no-fit';
@@ -298,7 +300,7 @@ const START_CARDS: NonNullable<FakeClientData['start']> = {
     working_folder: { path: '/home/you', name: 'you', gaia_folder: false, choosable: true },
 };
 type Step = 'check' | 'plan' | 'gpu' | 'models' | 'key' | 'download' | 'test' | 'ready';
-const scene = (step: Step, data: FakeClientData = {}, extra: Pick<SetupScene, 'shell' | 'confirm' | 'chip' | 'queued'> = {}): SetupScene => {
+const scene = (step: Step, data: FakeClientData = {}, extra: Pick<SetupScene, 'shell' | 'confirm' | 'chip' | 'queued' | 'offer'> = {}): SetupScene => {
     const stage: SetupStage = step === 'gpu' || step === 'models' || step === 'key' ? 'plan' : step;
     return { stage, screen: step === 'gpu' || step === 'models' || step === 'key' ? step : undefined, data, ...extra };
 };
@@ -309,6 +311,12 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'check/failed': scene('check', { setupPlan: PLAN_COLD, setupStatus: SERVER_FAILED }),
     'check/found': scene('check'),
     'check/offer': scene('check', THEIRS),
+    // FR-CHECK-03: "Use the one I have" picked; one that needs its key; the confirm sheet Continue opens; and after
+    // `#tap=own-server-confirm` the one sentence the PC's failed check gets.
+    'check/offer-mine': scene('check', THEIRS, { offer: { pick: 'external' } }),
+    'check/offer-needs-key': scene('check', { ...THEIRS, lemonadeDetect: { found: { ...THEIRS.lemonadeDetect.found, status: 'needs_key' as const }, unchecked: [] } }, { offer: { pick: 'external' } }),
+    'check/offer-confirm': scene('check', THEIRS, { offer: { pick: 'external', confirming: true } }),
+    'check/offer-failed': scene('check', { ...THEIRS, serverChangeError: new GaiaApiError(422, "GAIA couldn't use a Lemonade Server at that address.") }, { offer: { pick: 'external', confirming: true } }),
     'check/running': scene('check', { setupPlan: PLAN_COLD, setupStatus: SERVER_RUNNING }),
     'chip/failed': scene('download', { setupStatus: RUN_VERIFY_FAILED }, { chip: true }),
     'chip/moving': scene('download', { setupStatus: RUN }, { chip: true }),

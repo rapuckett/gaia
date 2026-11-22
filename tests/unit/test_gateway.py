@@ -1077,6 +1077,21 @@ class TestAKeyThatDiscoversNothingIsRejected:
 # ── check_reachable (#5604) ────────────────────────────────────────────────
 
 
+def _resolve_to(addresses):
+    import socket
+
+    looked_up = []
+
+    def getaddrinfo(host, port, type=0, proto=0):
+        assert (type, proto) == (socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        looked_up.append((host, port))
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", (a, port)) for a in addresses
+        ]
+
+    return getaddrinfo, looked_up
+
+
 def test_check_reachable_dials_the_gateway_host_on_443(monkeypatch):
     import socket
 
@@ -1092,14 +1107,38 @@ def test_check_reachable_dials_the_gateway_host_on_443(monkeypatch):
         dialed.append((addr, timeout))
         return _Conn()
 
+    getaddrinfo, looked_up = _resolve_to(["93.184.215.14"])
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
     monkeypatch.setattr(socket, "create_connection", fake_connect)
     gateway.check_reachable("https://llm-api.amd.com/Unified/v1")
     gateway.check_reachable("http://gw.example.test:8080/v1")
+    assert looked_up == [("llm-api.amd.com", 443), ("gw.example.test", 8080)]
     assert [a for a, _ in dialed] == [
-        ("llm-api.amd.com", 443),
-        ("gw.example.test", 8080),
+        ("93.184.215.14", 443),
+        ("93.184.215.14", 8080),
     ]
     assert all(t == gateway.REACH_TIMEOUT for _, t in dialed)
+
+
+def test_check_reachable_dials_at_most_three_addresses(monkeypatch):
+    """A host with many dead addresses answers within three dials."""
+    import socket
+
+    from gaia.llm import gateway
+
+    dialed = []
+
+    def refuse(addr, timeout):
+        dialed.append(addr[0])
+        raise OSError("connection refused")
+
+    addresses = [f"93.184.215.{n}" for n in range(1, 16)]
+    getaddrinfo, _ = _resolve_to(addresses)
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(socket, "create_connection", refuse)
+    with pytest.raises(gateway.GatewayUnreachable, match="gw.example.com"):
+        gateway.check_reachable("https://gw.example.com/v1")
+    assert dialed == addresses[: gateway.REACH_DIAL_LIMIT] == addresses[:3]
 
 
 def test_check_reachable_names_the_vpn_for_an_unresolvable_host(monkeypatch):
@@ -1107,10 +1146,10 @@ def test_check_reachable_names_the_vpn_for_an_unresolvable_host(monkeypatch):
 
     from gaia.llm import gateway
 
-    def fail(addr, timeout):
+    def fail(host, port, type=0, proto=0):
         raise socket.gaierror(8, "nodename nor servname provided, or not known")
 
-    monkeypatch.setattr(socket, "create_connection", fail)
+    monkeypatch.setattr(socket, "getaddrinfo", fail)
     with pytest.raises(gateway.GatewayUnreachable) as exc:
         gateway.check_reachable(None)
     assert exc.value.host == "llm-api.amd.com"

@@ -4,6 +4,7 @@
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { SystemStatus } from '@/api/client.types';
 import { isStarting } from '@/data';
+import { namesSetupCommand, needsLocalSetup } from '@/features/settings/panes/advanced/statusText';
 import { technicalDetail, type Translate } from '@/i18n/useT';
 import type { NoticeTone } from '@/ui';
 import { isolate } from '@webui/i18n/registry';
@@ -19,6 +20,8 @@ export interface Banner {
     detail?: string;
     /** The raw cause, for a Details disclosure; never part of the sentence. */
     details?: string;
+    /** How the PC starts its model server, as it sent it: a command or its own instruction, on a line of its own. */
+    command?: string;
     /** The web lets these go: a failed download, a stopped or hung model server, a too-small context window. */
     dismissible?: boolean;
     /** Re-asks GAIA; shown as the "Check again" action. */
@@ -128,11 +131,23 @@ export function pickBanner(
     if (!status.lemonade_running) {
         // Listening but failing its health check is usually busy, not stopped.
         const hung = Boolean(status.lemonade_error);
+        // A server that listens is installed: setup can't fix a hang, so it isn't offered.
+        const setupNeeded = !hung && needsLocalSetup(status);
+        const command = hung && namesSetupCommand(status.start_command) ? null : status.start_command;
+        const instruction = hung && namesSetupCommand(status.start_instruction) ? null : status.start_instruction;
+        // GAIA starts its own server by itself, so then the PC sends no way to start it and the title stands alone.
+        const hint = setupNeeded
+            ? { message: t('banner.finishSetup') }
+            : command
+              ? { message: t(hung ? 'banner.restartHint' : 'banner.startHint'), command }
+              : instruction
+                ? { command: instruction }
+                : {};
         return {
             id: hung ? 'serverHung' : 'serverStopped',
             tone: 'warning',
             title: t(hung ? 'banner.serverHung' : 'banner.serverStopped'),
-            message: t('mobileApp.banner.openOnPc'),
+            ...hint,
             retry: true,
             dismissible: true,
         };

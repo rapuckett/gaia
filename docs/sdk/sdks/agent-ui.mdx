@@ -3569,14 +3569,17 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     current gateway to put back. A device's host is looked up once, every
     address must be public, and GAIA's check dials the first three of those
     addresses with TLS for the name given, so a second lookup can't point it
-    elsewhere. The check runs before the move takes the gateway key lock, so a
-    slow host doesn't hold up other replays. One try per device every 10 s
-    (**429**).
+    elsewhere. One try per device every 10 s (**429**). The PC's own connect
+    checks its gateway with a plain connect to the first three addresses.
+    Either check runs before the gateway key lock is taken, so a slow host
+    doesn't hold up other replays; when the address it checked is no longer
+    the one the connect would use, the connect gets a **409**.
 
     Any change of the `amd` address, with a key or without, first drops the key
     Lemonade holds for the old address. Only one replay or move of the gateway
     key runs at a time across every GAIA process (the Agent UI, the daemon, the
-    CLI and agents); a connect that waits over 60 s for another one gets a
+    CLI, agents, and the terminal app, which changes the gateway through the
+    daemon); a connect that waits over 60 s for another one gets a
     **409** saying so. The saved key lives in the credential store's
     `gateway:amd:v2` slot, which older GAIA versions don't read; a key in the
     old `gateway:amd` slot moves there, bound to the gateway it serves, the

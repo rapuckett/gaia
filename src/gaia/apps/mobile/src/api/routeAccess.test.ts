@@ -8,6 +8,7 @@ describe('isDeviceRefused', () => {
         expect(isDeviceRefused('GET', '/api/providers')).toBe(true);
         expect(isDeviceRefused('get', '/api/providers')).toBe(true);
         expect(isDeviceRefused('POST', '/api/devices/pairing')).toBe(true);
+        expect(isDeviceRefused('POST', '/api/messaging/discord/connect')).toBe(false);
         expect(isDeviceRefused('POST', '/api/messaging/discord/start')).toBe(false);
         expect(isDeviceRefused('POST', '/api/providers/key-store/retry')).toBe(false);
         expect(isDeviceRefused('GET', '/api/settings')).toBe(false);
