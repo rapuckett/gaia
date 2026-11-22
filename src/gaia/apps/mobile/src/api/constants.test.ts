@@ -130,6 +130,7 @@ describe('endpoints', () => {
         localModelRestart: ['POST'],
         localModelStatus: ['GET'],
         logs: ['GET'],
+        logRead: ['GET'],
         mcpStatus: ['GET'],
         media: ['GET'],
         memoryActivity: ['GET'],

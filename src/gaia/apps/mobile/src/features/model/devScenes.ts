@@ -24,6 +24,8 @@ export interface ModelScene {
     errorVariant?: 'window' | 'fill' | 'compact';
     /** What the switch to GAIA's own server throws. */
     switchError?: Error;
+    /** The PC's choice of model server never answers. */
+    targetPending?: boolean;
     /** The first status read never answers. */
     pending?: boolean;
 }
@@ -77,6 +79,8 @@ export const MODEL_SCENES: Record<string, ModelScene> = {
     'down-switch-failed': { view: 'down', data: other(), downSwitch: 'press', switchError: new GaiaApiError(500, 'Lemonade refused to start: port 13305 is in use.') },
     'down-switch-pc-only': { view: 'down', data: other({ serverChangeError: new GaiaApiError(403, 'Forbidden') }), downSwitch: 'press' },
     'down-switching': { view: 'down', data: other(), downSwitch: 'never' },
+    'down-target-failed': { view: 'down', data: other({ lemonadeTarget: new GaiaApiError(500, 'Could not read the model server choice: config.json is locked.') }) },
+    'down-target-loading': { view: 'down', data: other(), targetPending: true },
     'down-not-ours': { view: 'down', data: model({ ...STOPPED, owner: 'user' }) },
     'down-ours': { view: 'down', data: model(STOPPED) },
     'down-restart-error': { view: 'down', data: model({ ...STOPPED, restart_error: 'lemond exited with code 1: port 13305 is in use.' }) },
@@ -122,6 +126,7 @@ export function modelSceneClient(scene: ModelScene): GaiaClient {
     return {
         ...client,
         ...(scene.pending ? { getLocalModelStatus: pending } : {}),
+        ...(scene.targetPending ? { getLemonadeTarget: pending } : {}),
         ...(scene.downSwitch === 'never' ? { setLemonadeTarget: pending } : {}),
         ...(scene.switchError ? { setLemonadeTarget: () => Promise.reject(scene.switchError) } : {}),
     };

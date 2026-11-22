@@ -15,6 +15,7 @@ import {
     useSystemStatus,
 } from '@/data';
 import { useT } from '@/i18n/useT';
+import { ModelServerDownNotice } from '@/features/model/ModelServerDownNotice';
 import { Card, Disclosure, Notice, PillTabs, Row, Spinner, Stack, Text } from '@/ui';
 import { Cloud, Cpu } from '@/ui/icons';
 
@@ -61,6 +62,9 @@ export default function Model({ provider: requested }: { provider?: string }) {
     const connected = !!provider && !blocked && provider.configured;
     const local = provider?.id === 'local';
     const serverHung = !!systemStatus.data && !systemStatus.data.lemonade_running && !!systemStatus.data.lemonade_error;
+    const lemonadeError = providersQuery.data?.lemonadeError;
+    const serverDown = (!!systemStatus.data && !systemStatus.data.lemonade_running) || !!lemonadeError;
+    const serverDetail = lemonadeError || (systemStatus.data && !systemStatus.data.lemonade_running ? systemStatus.data.lemonade_error : null);
 
     const modelsQuery = useProviderModels(chosen, connected);
     const models = modelsQuery.data?.models;
@@ -83,11 +87,12 @@ export default function Model({ provider: requested }: { provider?: string }) {
     };
 
     const pcOnly = isPcRefusal(providersQuery.error);
-    const loadError = pcOnly ? null : providersQuery.error ? errorText(providersQuery.error, t) : providersQuery.data?.lemonadeError;
+    const loadError = pcOnly || !providersQuery.error ? null : errorText(providersQuery.error, t);
     const row = listedInUse ?? (sameModelId(inUseRow?.id, active?.model) ? inUseRow : null);
 
     return (
         <Stack gap="lg" paddingX="lg" paddingY="md">
+            {serverDown ? <ModelServerDownNotice detail={serverDetail} inPane /> : null}
             <ModelInUse
                 active={active}
                 readFailed={!!activeQuery.error}

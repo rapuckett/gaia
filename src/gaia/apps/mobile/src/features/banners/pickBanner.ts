@@ -24,6 +24,8 @@ export interface Banner {
     command?: string;
     /** The web lets these go: a failed download, a stopped or hung model server, a too-small context window. */
     dismissible?: boolean;
+    /** Setup isn't done on this PC: the card offers "Open setup" beside "Check again". */
+    setup?: boolean;
     /** Re-asks GAIA; shown as the "Check again" action. */
     retry?: boolean;
     /** The model whose failed download the "Retry" action starts again. */
@@ -33,6 +35,9 @@ export interface Banner {
     /** 0 to 1 for a determinate line; undefined for an indeterminate one. */
     progress?: { value?: number; label?: string };
 }
+
+/** The banners that say the model server isn't answering; each replaces the setup gate's generic "can't reply yet" notice. */
+export const isServerDownBanner = (banner: Banner | null | undefined): boolean => banner?.id === 'serverStopped' || banner?.id === 'serverHung';
 
 /** Keeps "12s" reading left to right inside Arabic text. */
 const ltr = (text: string) => `\u2066${text}\u2069`;
@@ -148,6 +153,7 @@ export function pickBanner(
             tone: 'warning',
             title: t(hung ? 'banner.serverHung' : 'banner.serverStopped'),
             ...hint,
+            ...(setupNeeded ? { setup: true } : {}),
             retry: true,
             dismissible: true,
         };

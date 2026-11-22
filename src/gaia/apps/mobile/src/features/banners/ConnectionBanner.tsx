@@ -4,18 +4,20 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 
-import { useActiveModel, useGaiaClient, useGoalStoreError, useModelActions, useQueryFailure, useStatusHealth, useSystemStatus } from '@/data';
+import { useGaiaClient, useModelActions } from '@/data';
 import { useT } from '@/i18n/useT';
 import { openChat } from '@/features/nav/navigation';
-import { hasTailnetRoute, useActiveConnection } from '@/features/pairing/routes';
+import { reopenSetup } from '@/features/setup/reopenSetup';
+import { useGateRecheck } from '@/features/setup/gateRecheck';
 import { useAnnounce } from '@/platform/useAnnounce';
 import { useBannerDismissedStore } from '@/state/bannerDismissed';
 import { useChatAlertBannerStore, type ChatAlertBanner } from '@/state/chatAlertBanner';
 import { usePickLoadStore } from '@/state/pickLoad';
-import { sameModelId } from '@webui/utils/modelList.core';
 import { Disclosure, Ltr, Notice, ProgressLine, Stack } from '@/ui';
 
-import { pickBanner } from './pickBanner';
+import { isServerDownBanner } from './pickBanner';
+import { ServerDownCard } from './ServerDownCard';
+import { useBannerPick } from './useBannerPick';
 
 export function ChatAlertNotice({ alert }: { alert: ChatAlertBanner }) {
     const t = useT();
@@ -50,25 +52,16 @@ function BannerDetails({ text }: { text: string }) {
 }
 
 /** The banner for the top of a `Screen`: a chat alert, then connection trouble; nothing while all is well or no PC is connected. */
-export function ConnectionBanner() {
+export function ConnectionBanner({ hideServerDown = false }: { /** Settings carries the model server's state in its own pane, so no server-down card sits above it. */ hideServerDown?: boolean } = {}) {
     const t = useT();
-    const status = useSystemStatus();
-    const { data, refetch } = status;
-    const held = useQueryFailure(status).error;
-    // A PC that answered once keeps its last status in the cache; its latest failure must still show.
-    const error = status.error ?? held;
-    const { slow, slowPending, lost } = useStatusHealth();
-    const connection = useActiveConnection();
-    const goalStoreError = useGoalStoreError().data;
     const client = useGaiaClient();
-    const load = usePickLoadStore((s) => s.pickLoad);
-    const activeModel = useActiveModel().data;
-    const name = load && sameModelId(activeModel?.model, load.model) ? activeModel?.display_name : null;
-    const picked = pickBanner(data, error, t, goalStoreError, { load, name, awayHint: hasTailnetRoute(connection), slow, slowPending, lost });
-    const redownload = useModelActions(picked?.downloadRetry ?? null, data);
+    const { picked, refetch, status } = useBannerPick();
+    const redownload = useModelActions(picked?.downloadRetry ?? null, status.data);
     const { dismissed, dismiss, reconcile } = useBannerDismissedStore();
     useEffect(() => reconcile(picked), [picked?.id, picked?.dismissible, reconcile]); // eslint-disable-line react-hooks/exhaustive-deps
-    const banner = picked && picked.id === dismissed ? null : picked;
+    const shown = hideServerDown && isServerDownBanner(picked) ? null : picked;
+    const banner = shown && shown.id === dismissed ? null : shown;
+    const recheckGate = useGateRecheck();
     const alert = useChatAlertBannerStore((s) => s.alert);
     useAnnounce([alert?.title, alert?.message, banner?.title, banner?.message].filter(Boolean).join('. '));
     if (!banner && !alert) return null;
@@ -77,6 +70,17 @@ export function ConnectionBanner() {
             {alert ? <ChatAlertNotice alert={alert} /> : null}
             {banner ? (
                 <Stack gap="sm" testID={`banner-${banner.id}`}>
+                    {isServerDownBanner(banner) ? (
+                        <ServerDownCard
+                            banner={banner}
+                            onDismiss={() => dismiss(banner.id)}
+                            onCheckAgain={() => {
+                                void refetch();
+                                void recheckGate?.();
+                            }}
+                            onOpenSetup={banner.setup ? reopenSetup : undefined}
+                        />
+                    ) : (
                     <Notice
                         tone={banner.tone}
                         title={banner.title}
@@ -93,6 +97,7 @@ export function ConnectionBanner() {
                                     : undefined
                         }
                     />
+                    )}
                     {banner.details ? <BannerDetails text={banner.details} /> : null}
                     {banner.progress ? <ProgressLine value={banner.progress.value} label={banner.progress.label} /> : null}
                 </Stack>

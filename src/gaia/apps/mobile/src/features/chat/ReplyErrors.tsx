@@ -40,12 +40,12 @@ function PcOnlyLine({ text, testID }: { text: string; testID: string }) {
     );
 }
 
-/** The log and report lines of a failed reply on a local model: both are read on the PC only. */
+/** A failed reply on a local model points to the phone's Logs screen; the report is saved on the PC only. */
 function PcOnlyFailureLines({ showLog, showReport }: { showLog: boolean; showReport: boolean }) {
     const t = useT();
     return (
         <>
-            {showLog ? <PcOnlyLine text={t('mobileApp.pcOnly.logs')} testID="pc-only-logs" /> : null}
+            {showLog ? <PcOnlyLine text={t('mobileApp.logs.seeLogs')} testID="see-logs" /> : null}
             {showReport ? (
                 <PcOnlyAction
                     label={t('setup.logs.report')}
