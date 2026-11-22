@@ -163,7 +163,17 @@ export interface ConnectorRow {
      * ``product_url`` in that case.
      */
     docs_url: string | null;
-    configured: boolean;
+    /**
+     * ``null`` only with ``key_store`` set: the PC's OS key store
+     * held back the read, so whether it is connected is unknown.
+     */
+    configured: boolean | null;
+    /**
+     * Set when the OS key store held back this connector's read:
+     * ``waiting`` while its unlock prompt is open, ``locked`` once it was
+     * refused or closed. Absent once the read finished.
+     */
+    key_store?: 'waiting' | 'locked' | null;
     /**
      * ``false`` when the connector cannot be instantiated as configured —
      * for example, an ``oauth_pkce`` provider whose required environment

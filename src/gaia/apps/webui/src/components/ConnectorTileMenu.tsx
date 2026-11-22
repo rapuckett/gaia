@@ -40,7 +40,7 @@ interface Props {
  * everything else.
  */
 function shouldRenderMenu(connector: ConnectorRow): boolean {
-    return connector.type === 'mcp_server' && connector.configured;
+    return connector.type === 'mcp_server' && connector.configured === true;
 }
 
 export function ConnectorTileMenu({ connector, onChanged }: Props) {

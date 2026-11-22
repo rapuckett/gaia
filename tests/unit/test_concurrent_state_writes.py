@@ -134,7 +134,8 @@ def test_race_that_fails_before_release_leaves_no_racer_running(tmp_path, monkey
     monkeypatch.setattr(sys.modules[__name__], "_spawn", spawn)
     specs = [("together()\n",), ("together()\n",), ("import time\ntime.sleep(600)\n",)]
     with pytest.raises(AssertionError, match="never became ready"):
-        _race(tmp_path, specs, ready_timeout=15)
+        # The third racer never gets ready, so any wait here ends in the same failure.
+        _race(tmp_path, specs, ready_timeout=3)
     assert len(spawned) == 3
     assert [p.poll() for p in spawned if p.poll() is None] == []
 
@@ -574,19 +575,16 @@ if failures:
 """
 
 
-def test_rag_cache_reader_never_sees_a_half_written_cache(tmp_path):
+def test_rag_cache_reader_never_sees_a_half_written_cache(tmp_path, monkeypatch):
     cache_path = tmp_path / "rag" / "doc.json"
     cache_path.parent.mkdir()
     enough = str(tmp_path / "enough-reads")
     # One write first, so both racers share the HMAC key and an initial cache.
-    seed_enough = str(tmp_path / "seed-enough")
-    Path(seed_enough).touch()
-    (seed,) = _race(
-        tmp_path,
-        [(_RAG_CACHE_WORKER, "write", str(cache_path), "1", seed_enough)],
-        tag="seed",
+    # Done here rather than in a third process, which costs a whole gaia import.
+    monkeypatch.setenv("GAIA_HOME", str(tmp_path / "gaia-home"))
+    _rag_signer()._save_cache(
+        str(cache_path), {"chunks": ["0" * 2000], "full_text": "", "metadata": {}}
     )
-    assert _finish([seed])[0][0] == 0
 
     procs = _race(
         tmp_path,

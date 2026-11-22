@@ -417,9 +417,10 @@ def test_a_megabyte_of_skill_words_is_classified_quickly(prefix, unit):
     import time
 
     message = prefix + unit * 100000
-    start = time.perf_counter()
+    # CPU time, not wall clock: other jobs' load must not fail a complexity guard.
+    start = time.process_time()
     requested_tools(message, SKILL_REGISTRY)
-    assert time.perf_counter() - start < 1.0
+    assert time.process_time() - start < 1.0
 
 
 def test_a_huge_paste_is_classified_quickly():
@@ -427,6 +428,6 @@ def test_a_huge_paste_is_classified_quickly():
     import time
 
     message = "save this skill\n" + "---\nname: x\n" * 5000
-    start = time.perf_counter()
+    start = time.process_time()
     requested_tools(message, SKILL_REGISTRY)
-    assert time.perf_counter() - start < 5.0
+    assert time.process_time() - start < 5.0

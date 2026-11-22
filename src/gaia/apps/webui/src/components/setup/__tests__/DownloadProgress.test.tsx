@@ -82,7 +82,7 @@ describe('DownloadProgress', () => {
         ], { state: 'failed' })} names={NAMES} onRetry={vi.fn()} onResume={vi.fn()} />);
         expect(within(rowOf('Qwen3.6-35B-A3B')).getByText('Checking')).toBeInTheDocument();
         expect(within(rowOf('Gemma-4-E4B-it')).getByText('Failed')).toBeInTheDocument();
-        expect(within(rowOf('embeddinggemma-300m')).getByText('Cancelled')).toBeInTheDocument();
+        expect(within(rowOf('embeddinggemma-300m')).getByText('Canceled')).toBeInTheDocument();
         expect(within(rowOf('embeddinggemma-300m')).getByText('100 MB kept. Resume continues from there.')).toBeInTheDocument();
     });
 

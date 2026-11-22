@@ -209,8 +209,11 @@ def test_secrets_are_found_once_not_per_stderr_line(tmp_path, monkeypatch):
     assert transport.connect()
     try:
         box, _ = _call_with_watchdog(lambda: transport.send_request("tools/list"))
-        deadline = time.monotonic() + 5
-        while len(transport._stderr_tail) < 500 and time.monotonic() < deadline:
+        # The tail keeps 200 lines, so wait for the last one, not for 500.
+        tail, deadline = transport._stderr_tail, time.monotonic() + 5
+        while not (tail and tail[-1].startswith("log line 499")):
+            if time.monotonic() > deadline:
+                break
             time.sleep(0.05)
     finally:
         transport.disconnect()
@@ -418,7 +421,9 @@ for line in sys.stdin:
 
 
 @pytest.mark.parametrize("mode", ["die", "stdout", "reject", "list", "call", "result"])
-def test_no_part_of_a_secret_reaches_a_label_log_or_error(tmp_path, caplog, mode):
+def test_no_part_of_a_secret_reaches_a_label_log_or_error(
+    tmp_path, caplog, monkeypatch, mode
+):
     """Property: no 4-character run of a secret ever reaches the server's
     label, GAIA's logs (at DEBUG, with debug on), an error, last_error, or a
     tool result, when the secret sits where config secrets sit: an env
@@ -435,6 +440,8 @@ def test_no_part_of_a_secret_reaches_a_label_log_or_error(tmp_path, caplog, mode
     # GAIA pins these loggers at INFO; the debug lines are under test too.
     for name in ("gaia.mcp.client.transports.stdio", "gaia.mcp.client.mcp_client"):
         caplog.set_level(logging.DEBUG, logger=name)
+    # One process-table scan per launch instead of five; the window stays 0.1 s.
+    monkeypatch.setattr(stdio_module, "_STARTUP_CHECK_SLICES", 1)
     script = tmp_path / "echo.py"
     script.write_text(_ECHO_STUB)
     exe = sys.executable.replace("\\", "/")
@@ -1308,7 +1315,8 @@ def test_known_secrets_are_cleaned_in_every_form_they_arrive_in(
         except ValueError as e:
             seen.append(str(e))
         seen.append(repr(client.call_tool("x", {})))
-        time.sleep(0.5)
+        # Stderr is read only from a server that has exited, as this one now does.
+        client.transport._process.wait(timeout=30)
         seen.append(client.transport._read_stderr())
     finally:
         client.disconnect()

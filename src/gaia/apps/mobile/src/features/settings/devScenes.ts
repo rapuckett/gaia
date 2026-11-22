@@ -382,7 +382,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-key-error': keyFields({ configured: false, key_source: 'stored', key_hint: '4f2a', error: 'HTTP 401: invalid api key' }),
     // SET-MODEL-10: a key Lemonade already holds, shown masked like a saved one.
     'model-key-lemonade': keyFields({ configured: true, key_source: 'lemonade', key_hint: '7b3d' }),
-    // SET-MODEL-10: GAIA on the PC hasn't read its key store since it started: "Waiting for the OS…".
+    // SET-MODEL-10: GAIA on the PC hasn't read its key store since it started: "Waiting for your PC…".
     'model-key-unknown': keyFields({ configured: false, key_state: 'unknown' }),
     // SET-MODEL-18: the PC's list says its key store is locked, before anything is sent: the warning and Try again.
     'model-key-store-locked': keyFields({ configured: false, key_state: 'store_locked' }),
