@@ -4199,6 +4199,7 @@ export const enMessages = {
     'mobileApp.env.removeConfirm': 'Remove {name} from this chat? GAIA is refused there until you add it back on your PC.',
     'mobileApp.env.yourPc': 'Your PC',
     'mobileApp.serverDown.title': 'The model server on your PC isn’t answering',
+    'mobileApp.serverDown.notOurs': "GAIA doesn't run this server, so it can't start it. Start it on your PC the way you usually do, then send your message again.",
     'mobileApp.skills.yoursEmpty': 'None yet. Add a folder with a SKILL.md file to {path} on your PC and it shows up here.',
     'mobileApp.skills.pcTitle': 'Add these on your PC',
     'mobileApp.skills.linkHint': 'A {github} repo or folder, {repo}, a {skills} page, or an {https} {zip} link. A library adds every skill in it.',
