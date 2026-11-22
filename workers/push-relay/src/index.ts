@@ -7,6 +7,7 @@
  *   POST   /v1/handles                register a device token, returns {handle, secret}
  *   PUT    /v1/handles/{handle}       rotate the token                (Bearer secret)
  *   DELETE /v1/handles/{handle}       delete the handle               (Bearer secret)
+ *   POST   /v1/handles/{handle}/send  push an encrypted blob          (Bearer secret)
  *   GET    /v1/health                 liveness, no auth
  *
  * A daily cron drops idle handles and ended rate windows.
@@ -14,6 +15,7 @@
 
 import { cleanup, deleteHandle, registerHandle, rotateToken } from "./handles";
 import { errorResponse, HttpError, json } from "./http";
+import { sendToHandle } from "./send";
 import type { Env } from "./types";
 
 const methodNotAllowed = () => new HttpError(405, "method_not_allowed");
@@ -35,6 +37,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (method === "PUT") return rotateToken(request, env, m[1]);
     if (method === "DELETE") return deleteHandle(request, env, m[1]);
     throw methodNotAllowed();
+  }
+  const send = /^\/v1\/handles\/([^/]+)\/send$/.exec(pathname);
+  if (send) {
+    if (method !== "POST") throw methodNotAllowed();
+    return sendToHandle(request, env, send[1]);
   }
   throw new HttpError(404, "not_found");
 }
