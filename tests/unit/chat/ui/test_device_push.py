@@ -66,7 +66,8 @@ class FakeRelay:
         self.calls = []
         self.answers = []
 
-    def __call__(self, host, port, address, path, headers, body):
+    def __call__(self, host, port, address, path, headers, body, *, deadline):
+        assert 0 < deadline <= push.PUSH_SEND_SECONDS
         self.calls.append(
             SimpleNamespace(
                 host=host,
@@ -218,6 +219,13 @@ def test_a_device_turns_push_on_reads_it_and_turns_it_off(phone):
         ("https://relay.example.com", "0.0.0.0"),
         ("https://relay.example.com", "fd00::1"),
         ("https://relay.example.com", "fe80::1"),
+        ("https://relay.example.com", "::ffff:10.0.0.1"),
+        ("https://relay.example.com", "64:ff9b::7f00:1"),
+        ("https://relay.example.com", "::127.0.0.1"),
+        ("https://relay.example.com/caf\u00e9", PUBLIC),
+        ("https://relay.example.com/a b", PUBLIC),
+        ("https://relay.example.com/%zz", PUBLIC),
+        ("https://relay.example.com/\x07", PUBLIC),
     ],
 )
 def test_a_relay_that_isnt_public_https_is_refused(
@@ -241,6 +249,10 @@ def test_a_relay_that_isnt_public_https_is_refused(
         {"platform": "sms"},
         {"extra": "field"},
         {"key": None},
+        {"key": b64(os.urandom(32)) + "="},
+        {"handle": b64(os.urandom(16))[:-1] + "!"},
+        {"send_token": "A" * 42 + "\n"},
+        {"send_token": "A" * 44},
     ],
 )
 def test_bad_push_settings_are_refused_without_echoing_them(phone, overrides):
@@ -291,6 +303,7 @@ def sender(phone, monkeypatch):
     relay, clock, wall_ms = FakeRelay(), Clock(), WallMs()
     notifier = PushNotifier(phone.app, transport=relay, clock=clock, wall_ms=wall_ms)
     monkeypatch.setattr(notifier, "_put", notifier.handle)
+    monkeypatch.setattr(notifier, "_submit", lambda _d, _h, send: send() or True)
     push.bind(notifier)
     db = phone.app.state.db
     session = db.create_session(title="Quarterly report")
@@ -335,7 +348,14 @@ def _compact(payload):
 
 
 def _collapse(key, subject):
-    return b64(hmac.new(key, subject.encode(), hashlib.sha256).digest()[:16])
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+    derived = HKDF(
+        algorithm=hashes.SHA256(), length=32, salt=b"", info=b"gaia-push-collapse-v1"
+    ).derive(key)
+    assert derived != key
+    return b64(hmac.new(derived, subject.encode(), hashlib.sha256).digest()[:16])
 
 
 def test_an_approval_push_is_encrypted_to_the_phone(sender):
@@ -542,7 +562,7 @@ def test_nothing_secret_reaches_the_logs(sender, monkeypatch, caplog):
         sender.notifier.needs_you("setup")
         sender.clock.now += 3601 * 2
 
-    def broken(*_a):
+    def broken(*_a, **_k):
         raise OSError(f"boom {sender.record.send_token}")
 
     sender.phone.access.set_push(sender.record)
@@ -747,3 +767,218 @@ def test_a_new_key_resets_seq_and_the_same_key_keeps_it(phone):
     assert phone.access.next_push_seq(phone.device_id, 0) == 4
     phone.access.set_push(_record(phone.device_id))
     assert phone.access.next_push_seq(phone.device_id, 0) == 1
+
+
+# ── Security review follow-ups ────────────────────────────────────────────
+
+
+def test_the_aes_gcm_test_vector():
+    """The vector the phone must match: AAD is the handle's text, then 0x01."""
+    key = bytes(range(32))
+    handle = b64(bytes(range(16)))
+    assert handle == "AAECAwQFBgcICQoLDA0ODw"
+    assert push.associated_data(handle).hex() == (
+        "41414543417751464267634943516f4c4441304f447701"
+    )
+    ciphertext, nonce = push.encrypt(
+        key, handle, b'{"v":1,"kind":"badge","badge":3}', bytes(range(12))
+    )
+    assert nonce == "AAECAwQFBgcICQoL"
+    assert ciphertext == (
+        "PCCgOf_U7jnmKPnvk9NaD-Ky4FHSV30eWQOC4D9TM89HHC7356eSJUqWpl1JJjID"
+    )
+    assert collapse_id(key, "b") == "ig1dJZsrLW0ooa4Pj6MLoQ" == _collapse(key, "b")
+
+
+def test_an_approval_names_its_tool(sender):
+    push.observe_run_frame(
+        sender.session_id,
+        'data: {"type": "permission_request", "tool": "write_file", '
+        '"tool_label": "writing file", "confirm_id": "c-1"}\n\n',
+    )
+    params = _opened(sender, sender.relay.calls[0])["params"]
+    assert (params["tool"], params["label"]) == ("write_file", "writing file")
+
+
+def _second_device(phone, relay_url):
+    invite, _ = phone.access.pairing.open()
+    other = phone.access.redeem(invite, "Other", "android", "192.168.1.31")
+    phone.access.allow(other["device_id"])
+    record = PushRecord(
+        device_id=other["device_id"],
+        relay_url=relay_url,
+        handle=b64(os.urandom(16)),
+        send_token=b64(os.urandom(32)),
+        key=b64(os.urandom(32)),
+        platform="fcm",
+    )
+    phone.access.set_push(record)
+    return record
+
+
+def test_one_broken_device_does_not_stop_the_others(sender, caplog):
+    # Stored before the PUT check refused such paths.
+    broken = _second_device(sender.phone, "https://bad.example.com/caf\u00e9")
+    sender.notifier.approval(sender.session_id, "c-1", "approval")
+    assert [c.host for c in sender.relay.calls] == ["relay.example.com"]
+    assert "bad.example.com" in caplog.text
+    for secret in (broken.send_token, broken.key, broken.handle, "caf"):
+        assert secret not in caplog.text
+    sender.db.finish_session_run(sender.session_id, "done")
+    sender.notifier.badge_changed()
+    sender.notifier._send_due_badges()
+    assert [c.host for c in sender.relay.calls][-1] == "relay.example.com"
+
+
+def test_get_reports_an_old_records_host_without_checking_it(phone):
+    phone.access.set_push(
+        PushRecord(
+            device_id=phone.device_id,
+            relay_url="https://old.example.com/caf\u00e9",
+            handle=b64(os.urandom(16)),
+            send_token=b64(os.urandom(32)),
+            key=b64(os.urandom(32)),
+            platform="apns",
+        )
+    )
+    resp = phone.clients["device"].get(ROUTE)
+    assert resp.status_code == 200
+    assert resp.json() == {"enabled": True, "relay_host": "old.example.com"}
+
+
+def test_a_slow_relay_does_not_hold_up_other_devices(phone, monkeypatch):
+    import threading
+
+    phone.access.set_push(_record(phone.device_id))
+    slow = _second_device(phone, "https://slow.example.com")
+    release, fast_sent = threading.Event(), threading.Event()
+    hosts = []
+
+    def transport(host, port, address, path, headers, body, *, deadline):
+        hosts.append(host)
+        if host == "slow.example.com":
+            release.wait(timeout=deadline)
+            raise TimeoutError("trickled past its deadline")
+        fast_sent.set()
+        return RelayAnswer(202)
+
+    notifier = PushNotifier(phone.app, transport=transport)
+    try:
+        for i in range(push.PUSH_SENDERS * 2):
+            notifier.approval("s", f"c-{i}", "approval")
+        assert fast_sent.wait(timeout=5), hosts
+        assert slow.device_id != phone.device_id
+    finally:
+        release.set()
+        notifier.close()
+
+
+def test_a_trickling_relay_is_cut_at_the_total_deadline():
+    import threading
+    import time
+
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    stop = threading.Event()
+
+    def trickle():
+        conn, _ = server.accept()
+        with conn:
+            while not stop.is_set():
+                try:
+                    conn.send(b"\x16")
+                except OSError:
+                    return
+                stop.wait(0.4)
+
+    thread = threading.Thread(target=trickle, daemon=True)
+    thread.start()
+    started = time.monotonic()
+    try:
+        with pytest.raises(TimeoutError):
+            push.post_to_relay(
+                "relay.example.com",
+                server.getsockname()[1],
+                "127.0.0.1",
+                "/v1/handles/x/send",
+                {},
+                b"{}",
+                deadline=1.0,
+            )
+        assert time.monotonic() - started < 3
+    finally:
+        stop.set()
+        server.close()
+
+
+def test_a_slow_lookup_is_given_up_on():
+    import threading
+    import time
+
+    hold = threading.Event()
+    started = time.monotonic()
+    with pytest.raises(TimeoutError):
+        push.resolve_within(
+            lambda h, p: hold.wait(5) or [PUBLIC], "x.example", 443, 0.2
+        )
+    assert time.monotonic() - started < 1
+    hold.set()
+
+
+def test_deleted_push_keys_are_overwritten_on_disk(phone):
+    store = phone.access._store
+    assert store._conn.execute("PRAGMA secure_delete").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize(
+    "address, public",
+    [
+        ("93.184.215.14", True),
+        ("::ffff:93.184.215.14", True),
+        ("64:ff9b::5db8:d70e", True),
+        ("::ffff:127.0.0.1", False),
+        ("64:ff9b::a00:1", False),
+        ("64:ff9b::c0a8:101", False),
+        ("::10.0.0.1", False),
+        ("::1", False),
+        ("::", False),
+        ("2606:4700::1111", True),
+    ],
+)
+def test_ipv4_inside_ipv6_is_held_to_the_public_rule(address, public):
+    from gaia.ui.public_address import is_public_address
+
+    assert is_public_address(address) is public
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "https://[64:ff9b::a00:1]",
+        "https://[::ffff:127.0.0.1]",
+        "https://[::10.0.0.1]",
+    ],
+)
+def test_the_gateway_refuses_ipv4_inside_ipv6_literals(base_url):
+    from fastapi import HTTPException
+
+    from gaia.ui.routers import providers
+
+    with pytest.raises(HTTPException) as e:
+        providers._device_gateway_host(base_url)
+    assert e.value.status_code == 422
+
+
+def test_the_gateway_refuses_a_name_resolving_to_nat64_loopback(monkeypatch):
+    from gaia.ui.public_address import public_addresses
+
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *a, **k: [
+            (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("64:ff9b::7f00:1", 443, 0, 0))
+        ],
+    )
+    with pytest.raises(ValueError):
+        public_addresses("gateway.example.com", 443)

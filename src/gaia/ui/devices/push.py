@@ -32,6 +32,8 @@ import threading
 import time
 import unicodedata
 from collections import OrderedDict, deque
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
 from typing import Any, Callable, Deque, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import quote, urlsplit
@@ -60,6 +62,12 @@ PUSH_CIPHERTEXT_MAX = 3000
 #: Plaintext is padded with spaces to one of these, so its length says little.
 PUSH_PAD_BUCKETS = (256, 512, 1024, 2048)
 PUSH_TIMEOUT_SECONDS = 5.0
+#: Everything one send may take: the lookup, connect, TLS, write and status.
+PUSH_SEND_SECONDS = 10.0
+#: Sends at once, so one slow relay can't hold up the others.
+PUSH_SENDERS = 4
+#: Sends waiting for a sender before new ones are dropped.
+PUSH_SENDS_WAITING = 64
 PUSH_QUEUE_MAX = 256
 PUSH_ALERTS_PER_HOUR = 30
 PUSH_SILENT_PER_DAY = 250
@@ -85,7 +93,9 @@ NEEDS_YOU_REASONS = (NEEDS_YOU_MODEL_SERVER, NEEDS_YOU_KEY_STORE, NEEDS_YOU_SETU
 
 ROUTE_HOME = "/"
 _ROUTE_RE = re.compile(r"\A(?:/|/chat/[A-Za-z0-9_-]{1,128})\Z")
-_B64URL_RE = re.compile(r"\A[A-Za-z0-9_-]+\Z")
+#: The path a relay URL may carry: printable ASCII, already percent-encoded.
+_RELAY_PATH_RE = re.compile(r"(?:[A-Za-z0-9\-._~!$&'()*+,;=:@/]|%[0-9A-Fa-f]{2})*")
+PUSH_COLLAPSE_INFO = b"gaia-push-collapse-v1"
 #: Dedupe keys kept per device; an approval id is never reused, so old ones age out.
 _SENT_KEPT = 512
 
@@ -102,22 +112,38 @@ def b64url(data: bytes) -> str:
 
 
 def decode_b64url(text: str, size: int, what: str) -> bytes:
-    """*text* as exactly *size* bytes of canonical base64url, or :class:`PushRefused`."""
-    stripped = text.rstrip("=") if isinstance(text, str) else ""
-    if not stripped or not _B64URL_RE.match(stripped):
-        raise PushRefused(f"{what} must be base64url")
+    """*text* as exactly *size* bytes of unpadded canonical base64url, or
+    :class:`PushRefused`. Checked by pattern first: the decoder skips stray
+    characters."""
+    length = -(-size * 4 // 3)
+    if not isinstance(text, str) or not re.fullmatch(
+        rf"[A-Za-z0-9_-]{{{length}}}", text
+    ):
+        raise PushRefused(f"{what} must be {size} bytes, unpadded base64url")
     try:
-        raw = base64.urlsafe_b64decode(stripped + "=" * (-len(stripped) % 4))
+        raw = base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
     except (binascii.Error, ValueError) as e:
-        raise PushRefused(f"{what} must be base64url") from e
-    if len(raw) != size or b64url(raw) != stripped:
-        raise PushRefused(f"{what} must be {size} bytes, base64url")
+        raise PushRefused(f"{what} must be {size} bytes, unpadded base64url") from e
+    if len(raw) != size or b64url(raw) != text:
+        raise PushRefused(f"{what} must be {size} bytes, unpadded base64url")
     return raw
 
 
+def collapse_key(key: bytes) -> bytes:
+    """The collapse-id HMAC key, derived so the AES key is used for nothing else."""
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+    return HKDF(
+        algorithm=hashes.SHA256(), length=32, salt=None, info=PUSH_COLLAPSE_INFO
+    ).derive(key)
+
+
 def collapse_id(key: bytes, subject: str) -> str:
-    """The relay's opaque collapse id: HMAC-SHA256(key, subject), first 16 bytes."""
-    return b64url(hmac.new(key, subject.encode("utf-8"), hashlib.sha256).digest()[:16])
+    """The relay's opaque collapse id: HMAC-SHA256(collapse_key(key), subject),
+    first 16 bytes."""
+    digest = hmac.new(collapse_key(key), subject.encode("utf-8"), hashlib.sha256)
+    return b64url(digest.digest()[:16])
 
 
 def associated_data(handle: str) -> bytes:
@@ -125,11 +151,16 @@ def associated_data(handle: str) -> bytes:
     return handle.encode("ascii") + bytes([PUSH_VERSION])
 
 
-def encrypt(key: bytes, handle: str, plaintext: bytes) -> Tuple[str, str]:
-    """``(ciphertext, nonce)``, both base64url, under a fresh random nonce."""
+def encrypt(
+    key: bytes, handle: str, plaintext: bytes, nonce: Optional[bytes] = None
+) -> Tuple[str, str]:
+    """``(ciphertext, nonce)``, both base64url, under a fresh random nonce.
+
+    *nonce* is for the published test vector only; a send never passes one.
+    """
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-    nonce = os.urandom(PUSH_NONCE_BYTES)
+    nonce = os.urandom(PUSH_NONCE_BYTES) if nonce is None else nonce
     sealed = AESGCM(key).encrypt(nonce, plaintext, associated_data(handle))
     return b64url(sealed), b64url(nonce)
 
@@ -211,20 +242,32 @@ def relay_parts(relay_url: str) -> Tuple[str, int, str]:
         PushRefused: not a public https address, or it carries credentials, a
             query or a fragment.
     """
-    if not isinstance(relay_url, str) or len(relay_url) > PUSH_RELAY_URL_MAX:
-        raise PushRefused("relay_url must be an https:// address")
+    if (
+        not isinstance(relay_url, str)
+        or len(relay_url) > PUSH_RELAY_URL_MAX
+        or not relay_url.isascii()
+        or not relay_url.isprintable()
+        or " " in relay_url
+    ):
+        raise PushRefused("relay_url must be a printable-ASCII https:// address")
     try:
         host, port = public_https_host(relay_url)
-        parts = urlsplit(relay_url.strip())
+        parts = urlsplit(relay_url)
     except ValueError as e:
         raise PushRefused(f"relay_url is refused: {e}") from e
     if parts.username or parts.password or parts.query or parts.fragment:
         raise PushRefused("relay_url must be a plain https:// address")
+    if not _RELAY_PATH_RE.fullmatch(parts.path):
+        raise PushRefused("relay_url's path must be percent-encoded")
     return host, port, parts.path.rstrip("/")
 
 
-def relay_host(relay_url: str) -> str:
-    return relay_parts(relay_url)[0]
+def stored_relay_host(relay_url: str) -> Optional[str]:
+    """The host of a relay URL already stored, read without checking it again."""
+    try:
+        return urlsplit(relay_url).hostname
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True)
@@ -244,7 +287,22 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
 
     def connect(self) -> None:
         raw = socket.create_connection((self._address, self.port), self.timeout)
-        self.sock = self._context.wrap_socket(raw, server_hostname=self.host)
+        # Held before the handshake, so the deadline can cut a slow one too.
+        self.sock = self._context.wrap_socket(
+            raw, server_hostname=self.host, do_handshake_on_connect=False
+        )
+        self.sock.do_handshake()
+
+
+def _cut(conn: http.client.HTTPConnection) -> None:
+    sock = conn.sock
+    if sock is None:
+        return
+    try:
+        # The plain socket's shutdown: it wakes a read blocked in another thread.
+        socket.socket.shutdown(sock, socket.SHUT_RDWR)
+    except OSError as e:
+        logger.debug("Push connection already closed at its deadline (%s)", e)
 
 
 def post_to_relay(
@@ -254,20 +312,65 @@ def post_to_relay(
     path: str,
     headers: Dict[str, str],
     body: bytes,
+    *,
+    deadline: float = PUSH_SEND_SECONDS,
 ) -> RelayAnswer:
-    """POST *body* to *address* as *host*; only the status is read, nothing followed.
+    """POST *body* to *address* as *host* within *deadline* seconds in all;
+    only the status is read, nothing followed.
 
     Raises:
-        OSError: no connection, TLS failed, or the relay took longer than 5 s.
+        TimeoutError: the whole exchange took longer than *deadline*.
+        OSError: no connection, or TLS failed.
         http.client.HTTPException: the relay's answer was not HTTP.
     """
-    conn = _PinnedHTTPSConnection(host, port, address, PUSH_TIMEOUT_SECONDS)
+    conn = _PinnedHTTPSConnection(
+        host, port, address, min(PUSH_TIMEOUT_SECONDS, deadline)
+    )
+    expired = threading.Event()
+
+    def expire() -> None:
+        expired.set()
+        _cut(conn)
+
+    timer = threading.Timer(deadline, expire)
+    timer.daemon = True
+    timer.start()
     try:
         conn.request("POST", path, body=body, headers=headers)
         response = conn.getresponse()
         return RelayAnswer(response.status, response.getheader("Retry-After"))
+    except (OSError, http.client.HTTPException) as e:
+        if expired.is_set():
+            raise TimeoutError(f"the relay took longer than {deadline:g} s") from e
+        raise
     finally:
+        timer.cancel()
         conn.close()
+
+
+def resolve_within(
+    resolve: "Resolver", host: str, port: int, timeout: float
+) -> List[str]:
+    """``resolve(host, port)`` on its own thread, waited on for *timeout* seconds.
+
+    Raises:
+        TimeoutError: the lookup didn't answer in time (its thread is left to end).
+        OSError, ValueError: as *resolve* raises them.
+    """
+    done: "Future[List[str]]" = Future()
+
+    def run() -> None:
+        try:
+            done.set_result(resolve(host, port))
+        except BaseException as e:  # pylint: disable=broad-except
+            # Not swallowed: result() below re-raises it.
+            done.set_exception(e)
+
+    threading.Thread(target=run, name="device-push-dns", daemon=True).start()
+    try:
+        return done.result(timeout=timeout)
+    except FutureTimeout as e:
+        raise TimeoutError(f"looking up {host} took longer than {timeout:g} s") from e
 
 
 # ── The notifier ──────────────────────────────────────────────────────────
@@ -298,7 +401,8 @@ class _DeviceState:
     silent_count: int = 0
 
 
-Transport = Callable[[str, int, str, str, Dict[str, str], bytes], RelayAnswer]
+#: ``(host, port, address, path, headers, body, *, deadline)`` -> the relay's answer.
+Transport = Callable[..., RelayAnswer]
 Resolver = Callable[[str, int], List[str]]
 
 
@@ -328,6 +432,8 @@ class PushNotifier:
         self._thread: Optional[threading.Thread] = None
         self._streams: Dict[str, int] = {}
         self._state: Dict[str, _DeviceState] = {}
+        self._senders: Optional[ThreadPoolExecutor] = None
+        self._waiting = 0
 
     # ── Hooks: safe from any thread, never block ──────────────────────────
 
@@ -359,12 +465,15 @@ class PushNotifier:
         *,
         summary: Optional[str] = None,
         label: Optional[str] = None,
+        tool: Optional[str] = None,
     ) -> None:
         params = {"ask": ask}
         if summary:
             params["summary"] = summary
         if label:
             params["label"] = label
+        if tool:
+            params["tool"] = tool
         self._put(_Event(KIND_APPROVAL, session_id, approval_id, params=params))
 
     def run_ended(self, session_id: str, status: str) -> None:
@@ -397,6 +506,10 @@ class PushNotifier:
         if thread is not None:
             self._queue.put(_STOP)
             thread.join(timeout=PUSH_TIMEOUT_SECONDS + 1)
+        with self._lock:
+            senders, self._senders = self._senders, None
+        if senders is not None:
+            senders.shutdown(wait=True, cancel_futures=True)
 
     def _put(self, event: _Event) -> None:
         with self._lock:
@@ -465,7 +578,10 @@ class PushNotifier:
                 self._schedule_badge(device.id, badge)
             return
         for device, record in targets:
-            self._alert(device, record, event, badge)
+            try:
+                self._alert(device, record, event, badge)
+            except Exception as e:  # pylint: disable=broad-except
+                _log_device_failure(device.id, record, e)
 
     def _alert(
         self, device: Device, record: PushRecord, event: _Event, badge: int
@@ -569,8 +685,11 @@ class PushNotifier:
             state.badge_at = now
             device, record = targets[device_id]
             payload = {"v": PUSH_VERSION, "kind": KIND_BADGE, "badge": badge}
-            if self._send(device, record, payload, "b", DELIVERY_SILENT):
-                state.badge_sent = badge
+            try:
+                if self._send(device, record, payload, "b", DELIVERY_SILENT):
+                    state.badge_sent = badge
+            except Exception as e:  # pylint: disable=broad-except
+                _log_device_failure(device_id, record, e)
 
     def _send(
         self,
@@ -592,16 +711,11 @@ class PushNotifier:
             key = decode_b64url(record.key, PUSH_KEY_BYTES, "key")
             plaintext = fit_payload(payload)
         except PushRefused as e:
-            logger.error("Push to device %s not sent: %s", device.id, e)
-            return False
-        try:
-            addresses = self._resolve(host, port)
-        except (OSError, ValueError):
-            logger.warning(
-                "Push to device %s dropped: its relay %s doesn't resolve to public "
-                "addresses only",
+            logger.error(
+                "Push to device %s through %s not sent: %s",
                 device.id,
-                host,
+                stored_relay_host(record.relay_url) or "an unreadable relay",
+                e,
             )
             return False
         ciphertext, nonce = encrypt(key, record.handle, plaintext)
@@ -618,17 +732,98 @@ class PushNotifier:
             "Authorization": f"Bearer {record.send_token}",
             "Content-Type": "application/json",
         }
+        return self._submit(
+            device.id,
+            host,
+            lambda: self._deliver(
+                device, record, host, port, path, headers, body, kind, ciphertext
+            ),
+        )
+
+    def _submit(self, device_id: str, host: str, send: Callable[[], None]) -> bool:
+        """Hand *send* to a sender thread; False (and logged) when too many wait."""
+        with self._lock:
+            if self._waiting >= PUSH_SENDS_WAITING:
+                logger.warning(
+                    "Push to device %s through %s dropped: %d sends already wait",
+                    device_id,
+                    host,
+                    PUSH_SENDS_WAITING,
+                )
+                return False
+            self._waiting += 1
+            if self._senders is None:
+                self._senders = ThreadPoolExecutor(
+                    PUSH_SENDERS, thread_name_prefix="device-push-send"
+                )
+            senders = self._senders
+
+        def run() -> None:
+            with self._lock:
+                self._waiting -= 1
+            send()
+
+        senders.submit(run)
+        return True
+
+    def _deliver(
+        self,
+        device: Device,
+        record: PushRecord,
+        host: str,
+        port: int,
+        path: str,
+        headers: Dict[str, str],
+        body: bytes,
+        kind: str,
+        ciphertext: str,
+    ) -> None:
+        """One send, within ``PUSH_SEND_SECONDS`` from the lookup to the status."""
+        started = time.monotonic()
         try:
-            answer = self._transport(host, port, addresses[0], path, headers, body)
-        except (OSError, http.client.HTTPException) as e:
-            logger.warning(
-                "Push to device %s through %s failed (%s); dropped",
+            try:
+                addresses = resolve_within(
+                    self._resolve, host, port, PUSH_TIMEOUT_SECONDS
+                )
+            except TimeoutError:
+                logger.warning(
+                    "Push to device %s dropped: looking up its relay %s took longer "
+                    "than %.0f s",
+                    device.id,
+                    host,
+                    PUSH_TIMEOUT_SECONDS,
+                )
+                return
+            except (OSError, ValueError):
+                logger.warning(
+                    "Push to device %s dropped: its relay %s doesn't resolve to "
+                    "public addresses only",
+                    device.id,
+                    host,
+                )
+                return
+            left = PUSH_SEND_SECONDS - (time.monotonic() - started)
+            try:
+                answer = self._transport(
+                    host, port, addresses[0], path, headers, body, deadline=left
+                )
+            except (OSError, http.client.HTTPException) as e:
+                logger.warning(
+                    "Push to device %s through %s failed (%s); dropped",
+                    device.id,
+                    host,
+                    type(e).__name__,
+                )
+                return
+            self._answered(device, record, host, kind, ciphertext, answer)
+        except Exception as e:  # pylint: disable=broad-except
+            # A sender thread must outlive one bad send; never log its content.
+            logger.error(
+                "Push to device %s through %s failed unexpectedly (%s); dropped",
                 device.id,
                 host,
                 type(e).__name__,
             )
-            return False
-        return self._answered(device, record, host, kind, ciphertext, answer)
 
     def _answered(
         self,
@@ -638,10 +833,10 @@ class PushNotifier:
         kind: str,
         ciphertext: str,
         answer: RelayAnswer,
-    ) -> bool:
+    ) -> None:
         status = answer.status
         if 200 <= status < 300:
-            return True
+            return
         if status in (401, 410):
             access = getattr(self._app.state, "devices", None)
             if access is not None:
@@ -656,9 +851,11 @@ class PushNotifier:
             )
         elif status == 429:
             wait = _retry_after(answer.retry_after)
-            self._device(device.id).blocked_until = self._clock() + (
-                wait if wait is not None else PUSH_DEFAULT_RETRY_AFTER
-            )
+            state = self._device(device.id)
+            with self._lock:
+                state.blocked_until = self._clock() + (
+                    wait if wait is not None else PUSH_DEFAULT_RETRY_AFTER
+                )
             logger.warning(
                 "Relay %s is rate-limiting device %s (HTTP 429, wait %s); push "
                 "dropped",
@@ -684,7 +881,6 @@ class PushNotifier:
                 host,
                 status,
             )
-        return False
 
     # ── What a payload says ───────────────────────────────────────────────
 
@@ -716,6 +912,16 @@ class PushNotifier:
         db = self._db()
         unread = set(db.unread_ended_session_ids()) if db is not None else set()
         return len(waiting | unread)
+
+
+def _log_device_failure(device_id: str, record: PushRecord, e: Exception) -> None:
+    """One device's push failed: logged by its relay host only, and the rest go on."""
+    logger.error(
+        "Push to device %s through %s failed (%s); dropped",
+        device_id,
+        stored_relay_host(record.relay_url) or "an unreadable relay",
+        type(e).__name__,
+    )
 
 
 def _retry_after(value: Optional[str]) -> Optional[float]:
@@ -767,12 +973,13 @@ def observe_run_frame(session_id: str, data: str) -> None:
         return
     etype = event.get("type")
     if etype == "permission_request" and event.get("confirm_id"):
-        label = event.get("tool_label")
+        label, tool = event.get("tool_label"), event.get("tool")
         notifier.approval(
             session_id,
             str(event["confirm_id"]),
             ASK_APPROVAL,
             label=label if isinstance(label, str) else None,
+            tool=tool if isinstance(tool, str) else None,
         )
     elif etype == "user_input_request" and event.get("request_id"):
         message = event.get("message")
@@ -832,6 +1039,6 @@ __all__: Sequence[str] = (
     "decode_b64url",
     "encrypt",
     "fit_payload",
-    "relay_host",
+    "stored_relay_host",
     "relay_parts",
 )

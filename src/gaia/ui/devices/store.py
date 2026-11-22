@@ -136,6 +136,8 @@ class DeviceStore:
         self._seen_written: Dict[str, float] = {}
         self._conn = sqlite3.connect(str(path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        # A deleted push key or send token is overwritten, not left in free pages.
+        self._conn.execute("PRAGMA secure_delete = ON")
         with self._lock, self._conn:
             self._conn.executescript(_SCHEMA)
 

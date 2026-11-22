@@ -66,8 +66,8 @@ from ..devices.push import (
     PUSH_SEND_TOKEN_BYTES,
     PushRefused,
     decode_b64url,
-    relay_host,
     relay_parts,
+    stored_relay_host,
 )
 from ..devices.storage import DeviceCertificateError, UnsafeDeviceFolderError
 from ..devices.store import PushRecord
@@ -364,7 +364,7 @@ def _push_status(request: Request, device_id: str) -> Dict[str, Any]:
     record = _access(request).push_record(device_id)
     if record is None:
         return {"enabled": False, "relay_host": None}
-    return {"enabled": True, "relay_host": relay_host(record.relay_url)}
+    return {"enabled": True, "relay_host": stored_relay_host(record.relay_url)}
 
 
 def _checked_push(device_id: str, raw: Any) -> PushRecord:
@@ -387,10 +387,10 @@ def _checked_push(device_id: str, raw: Any) -> PushRecord:
         raise HTTPException(status_code=422, detail=str(e)) from None
     return PushRecord(
         device_id=device_id,
-        relay_url=body.relay_url.strip(),
-        handle=body.handle.rstrip("="),
-        send_token=body.send_token.rstrip("="),
-        key=body.key.rstrip("="),
+        relay_url=body.relay_url,
+        handle=body.handle,
+        send_token=body.send_token,
+        key=body.key,
         platform=body.platform,
     )
 

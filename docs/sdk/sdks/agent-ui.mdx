@@ -2039,7 +2039,7 @@ removed.
     A device's own push notifications. Only an allowed device, with its own
     token; the PC, mobile access and a pending device get **403**. `PUT` takes
     `{relay_url, handle, send_token, key, platform}` (`handle` 16 bytes,
-    `send_token` and `key` 32, base64url; `platform` `apns` or `fcm`);
+    `send_token` and `key` 32, unpadded base64url; `platform` `apns` or `fcm`);
     `relay_url` must be https and resolve only to public addresses, or **422**.
     `GET` and every answer are `DevicePushStatus` (`{enabled, relay_host}`),
     never the send token or key. Unpairing, removing or resetting deletes the
