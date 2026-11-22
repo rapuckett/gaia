@@ -163,10 +163,11 @@ def test_one_connector_off_the_pc_carries_its_key_store_state(clients, reads):
     assert resp.json()["configured"] is None
 
 
-def test_the_pc_waits_on_its_own_prompt(clients, reads):
+def test_the_pc_lists_a_held_back_connector_instead_of_waiting(clients, reads):
     _, behavior = reads
     behavior[OAUTH[0]] = "refuse"
     resp = clients["pc"].get("/api/connectors")
     rows = _rows(resp)
-    assert "key_store" not in resp.json()
-    assert rows[OAUTH[0]]["error"] == "unavailable"
+    assert resp.json()["key_store"] == "locked"
+    assert rows[OAUTH[0]]["key_store"] == "locked"
+    assert rows[OAUTH[0]]["configured"] is None

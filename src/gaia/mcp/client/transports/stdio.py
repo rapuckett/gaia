@@ -468,10 +468,15 @@ class StdioTransport(MCPTransport):
 
             # Brief pause to catch immediate crashes (e.g. missing binary, SIGSEGV
             # on load), recording children as it goes: a launcher that dies in
-            # this window must still have them stopped.
+            # this window must still have them stopped. Once it has died, no
+            # later scan can find its children, so the wait ends there.
             for _ in range(_STARTUP_CHECK_SLICES):
                 self._track_children()
-                time.sleep(_STARTUP_CHECK_S / _STARTUP_CHECK_SLICES)
+                try:
+                    self._process.wait(timeout=_STARTUP_CHECK_S / _STARTUP_CHECK_SLICES)
+                except subprocess.TimeoutExpired:
+                    continue
+                break
             if self._process.poll() is not None:
                 error = self._process_died_error()
                 self._process = None

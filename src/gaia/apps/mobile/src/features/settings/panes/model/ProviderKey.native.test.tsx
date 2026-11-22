@@ -167,7 +167,7 @@ describeNative('Provider key', () => {
         await render(<ProviderKey provider={savedKey} connected={false} />, { wrapper: wrap });
 
         await fireEvent.press(screen.getByTestId('provider-key-reconnect'));
-        expect(await screen.findByText("The OS key store is locked, so GAIA can't read your saved key.")).toBeTruthy();
+        expect(await screen.findByText("Your PC's key store is locked, so GAIA can't read your saved key.")).toBeTruthy();
         expect(screen.getByText(locked)).toBeTruthy();
         await fireEvent.press(screen.getByText('Try again'));
         await waitFor(() => expect(client.keyStoreRetries).toBe(1));
@@ -177,7 +177,7 @@ describeNative('Provider key', () => {
 
     describe('the locked key store\'s Try again follows the PC\'s prompt', () => {
         const lockedRow: ProviderRow = { ...none, key_state: 'store_locked' };
-        const LOCKED = "The OS key store is locked, so GAIA can't read your saved key.";
+        const LOCKED = "Your PC's key store is locked, so GAIA can't read your saved key.";
         const event = (state: string) => ({ type: 'device_prompt', device_id: 'd1', kind: 'keyStore', action: 'keyStoreRetry', state });
 
         it('while the PC asks, the notice replaces Try again; the request stays open and its result clears the lock', async () => {
@@ -307,12 +307,12 @@ describeNative('Provider key', () => {
         queryClient.clear();
     });
 
-    it('before GAIA on the PC has read its key store, it says it is waiting for the OS', async () => {
+    it('before GAIA on the PC has read its key store, it says it is waiting for the PC', async () => {
         const unknown: ProviderRow = { ...none, key_source: null, key_state: 'unknown', key_hint: null, known_models: false };
         const { queryClient, wrap } = setup(unknown);
         await render(<ProviderKey provider={unknown} connected={false} />, { wrapper: wrap });
 
-        expect(screen.getByTestId('provider-key-waiting')).toHaveTextContent('Waiting for the OS to allow reading the saved key.');
+        expect(screen.getByTestId('provider-key-waiting')).toHaveTextContent('Waiting for your PC to allow reading the saved key.');
         expect(screen.queryByText('No key yet.')).toBeNull();
         expect(screen.queryByTestId('provider-key-reconnect')).toBeNull();
         queryClient.clear();

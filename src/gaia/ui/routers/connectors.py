@@ -983,12 +983,12 @@ def _field_summary(f: ConfigField) -> Dict[str, Any]:
 def list_connectors(request: Request) -> Dict[str, Any]:
     """Return catalog specs merged with live state for all connectors.
 
-    Off the PC, a connector whose secret the key store holds back is listed
-    with ``key_store`` instead of blocking the list; the PC waits on its own
-    prompt. Once one read is waiting, later ones wait too, so a list never
-    opens a second prompt.
+    A connector whose secret the key store holds back is listed with
+    ``key_store`` instead of blocking the list, on the PC and off it alike:
+    the PC no longer waits on its own prompt. Once one read is waiting,
+    later ones wait too, so a list never opens a second prompt.
     """
-    bounded = not is_local_pc(request)
+    bounded = True
     key_store: Optional[str] = None
     specs = REGISTRY.all()
     # Every summary reads the same ledger; a corrupt one is fixed by deleting it, so name it.

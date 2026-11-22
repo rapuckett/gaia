@@ -139,7 +139,11 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
                     <Screen>
                         <Stack gap="md" justify="end" flex={1}>
                             {state === 'warning' ? <HistoryNotice text="Older messages are now out of the model's view (6 turns). Ask me to recall them if you need them." /> : null}
-                            {state === 'pickLoading' || state === 'pickFailed' ? <ConnectionBanner /> : null}
+                            {state === 'pickLoading' || state === 'pickFailed' ? (
+                                <Stack paddingX="gutter">
+                                    <ConnectionBanner />
+                                </Stack>
+                            ) : null}
                             <ContextWarning usage={state === 'warning' ? usage : null} />
                             <Composer
                                 onSend={noop}

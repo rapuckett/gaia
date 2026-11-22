@@ -35,7 +35,11 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 try:
-    from watchdog.events import FileSystemEvent, FileSystemEventHandler
+    from watchdog.events import (
+        DirModifiedEvent,
+        FileSystemEvent,
+        FileSystemEventHandler,
+    )
     from watchdog.observers import Observer
 
     WATCHDOG_AVAILABLE = True
@@ -52,7 +56,14 @@ except ImportError:
         is_directory: bool = False
 
     Observer = None
+    DirModifiedEvent = None
     WATCHDOG_AVAILABLE = False
+
+try:
+    from watchdog.observers.api import BaseObserver
+    from watchdog.observers.fsevents import FSEventsEmitter, FSEventsObserver
+except ImportError:  # not macOS, or no watchdog
+    FSEventsEmitter = None
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +80,10 @@ _MIN_RECHECK_SECONDS = 0.05
 # (PermissionError, e.g. an exclusive open on Windows) is retried, 1, 2 and 4
 # windows (of at least a second) apart, before the change is given up on.
 _MAX_LOCKED_RETRIES = 3
+
+# How deep a folder rescan looks: the folder's own files, also any subfolder
+# it has not seen before, or everything below it.
+_RESCAN_FILES, _RESCAN_NEW_SUBDIRS, _RESCAN_ALL = 0, 1, 2
 
 # Default chunk size for file hashing (64KB)
 HASH_CHUNK_SIZE = 65536
@@ -302,6 +317,18 @@ class FileChangeHandler(FileSystemEventHandler):
         # Settle tracking: path -> [kind, due time, (size, mtime_ns) or None].
         # Guarded by _cond, which also wakes the dispatch thread.
         self._pending: Dict[str, list] = {}
+        # Folders to rescan (path -> _RESCAN_* depth); new folders to rescan
+        # again until their listing holds still (path -> [due time or None
+        # while running, depth, listing]); the roots that may be rescanned
+        # (real path -> recursive); and the real paths of the subfolders seen.
+        # By _key(): each file's signature when last seen or reported, and
+        # when last reported successfully. Guarded by _cond.
+        self._rescans: Dict[str, int] = {}
+        self._rechecks: Dict[str, list] = {}
+        self._roots: Dict[str, bool] = {}
+        self._dirs: Set[str] = set()
+        self._known: Dict[str, tuple] = {}
+        self._reported: Dict[str, tuple] = {}
         self._ready: deque = deque()
         self._cond = threading.Condition()
         self._dispatcher: Optional[threading.Thread] = None
@@ -346,6 +373,145 @@ class FileChangeHandler(FileSystemEventHandler):
             return None
         return (st.st_size, st.st_mtime_ns)
 
+    @staticmethod
+    def _key(file_path: str) -> str:
+        """One key per file however it is spelled (FSEvents reports real paths)."""
+        return os.path.join(
+            os.path.realpath(os.path.dirname(file_path)), os.path.basename(file_path)
+        )
+
+    def watch_root(self, directory: Union[str, Path], recursive: bool = False) -> None:
+        """Record what ``directory`` holds now, so a folder event can be rescanned.
+
+        Call it before the observer starts. Under load macOS drops per-file
+        events and reports only that a folder changed; with a root recorded, the
+        handler lists that folder and reports each new or changed file once,
+        as if its own event had arrived. Folder events outside every recorded
+        root are ignored.
+
+        Raises:
+            FileNotFoundError: If ``directory`` is not a directory.
+        """
+        root = os.path.realpath(directory)
+        if not os.path.isdir(root):
+            raise FileNotFoundError(f"Cannot watch {directory}: not a directory")
+        depth = _RESCAN_ALL if recursive else _RESCAN_FILES
+        found, dirs = self._list_files(str(directory), depth, set())
+        with self._cond:
+            prefix = root + os.sep
+            for key in [k for k in self._known if k.startswith(prefix)]:
+                del self._known[key]
+            self._dirs = {d for d in self._dirs if not d.startswith(prefix)}
+            for key, (_path, signature) in found.items():
+                self._known[key] = signature
+            self._dirs.update(dirs)
+            self._roots[root] = recursive
+
+    def _list_files(self, directory: str, depth: int, known_dirs: Set[str]):
+        """Watched files under ``directory`` to ``depth``, and the subfolders
+        listed: ({key: (path, signature)}, {real path})."""
+        found: Dict[str, tuple] = {}
+        listed_dirs: Set[str] = set()
+        folders = [(directory, depth)]
+        while folders:
+            folder, folder_depth = folders.pop()
+            real = os.path.realpath(folder)
+            try:
+                with os.scandir(folder) as entries:
+                    listed = list(entries)
+            except FileNotFoundError:
+                continue  # removed since its event; the deletes report that
+            except OSError as e:
+                logger.warning(
+                    f"Cannot list {folder}, so changes in it may be missed: {e}"
+                )
+                continue
+            listed_dirs.add(real)
+            for entry in listed:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        child = os.path.join(real, entry.name)
+                        if folder_depth == _RESCAN_ALL or (
+                            folder_depth == _RESCAN_NEW_SUBDIRS
+                            and child not in known_dirs
+                        ):
+                            # A new folder's files are all new, however deep.
+                            folders.append((entry.path, _RESCAN_ALL))
+                        continue
+                    if not entry.is_file():
+                        continue
+                except OSError as e:
+                    logger.warning(f"Cannot check {entry.path}: {e}")
+                    continue
+                if not self._should_process(entry.path):
+                    continue
+                signature = self._signature(entry.path)
+                if signature is not None:
+                    found[os.path.join(real, entry.name)] = (entry.path, signature)
+        return found, listed_dirs
+
+    def _request_rescan(self, directory: str, subdirs: bool) -> None:
+        """Queue ``directory`` for a rescan on the dispatch thread."""
+        real = os.path.realpath(directory)
+        with self._cond:
+            if self._closed:
+                return
+            for root, recursive in self._roots.items():
+                if real == root or (recursive and real.startswith(root + os.sep)):
+                    break
+            else:
+                return
+            if not recursive:
+                depth = _RESCAN_FILES
+            elif subdirs:
+                depth = _RESCAN_ALL
+            else:
+                depth = _RESCAN_NEW_SUBDIRS
+            self._rescans[directory] = max(depth, self._rescans.get(directory, 0))
+            self._ensure_dispatcher()
+            self._cond.notify()
+
+    def _rescan(self, directory: str, depth: int) -> None:
+        """Report each file in ``directory`` that changed since it was last seen."""
+        if not os.path.isdir(directory):
+            with self._cond:
+                self._rechecks.pop(directory, None)
+            return  # removed since its event; the deletes report that
+        with self._cond:
+            known_dirs = set(self._dirs)
+        found, dirs = self._list_files(directory, depth, known_dirs)
+        with self._cond:
+            if self._closed:
+                return
+            self._dirs.update(dirs)
+            now = time.monotonic()
+            due = now + self._debounce_seconds
+            # A new folder may still be filling, and the events for what lands
+            # in it later can be lost too, so look again once it holds still.
+            listing = (frozenset((k, v[1]) for k, v in found.items()), frozenset(dirs))
+            recheck = self._rechecks.get(directory)
+            if recheck is not None and recheck[0] is None and recheck[2] == listing:
+                del self._rechecks[directory]
+            elif recheck is not None or depth == _RESCAN_ALL or dirs - known_dirs:
+                self._rechecks[directory] = [
+                    now + max(self._debounce_seconds, _MIN_RECHECK_SECONDS),
+                    max(depth, recheck[1]) if recheck else depth,
+                    listing,
+                ]
+            for key, (path, signature) in found.items():
+                if path in self._pending:
+                    continue  # its own event got through
+                known = self._known.get(key)
+                if known == signature:
+                    continue
+                kind = "created" if known is None else "modified"
+                if (self._on_created if known is None else self._on_modified) is None:
+                    self._known[key] = signature
+                    continue
+                logger.debug(f"Rescan of {directory} found {kind} {path}")
+                self._pending[path] = [kind, due, signature]
+            self._cond.notify()
+
     def _ensure_dispatcher(self) -> None:
         # Caller holds _cond.
         if self._dispatcher is None or not self._dispatcher.is_alive():
@@ -385,7 +551,7 @@ class FileChangeHandler(FileSystemEventHandler):
     def _settle(self, checked: List[tuple], now: float) -> List[tuple]:
         """Decide which checked paths have settled. Caller holds ``_cond``."""
         settled = []
-        for path, entry, current in checked:
+        for path, key, entry, current in checked:
             if self._pending.get(path) is not entry:
                 continue  # a newer event restarted its window
             kind, _due, signature = entry
@@ -397,8 +563,13 @@ class FileChangeHandler(FileSystemEventHandler):
                 # Still being written: wait another full window.
                 entry[1] = now + max(self._debounce_seconds, _MIN_RECHECK_SECONDS)
                 entry[2] = current
+            elif self._reported.get(key) == current:
+                # Already reported as it is now, e.g. found by a rescan first.
+                del self._pending[path]
+                logger.debug(f"Unchanged since last reported: {path}")
             else:
                 del self._pending[path]
+                self._known[key] = current
                 settled.append((kind, path))
         return settled
 
@@ -424,19 +595,31 @@ class FileChangeHandler(FileSystemEventHandler):
                     return False
                 now = time.monotonic()
                 due = [(p, e) for p, e in self._pending.items() if e[1] <= now]
-                if self._ready or due:
+                for folder, recheck in self._rechecks.items():
+                    if recheck[0] is not None and recheck[0] <= now:
+                        recheck[0] = None
+                        self._rescans[folder] = max(
+                            recheck[1], self._rescans.get(folder, 0)
+                        )
+                if self._ready or due or self._rescans:
                     items = list(self._ready)
                     self._ready.clear()
+                    rescans = dict(self._rescans)
+                    self._rescans.clear()
                     self._busy = True
                     break
-                if self._pending:
-                    next_due = min(e[1] for e in self._pending.values())
-                    self._cond.wait(max(0.0, next_due - now))
+                dues = [e[1] for e in self._pending.values()] + [
+                    r[0] for r in self._rechecks.values() if r[0] is not None
+                ]
+                if dues:
+                    self._cond.wait(max(0.0, min(dues) - now))
                 else:
                     self._cond.wait()
         try:
+            for directory, depth in rescans.items():
+                self._rescan(directory, depth)
             # stat outside the lock, as in _schedule_settle.
-            checked = [(p, e, self._signature(p)) for p, e in due]
+            checked = [(p, self._key(p), e, self._signature(p)) for p, e in due]
             with self._cond:
                 items.extend(self._settle(checked, time.monotonic()))
             for item in items:
@@ -481,8 +664,11 @@ class FileChangeHandler(FileSystemEventHandler):
             # Nothing above this thread can handle it; log the traceback.
             logger.exception(f"Error in on_{kind} callback for {paths[0]}")
             return
+        key = self._key(paths[-1])
         with self._cond:
             self._locked_retries.pop(paths[-1], None)
+            if kind != "deleted" and key in self._known:
+                self._reported[key] = self._known[key]
         self._update_telemetry(f"files_{kind}")
 
     def _locked_retry_kind(self, kind: str, file_path: str) -> Optional[str]:
@@ -535,7 +721,13 @@ class FileChangeHandler(FileSystemEventHandler):
         """
         deadline = None if timeout is None else time.monotonic() + timeout
         with self._cond:
-            while self._pending or self._ready or self._busy:
+            while (
+                self._pending
+                or self._ready
+                or self._rescans
+                or self._rechecks
+                or self._busy
+            ):
                 remaining = None if deadline is None else deadline - time.monotonic()
                 if remaining is not None and remaining <= 0:
                     return False
@@ -554,6 +746,8 @@ class FileChangeHandler(FileSystemEventHandler):
             dropped = len(self._pending) + len(self._ready)
             self._pending.clear()
             self._ready.clear()
+            self._rescans.clear()
+            self._rechecks.clear()
             self._cond.notify_all()
             dispatcher = self._dispatcher
         if dropped:
@@ -580,6 +774,9 @@ class FileChangeHandler(FileSystemEventHandler):
 
     def on_created(self, event: FileSystemEvent) -> None:
         """Handle file creation."""
+        if event.is_directory:
+            # Its files' own events can be lost, so look inside.
+            self._request_rescan(event.src_path, subdirs=True)
         if self._ignore_directories and event.is_directory:
             return
         if self._on_created and self._should_process(event.src_path):
@@ -587,6 +784,11 @@ class FileChangeHandler(FileSystemEventHandler):
 
     def on_modified(self, event: FileSystemEvent) -> None:
         """Handle file modification."""
+        if event.is_directory:
+            # FSEvents may report only the folder for a file it dropped.
+            self._request_rescan(
+                event.src_path, subdirs=getattr(event, "rescan_subdirs", False)
+            )
         if self._ignore_directories and event.is_directory:
             return
         if self._on_modified and self._should_process(event.src_path):
@@ -601,8 +803,17 @@ class FileChangeHandler(FileSystemEventHandler):
         """
         self.on_modified(event)
 
+    def _forget_dir(self, directory: str) -> None:
+        real = os.path.realpath(directory)
+        with self._cond:
+            self._dirs = {
+                d for d in self._dirs if d != real and not d.startswith(real + os.sep)
+            }
+
     def on_deleted(self, event: FileSystemEvent) -> None:
         """Handle file deletion."""
+        if event.is_directory:
+            self._forget_dir(event.src_path)
         if self._ignore_directories and event.is_directory:
             return
         if self._should_process(event.src_path):
@@ -614,26 +825,42 @@ class FileChangeHandler(FileSystemEventHandler):
                         event.src_path,
                     )
                 return
+            key = self._key(event.src_path)
             with self._cond:
                 self._pending.pop(event.src_path, None)
                 self._locked_retries.pop(event.src_path, None)
+                self._known.pop(key, None)
+                self._reported.pop(key, None)
             if self._on_deleted:
                 self._schedule_now("deleted", event.src_path)
 
     def on_moved(self, event: FileSystemEvent) -> None:
         """Handle file move/rename."""
+        src_path = event.src_path
+        dest_path = getattr(event, "dest_path", None)
+        if event.is_directory:
+            self._forget_dir(src_path)
+            if dest_path:
+                self._request_rescan(dest_path, subdirs=True)
         if self._ignore_directories and event.is_directory:
             return
 
-        src_path = event.src_path
-        dest_path = getattr(event, "dest_path", None)
+        src_key = self._key(src_path)
+        with self._cond:
+            self._known.pop(src_key, None)
+            self._reported.pop(src_key, None)
 
         if self._on_moved and dest_path:
             # Process if either source or destination matches filter
             if self._should_process(src_path) or self._should_process(dest_path):
+                dest_key = self._key(dest_path)
+                dest_signature = self._signature(dest_path)
                 with self._cond:
                     self._pending.pop(src_path, None)
                     self._locked_retries.pop(src_path, None)
+                    # The move reports the destination; a rescan must not too.
+                    if dest_signature is not None:
+                        self._known[dest_key] = dest_signature
                 self._schedule_now("moved", src_path, dest_path)
 
     @property
@@ -651,6 +878,65 @@ class FileChangeHandler(FileSystemEventHandler):
             "total_events": 0,
             "last_event_time": None,
         }
+
+
+if FSEventsEmitter is not None:
+
+    class _RescanEvent(DirModifiedEvent):
+        """A folder, subfolders included, whose file events may have been lost."""
+
+        rescan_subdirs = True
+
+    class _RescanningFSEventsEmitter(FSEventsEmitter):
+        """Reports FSEvents' must-rescan and dropped-event flags as folder events.
+
+        watchdog ignores kFSEventStreamEventFlagMustScanSubDirs and the
+        user/kernel dropped flags, which macOS sets instead of per-file events
+        when it falls behind, so without this the change is never seen.
+        """
+
+        def queue_events(self, timeout, events):
+            for event in events:
+                if getattr(event, "must_scan_subdirs", False):
+                    self.queue_event(_RescanEvent(event.path))
+                elif getattr(event, "is_user_dropped", False) or getattr(
+                    event, "is_kernel_dropped", False
+                ):
+                    self.queue_event(_RescanEvent(os.path.realpath(self.watch.path)))
+            super().queue_events(timeout, events)
+
+    class _RescanningFSEventsObserver(FSEventsObserver):
+        def __init__(self, **kwargs):
+            BaseObserver.__init__(self, _RescanningFSEventsEmitter, **kwargs)
+
+
+def start_observer(
+    handler: FileChangeHandler, directory: Union[str, Path], recursive: bool = False
+):
+    """Watch ``directory`` with ``handler`` and return the started observer.
+
+    Records the folder's files with :meth:`FileChangeHandler.watch_root` first,
+    so a file whose own events macOS drops under load is still reported, and
+    on macOS reports FSEvents' must-rescan signal, which watchdog ignores.
+
+    Raises:
+        ImportError: If watchdog is not installed.
+        FileNotFoundError: If ``directory`` is not a directory.
+    """
+    if not WATCHDOG_AVAILABLE:
+        raise ImportError(
+            "File watching requires the 'watchdog' package.\n"
+            "Install with: pip install 'watchdog>=2.1.0,<7'\n"
+            "Or: uv pip install -e '.[dev]'"
+        )
+    handler.watch_root(directory, recursive=recursive)
+    if FSEventsEmitter is not None and Observer is FSEventsObserver:
+        observer = _RescanningFSEventsObserver()
+    else:
+        observer = Observer()
+    observer.schedule(handler, str(directory), recursive=recursive)
+    observer.start()
+    return observer
 
 
 class FileWatcher:
@@ -748,13 +1034,9 @@ class FileWatcher:
             return
 
         self._handler.reopen()
-        self._observer = Observer()
-        self._observer.schedule(
-            self._handler,
-            str(self._directory),
-            recursive=self._recursive,
+        self._observer = start_observer(
+            self._handler, self._directory, recursive=self._recursive
         )
-        self._observer.start()
         logger.info(
             f"Started watching: {self._directory} " f"(recursive={self._recursive})"
         )

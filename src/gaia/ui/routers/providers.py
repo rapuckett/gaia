@@ -2000,7 +2000,7 @@ def _restore_known_models(provider: str) -> Optional[str]:
     except (ProviderError, CredentialStoreLocked, CredentialStoreWaiting) as e:
         return str(e)
     finally:
-        del old
+        old = None
     entry = _cloud_entry(provider)
     if not _holds_key(entry):
         return "Lemonade reports no key afterwards"
