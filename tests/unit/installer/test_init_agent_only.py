@@ -19,6 +19,8 @@ from gaia.hub import prerelease
 from gaia.installer import init_command
 from gaia.installer.init_command import InitCommand, run_agent_refresh
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 def installed(sha="old"):
     return hub_installer.InstalledAgent(

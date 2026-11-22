@@ -23,6 +23,8 @@ from gaia.eval import flagship_tasks as ft
 from gaia.eval import task_setups as setups
 from gaia.eval.bench import gaia_child, harness
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 ALL_TASKS = ft.load_suite("full")
 TASKS = {t.id: t for t in ALL_TASKS}
 MECHANICAL = [t for t in ALL_TASKS if t.check == "mechanical"]

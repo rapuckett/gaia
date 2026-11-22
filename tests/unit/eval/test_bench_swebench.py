@@ -26,7 +26,10 @@ from gaia.eval.bench import gaia_child, harness, sandbox, swebench
 
 from .conftest import gaia_tool
 
-pytestmark = pytest.mark.skipif(not shutil.which("git"), reason="needs git")
+pytestmark = [
+    pytest.mark.skipif(not shutil.which("git"), reason="needs git"),
+    pytest.mark.usefixtures("restore_gaia_logging"),
+]
 
 REQUESTS = "psf__requests-1921"
 FLASK = "pallets__flask-5014"

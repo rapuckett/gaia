@@ -41,6 +41,8 @@ from gaia.eval.integrity_gate import zero_token_errors
 from gaia.eval.runner import EXIT_CLAUDE_OUTAGE, AgentEvalRunner, compare_scorecards
 from gaia.eval.scorecard import build_scorecard
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 IDS = ["alpha", "bravo", "charlie", "delta", "echo"]
 
 

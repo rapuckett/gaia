@@ -16,6 +16,8 @@ import pytest
 from gaia.daemon.constants import DAEMON_PID_ENV_VAR
 from gaia.sidecar import parent_watch
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 @pytest.fixture(autouse=True)
 def _fresh_watcher():

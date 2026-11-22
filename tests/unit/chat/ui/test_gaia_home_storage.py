@@ -25,6 +25,8 @@ from gaia.ui.utils import (
     uploads_dir,
 )
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 @pytest.fixture
 def homes(tmp_path, monkeypatch):

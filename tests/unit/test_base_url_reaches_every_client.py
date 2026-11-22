@@ -18,6 +18,8 @@ import pytest
 
 from gaia.chat.sdk import AgentConfig, AgentSDK
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 DEAD = "http://127.0.0.1:1/api/v1"
 
 

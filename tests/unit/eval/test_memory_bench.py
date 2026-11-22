@@ -25,6 +25,8 @@ from gaia.eval.memory.clock import simulated_time
 from gaia.eval.memory.harness import CheckResult, ScriptedChat
 from gaia.eval.memory.scenario import ScenarioError, load_scenario, load_scenarios
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 #: A replay needs faiss for vector search, and a strict replay fails on memory's
 #: "vector search disabled" warning; skip visibly rather than fail or mis-pass.
 requires_faiss = pytest.mark.skipif(

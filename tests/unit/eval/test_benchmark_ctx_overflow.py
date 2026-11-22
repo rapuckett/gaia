@@ -10,6 +10,8 @@ import pytest
 from gaia.eval import benchmark
 from gaia.eval.benchmark import context_overflow_detail, run_benchmark
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 LLAMA_OVERFLOW = (
     "LemonadeError: request (19337 tokens) exceeds the available context size "
     "(16384 tokens), try increasing it"
