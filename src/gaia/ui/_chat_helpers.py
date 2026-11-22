@@ -6198,23 +6198,35 @@ def _hide_pc_paths(frame: str) -> str:
     """*frame* with each ``documents_added`` path shown home-relative.
 
     One run buffer feeds every subscriber, so the PC form is built once and a
-    caller away from the PC gets this rewrite at send time.
+    caller away from the PC gets this rewrite at send time. A frame that can't
+    be rewritten is sent with the PC's folders named, never as it is.
     """
     if '"documents_added"' not in frame:
         return frame
-    from .security import device_display_path
+    from .run_manager import _padded
+    from .security import device_display_path, hide_pc_folders
 
     start = frame.find("data: ")
+    # Each buffered item is one event: the producer yields one, _record keeps
+    # one line, and padding is a trailing SSE comment.
+    body = frame[start + len("data: ") :].split("\n\n", 1)[0] if start >= 0 else ""
     try:
-        event = json.loads(frame[start + len("data: ") :].split("\n\n", 1)[0])
-    except ValueError:
+        event = json.loads(body)
+        documents = event.get("documents_added") if isinstance(event, dict) else None
+        if documents is not None:
+            for doc in documents:
+                doc["filepath"] = device_display_path(doc.get("filepath") or "")
+    except (ValueError, TypeError, AttributeError) as e:
+        kind = _re.search(r'"type": ?"(\w+)"', frame)
+        logger.error(
+            "Could not hide PC paths in a %s event for a device (%s); "
+            "sending it with PC folders redacted",
+            kind.group(1) if kind else "unknown",
+            type(e).__name__,
+        )
+        return hide_pc_folders(frame)
+    if documents is None:
         return frame
-    if not isinstance(event, dict) or not event.get("documents_added"):
-        return frame
-    for doc in event["documents_added"]:
-        doc["filepath"] = device_display_path(doc.get("filepath") or "")
-    from .run_manager import _padded
-
     return _padded(_sse(event))
 
 

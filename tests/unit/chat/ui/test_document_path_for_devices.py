@@ -89,3 +89,24 @@ def test_chat_stream_shows_the_pc_the_full_path_and_a_device_home_relative(
     finally:
         run_manager._runs.pop("sess-docs", None)
     assert seen == {"pc": path, "phone": "~/Documents/report.pdf"}
+
+
+def test_an_unparseable_documents_frame_reaches_a_device_without_the_home_path(
+    fake_home, caplog
+):
+    from gaia.ui._chat_helpers import _hide_pc_paths
+
+    path = fake_home / "Documents" / "report.pdf"
+    broken = f'data: {{"type": "done", "documents_added": [{{"filepath": "{path}"\n\n'
+    with caplog.at_level("ERROR"):
+        shown = _hide_pc_paths(broken)
+    assert str(fake_home) not in shown
+    assert "your home folder" in shown
+    assert "done" in caplog.text and str(fake_home) not in caplog.text
+
+
+def test_a_malformed_documents_list_is_not_sent_whole_to_a_device(fake_home):
+    from gaia.ui._chat_helpers import _hide_pc_paths
+
+    frame = f'data: {{"type": "done", "documents_added": "{fake_home}/a.pdf"}}\n\n'
+    assert str(fake_home) not in _hide_pc_paths(frame)
