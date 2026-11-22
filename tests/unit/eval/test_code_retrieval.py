@@ -22,6 +22,8 @@ from gaia.eval.code_retrieval import (
 from gaia.eval.code_retrieval.runner import suite_parts
 from gaia.eval.code_retrieval.suites import SUITES
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 BASE = """import os
 
 

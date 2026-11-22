@@ -7,6 +7,8 @@ import os
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 @pytest.fixture
 def own_server(monkeypatch, tmp_path):

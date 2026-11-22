@@ -18,6 +18,8 @@ import pytest
 
 import gaia.tls as tls
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 class _Stop(Exception):
     """Raised by the patched injector so an entry point stops right there."""

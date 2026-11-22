@@ -22,6 +22,8 @@ from gaia.login_path import (
     read_login_path,
 )
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 BEGIN, END = lp._PATH_BEGIN, lp._PATH_END
 posix_only = pytest.mark.skipif(os.name == "nt", reason="needs a POSIX shell")
 SEP = os.pathsep

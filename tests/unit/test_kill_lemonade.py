@@ -15,6 +15,8 @@ import pytest
 
 from gaia.llm.lemonade_embedded import EmbeddedLemonadeError
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 class _OwnServer:
     """Stands in for GAIA's embedded Lemonade."""
