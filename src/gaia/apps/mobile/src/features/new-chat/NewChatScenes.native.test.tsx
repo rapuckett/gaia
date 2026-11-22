@@ -1,11 +1,19 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import type { StartScreen, SystemStatus } from '@webui/types';
+import { createFakeClient } from '@/api/fake';
+import { GaiaClientProvider } from '@/data';
+import { useNextChatFolder } from '@/features/composer';
+import { UIProvider } from '@/ui';
+
 import { NewChatScenes, type NewChatScene } from './NewChatScenes';
+import { NewChatScreen } from './NewChatScreen';
 
 jest.mock('@/features/nav/ScreenHeader', () => ({ ScreenHeader: () => null }));
 jest.mock('expo-font', () => ({ useFonts: () => [true, null] }));
@@ -50,5 +58,60 @@ describeNative('/dev/composer new-chat scenes', () => {
         expect(StyleSheet.flatten(error.props.style).writingDirection).toBe('ltr');
         expect(screen.queryByText(/stopped at 41%\.\s*\n/)).toBeNull();
         expect(screen.getByText(/Use a cloud model, or pick a smaller one/)).toBeTruthy();
+    });
+
+    it('new-chat-folder-refused keeps the picked folder and the message when the PC refuses it', async () => {
+        await mount('new-chat-folder-refused');
+        expect((await screen.findAllByText(/holds credentials or keys/)).length).toBeGreaterThan(0);
+        expect(screen.getByTestId('folder-picked')).toBeTruthy();
+        expect(screen.getByDisplayValue('Review the site copy for typos')).toBeTruthy();
+    });
+});
+
+describeNative('a new chat given a folder', () => {
+    const SITE = '/Users/Shared/Projects/site';
+    const listing = (path: string, entries: { name: string; type: 'folder' | 'file' }[]) => ({
+        current_path: path,
+        parent_path: null,
+        quick_links: [],
+        entries: entries.map((e) => ({ ...e, path: `${path}/${e.name}` })),
+    });
+    const ready = { lemonade_running: true, context_size_sufficient: true, init_state: 'ready', model_loaded: 'Gemma-4-E4B-it-GGUF' } as unknown as SystemStatus;
+    const start: StartScreen = { cards: [], working_folder: { path: '/Users/Shared/GAIA/documents', name: 'documents', gaia_folder: true, choosable: true } };
+
+    afterEach(() => useNextChatFolder.getState().set(null));
+
+    it('picks a folder in the picker, which lists folders only, and gives it to the chat as it is made', async () => {
+        const client = createFakeClient({
+            status: ready,
+            start,
+            fileFolders: {
+                '': listing('/Users/Shared/Projects', [{ name: 'site', type: 'folder' }, { name: 'budget.xlsx', type: 'file' }]),
+                [SITE]: listing(SITE, []),
+            },
+        });
+        await render(
+            <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                    <GaiaClientProvider client={client}>
+                        <UIProvider>
+                            <NewChatScreen onOpen={() => undefined} onChooseDocuments={() => undefined} initialText="Fix the footer" />
+                        </UIProvider>
+                    </GaiaClientProvider>
+                </QueryClientProvider>
+            </SafeAreaProvider>,
+        );
+        await fireEvent.press(await screen.findByTestId('folder-add'));
+        await fireEvent.press(await screen.findByText(/^\W*site\W*$/));
+        expect(screen.queryByText(/budget/)).toBeNull();
+        await waitFor(() => expect(screen.getByDisplayValue(SITE)).toBeTruthy());
+        await fireEvent.press(screen.getByTestId('folder-picker-use'));
+        expect(await screen.findByTestId('folder-picked')).toBeTruthy();
+        expect(client.created).toEqual([]);
+
+        await fireEvent.press(screen.getByTestId('composer-send'));
+        await waitFor(() => expect(client.created).toHaveLength(1));
+        expect(client.created[0]).toMatchObject({ folders: [SITE] });
+        await waitFor(() => expect(useNextChatFolder.getState().path).toBeNull());
     });
 });

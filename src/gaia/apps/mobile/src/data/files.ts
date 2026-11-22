@@ -13,8 +13,8 @@ import { queryKeys, requireClient } from './queries';
 /** Most results one search asks the PC for, as the web browser does. */
 export const FILE_SEARCH_LIMIT = 30;
 
-/** A folder on the PC; no `path` opens the chat's first folder. */
-export function useBrowseFiles(sessionId: string, path: string | undefined) {
+/** A folder on the PC; no `path` opens the chat's first folder, and no chat browses for a chat not made yet. */
+export function useBrowseFiles(sessionId: string | null, path: string | undefined) {
     const client = useGaiaClient();
     return useQuery<BrowseResponse>({
         queryKey: ['fileBrowse', sessionId, path ?? ''],
