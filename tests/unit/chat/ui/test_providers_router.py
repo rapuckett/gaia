@@ -4365,3 +4365,24 @@ def test_a_malformed_model_list_ends_a_switch_or_restore_with_one_full_stop(
     assert resp.status_code == 409, resp.text
     assert resp.json()["detail"].endswith("points at Lemonade.")
     assert ".." not in restore["message"] + resp.json()["detail"]
+
+
+def test_the_restore_leaves_no_key_behind_for_a_late_recall(monkeypatch):
+    from gaia.llm import fireworks_known_models, lemonade_embedded
+
+    kept = {}
+    monkeypatch.setattr(providers, "_lemonade", lambda *a, **k: (200, {}))
+    monkeypatch.setattr(providers, "_recall", lambda p: lambda: "sk-old-key")
+    monkeypatch.setattr(providers, "_cloud_entry", lambda p: {"runtime_key_set": True})
+    monkeypatch.setattr(providers, "_holds_key", lambda e: True)
+    monkeypatch.setattr(providers, "_known_models_active", lambda p: True)
+    monkeypatch.setattr(fireworks_known_models, "use_known_models", lambda e: None)
+    monkeypatch.setattr(lemonade_embedded, "EmbeddedLemonade", lambda: object())
+    monkeypatch.setattr(
+        cloud_keys,
+        "ensure_authenticated",
+        lambda provider, recall: kept.update(recall=recall),
+    )
+
+    assert providers._restore_known_models("amd") is None
+    assert kept["recall"]() is None

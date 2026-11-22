@@ -10,7 +10,7 @@
  */
 
 import ReactMarkdown from 'react-markdown';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import {
     CheckCircle2,
     AlertCircle,
@@ -31,6 +31,7 @@ import { connectorDescription, connectorDescriptionBare, fieldHelp, fieldLabel, 
 import { personalizeSourceKind, requestPersonalize } from '../utils/connectorPersonalize';
 import { connectScopes, scopeLabel } from '../utils/connectorScopes';
 import { ConnectorTileMenu } from './ConnectorTileMenu';
+import { DOWNLOAD_POLL_MS } from './settings/ModelSettings';
 import { SettingsDisclosure } from './settings/SettingsDisclosure';
 import { ltrIn } from './setup/format';
 import './ConnectorsSection.css';
@@ -152,6 +153,7 @@ export function ConnectorsSection() {
     const t = useT();
     const [connectors, setConnectors] = useState<ConnectorListEntry[]>([]);
     const [agentMcps, setAgentMcps] = useState<AgentMcpServer[]>([]);
+    const [keyStore, setKeyStore] = useState<'waiting' | 'locked' | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [disconnectNotice, setDisconnectNotice] = useState<string | null>(null);
@@ -201,11 +203,12 @@ export function ConnectorsSection() {
 
     const load = useCallback(async () => {
         try {
-            const [{ connectors: rows }, { agent_mcps: mcps }] = await Promise.all([
+            const [{ connectors: rows, key_store: heldBy }, { agent_mcps: mcps }] = await Promise.all([
                 api.listConnectors(),
                 api.listAgentMcps(),
             ]);
             setConnectors(rows);
+            setKeyStore(heldBy ?? null);
             setConnectedAtLoad(new Set(rows.filter((c) => !('error' in c) && c.configured).map((c) => c.id)));
             setAgentMcps(mcps);
             setError(null);
@@ -218,8 +221,16 @@ export function ConnectorsSection() {
 
     useEffect(() => { void load(); }, [load]);
 
-    // The tile left the group it was in; keep it in view, and keep focus on it if it went with the tile.
+    // Ask again while the OS prompt is open, so answering it is enough.
     useEffect(() => {
+        if (keyStore !== 'waiting') return;
+        const timer = setInterval(() => { void load(); }, DOWNLOAD_POLL_MS);
+        return () => clearInterval(timer);
+    }, [keyStore, load]);
+
+    // The tile left the group it was in; keep it in view, and keep focus on it if it went with the tile.
+    // A layout effect, so focus and scroll land in the commit that moves the tile, before paint.
+    useLayoutEffect(() => {
         if (!movedBack) return;
         const tile = [...document.querySelectorAll<HTMLElement>('.connector-tile')].find((el) => el.dataset.connectorId === movedBack);
         const header = tile?.querySelector<HTMLElement>('.connector-tile-header');
@@ -227,6 +238,16 @@ export function ConnectorsSection() {
         header.scrollIntoView?.({ block: 'nearest' });
         if (!document.activeElement || document.activeElement === document.body) header.focus({ preventScroll: true });
     }, [movedBack]);
+
+    const retryKeyStore = async () => {
+        try {
+            await api.retryKeyStore();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+            return;
+        }
+        await load();
+    };
 
     const toggle = (id: string) =>
         setExpanded((prev) => (prev === id ? null : id));
@@ -296,9 +317,11 @@ export function ConnectorsSection() {
         (movedBack && rows.some((c) => c.id === movedBack) ? `${name}:${movedBack}` : name);
     const holdsMoved = (rows: ConnectorRow[]) => !!movedBack && rows.some((c) => c.id === movedBack);
 
+    const holdsHeld = (rows: ConnectorRow[]) => rows.some((c) => c.key_store);
+
     const tiles = (rows: ConnectorRow[]) => (
         <div className="connectors-list">
-            {rows.map((c) => (
+            {rows.map((c) => c.key_store ? <HeldBackTile key={c.id} connector={c} /> : (
                 <ConnectorTile
                     key={c.id}
                     connector={c}
@@ -338,6 +361,20 @@ export function ConnectorsSection() {
                 </div>
             )}
 
+            {keyStore === 'locked' && (
+                <div className="settings-notice connectors-keystore" role="status">
+                    <span>{t('settings.connectors.keyStore.locked')}</span>
+                    <button type="button" className="link-btn" onClick={() => void retryKeyStore()}>
+                        {t('settings.key.unlockAgain')}
+                    </button>
+                </div>
+            )}
+            {keyStore === 'waiting' && (
+                <p className="settings-hint connectors-keystore" role="status">
+                    {t('settings.connectors.keyStore.waiting')}
+                </p>
+            )}
+
             {loading ? (
                 <div className="connectors-loading">
                     <Loader2 size={16} className="spin" />
@@ -369,12 +406,12 @@ export function ConnectorsSection() {
                         </SettingsDisclosure>
                     )}
                     {accounts.length > 0 && (
-                        <SettingsDisclosure key={groupKey('accounts', accounts)} title={t('settings.connectors.accounts')} hint={t('settings.connectors.accountsHint')} count={accounts.length} defaultOpen={nothingConnected || holdsMoved(accounts)} forceOpen={!!q}>
+                        <SettingsDisclosure key={groupKey('accounts', accounts)} title={t('settings.connectors.accounts')} hint={t('settings.connectors.accountsHint')} count={accounts.length} defaultOpen={nothingConnected || holdsMoved(accounts) || holdsHeld(accounts)} forceOpen={!!q}>
                             {tiles(accounts)}
                         </SettingsDisclosure>
                     )}
                     {servers.length > 0 && (
-                        <SettingsDisclosure key={groupKey('servers', servers)} title={t('settings.connectors.servers')} hint={t('settings.connectors.serversHint')} count={servers.length} defaultOpen={holdsMoved(servers)} forceOpen={!!q}>
+                        <SettingsDisclosure key={groupKey('servers', servers)} title={t('settings.connectors.servers')} hint={t('settings.connectors.serversHint')} count={servers.length} defaultOpen={holdsMoved(servers) || holdsHeld(servers)} forceOpen={!!q}>
                             {tiles(servers)}
                         </SettingsDisclosure>
                     )}
@@ -408,6 +445,20 @@ function UnavailableTile({ connector }: { connector: UnavailableConnectorRow }) 
             <div className="connector-tile-header connector-tile-header--static">
                 <bdi className="connector-tile-name">{connector.display_name}</bdi>
                 <span className="connector-status disabled">{t('settings.connectors.unavailableStatus')}</span>
+            </div>
+        </div>
+    );
+}
+
+// ── HeldBackTile ─────────────────────────────────────────────────────────────
+
+function HeldBackTile({ connector }: { connector: ConnectorRow }) {
+    const t = useT();
+    return (
+        <div className="connector-tile connector-tile--held" data-connector-id={connector.id}>
+            <div className="connector-tile-header connector-tile-header--static">
+                <bdi className="connector-tile-name">{connector.display_name}</bdi>
+                <span className="connector-tile-held">{t('settings.connectors.tile.heldBack')}</span>
             </div>
         </div>
     );

@@ -3,7 +3,7 @@
 
 import { createContext, useContext, useEffect, useId, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import { BackHandler, Pressable as RNPressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { KeyboardAvoidingView, useKeyboardState } from 'react-native-keyboard-controller';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -89,6 +89,9 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
     const { colors, radius, space, shadows } = useTheme();
     const { width, height } = useWindowDimensions();
     const insets = useSafeAreaInsets();
+    const keyboardHeight = useKeyboardState((k) => (k.isVisible ? k.height : 0));
+    // The keyboard pads the panel upward; cap it so its header stays below the status bar and the body scrolls.
+    const maxHeight = Math.min(height * 0.9, height - keyboardHeight - insets.top - space.sm);
     const reduced = useReducedMotion();
     const wide = width >= WIDE_BREAKPOINT;
     const progress = useSharedValue(0);
@@ -190,7 +193,7 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
                     style={[
                         {
                             backgroundColor: colors.bgPrimary,
-                            maxHeight: height * 0.9,
+                            maxHeight,
                             width: '100%',
                             maxWidth: sheetMaxWidth,
                             alignSelf: 'center',
@@ -204,6 +207,7 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
                 >
                     {wide ? header : <GestureDetector gesture={pan}>{header}</GestureDetector>}
                     <ScrollView
+                        testID={entry.scrollTestID}
                         keyboardShouldPersistTaps="handled"
                         style={{ flexGrow: 0 }}
                         contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.lg }}

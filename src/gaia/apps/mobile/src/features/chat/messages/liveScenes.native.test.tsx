@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { BackHandler, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -38,6 +38,14 @@ jest.setTimeout(30000);
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 const opts = { includeHiddenElements: true };
+
+// The run's events and timers reach React between act() scopes; each tick lets them land inside one.
+const tick = (ms: number) => act(async () => new Promise((resolve) => setTimeout(resolve, ms)));
+
+async function until(what: string, done: () => boolean) {
+    for (let i = 0; i < 400 && !done(); i++) await tick(25);
+    if (!done()) throw new Error(`The scene never got to: ${what}`);
+}
 
 const mount = (Route: () => React.JSX.Element) =>
     render(
@@ -244,8 +252,11 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
 
     it('chat queue-stop returns the queued texts to the box after Stop', async () => {
         await open('chat', { state: 'queue-stop' });
-        fireEvent.press(await screen.findByTestId('composer-stop', opts));
-        await waitFor(() => expect(screen.getByDisplayValue(/Also check the budget sheet/, opts)).toBeTruthy());
+        const stop = await screen.findByTestId('composer-stop', opts);
+        // The run's first event (50 ms in), the cancel and the closing done all follow the press; they must land in act scopes.
+        await act(async () => fireEvent.press(stop));
+        await until('the queued texts back in the box after Stop', () => screen.queryByDisplayValue(/Also check the budget sheet/, opts) !== null);
+        expect(screen.getByDisplayValue(/Also check the budget sheet/, opts)).toBeTruthy();
     });
 
     it.each(['calendar-create', 'calendar-update', 'calendar-cancel'])('permission %s lists the event facts', async (only) => {

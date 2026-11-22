@@ -176,6 +176,7 @@ export function AddSkillsSheet({ open, onClose, seed }: { open: boolean; onClose
             open={open}
             onClose={close}
             title={t('settings.skills.link.title')}
+            scrollTestID="add-skills-scroll"
             footer={
                 !refused && preview ? (
                     <Button
@@ -275,7 +276,7 @@ export function AddSkillsSheet({ open, onClose, seed }: { open: boolean; onClose
                                 description={t('settings.skills.link.codeHint')}
                                 descriptionBelow
                                 disabled={adding}
-                                testID="skills-link-allow-code"
+                                testID="skills-link-include-code"
                             />
                         ) : null}
                         {refused && shareable ? (

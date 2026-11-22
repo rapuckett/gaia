@@ -100,9 +100,12 @@ describe('MessagingSettings', () => {
         vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
         serve({ 'GET /messaging/discord': ok(PAIRING) });
         render(<MessagingSettings />);
-        fireEvent.click(await screen.findByRole('button', { name: 'Copy code' }));
+        const copy = await screen.findByRole('button', { name: 'Copy code' });
+        await act(async () => { fireEvent.click(copy); });
         expect(writeText).toHaveBeenCalledWith('ABCD2345');
-        expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+        // Wait for the clipboard write itself, not a polling timeout a loaded machine can outlast.
+        await act(async () => { await writeText.mock.results[0].value; });
+        expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
     });
 
     it('pairing: watches the bridge and shows success once the code is sent', async () => {
