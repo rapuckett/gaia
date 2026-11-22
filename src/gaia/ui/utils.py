@@ -43,6 +43,7 @@ from .models import (
     SessionResponse,
     SourceInfo,
 )
+from .security import device_display_path
 
 logger = logging.getLogger(__name__)
 
@@ -291,7 +292,8 @@ def doc_to_response(doc: dict, *, away: bool = False) -> DocumentResponse:
     """Convert database document dict to response model.
 
     *away* is a caller away from the PC: the stored failure text can hold PC
-    paths and raw exception text, so it gets a fixed sentence instead.
+    paths and raw exception text, so it gets a fixed sentence instead, and the
+    path is shown home-relative.
     """
     last_error = doc.get("last_error")
     if away and last_error:
@@ -299,7 +301,7 @@ def doc_to_response(doc: dict, *, away: bool = False) -> DocumentResponse:
     return DocumentResponse(
         id=doc["id"],
         filename=doc["filename"],
-        filepath=doc["filepath"],
+        filepath=device_display_path(doc["filepath"]) if away else doc["filepath"],
         file_size=doc.get("file_size", 0),
         chunk_count=doc.get("chunk_count", 0),
         indexed_at=doc["indexed_at"],
