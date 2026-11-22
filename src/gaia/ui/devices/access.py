@@ -52,7 +52,7 @@ from .storage import (
     reset_folder,
     server_context,
 )
-from .store import Device, DeviceStore, read_pc_id
+from .store import Device, DeviceStore, PushRecord, read_pc_id
 from .tailnet import TailnetRoute
 
 logger = get_logger(__name__)
@@ -567,6 +567,39 @@ class DeviceAccess:
                 self.requests.end(device_id)
             _reset_discord_pairing([device_id])
         return gone
+
+    # ── Push ──────────────────────────────────────────────────────────────
+
+    def set_push(self, record: PushRecord) -> bool:
+        """Keep a device's push settings; False when it is no longer paired."""
+        store = self._existing_store()
+        return bool(store and store.set_push(record))
+
+    def push_record(self, device_id: str) -> Optional[PushRecord]:
+        store = self._store
+        return store.push(device_id) if store else None
+
+    def drop_push(self, device_id: str, handle: Optional[str] = None) -> bool:
+        """Turn push off for a device (with *handle*, only while it still has it)."""
+        store = self._existing_store()
+        gone = bool(store and store.delete_push(device_id, handle))
+        if gone:
+            logger.info("Push turned off for device %s", device_id)
+        return gone
+
+    def next_push_seq(self, device_id: str, now_ms: int) -> Optional[int]:
+        store = self._store
+        return store.next_push_seq(device_id, now_ms) if store else None
+
+    def push_targets(self) -> List[Tuple[Device, PushRecord]]:
+        """The allowed devices that turned push on, with their settings."""
+        store = self._store
+        if store is None:
+            return []
+        records = {r.device_id: r for r in store.pushes()}
+        return [
+            (d, records[d.id]) for d in store.devices() if d.allowed and d.id in records
+        ]
 
     async def reset(self) -> None:
         """A new key and pin, every device unpaired; the listener as it was.

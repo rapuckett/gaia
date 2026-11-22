@@ -1161,6 +1161,26 @@ class DeviceOrigin(BaseModel):
     origin: str
 
 
+class DevicePushRequest(BaseModel):
+    """A device turning its push notifications on: where its relay is and how to
+    reach it. ``handle`` is 16 bytes, ``send_token`` and ``key`` 32, all base64url."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    relay_url: str
+    handle: str
+    send_token: str
+    key: str
+    platform: Literal["apns", "fcm"]
+
+
+class DevicePushStatus(BaseModel):
+    """Whether this device has push on, and its relay's host. Never the send token or key."""
+
+    enabled: bool
+    relay_host: Optional[str] = None
+
+
 class DeviceRoutes(BaseModel):
     """Every origin a paired device may reach this PC at now."""
 

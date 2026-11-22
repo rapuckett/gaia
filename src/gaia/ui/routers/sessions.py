@@ -43,7 +43,7 @@ from ..database import (
     resolved_default_model,
 )
 from ..dependencies import get_db
-from ..devices import DEVICE_PROMPT_EVENT, DEVICE_PROMPT_STATES
+from ..devices import DEVICE_PROMPT_EVENT, DEVICE_PROMPT_STATES, push
 from ..devices.changes import record_folder_added
 from ..email_sidecar.profiles import profile_for
 from ..models import (
@@ -430,6 +430,8 @@ async def session_events(request: Request):
     async def generate():
         q = await _system_emitter.subscribe()
         stream_opened()
+        if device_id:
+            push.stream_opened(device_id)
         try:
             yield ": keepalive\n\n"
             while True:
@@ -449,6 +451,8 @@ async def session_events(request: Request):
                     yield ": keepalive\n\n"  # prevent proxy timeout
         finally:
             stream_closed()
+            if device_id:
+                push.stream_closed(device_id)
             await _system_emitter.unsubscribe(q)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -661,6 +665,7 @@ async def mark_session_read(session_id: str, db: ChatDatabase = Depends(get_db))
     """Clear a chat's unread mark; the UI calls this when the chat is opened (#5221)."""
     if not db.mark_session_read(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    push.session_read(session_id)
     return await _session_response(db, db.get_session(session_id))
 
 

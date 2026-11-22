@@ -38,6 +38,7 @@ from .._chat_helpers import (
 )
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices import push
 from ..devices.changes import record_device_change
 from ..models import ChatRequest, ChatResponse, WireModel
 from ..restart_recovery import CANCELLED_TURN_NOTICE
@@ -399,6 +400,7 @@ async def confirm_tool(request: ToolConfirmRequest, http_request: Request):
     if request.approved and request.always:
         verdict = "always allowed"
     audit_approval(http_request, f"tool call {verdict} in chat {request.session_id}")
+    push.badge_changed()
     return answer
 
 
@@ -806,6 +808,7 @@ async def user_input(request: UserInputRequest):
             detail="That question is no longer waiting for an answer: it was "
             "already answered or its wait ran out.",
         )
+    push.badge_changed()
     return {"status": "ok", "request_id": request.request_id}
 
 

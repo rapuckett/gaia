@@ -14,6 +14,7 @@ in the response that pairs it.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator
 
@@ -27,6 +28,7 @@ from fastapi import (
     Response,
 )
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from starlette.background import BackgroundTask
 
 from gaia.config import GaiaConfig, GaiaConfigError
@@ -43,6 +45,7 @@ from ..devices import (
     PAIR_LOCKOUT_SECONDS,
     PAIR_ROUTE,
     PAIRING_LOCKOUT_ALERT,
+    PUSH_ROUTE,
     ROUTES_ROUTE,
     SECURITY_ALERT_EVENT,
     SELF_ROUTE,
@@ -57,18 +60,31 @@ from ..devices.access import (
 from ..devices.changes import prune_device_changes, record_device_change
 from ..devices.listener import ListenerError
 from ..devices.pairing import PairingRefused
+from ..devices.push import (
+    PUSH_HANDLE_BYTES,
+    PUSH_KEY_BYTES,
+    PUSH_SEND_TOKEN_BYTES,
+    PushRefused,
+    decode_b64url,
+    relay_host,
+    relay_parts,
+)
 from ..devices.storage import DeviceCertificateError, UnsafeDeviceFolderError
+from ..devices.store import PushRecord
 from ..models import (
     DeviceAccessStatus,
     DeviceChangeList,
     DevicePairingOffer,
     DevicePairRequest,
     DevicePairResponse,
+    DevicePushRequest,
+    DevicePushStatus,
     DeviceRemoved,
     DeviceRoutes,
     PairedDevice,
     PairedDeviceList,
 )
+from ..public_address import public_addresses
 from ..security import (
     ROUTE_SCOPE_KEY,
     allowed_device,
@@ -334,6 +350,102 @@ async def pair_device(request: Request, body: DevicePairRequest) -> Dict[str, An
 def device_routes(request: Request) -> Dict[str, Any]:
     """Every origin this device may reach the PC at: home, then each away route on."""
     return {"origins": _access(request).route_origins()}
+
+
+_PUSH_PATH = PUSH_ROUTE.removeprefix("/api/devices")
+
+#: Every refused relay lookup, so the answer says nothing about the PC's network.
+_PUSH_RELAY_REFUSED = (
+    "That push relay can't be used: relay_url must be a public https:// address."
+)
+
+
+def _push_status(request: Request, device_id: str) -> Dict[str, Any]:
+    record = _access(request).push_record(device_id)
+    if record is None:
+        return {"enabled": False, "relay_host": None}
+    return {"enabled": True, "relay_host": relay_host(record.relay_url)}
+
+
+def _checked_push(device_id: str, raw: Any) -> PushRecord:
+    """The record a PUT asks for, or 422 naming fields but never their values."""
+    try:
+        body = DevicePushRequest.model_validate(raw)
+    except ValidationError as e:
+        fields = sorted({str(err["loc"][0]) for err in e.errors() if err["loc"]})
+        raise HTTPException(
+            status_code=422,
+            detail="Push settings need relay_url, handle, send_token, key and platform "
+            f"(apns or fcm), and nothing else. Check: {', '.join(fields) or 'body'}.",
+        ) from None
+    try:
+        relay_parts(body.relay_url)
+        decode_b64url(body.handle, PUSH_HANDLE_BYTES, "handle")
+        decode_b64url(body.send_token, PUSH_SEND_TOKEN_BYTES, "send_token")
+        decode_b64url(body.key, PUSH_KEY_BYTES, "key")
+    except PushRefused as e:
+        raise HTTPException(status_code=422, detail=str(e)) from None
+    return PushRecord(
+        device_id=device_id,
+        relay_url=body.relay_url.strip(),
+        handle=body.handle.rstrip("="),
+        send_token=body.send_token.rstrip("="),
+        key=body.key.rstrip("="),
+        platform=body.platform,
+    )
+
+
+@router.put(
+    _PUSH_PATH,
+    response_model=DevicePushStatus,
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {"schema": DevicePushRequest.model_json_schema()}
+            },
+        }
+    },
+)
+async def turn_on_push(
+    request: Request, device_id: str = Depends(require_allowed_device)
+) -> Dict[str, Any]:
+    """This device's notifications go through the relay it names, encrypted with its key."""
+    try:
+        raw = await request.json()
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="Push settings must be a JSON object."
+        ) from None
+    record = _checked_push(device_id, raw)
+    host, port, _ = relay_parts(record.relay_url)
+    try:
+        await asyncio.to_thread(public_addresses, host, port)
+    except (OSError, ValueError):
+        raise HTTPException(status_code=422, detail=_PUSH_RELAY_REFUSED) from None
+    access = _access(request)
+    if not access.set_push(record):
+        raise HTTPException(status_code=403, detail="This device is no longer paired.")
+    audit_approval(request, "push turned on")
+    return _push_status(request, device_id)
+
+
+@router.get(_PUSH_PATH, response_model=DevicePushStatus)
+def push_status(
+    request: Request, device_id: str = Depends(require_allowed_device)
+) -> Dict[str, Any]:
+    """Whether this device has push on; never its send token or key."""
+    return _push_status(request, device_id)
+
+
+@router.delete(_PUSH_PATH, response_model=DevicePushStatus)
+def turn_off_push(
+    request: Request, device_id: str = Depends(require_allowed_device)
+) -> Dict[str, Any]:
+    """This device gets no more notifications from this PC."""
+    if _access(request).drop_push(device_id):
+        audit_approval(request, "push turned off")
+    return {"enabled": False, "relay_host": None}
 
 
 @router.delete(SELF_ROUTE.removeprefix("/api/devices"), status_code=204)

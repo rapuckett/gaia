@@ -3951,6 +3951,31 @@
     "title": "DevicePairingOffer",
     "type": "object"
   },
+  "DevicePushStatus": {
+    "description": "Whether this device has push on, and its relay's host. Never the send token or key.",
+    "properties": {
+      "enabled": {
+        "title": "Enabled",
+        "type": "boolean"
+      },
+      "relay_host": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Relay Host"
+      }
+    },
+    "required": [
+      "enabled"
+    ],
+    "title": "DevicePushStatus",
+    "type": "object"
+  },
   "DeviceRemoved": {
     "description": "A device the PC unpaired: how many of its changes stay on the PC.",
     "properties": {
