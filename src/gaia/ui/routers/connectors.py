@@ -117,7 +117,12 @@ from gaia.ui.shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_op
 
 from ..devices.changes import record_device_change
 from ..devices.prompts import DevicePromptTimeout, limit_device_rate, watch_key_store
-from ..key_store import key_store_detail
+from ..key_store import (
+    KEY_STORE_LOCKED,
+    KEY_STORE_WAITING,
+    KeyStoreState,
+    key_store_detail,
+)
 from ..models import WireModel
 from ..security import (
     allowed_device,
@@ -313,13 +318,6 @@ class ConnectorOAuthClient(WireModel):
     source: Optional[Literal["keyring", "env"]]
     client_id: Optional[str]
     has_secret: bool
-
-
-#: ``key_store`` while the OS store's unlock prompt is still open on the PC.
-KEY_STORE_WAITING = "waiting"
-#: ``key_store`` once that prompt was refused or closed; GAIA holds off asking.
-KEY_STORE_LOCKED = "locked"
-KeyStoreState = Literal["waiting", "locked"]
 
 
 class ConnectorSummary(WireModel):
