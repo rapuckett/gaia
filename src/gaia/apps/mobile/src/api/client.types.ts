@@ -74,6 +74,8 @@ import type {
     DocumentResponse,
     FilePreviewResponse,
     FileSearchResponse,
+    LogReadResponse,
+    LogSourcesResponse,
     MessagesDeleteResponse,
     ModelServerInfo,
     ProviderSummaryList,
@@ -84,6 +86,7 @@ import type {
     UserInputResponse,
 } from '@webui/types/api.gen';
 
+export type { LogLineInfo, LogReadResponse, LogSourcesResponse } from '@webui/types/api.gen';
 export type { AgentInstallStatus } from '@webui/services/api';
 export type {
     ActiveModel,
@@ -513,6 +516,10 @@ export interface GaiaClient {
     updateSettings(patch: { custom_model?: string; dynamic_tools?: boolean }, options?: RequestOptions): Promise<Settings>;
     /** Turns Local only on or off. The PC alone may change it: 403 from a phone. */
     setNetworkPolicy(policy: Settings['network_policy'], options?: RequestOptions): Promise<Settings>;
+    /** The PC's log groups and the file names each has now. */
+    getLogSources(options?: RequestOptions): Promise<LogSourcesResponse>;
+    /** A log's newest lines, or only those after `after` (a cursor an earlier read returned). The PC redacts them first. */
+    readLog(source: string, params?: { file?: string | null; after?: string | null }, options?: RequestOptions): Promise<LogReadResponse>;
     /** How long and how much undo history is kept, and how much is in use. */
     getUndoSettings(options?: RequestOptions): Promise<UndoSettings>;
     /** Saves the undo limits; the PC trims history to fit them at once. */

@@ -126,6 +126,8 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    LogReadResponse,
+    LogSourcesResponse,
     Settings,
     SkillList,
     SpeechModel,
@@ -142,6 +144,7 @@ import type {
 } from './client.types';
 import {
     agentInstallStatusPath,
+    logReadPath,
     ATTACH_HEADER_TIMEOUT_MS,
     connectorActivationPath,
     connectorActivationsPath,
@@ -647,6 +650,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         disconnectDiscord(options) {
             return postJson<DiscordStatus>(ENDPOINTS.messagingDiscordDisconnect, undefined, options?.signal);
+        },
+
+        getLogSources(options) {
+            return getJson<LogSourcesResponse>(ENDPOINTS.logs, options?.signal);
+        },
+
+        readLog(source, params, options) {
+            return getJson<LogReadResponse>(logReadPath(source, params), options?.signal);
         },
 
         getUndoSettings(options) {
