@@ -54,7 +54,7 @@ function windows(env: Env, delivery: Message["delivery"]): Window[] {
 }
 
 export async function sendToHandle(request: Request, env: Env, id: string): Promise<Response> {
-  const row = await authenticate(request, env, id);
+  const row = await authenticate(request, env, id, "send_token");
   const message = parseMessage(await readJsonObject(request, env));
   const send = row.platform === "apns" ? apnsSender(env) : fcmSender(env);
   await hit(env.DB, row.id, windows(env, message.delivery));

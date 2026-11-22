@@ -4,10 +4,10 @@
 /**
  * GAIA push relay.
  *
- *   POST   /v1/handles                register a device token, returns {handle, secret}
+ *   POST   /v1/handles                register a device token, returns {handle, secret, send_token}
  *   PUT    /v1/handles/{handle}       rotate the token                (Bearer secret)
  *   DELETE /v1/handles/{handle}       delete the handle               (Bearer secret)
- *   POST   /v1/handles/{handle}/send  push an encrypted blob          (Bearer secret)
+ *   POST   /v1/handles/{handle}/send  push an encrypted blob          (Bearer send_token)
  *   GET    /v1/health                 liveness, no auth
  *
  * A daily cron drops idle handles and ended rate windows.

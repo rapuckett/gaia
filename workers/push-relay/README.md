@@ -5,16 +5,18 @@ through Apple Push Notification service (APNs) and Firebase Cloud Messaging
 (FCM). Whoever publishes the phone app runs one. The PC never holds Apple or
 Google keys, and the relay never sees what a notification says.
 
-- **The phone** registers its APNs or FCM token here and gets back a *handle*
-  and a *secret*, one pair per paired PC. It hands both to that PC over the
-  paired connection.
+- **The phone** registers its APNs or FCM token here, once per paired PC, and
+  gets back a *handle*, a *secret* and a *send token*. It keeps the secret,
+  which rotates or deletes the handle, and hands only the handle and send token
+  to that PC over the paired connection. A PC can therefore push to its own
+  handle but never point it at another device.
 - **The PC** posts an end-to-end encrypted blob to the handle. The relay looks up
   the token and forwards the blob to APNs or FCM unread. The phone decrypts it
   with a key agreed at pairing, in its notification service extension (iOS) or
   messaging service (Android).
-- **What the relay stores:** handle id, SHA-256 of the secret, platform, token,
-  app id, APNs environment, and two timestamps. It stores no payloads, keeps no
-  logs of their contents, and keeps no raw IPs.
+- **What the relay stores:** handle id, SHA-256 of the secret and of the send
+  token, platform, token, app id, APNs environment, and two timestamps. It
+  stores no payloads, keeps no logs of their contents, and keeps no raw IPs.
 
 Moving the app to another publisher means a new app build pointing at a new
 relay. GAIA on the PC needs no change.
@@ -27,15 +29,18 @@ All bodies are JSON. Errors are `{error, message?}`.
 
 | Call | Auth | Body | Success |
 |---|---|---|---|
-| `POST /v1/handles` | none, limited per client IP | `{platform: "apns"\|"fcm", token, app_id, environment: "sandbox"\|"production"}` | `201 {handle, secret}` |
+| `POST /v1/handles` | none, limited per client IP | `{platform: "apns"\|"fcm", token, app_id, environment: "sandbox"\|"production"}` | `201 {handle, secret, send_token}` |
 | `PUT /v1/handles/{handle}` | `Bearer <secret>` | `{token}` | `204` |
 | `DELETE /v1/handles/{handle}` | `Bearer <secret>` | none | `204` |
-| `POST /v1/handles/{handle}/send` | `Bearer <secret>` | `{delivery: "alert"\|"silent", ciphertext, nonce, collapse_id?}` | `202` |
+| `POST /v1/handles/{handle}/send` | `Bearer <send_token>` | `{delivery: "alert"\|"silent", ciphertext, nonce, collapse_id?}` | `202` |
 | `GET /v1/health` | none | none | `200 {ok: true}` |
 
 **Handles**
 
-- `handle` is 16 random bytes and `secret` is 32 random bytes, both base64url.
+- `handle` is 16 random bytes; `secret` and `send_token` are 32 random bytes
+  each. All three are base64url.
+- `PUT` and `DELETE` accept only the secret, and `send` accepts only the send
+  token.
 - `app_id` must be in `ALLOWED_APP_IDS`, or the call gets `400 app_not_allowed`.
   On APNs it is the topic (the iOS bundle id). On FCM it is the Android package
   name, sent as `restricted_package_name`.
@@ -70,8 +75,8 @@ All bodies are JSON. Errors are `{error, message?}`.
 | Status | When |
 |---|---|
 | `400` | A malformed body, an unknown field, a bad `delivery`, a size limit broken, or an app id that is not allowed |
-| `401 {error: "unauthorized"}` | An unknown handle, a wrong secret and a missing `Authorization` header all look the same |
-| `410 {error: "gone"}` | The token is dead (APNs 410 or 400 `BadDeviceToken`; FCM `UNREGISTERED`). The handle is deleted, and the caller should drop it. This status is sent only to a caller with the right secret. |
+| `401 {error: "unauthorized"}` | An unknown handle, a wrong credential, the other kind of credential and a missing `Authorization` header all look the same |
+| `410 {error: "gone"}` | The token is dead (APNs 410 or 400 `BadDeviceToken`; FCM `UNREGISTERED`). The handle is deleted, and the caller should drop it. This status is sent only to a caller with the right send token. |
 | `413` | The body is over `MAX_BODY_BYTES`, by Content-Length or by bytes read |
 | `429 {error: "rate_limited", retry_after}` | A rate limit is hit. The `Retry-After` header is set. |
 | `500 {error: "missing_config" \| "invalid_config", message}` | A secret needed for the call is unset or malformed. The message names the variable. |
@@ -85,7 +90,7 @@ own `SILENT_PER_MINUTE` and `SILENT_PER_DAY`. Registrations count against
 `IP_HASH_SALT`.
 
 **Logs** carry status codes and the first six characters of a handle id, never
-tokens, secrets, ciphertext, collapse ids or IPs.
+tokens, secrets, send tokens, ciphertext, collapse ids or IPs.
 
 ## Configuration
 

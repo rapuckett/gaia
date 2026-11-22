@@ -77,8 +77,8 @@ const oauthReply = (url: string) =>
     ? Response.json({ access_token: "ya29.test-access", expires_in: 3599, token_type: "Bearer" })
     : new Response("{}", { status: 200 });
 
-const send = (env: Env, h: { handle: string; secret: string }, body: unknown = ALERT) =>
-  call(env, "POST", `/v1/handles/${h.handle}/send`, { secret: h.secret, body });
+const send = (env: Env, h: { handle: string; send_token: string }, body: unknown = ALERT) =>
+  call(env, "POST", `/v1/handles/${h.handle}/send`, { secret: h.send_token, body });
 
 describe("APNs", () => {
   it("sends an alert to the sandbox host with a verifiable ES256 provider token", async () => {
@@ -312,11 +312,14 @@ describe("send validation and limits", () => {
     expect(seen).toEqual([]);
   });
 
-  it("gives 401, not 410, for a wrong secret", async () => {
+  it("gives 401, not 410, for a wrong send token or the handle's secret", async () => {
     const { env } = apnsEnv();
     const h = await register(env);
     reply = () => Response.json({ reason: "Unregistered" }, { status: 410 });
-    expect((await send(env, { ...h, secret: "C".repeat(43) })).status).toBe(401);
+    const wrong = await send(env, { ...h, send_token: "C".repeat(43) });
+    const managing = await send(env, { ...h, send_token: h.secret });
+    expect([wrong.status, managing.status]).toEqual([401, 401]);
+    expect(await managing.text()).toBe('{"error":"unauthorized"}');
     expect(seen).toEqual([]);
   });
 

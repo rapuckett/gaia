@@ -34,11 +34,11 @@ export async function register(
   env: Env,
   body: Record<string, unknown> = {},
   ip?: string
-): Promise<{ handle: string; secret: string }> {
+): Promise<{ handle: string; secret: string; send_token: string }> {
   const res = await call(env, "POST", "/v1/handles", {
     ip,
     body: { platform: "apns", token: APNS_TOKEN, app_id: APP_ID, environment: "sandbox", ...body },
   });
   if (res.status !== 201) throw new Error(`register failed: ${res.status} ${await res.text()}`);
-  return (await res.json()) as { handle: string; secret: string };
+  return (await res.json()) as { handle: string; secret: string; send_token: string };
 }

@@ -30,6 +30,7 @@ export type DeliveryKind = "alert" | "silent";
 export interface HandleRow {
   id: string;
   secret_hash: string;
+  send_hash: string;
   platform: Platform;
   token: string;
   app_id: string;

@@ -1,7 +1,11 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-/** Register, rotate and delete handles, and authenticate a handle's caller. */
+/**
+ * Register, rotate and delete handles, and authenticate a handle's caller.
+ * The secret manages a handle and the send token only sends with it, so the
+ * PC, which holds just the send token, cannot move a handle to another device.
+ */
 
 import { readJsonObject, onlyFields } from "./body";
 import { allowedAppIds, limit, requireSecrets } from "./config";
@@ -70,31 +74,47 @@ export async function registerHandle(request: Request, env: Env): Promise<Respon
 
   const handle = randomBase64url(16);
   const secret = randomBase64url(32);
+  const sendToken = randomBase64url(32);
   const now = Date.now();
   await env.DB.prepare(
-    `INSERT INTO handles (id, secret_hash, platform, token, app_id, environment, created_at, last_used_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO handles (id, secret_hash, send_hash, platform, token, app_id, environment, created_at, last_used_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
-    .bind(handle, base64urlEncode(await sha256(secret)), platform, token, app_id, environment as Environment, now, now)
+    .bind(
+      handle,
+      base64urlEncode(await sha256(secret)),
+      base64urlEncode(await sha256(sendToken)),
+      platform,
+      token,
+      app_id,
+      environment as Environment,
+      now,
+      now
+    )
     .run();
   await enforceTokenCap(env, platform, token);
-  return json({ handle, secret }, 201);
+  return json({ handle, secret, send_token: sendToken }, 201);
 }
 
-/** The handle row if `Authorization: Bearer <secret>` matches it; otherwise one indistinguishable 401. */
-export async function authenticate(request: Request, env: Env, id: string): Promise<HandleRow> {
+export type Credential = "secret" | "send_token";
+
+/**
+ * The handle row if `Authorization: Bearer <credential>` matches the given kind;
+ * otherwise one indistinguishable 401, whatever was wrong.
+ */
+export async function authenticate(request: Request, env: Env, id: string, kind: Credential): Promise<HandleRow> {
   const match = /^Bearer ([A-Za-z0-9_-]{1,128})$/.exec(request.headers.get("authorization") ?? "");
   const presented = await sha256(match ? match[1] : "");
   const row = HANDLE_ID.test(id)
     ? await env.DB.prepare("SELECT * FROM handles WHERE id = ?").bind(id).first<HandleRow>()
     : null;
-  const stored = row ? base64urlDecode(row.secret_hash) : DUMMY_HASH;
+  const stored = row ? base64urlDecode(kind === "secret" ? row.secret_hash : row.send_hash) : DUMMY_HASH;
   if (!timingSafeEqual(presented, stored) || !row || !match) throw unauthorized();
   return row;
 }
 
 export async function rotateToken(request: Request, env: Env, id: string): Promise<Response> {
-  const row = await authenticate(request, env, id);
+  const row = await authenticate(request, env, id, "secret");
   const body = await readJsonObject(request, env);
   onlyFields(body, ["token"]);
   const token = validToken(row.platform, body.token);
@@ -104,7 +124,7 @@ export async function rotateToken(request: Request, env: Env, id: string): Promi
 }
 
 export async function deleteHandle(request: Request, env: Env, id: string): Promise<Response> {
-  await authenticate(request, env, id);
+  await authenticate(request, env, id, "secret");
   await env.DB.prepare("DELETE FROM handles WHERE id = ?").bind(id).run();
   return new Response(null, { status: 204 });
 }

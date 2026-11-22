@@ -10,16 +10,20 @@ import { APNS_TOKEN, APP_ID, call, FCM_TOKEN, makeEnv, register } from "./helper
 afterEach(() => vi.useRealTimers());
 
 describe("POST /v1/handles", () => {
-  it("returns a 16-byte handle and 32-byte secret, and stores only the secret's hash", async () => {
+  it("returns a 16-byte handle, a 32-byte secret and send token, and stores only their hashes", async () => {
     const { env, t } = makeEnv();
-    const { handle, secret } = await register(env);
+    const { handle, secret, send_token } = await register(env);
     expect(base64urlDecode(handle)).toHaveLength(16);
     expect(base64urlDecode(secret)).toHaveLength(32);
+    expect(base64urlDecode(send_token)).toHaveLength(32);
+    expect(send_token).not.toBe(secret);
 
     const [row] = t.query<Record<string, unknown>>("SELECT * FROM handles");
     expect(row).toMatchObject({ id: handle, platform: "apns", token: APNS_TOKEN, app_id: APP_ID, environment: "sandbox" });
     expect(row.secret_hash).toBe(base64urlEncode(await sha256(secret)));
+    expect(row.send_hash).toBe(base64urlEncode(await sha256(send_token)));
     expect(JSON.stringify(row)).not.toContain(secret);
+    expect(JSON.stringify(row)).not.toContain(send_token);
   });
 
   it("refuses an app id outside ALLOWED_APP_IDS, and every app id when it is empty", async () => {
@@ -127,6 +131,16 @@ describe("handle auth", () => {
     const bodies = await Promise.all([unknown, wrong, none, malformed].map((r) => r.text()));
     expect([unknown, wrong, none, malformed].map((r) => r.status)).toEqual([401, 401, 401, 401]);
     expect(new Set(bodies)).toEqual(new Set(['{"error":"unauthorized"}']));
+  });
+
+  it("refuses the send token for PUT and DELETE, leaving the handle as it was", async () => {
+    const { env, t } = makeEnv();
+    const h = await register(env);
+    const put = await call(env, "PUT", `/v1/handles/${h.handle}`, { secret: h.send_token, body: { token: "b2".repeat(32) } });
+    const del = await call(env, "DELETE", `/v1/handles/${h.handle}`, { secret: h.send_token });
+    expect([put.status, del.status]).toEqual([401, 401]);
+    expect(await del.text()).toBe('{"error":"unauthorized"}');
+    expect(t.query("SELECT token FROM handles")).toEqual([{ token: APNS_TOKEN }]);
   });
 });
 
