@@ -5293,6 +5293,22 @@
     "additionalProperties": true,
     "description": "Why a chat can't be given the folder, or null when it can.",
     "properties": {
+      "code": {
+        "anyOf": [
+          {
+            "enum": [
+              "device_folder_outside_home",
+              "device_folder_withheld"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Set only on a paired device's refusal, for the phone to word it.",
+        "title": "Code"
+      },
       "refusal": {
         "anyOf": [
           {
