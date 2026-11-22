@@ -1,8 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState, type ComponentRef, type ReactNode, type Ref } from 'react';
-import { Platform, TextInput, View, useWindowDimensions, type KeyboardTypeOptions, type ReturnKeyTypeOptions } from 'react-native';
+import { useRef, useState, type ComponentRef, type ReactNode, type Ref } from 'react';
+import { Platform, Pressable, TextInput, View, useWindowDimensions, type KeyboardTypeOptions, type ReturnKeyTypeOptions } from 'react-native';
 import { CircleAlert } from 'lucide-react-native';
 import { useDirection, useT } from '@/i18n/useT';
 import { Eye, EyeOff } from '../icons';
@@ -16,8 +16,13 @@ import { Icon } from './Icon';
 import { Row } from '../layout/layout';
 import { metrics } from '../tokens/generated';
 
-/** Room an icon at the field's start takes: 12 in, a 16 icon, and the gap to the text. */
-export const LEADING_INSET = 40;
+/** Inset from the box edge to the icon; then a 16 icon and an 8 gap before the text. */
+export const LEADING_INSET = 12;
+
+function assignRef<T>(ref: Ref<T> | undefined, node: T | null) {
+    if (typeof ref === 'function') ref(node);
+    else if (ref) (ref as { current: T | null }).current = node;
+}
 
 export interface TextFieldProps {
     value: string;
@@ -98,6 +103,11 @@ export function TextField({
     const exact = url || literal || secret;
     const valueRtl = url && !value ? uiRtl : false;
     const [focused, setFocused] = useState(false);
+    const inner = useRef<ComponentRef<typeof TextInput> | null>(null);
+    const setRef = (node: ComponentRef<typeof TextInput> | null) => {
+        inner.current = node;
+        assignRef(inputRef, node);
+    };
     const [revealed, setRevealed] = useState(false);
     const canReveal = !!secureTextEntry && !!revealable;
     const end = canReveal ? (
@@ -133,9 +143,32 @@ export function TextField({
                     </Text>
                 </View>
             ) : null}
-            <View style={{ opacity: disabled ? 0.45 : 1 }}>
+            <Pressable
+                accessible={false}
+                disabled={disabled}
+                onPress={() => inner.current?.focus()}
+                testID={testID ? `${testID}-box` : undefined}
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'stretch',
+                    gap: 8,
+                    opacity: disabled ? 0.45 : 1,
+                    paddingStart: bare ? 4 : LEADING_INSET - 1,
+                    paddingEnd: end ? 0 : bare ? 4 : 11,
+                    borderRadius: radius.md,
+                    borderWidth: bare ? 0 : 1,
+                    borderColor,
+                    backgroundColor: disabled ? colors.bgTertiary : bare ? 'transparent' : colors.bgInput,
+                    ...(focused && !error && !bare ? { boxShadow: `0 0 0 3px ${colors.accentRing}` } : null),
+                }}
+            >
+            {leading ? (
+                <View pointerEvents="none" style={{ alignSelf: 'center' }}>
+                    {leading}
+                </View>
+            ) : null}
             <TextInput
-                ref={inputRef}
+                ref={setRef}
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={placeholder}
@@ -167,18 +200,13 @@ export function TextField({
                 maxFontSizeMultiplier={maxFontSizeMultiplier}
                 testID={testID}
                 style={{
-                    minHeight: multiline ? Math.max(bare ? 40 : 48, wantHeight) : bare ? 40 : 48,
+                    flex: 1,
+                    minHeight: (multiline ? Math.max(bare ? 40 : 48, wantHeight) : bare ? 40 : 48) - (bare ? 0 : 2),
                     ...(multiline
                         ? { maxHeight, textAlignVertical: 'top' as const }
                         : null),
-                    // Physical sides from the UI direction: Android resolves an input's own paddingStart from its text direction, which flips with the typed text and drops the icon's room.
-                    [uiRtl ? 'paddingRight' : 'paddingLeft']: leading ? LEADING_INSET : bare ? 4 : 12,
-                    [uiRtl ? 'paddingLeft' : 'paddingRight']: end ? 48 : bare ? 4 : 12,
-                    paddingVertical: paddingV,
-                    borderRadius: radius.md,
-                    borderWidth: bare ? 0 : 1,
-                    borderColor,
-                    backgroundColor: disabled ? colors.bgTertiary : bare ? 'transparent' : colors.bgInput,
+                    paddingHorizontal: 0,
+                    paddingVertical: paddingV - (bare ? 0 : 1),
                     color: colors.textPrimary,
                     fontFamily: fontFamily({ weight: 'regular', mono: false, display: false }),
                     fontSize: size,
@@ -187,16 +215,10 @@ export function TextField({
                     ...(url
                         ? { textAlign: inputAlign(valueRtl), writingDirection: valueRtl ? ('rtl' as const) : ('ltr' as const) }
                         : { textAlign: inputAlign(rtl), writingDirection: rtl ? ('rtl' as const) : ('ltr' as const) }),
-                    ...(focused && !error && !bare ? { boxShadow: `0 0 0 3px ${colors.accentRing}` } : null),
                 }}
             />
-            {leading ? (
-                <View pointerEvents="none" style={{ position: 'absolute', start: 12, top: 0, bottom: 0, justifyContent: 'center' }}>
-                    {leading}
-                </View>
-            ) : null}
-            {end ? <View style={{ position: 'absolute', end: 0, top: 0, bottom: 0, justifyContent: 'center' }}>{end}</View> : null}
-            </View>
+            {end ? <View style={{ alignSelf: 'center' }}>{end}</View> : null}
+            </Pressable>
             {error ? (
                 <Row gap="xs" align="start">
                     <Icon icon={CircleAlert} size="sm" tone="danger" />

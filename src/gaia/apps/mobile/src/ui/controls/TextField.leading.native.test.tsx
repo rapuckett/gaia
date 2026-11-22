@@ -1,13 +1,13 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import type { ReactNode } from 'react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
+import { Children, type ReactNode } from 'react';
 import { I18nManager, Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useLocaleStore } from '@/state/locale';
-import { SearchField, ThemeProvider } from '@/ui';
+import { SearchField, TextField, ThemeProvider } from '@/ui';
 import { LEADING_INSET } from './TextField';
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
@@ -18,7 +18,6 @@ const wrap = ({ children }: { children: ReactNode }) => (
     </SafeAreaProvider>
 );
 
-const ICON_START = 12;
 const ICON_WIDTH = 16;
 
 afterEach(() => {
@@ -26,32 +25,58 @@ afterEach(() => {
     jest.restoreAllMocks();
 });
 
-function inset(rtl: boolean) {
-    const flat = StyleSheet.flatten(screen.getByTestId('s').props.style);
-    return rtl ? flat.paddingRight : flat.paddingLeft;
-}
+const styleOf = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
 
 describeNative.each([
     ['en', false],
     ['ar', true],
-])('search field icon room (%s)', (locale, rtl) => {
-    it('keeps the icon side inset through focus, blur, typing and clearing', async () => {
+    ['ar', false],
+])('search field icon room (%s, native RTL %s)', (locale, isRTL) => {
+    beforeEach(() => {
         useLocaleStore.getState().setLocale(locale as 'en' | 'ar');
-        jest.spyOn(I18nManager, 'getConstants').mockReturnValue({ isRTL: rtl, doLeftAndRightSwapInRTL: true, localeIdentifier: locale });
-        const onChange = jest.fn();
-        await render(<SearchField testID="s" value="" onChangeText={onChange} placeholder="Search chats" />, { wrapper: wrap });
-        const before = inset(rtl);
-        expect(before).toBe(LEADING_INSET);
-        expect(before).toBeGreaterThanOrEqual(ICON_START + ICON_WIDTH);
+        jest.spyOn(I18nManager, 'getConstants').mockReturnValue({ isRTL, doLeftAndRightSwapInRTL: true, localeIdentifier: locale });
+    });
+
+    it('lays the icon and the input out as siblings in a row, with no inset on the input', async () => {
+        await render(<SearchField testID="s" value="" onChangeText={jest.fn()} placeholder="Search chats" />, { wrapper: wrap });
+        const box = screen.getByTestId('s-box');
+        expect(styleOf('s-box')).toMatchObject({ flexDirection: 'row' });
+        expect(within(box).getByTestId('s')).toBeTruthy();
+        const kids = Children.toArray(box.props.children);
+        expect(kids.length).toBeGreaterThanOrEqual(2);
+        const input = styleOf('s');
+        for (const key of ['paddingLeft', 'paddingRight', 'paddingStart', 'paddingEnd', 'paddingHorizontal'] as const) {
+            expect(input[key] ?? 0).toBe(0);
+        }
+        expect(input.flex).toBe(1);
+        expect(styleOf('s-box').paddingStart + 1 + ICON_WIDTH).toBeLessThanOrEqual(LEADING_INSET + ICON_WIDTH);
+    });
+
+    it('keeps that layout through focus, blur, typing and clearing', async () => {
+        await render(<SearchField testID="s" value="" onChangeText={jest.fn()} placeholder="Search chats" />, { wrapper: wrap });
+        const layout = () => {
+            const { paddingStart, flexDirection, gap } = styleOf('s-box');
+            const { paddingLeft, paddingRight, paddingStart: s, paddingEnd: e } = styleOf('s');
+            return JSON.stringify({ paddingStart, flexDirection, gap, paddingLeft, paddingRight, s, e });
+        };
+        const before = layout();
         const input = screen.getByTestId('s');
         await act(async () => fireEvent(input, 'focus'));
-        expect(inset(rtl)).toBe(before);
+        expect(layout()).toBe(before);
         await act(async () => fireEvent(input, 'blur'));
-        expect(inset(rtl)).toBe(before);
+        expect(layout()).toBe(before);
         await act(async () => fireEvent.changeText(input, 'مرحبا'));
         await act(async () => fireEvent(input, 'blur'));
-        expect(inset(rtl)).toBe(before);
+        expect(layout()).toBe(before);
         await act(async () => fireEvent.changeText(input, ''));
-        expect(inset(rtl)).toBe(before);
+        expect(layout()).toBe(before);
+    });
+
+    it('focuses the input when the box is pressed', async () => {
+        let node: { focus: () => void } | null = null;
+        await render(<TextField testID="f" value="" onChangeText={jest.fn()} inputRef={(n) => { node = n as unknown as { focus: () => void }; }} />, { wrapper: wrap });
+        const focus = jest.spyOn(node as unknown as { focus: () => void }, 'focus');
+        await act(async () => fireEvent.press(screen.getByTestId('f-box')));
+        expect(focus).toHaveBeenCalled();
     });
 });
