@@ -5,40 +5,16 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, Download, Loader2 } from 'lucide-react';
 import { RadioGroup } from '../RadioGroup';
 import { useT } from '../../i18n/useT';
-import type { MessageKey } from '../../i18n/registry';
 import * as api from '../../services/api';
 import type { AgentProgram, AgentPrograms, FlagshipAgent } from '../../types';
 import { AgentDownloadRow, useAgentDownload } from './AgentDownload';
+import { AGENT_OPTIONS as OPTIONS, AGENT_WHY as WHY, agentInstalled, agentNeedsDownload, agentOff, type AgentPick } from './agentPrograms';
 import { formatBytes } from './format';
 import './setup.css';
 
-interface Option {
-    id: FlagshipAgent;
-    label: MessageKey;
-    more: MessageKey;
-    tag: MessageKey;
-}
-
-const OPTIONS: Option[] = [
-    { id: 'gaiapy', label: 'setup.agent.gaiapy', more: 'setup.agent.gaiapyMore', tag: 'setup.offer.recommended' },
-    { id: 'gaiacpp', label: 'setup.agent.gaiacpp', more: 'setup.agent.gaiacppMore', tag: 'setup.agent.beta' },
-];
-
-const WHY: Record<NonNullable<AgentProgram['unavailable_code']>, MessageKey> = {
-    no_release: 'setup.agent.why.noRelease',
-    unreachable: 'setup.agent.why.unreachable',
-    unverifiable: 'setup.agent.why.unverifiable',
-};
+export type { AgentPick };
 
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
-
-/** Setup's pick: saved on Continue, and downloaded first when `download` is set. */
-export interface AgentPick {
-    id: FlagshipAgent;
-    download: boolean;
-    /** The agent saved now (possibly one this version can't run), which setup carries on with if the pick can't be had. */
-    current: string;
-}
 
 interface Props {
     /** In Settings: a settings card; a gaiacpp not on this PC has a Download button, and switches once that finishes. */
@@ -105,11 +81,9 @@ export function AgentChoice({ inSettings = false, disabled = false, pending = nu
     }, [inSettings, follow]);
 
     const program = (id: FlagshipAgent): AgentProgram | undefined => listing?.programs.find((p) => p.id === id);
-    // gaiapy is always selectable, whatever the listing says, so nobody is locked out of switching back.
-    const installed = (p: AgentProgram) => p.id === 'gaiapy' || p.installed;
-    const off = (p: AgentProgram | undefined) => !!p && !installed(p) && !p.can_download;
-    // In Settings a gaiacpp that isn't here is had through its Download button, never by selecting it.
-    const needsDownload = (p: AgentProgram | undefined) => !!p && inSettings && !installed(p) && p.can_download;
+    const installed = agentInstalled;
+    const off = agentOff;
+    const needsDownload = (p: AgentProgram | undefined) => agentNeedsDownload(p, inSettings);
     const downloading = job?.state === 'downloading';
     const selected = pending ?? listing?.current;
 

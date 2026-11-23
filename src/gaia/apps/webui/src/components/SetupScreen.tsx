@@ -25,7 +25,8 @@ import { tooBigText } from './setup/ModelChecklist';
 import { StageLogs } from './setup/StageLogs';
 import { SetupFooter, SetupFooterSlot } from './setup/SetupFooter';
 import { LanguagePicker } from './setup/LanguagePicker';
-import { AgentChoice, type AgentPick } from './setup/AgentChoice';
+import { AgentChoice } from './setup/AgentChoice';
+import { AGENT_PICK_KEY, type AgentPick } from './setup/agentPrograms';
 import { AgentDownloadRow, useAgentDownload } from './setup/AgentDownload';
 import { BackendChoice, applyTestedBackend } from './setup/BackendChoice';
 import { DetectedSummary } from './setup/DetectedSummary';
@@ -352,7 +353,6 @@ interface HeldRun {
     acknowledgeLowDisk: boolean;
 }
 
-const AGENT_PICK_KEY = 'gaia.setup.agentPick';
 const HELD_RUN_KEY = 'gaia.setup.heldRun';
 /** Extras added on the Download step, kept across a quit until they are handed to the download. */
 const QUEUED_EXTRAS_KEY = 'gaia.setup.queuedExtras';
