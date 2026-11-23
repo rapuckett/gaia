@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { Pressable } from '../controls/Pressable';
 import { Row } from '../layout/layout';
@@ -36,6 +36,15 @@ export interface ListRowProps {
     testID?: string;
 }
 
+/** Reports the pressable's pressed look up to the row, so the highlight covers the trailing control too. */
+function PressMirror({ highlight, onChange }: { highlight: boolean; onChange: (held: boolean) => void }) {
+    useEffect(() => {
+        onChange(highlight);
+        return () => onChange(false);
+    }, [highlight, onChange]);
+    return null;
+}
+
 export function ListRow({
     title,
     subtitle,
@@ -56,32 +65,73 @@ export function ListRow({
 }: ListRowProps) {
     const { colors, space } = useTheme();
     const largeText = useLargeText();
-    const body = (
-        <View
-            style={{
-                minHeight: 48,
-                paddingHorizontal: space.lg,
-                paddingVertical: space.sm,
-                backgroundColor: selected ? colors.bgActive : 'transparent',
-                justifyContent: 'center',
-            }}
-        >
-            <Row gap="md" align={largeText ? 'start' : 'center'}>
-                {leading ? <FirstLine role="ui" maxScale={titleMaxScale}>{leading}</FirstLine> : null}
-                <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text role="ui" weight={selected || emphasized ? 'semibold' : 'medium'} numberOfLines={titleLines} largeLines={titleLargeLines} ellipsize={titleEllipsize} maxScale={titleMaxScale}>
-                        {title}
+    const [held, setHeld] = useState(false);
+    // The whole row height stays tappable: the pressable grows to the trailing control's height.
+    const [trailingHeight, setTrailingHeight] = useState(0);
+    const pressable = !!onPress || !!onLongPress;
+    const split = pressable && !!trailing;
+    const content = (
+        <Row gap="md" align={largeText ? 'start' : 'center'}>
+            {leading ? <FirstLine role="ui" maxScale={titleMaxScale}>{leading}</FirstLine> : null}
+            <View style={{ flex: 1, minWidth: 0 }}>
+                <Text role="ui" weight={selected || emphasized ? 'semibold' : 'medium'} numberOfLines={titleLines} largeLines={titleLargeLines} ellipsize={titleEllipsize} maxScale={titleMaxScale}>
+                    {title}
+                </Text>
+                {subtitle ? (
+                    <Text role="caption" tone={subtitleTone} numberOfLines={subtitleLines}>
+                        {subtitle}
                     </Text>
-                    {subtitle ? (
-                        <Text role="caption" tone={subtitleTone} numberOfLines={subtitleLines}>
-                            {subtitle}
-                        </Text>
-                    ) : null}
-                </View>
-                {trailing ? <View style={{ flexShrink: 0 }}>{trailing}</View> : null}
-            </Row>
-        </View>
+                ) : null}
+            </View>
+            {trailing && !split ? <View style={{ flexShrink: 0 }}>{trailing}</View> : null}
+        </Row>
     );
+    const surface = {
+        minHeight: 48,
+        paddingHorizontal: space.lg,
+        paddingVertical: space.sm,
+        backgroundColor: selected ? colors.bgActive : 'transparent',
+        justifyContent: 'center',
+    } as const;
+    const body = <View style={surface}>{content}</View>;
+    if (split) {
+        // On iOS an accessible element hides its children, so the trailing control sits beside the pressable, not in it.
+        return (
+            <View
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'stretch',
+                    paddingEnd: space.lg,
+                    gap: space.md,
+                    backgroundColor: selected ? colors.bgActive : 'transparent',
+                }}
+            >
+                <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
+                    <Pressable
+                        onPress={onPress}
+                        onLongPress={onLongPress}
+                        accessibilityLabel={accessibilityLabel}
+                        aria-selected={!!selected}
+                        minSize={48}
+                        testID={testID}
+                    >
+                        {({ highlight }) => (
+                            <>
+                                <PressMirror highlight={highlight} onChange={setHeld} />
+                                <View style={{ ...surface, minHeight: Math.max(surface.minHeight, trailingHeight), backgroundColor: 'transparent', paddingEnd: 0 }}>{content}</View>
+                            </>
+                        )}
+                    </Pressable>
+                </View>
+                <View
+                    onLayout={(e) => setTrailingHeight(e.nativeEvent.layout.height)}
+                    style={{ flexShrink: 0, paddingVertical: space.sm, alignSelf: largeText ? 'flex-start' : 'center', opacity: held ? 0.72 : 1 }}
+                >
+                    {trailing}
+                </View>
+            </View>
+        );
+    }
     if (!onPress && !onLongPress) return <View testID={testID}>{body}</View>;
     return (
         <Pressable
