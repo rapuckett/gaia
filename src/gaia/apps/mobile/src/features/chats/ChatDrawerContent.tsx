@@ -371,6 +371,9 @@ function NavRow({ entry, active, onOpen }: { entry: NavEntry; active: boolean; o
 function ChatListRow({ row, onSelect, onMore }: { row: ChatRow; onSelect: (sessionId: string) => void; onMore: (row: ChatRow) => void }) {
     const t = useT();
     const text = rowText(row, t);
+    const showDot = !!row.dot && !!text.status;
+    // An empty leading slot would still add the row's 12 pt gap before the title.
+    const hasIcon = showDot || row.private;
     return (
         <ListRow
             title={row.title}
@@ -382,10 +385,12 @@ function ChatListRow({ row, onSelect, onMore }: { row: ChatRow; onSelect: (sessi
             onLongPress={() => onMore(row)}
             trailing={<IconButton icon={Ellipsis} size="sm" label={t('row.moreActions', { title: row.title })} onPress={() => onMore(row)} />}
             leading={
-                <Row gap="xs">
-                    {row.dot && text.status ? <StatusDot tone={statusTone(row.dot)} label={text.status} /> : null}
-                    {row.private ? <Icon icon={EyeOff} size="sm" label={t('row.private')} /> : null}
-                </Row>
+                hasIcon ? (
+                    <Row gap="xs">
+                        {showDot ? <StatusDot tone={statusTone(row.dot!)} label={text.status!} /> : null}
+                        {row.private ? <Icon icon={EyeOff} size="sm" label={t('row.private')} /> : null}
+                    </Row>
+                ) : undefined
             }
             subtitle={text.note ?? undefined}
             subtitleTone={text.noteFailed ? 'danger' : undefined}

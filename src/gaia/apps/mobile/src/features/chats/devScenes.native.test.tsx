@@ -77,6 +77,17 @@ describeNative('drawer gallery route', () => {
         expect(scroll.props.keyboardDismissMode).toBe('on-drag');
     });
 
+    it('starts a chat title with no status icon on the row gutter, with no empty icon slot before it', async () => {
+        mockState = 'groups-older';
+        await render(<DrawerGalleryRoute />);
+        const title = await screen.findByText('Recipe ideas for the weekend');
+        const row = title.parent!.parent!;
+        expect(row.children).toHaveLength(1);
+        const surface = row.parent!;
+        expect(surface.props.style.paddingHorizontal).toBe(16);
+        expect(surface.props.style.paddingStart).toBeUndefined();
+    });
+
     it('hides the background runs behind a counted toggle', async () => {
         mockState = 'background-hidden';
         await render(<DrawerGalleryRoute />);
