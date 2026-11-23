@@ -20,10 +20,21 @@ import {
     PROMPT_CODE_PREVIEW_LINES,
     requiresFreshConsent,
     shortScope,
+    shownArgs,
+    shownField,
     splitCommandSummary,
-    summarize,
+    summarizeField,
 } from '@webui/utils/permissionPrompts.core';
-import { calendarFacts, CALENDAR_WRITE_TOOLS } from '@webui/utils/calendarApproval.core';
+import {
+    calendarFacts,
+    CALENDAR_WRITE_TOOLS,
+    unseen,
+    unseenCommand,
+    unseenStrict,
+    visibleCommand,
+    visibleStrict,
+    visibleText,
+} from '@webui/utils/calendarApproval.core';
 import { CHANGE_PREVIEW_LINES, fileChange, fileText, fileUnseen } from '@webui/utils/permissionChange.core';
 
 import { useT } from '@/i18n/useT';
@@ -55,6 +66,8 @@ const BODY_HEIGHT_SHARE = 0.35;
 const MIN_BODY_HEIGHT = 96;
 
 const mark = (text: string): string => isolate(text, 'ltr');
+// Code first, then isolate: the isolate's own marks would otherwise show as codes.
+const markName = (text: string): string => mark(visibleStrict(text));
 
 type CodeTone = 'primary' | 'secondary' | 'success' | 'danger';
 
@@ -185,7 +198,8 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
     const t = useT();
     const tool = prompt.tool ?? '';
     const args = prompt.toolArgs ?? {};
-    const detail = summarize(prompt);
+    const field = summarizeField(prompt);
+    const detail = field.text;
     const riskNote = typeof args._risk_note === 'string' ? args._risk_note : '';
     const outsidePath = outsideFolderPath(riskNote);
     const folder = riskNote && typeof args.working_directory === 'string' ? args.working_directory : '';
@@ -202,10 +216,18 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
     const relayed = !hasArgs && COMMAND_SUMMARY_TOOLS.has(tool) ? splitCommandSummary(prompt.summary ?? '') : null;
     // The question already names the path of a folder or trust prompt.
     const own = tool === PATH_ACCESS_TOOL || tool === PROJECT_TRUST_TOOL;
-    const shownDetail = own ? '' : detail;
+    // Characters that don't show are shown as [U+XXXX]: the card is approved as it reads.
+    const { shown, coded: detailCoded } = shownField(field.key, detail);
+    const shownDetail = own ? '' : shown;
+    const command = typeof args.command === 'string' ? args.command : relayed?.command ?? '';
+    const hidden =
+        detailCoded ||
+        [code, relayed?.extras].some(unseen) ||
+        unseenCommand(command) ||
+        [args.path, folder, relayed?.folder].some(unseenStrict);
     const inFolder = (path: string) => (
         <Text role="caption" tone="secondary">
-            {t.bare('prompt.in')} <Text mono>{mark(path)}</Text>
+            {t.bare('prompt.in')} <Text mono>{markName(path)}</Text>
         </Text>
     );
 
@@ -222,16 +244,21 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
             {folder ? inFolder(folder) : null}
             {riskNote ? (
                 <Text role="caption" tone="warning" accessibilityRole="text">
-                    {outsidePath ? t('prompt.outsideFolders', { path: mark(outsidePath) }) : riskNote}
+                    {outsidePath ? t('prompt.outsideFolders', { path: markName(outsidePath) }) : riskNote}
                 </Text>
             ) : null}
-            {code ? <Collapsible text={code} /> : null}
+            {code ? <Collapsible text={visibleText(code, true)} /> : null}
             {exactText ? <Collapsible text={exactText} /> : null}
-            {relayed ? <Collapsible text={relayed.command} /> : null}
+            {relayed ? <Collapsible text={visibleCommand(relayed.command)} /> : null}
+            {hidden ? (
+                <Text role="caption" tone="warning" testID="perm-hidden-note">
+                    {t('prompt.hiddenChars')}
+                </Text>
+            ) : null}
             {relayed?.folder ? inFolder(relayed.folder) : null}
             {relayed?.extras ? (
                 <Text role="caption" tone="secondary">
-                    {relayed.extras}
+                    {visibleText(relayed.extras, false)}
                 </Text>
             ) : null}
             {relayed?.note ? (
@@ -243,7 +270,7 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
             {calendar && !hasArgs && prompt.summary ? <Collapsible text={prompt.summary} /> : null}
             {!detail && !code && !exactText && !relayed && !calendar && prompt.summary ? (
                 <Text role="caption" tone="secondary">
-                    {prompt.summary}
+                    {visibleText(prompt.summary, true)}
                 </Text>
             ) : null}
             <ChangePreview args={args} />
@@ -254,7 +281,7 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
                     onToggle={() => setShowArgs((v) => !v)}
                     testID="perm-details"
                 >
-                    <Collapsible text={JSON.stringify(args, null, 2)} />
+                    <Collapsible text={visibleText(JSON.stringify(shownArgs(args), null, 2), true)} />
                 </Disclosure>
             ) : null}
         </Stack>
@@ -296,14 +323,18 @@ export function PermissionPrompt({
         Keyboard.dismiss();
     }, [prompt.id]);
 
-    const { heading, question } = permissionPromptText(prompt, t, mark);
+    const { heading, question } = permissionPromptText(prompt, t, markName);
     useEffect(() => {
         AccessibilityInfo.announceForAccessibility(heading);
     }, [heading]);
 
     const scope = requiresFreshConsent(prompt.tool) ? undefined : prompt.alwaysScope;
+    // A coded copy for the wording only; the answer and repeat count keep the raw scope.
+    const shownScope = { ...prompt, alwaysScope: prompt.alwaysScope && visibleStrict(prompt.alwaysScope) };
     // Isolate the file or folder name so an LTR name can't reorder the Arabic around it.
-    const scopeIn = (say: Say) => alwaysScopeWith(prompt, say, (name) => `\u2068${shortScope(` ${name}`).trim()}\u2069`) ?? prompt.alwaysLabel ?? scope ?? '';
+    const scopeIn = (say: Say) =>
+        alwaysScopeWith(shownScope, say, (name) => `\u2068${shortScope(` ${name}`).trim()}\u2069`) ??
+        visibleStrict(prompt.alwaysLabel ?? scope ?? '');
     const suggestAlways = !!scope && repeats > 0;
     const allowLabel = t(
         prompt.tool === PROJECT_TRUST_TOOL ? 'prompt.trust.allow' : prompt.tool === PATH_ACCESS_TOOL ? 'prompt.allowForChat' : 'prompt.allowOnce',
