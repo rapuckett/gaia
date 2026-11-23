@@ -1,0 +1,9 @@
+// Tests run in Node, so they may use node: builtins (node:sqlite backs the D1
+// fake). src/ stays typed with @cloudflare/workers-types only.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "@cloudflare/workers-types"]
+  },
+  "include": ["test/**/*.ts", "src/**/*.ts"]
+}

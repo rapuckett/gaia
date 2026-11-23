@@ -82,7 +82,12 @@ def runtime(monkeypatch):
     manager = RunManager()
     queue = TurnQueue()
     state = SimpleNamespace(session_locks={})
-    http_request = SimpleNamespace(app=SimpleNamespace(state=state), headers={})
+    http_request = SimpleNamespace(
+        app=SimpleNamespace(state=state),
+        headers={},
+        scope={},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
     server = SimpleNamespace(_stream_chat_response=helpers._stream_chat_response)
     helpers._agent_cache.clear()
     with (

@@ -53,6 +53,7 @@ import { findFilePaths } from '../utils/windowsPaths';
 import { cleanToolCallContent } from '../utils/toolCallContent';
 export { cleanToolCallContent, escapeBareNumberLines } from '../utils/toolCallContent';
 import './MessageBubble.css';
+import { visibleName, markStrayDirection } from './CalendarApproval';
 
 interface MessageBubbleProps {
     message: Message;
@@ -308,7 +309,7 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
     );
     const cleanedContent = useMemo(
         () => {
-            if (userParts) return userParts.text;
+            if (userParts) return markStrayDirection(userParts.text);
             const body = cutOff
                 ? cutOff.body
                 : endedBy ? message.content.trimEnd().slice(0, -endedBy.length) : message.content;
@@ -792,13 +793,13 @@ function FilePathLink({ path, label }: { path: string; label?: string }) {
             className="file-path-link"
             dir="ltr"
             onClick={handleClick}
-            title={t('msg.openInExplorer', { path })}
+            title={t('msg.openInExplorer', { path: visibleName(path) })}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(e as unknown as React.MouseEvent); } }}
         >
             <FolderOpen size={12} className="file-path-icon" />
-            {label ?? path}
+            {visibleName(label ?? path)}
         </span>
         {error && <span className="file-path-error" role="alert" dir="auto">{error}</span>}
         </>
@@ -843,12 +844,12 @@ function CitationLink({ doc, page, t }: { doc: CitedDoc; page?: number; t: Trans
             target="_blank"
             rel="noopener noreferrer"
             dir="ltr"
-            title={page ? t('citation.openPage', { page }) : t('citation.open', { name: doc.label })}
+            title={page ? t('citation.openPage', { page }) : t('citation.open', { name: visibleName(doc.label) })}
             data-doc-id={doc.id}
             data-page={page}
         >
             <FileText size={12} className="citation-icon" aria-hidden="true" />
-            {doc.label}
+            {visibleName(doc.label)}
         </a>
     );
 }

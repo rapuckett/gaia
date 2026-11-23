@@ -64,6 +64,8 @@ PC_ONLY = {
     "DELETE /api/devices/routes/{kind}",
     "GET /api/connectors/_debug",
     "GET /api/connectors/eval-mailbox",
+    "POST /api/agent-programs/{program_id}/download",
+    "POST /api/auth/launch-code",
     "POST /api/connectors/eval-mailbox",
     "POST /api/devices/listener",
     "POST /api/devices/pairing",
@@ -82,12 +84,16 @@ PC_ONLY = {
 PC_OR_DEVICE = {
     "DELETE /api/automations/{ref}",
     "DELETE /api/connectors/_flows/{flow_id}",
+    "DELETE /api/connectors/{connector_id}",
+    "DELETE /api/connectors/{connector_id}/accounts/{account_id}",
     "DELETE /api/connectors/{connector_id}/activations/{agent_id:path}",
     "DELETE /api/devices/pairing",
     "DELETE /api/devices/{device_id}",
     "DELETE /api/goals/{goal_id}",
+    "DELETE /api/memory/all",
     "DELETE /api/providers/{provider}/key",
     "DELETE /api/schedules/{name:path}",
+    "DELETE /v1/connections/{provider}",
     "GET /api/automations",
     "GET /api/devices",
     "GET /api/devices/status",
@@ -147,11 +153,14 @@ PC_OR_DEVICE = {
     "PUT /api/goals/{goal_id}/reject",
     "PUT /api/goals/{goal_id}/status",
     "PUT /api/goals/{goal_id}/tasks/{task_id}",
+    "PUT /api/images/settings",
     "PUT /api/schedules/{name:path}",
     "PUT /api/system/model-server/backend",
 }
 
 NOT_ON_LISTENER = {
+    "GET /api/agent-programs",
+    "GET /api/agent-programs/{program_id}/download",
     "GET /api/providers",
 }
 
@@ -180,12 +189,9 @@ WEB = {
 # may not change.
 REMOTE = {
     "DELETE /api/chat/permissions/{session_id}/grants",
-    "DELETE /api/connectors/{connector_id}",
-    "DELETE /api/connectors/{connector_id}/accounts/{account_id}",
     "DELETE /api/connectors/{connector_id}/grants/{agent_id:path}",
     "DELETE /api/documents/{doc_id}",
     "DELETE /api/gpu-memory/pending",
-    "DELETE /api/memory/all",
     "DELETE /api/memory/knowledge/{knowledge_id}",
     "DELETE /api/providers/local/custom/{model_id}",
     "DELETE /api/sessions/{session_id}",
@@ -194,7 +200,6 @@ REMOTE = {
     "DELETE /api/sessions/{session_id}/messages/{message_id}/and-below",
     "DELETE /api/skills/{name}",
     "DELETE /api/skills/{name}/preferences",
-    "DELETE /v1/connections/{provider}",
     "GET /api/agents",
     "GET /api/agents/catalog",
     "GET /api/agents/{agent_id}/install-status",
@@ -226,6 +231,7 @@ REMOTE = {
     "GET /api/goals/{goal_id}",
     "GET /api/gpu-memory",
     "GET /api/health",
+    "GET /api/images/settings",
     "GET /api/lemonade/detect",
     "GET /api/lemonade/target",
     "GET /api/mcp/servers",

@@ -179,6 +179,7 @@ export function ConnectionBanner({ onRetry, backendSlow = false, backendError = 
         }
     };
     if (isActiveDownload || activeProgress?.state === 'error') {
+        const shownName = displayModelName(downloadName);
         const sizeHint = activeProgress?.total_bytes
             ? `${(activeProgress.total_bytes / 1e9).toFixed(1)} ${GB_UNIT}`
             : ref('banner.download.sizeUnknown');
@@ -196,14 +197,14 @@ export function ConnectionBanner({ onRetry, backendSlow = false, backendError = 
                 <div className="connection-banner__text" dir="auto">
                     {isError ? (
                         <>
-                            {t('banner.download.failed', { name: downloadName })}{' '}
+                            {t('banner.download.failed', { name: shownName })}{' '}
                             {(downloadError ?? activeProgress?.message) && (
                                 <span className="connection-banner__hint">{downloadError ?? activeProgress?.message}</span>
                             )}
                         </>
                     ) : (
                         <>
-                            {t('banner.download.running', { name: downloadName, size: sizeHint })}
+                            {t('banner.download.running', { name: shownName, size: sizeHint })}
                             {activeProgress?.state === 'downloading' && activeProgress.file && (
                                 <>
                                     {' '}

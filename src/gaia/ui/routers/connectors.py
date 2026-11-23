@@ -119,6 +119,7 @@ from gaia.connectors.store import (
 )
 from gaia.ui.shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_opened
 
+from ..devices import DEVICE_CHANGE_PARAM_MAX
 from ..devices.changes import record_device_change
 from ..devices.prompts import DevicePromptTimeout, limit_device_rate, watch_key_store
 from ..key_store import (
@@ -147,10 +148,9 @@ router = APIRouter(prefix="/api/connectors", tags=["connectors"])
 # Issue #1292 — forwarded pre-authenticated connections. Separate prefix
 # (``/v1/connections``) per the issue's REST contract: a host app that already
 # authenticated a user POSTs the forwarded grant here; GAIA persists it and
-# acts on the mailbox as the host app's client — no second OAuth. The UI
-# server binds localhost by default and gates remote/tunnel access behind a
-# token (see ``TunnelAuthMiddleware``); mutating routes also require the
-# ``X-Gaia-UI`` CSRF header below.
+# acts on the mailbox as the host app's client — no second OAuth. Every caller
+# presents the Agent UI API token (see ``ApiTokenMiddleware``); mutating routes
+# also require the ``X-Gaia-UI`` CSRF header below.
 forwarded_router = APIRouter(prefix="/v1/connections", tags=["connections"])
 
 
@@ -190,6 +190,25 @@ async def _record_change(
         connector=REGISTRY.get(connector_id).display_name,
         connector_id=connector_id,
         **params,
+    )
+
+
+async def _record_removed(request: Request, connector_id: str) -> None:
+    """A device removed *connector_id*: an audit line and a row in its changes."""
+    if is_local_pc(request):
+        return
+    audit_approval(request, f"connector {connector_id} removed")
+    try:
+        name = REGISTRY.get(connector_id).display_name
+    except KeyError:
+        # A forwarded connection's provider need not be a catalog connector.
+        name = connector_id
+    await asyncio.to_thread(
+        record_device_change,
+        request,
+        "connectorRemoved",
+        connector=name[:DEVICE_CHANGE_PARAM_MAX],
+        connector_id=connector_id[:DEVICE_CHANGE_PARAM_MAX],
     )
 
 
@@ -1109,13 +1128,14 @@ def debug_state() -> Dict[str, Any]:
 
     from gaia.connectors.providers import _registry as provider_registry
 
+    # Resolved now, like every grant write; the import-time constant goes stale.
+    grants_file = _grants_path()
     grants_writable = False
     try:
-        grants_dir = _grants_path().parent
-        grants_dir.mkdir(parents=True, exist_ok=True)
-        grants_writable = os.access(str(grants_dir), os.W_OK)
-    except OSError:
-        pass
+        grants_file.parent.mkdir(parents=True, exist_ok=True)
+        grants_writable = os.access(str(grants_file.parent), os.W_OK)
+    except OSError as e:
+        logger.warning("Grants folder %s is not usable: %s", grants_file.parent, e)
 
     # Derive configured ids live by walking the catalog and asking the
     # source-of-truth store for each type.
@@ -1129,7 +1149,7 @@ def debug_state() -> Dict[str, Any]:
         "provider_registered": "google" in provider_registry,
         "env_var_present": bool(os.environ.get("GAIA_GOOGLE_CLIENT_ID")),
         "keyring_backend_class": type(keyring.get_keyring()).__name__,
-        "grants_path": str(_grants_path()),
+        "grants_path": str(grants_file),
         "grants_path_writable": grants_writable,
         "in_flight_flow_count": len(_flow_pending),
         "catalog_size": len(REGISTRY.all()),
@@ -1464,10 +1484,14 @@ async def test_connector(request: Request, connector_id: str) -> Dict[str, Any]:
 
 
 @router.delete(
-    "/{connector_id}", status_code=204, dependencies=[Depends(_require_ui_header)]
+    "/{connector_id}",
+    status_code=204,
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
 async def disconnect_connector(
-    connector_id: str, all_accounts: bool = Query(False, alias="all")
+    request: Request,
+    connector_id: str,
+    all_accounts: bool = Query(False, alias="all"),
 ) -> Response:
     """Disconnect a connector — removes credentials and (for MCP) removes it
     from mcp_servers.json.
@@ -1490,6 +1514,7 @@ async def disconnect_connector(
     # present a bare "disconnected" that reads as a full revoke when only
     # the local credential was cleared). ``revoke_result`` is ``None`` for
     # handler types with no remote-revoke concept (e.g. MCP servers).
+    await _record_removed(request, connector_id)
     await _emitter.emit(
         "connector.disconnected",
         {"connector_id": connector_id, **(revoke_result or {})},
@@ -1500,9 +1525,11 @@ async def disconnect_connector(
 @router.delete(
     "/{connector_id}/accounts/{account_id}",
     status_code=204,
-    dependencies=[Depends(_require_ui_header)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def disconnect_account(connector_id: str, account_id: str) -> Response:
+async def disconnect_account(
+    request: Request, connector_id: str, account_id: str
+) -> Response:
     """Disconnect one account of an OAuth connector (``account_id`` is its
     stable id or address). The other accounts keep working, and agent grants
     are kept until the last account goes."""
@@ -1515,6 +1542,7 @@ async def disconnect_account(connector_id: str, account_id: str) -> Response:
     except ConnectorsError as e:
         raise _raise_http_for(e) from e
 
+    await _record_removed(request, connector_id)
     await _emitter.emit(
         "connector.disconnected",
         {"connector_id": connector_id, **(revoke_result or {})},
@@ -2193,9 +2221,11 @@ def get_forwarded_connection(
 
 
 @forwarded_router.delete(
-    "/{provider}", status_code=204, dependencies=[Depends(_require_ui_header)]
+    "/{provider}",
+    status_code=204,
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def revoke_forwarded_connection(provider: str) -> Response:
+async def revoke_forwarded_connection(request: Request, provider: str) -> Response:
     """Revoke a forwarded connection: clear every account's refresh token, the
     forwarded OAuth client credentials, every per-agent grant, and the cached
     provider / token state (AC4). Idempotent."""
@@ -2217,6 +2247,7 @@ async def revoke_forwarded_connection(provider: str) -> Response:
     for key in [k for k in _token_cache if k[0] == provider]:
         _token_cache.pop(key, None)
 
+    await _record_removed(request, provider)
     await _emitter.emit(
         "connector.disconnected", {"connector_id": provider, **revoke_result}
     )

@@ -244,7 +244,7 @@ def _cloud_error(
         if not install and isinstance(message, str) and "is not installed" in message:
             return ProviderError(
                 f"Lemonade has no cloud provider registered for {name}, so it "
-                "cannot accept a key yet. Open Settings › Model and connect it "
+                "cannot accept a key yet. Open Settings > Agent & model and connect it "
                 "again, then try again.",
                 409,
             )
@@ -2803,11 +2803,11 @@ def _list_outage_detail(
 
     Returns the list's failure, the one case where the key is not to blame.
     """
-    from gaia.llm.lemonade_tls import ca_store_problem
+    from gaia.llm.lemonade_embedded import EmbeddedLemonade
     from gaia.llm.providers.fireworks import ModelListState, check_model_list
 
     name = _NAMES[provider]
-    ca_problem = ca_store_problem() if runs_lemonade else None
+    ca_problem = EmbeddedLemonade().ca_problem() if runs_lemonade else None
     if ca_problem:
         if not on_pc:
             ca_problem = (

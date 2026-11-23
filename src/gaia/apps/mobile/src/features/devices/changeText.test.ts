@@ -43,6 +43,7 @@ describe('changeText', () => {
         ['localOnlyOn', {}, 'Turned on Local only'],
         ['agentInstalled', {}, 'Installed the GAIA agent'],
         ['folderAdded', { folder: 'taxes' }, 'Gave a chat the folder taxes'],
+        ['folderRemoved', { folder: 'taxes' }, 'Took the folder taxes from a chat'],
     ])('%s %j reads "%s"', (kind, params, expected) => {
         expect(text(kind, params)).toBe(expected);
     });

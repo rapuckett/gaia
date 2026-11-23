@@ -29,20 +29,20 @@ from __future__ import annotations
 
 import ast
 import contextvars
-import functools
 import ipaddress
+import json
 import logging
 import ntpath
 import os
 import re
 import shlex
-import socket
 import tempfile
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from gaia.agents.base.call_risk import DESTRUCTIVE, shell_command_risk
 from gaia.agents.base.command_wrappers import unwrap_command_argv
+from gaia.canonical_path import canonical_path
 
 logger = logging.getLogger(__name__)
 
@@ -410,49 +410,16 @@ def _path_within(child: str, parent: str) -> bool:
     return child.startswith(parent + os.sep) or child.startswith(parent + "/")
 
 
-_UNC_DRIVE_RE = re.compile(r"^\\\\([^\\]+)\\([A-Za-z])\$(\\.*)?$")
-
-
-@functools.lru_cache(maxsize=1)
-def _local_hosts() -> frozenset:
-    r"""Host names an administrative share (``\\host\c$``) means this PC by."""
-    return frozenset({"localhost", "127.0.0.1", "::1", socket.gethostname().lower()})
-
-
-def _windows_spelling(path: str) -> str:
-    r"""One spelling for the many Windows has for a file.
-
-    ``\\?\C:\x``, ``\\localhost\c$\x``, ``C:\x::$DATA``, ``C:\x:stream`` and
-    ``C:\x.`` all open ``C:\x``.
-    """
-    path = path.replace("/", "\\")
-    lowered = path.lower()
-    if lowered.startswith("\\\\?\\unc\\"):
-        path = "\\\\" + path[8:]
-    elif lowered.startswith(("\\\\?\\", "\\\\.\\")):
-        path = path[4:]
-    share = _UNC_DRIVE_RE.match(path)
-    if share and share.group(1).lower() in _local_hosts():
-        path = f"{share.group(2)}:{share.group(3) or chr(92)}"
-    drive, rest = os.path.splitdrive(path)
-    parts = [
-        part if part in (".", "..") else part.split(":", 1)[0].rstrip(" .")
-        for part in rest.split("\\")
-    ]
-    return drive + "\\".join(parts)
-
-
 def _canonical(path: str) -> str:
-    """The form every target is compared in, wherever it was spelled."""
-    if os.name == "nt":
-        path = _windows_spelling(path)
+    """The form every target is compared in, wherever it was spelled.
+
+    The same canonical form the path validator judges by, with a named NTFS
+    stream compared as its file.
+    """
     try:
-        # Expands 8.3 short names and follows links, as opening the file would.
-        path = os.path.realpath(path)
-    except (OSError, ValueError) as e:
-        logger.debug(
-            "compared a target as written; resolving it failed (%s)", type(e).__name__
-        )
+        path = canonical_path(path, for_comparison=True)
+    except (OSError, ValueError) as e:  # UncheckablePathError included
+        logger.debug("compared a target as written: %s", e)
     return os.path.normcase(os.path.abspath(path))
 
 
@@ -780,6 +747,9 @@ _PACKAGE_PROGRAMS = frozenset(
     {"pip", "pip3", "uv", "pipx", "conda", "mamba", "npm", "pnpm", "yarn", "winget"}
 )
 _VERSION_PIN = re.compile(r"[\[<>=!~;@ ]")
+#: ``git commit -am "msg"``: only flags that take no value may precede ``m``
+#: (``-Fm`` reads ``m`` as the file). Commit only: ``checkout -m`` merges.
+_COMMIT_MESSAGE_CLUSTER = re.compile(r"-[aeinopqsvz]+m")
 
 
 def _without_text_values(family: str, rest: Sequence[str]) -> List[str]:
@@ -791,12 +761,19 @@ def _without_text_values(family: str, rest: Sequence[str]) -> List[str]:
     flags = _TEXT_FLAGS | _SHORT_TEXT_FLAGS.get(family.split(" ")[0], frozenset())
     kept: List[str] = []
     skip = False
+    # After a bare ``--`` git reads ``-am`` as a path, not a message cluster.
+    paths_only = False
     for word in rest:
         if skip:
             skip = False
-        elif word.lower() in flags:
+        elif word.lower() in flags or (
+            family == "git commit"
+            and not paths_only
+            and _COMMIT_MESSAGE_CLUSTER.fullmatch(word)
+        ):
             skip = True
         else:
+            paths_only = paths_only or word == "--"
             kept.append(word)
     return kept
 
@@ -2355,13 +2332,21 @@ class DeniedEffects:
         return denial
 
     def conflict(
-        self, tool_name: str, tool_args: Optional[Dict[str, Any]]
+        self,
+        tool_name: str,
+        tool_args: Optional[Dict[str, Any]],
+        by_user_only: bool = False,
     ) -> Optional[Tuple[Denial, Effect]]:
-        """The earlier denial this call would route around, if any."""
+        """The earlier denial this call would route around, if any.
+
+        *by_user_only* looks only at what a person declined.
+        """
         if not self:
             return None
         wanted, operands, _ = _read_call(tool_name, tool_args, self.cwd)
         for denial in self.denials:
+            if by_user_only and not denial.by_user:
+                continue
             for denied in denial.effects:
                 for effect in wanted:
                     if not denied.overlaps(effect):
@@ -2374,3 +2359,87 @@ class DeniedEffects:
                         continue
                     return denial, effect
         return None
+
+
+# ------------------------------------------------------------------ exact calls
+
+_ASCII_SPACE = re.compile(r"[ \t\r\n\f\v]+")
+#: A later message that asks for a declined call again.
+_ASKS_AGAIN = re.compile(
+    r"\b(?:again|retry|re-?run|run (?:it|that|this)\b"
+    r"|go ahead|do it\b|allow it|approve)"
+    r"|^\s*(?:yes|yeah|yep|ok|okay|sure)\b",
+    re.IGNORECASE,
+)
+_NEGATED_ASK = re.compile(
+    r"\b(?:don'?t|do not|never|not)\s+"
+    r"(?:try|retry|re-?run|run|do|allow|approve|go|again)\b",
+    re.IGNORECASE,
+)
+
+
+def _spaced(value: Any) -> Any:
+    """*value* with runs of ASCII whitespace in its one-line strings collapsed.
+
+    ASCII only: a no-break or zero-width space makes another command. A
+    multi-line string keeps its spacing, since indentation can be content.
+    """
+    if isinstance(value, str):
+        text = value.strip(" \t\r\n\f\v")
+        if "\n" in text or "\r" in text:
+            return text
+        return _ASCII_SPACE.sub(" ", text)
+    if isinstance(value, dict):
+        return {str(k): _spaced(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_spaced(v) for v in value]
+    return value
+
+
+def declined_call_key(tool_name: str, tool_args: Any) -> str:
+    """One call's identity: its tool and arguments, whitespace aside."""
+    return json.dumps(
+        [tool_name, _spaced(tool_args)], sort_keys=True, default=str, ensure_ascii=False
+    )
+
+
+class DeclinedCalls:
+    """The exact calls the user declined in this chat.
+
+    A retry of one is refused without asking again, whatever its effects.
+    A call lasts until a later message of the user's asks for it again.
+    """
+
+    def __init__(self) -> None:
+        self._calls: Dict[str, str] = {}
+
+    def __bool__(self) -> bool:
+        return bool(self._calls)
+
+    def record(self, tool_name: str, tool_args: Any) -> None:
+        """Remember that the user said no to this exact call."""
+        self._calls[declined_call_key(tool_name, tool_args)] = render_call(
+            tool_name, tool_args if isinstance(tool_args, dict) else None
+        )
+
+    def declined(self, tool_name: str, tool_args: Any) -> Optional[str]:
+        """The declined call this one repeats, as it was shown, or None."""
+        return self._calls.get(declined_call_key(tool_name, tool_args))
+
+    def lift_for(self, message: str) -> List[str]:
+        """Drop the calls *message* asks for again; returns them as shown.
+
+        A message that names a call, or asks to retry, asks again; one that
+        says not to does not. A wrong guess here only puts the call to the
+        user again, so it never runs anything unasked.
+        """
+        text = _ASCII_SPACE.sub(" ", message or "").strip()
+        if not self._calls or not text or _NEGATED_ASK.search(text):
+            return []
+        retry = _ASKS_AGAIN.search(text) is not None
+        lifted = [
+            key
+            for key, shown in self._calls.items()
+            if retry or (shown and _ASCII_SPACE.sub(" ", shown).strip() in text)
+        ]
+        return [self._calls.pop(key) for key in lifted]

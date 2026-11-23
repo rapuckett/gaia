@@ -28,6 +28,22 @@ const KEYS = {
     pairingClosed: `${P}pairingClosed`,
     npuMemlockFixed: `${P}npuMemlockFixed`,
     folderAdded: `${P}folderAdded`,
+    imageSettingsChanged: `${P}imageSettingsChanged`,
+    folderRemoved: `${P}folderRemoved`,
+    chatPermissionsAsk: `${P}chatPermissionsAsk`,
+    chatPermissionsFull: `${P}chatPermissionsFull`,
+    connectorRemoved: `${P}connectorRemoved`,
+    gitCommitted: `${P}gitCommitted`,
+    gitPullRequest: `${P}gitPullRequest`,
+    goalApproved: `${P}goalApproved`,
+    goalRejected: `${P}goalRejected`,
+    scheduleCreated: `${P}scheduleCreated`,
+    scheduleResumed: `${P}scheduleResumed`,
+    scheduleRun: `${P}scheduleRun`,
+    spendingAllowedMonth: `${P}spendingAllowedMonth`,
+    spendingLimitCleared: `${P}spendingLimitCleared`,
+    spendingLimitSet: `${P}spendingLimitSet`,
+    undoLimitsChanged: `${P}undoLimitsChanged`,
 } as const satisfies Record<string, MessageKey>;
 
 const DISCORD_ACTIONS = {
