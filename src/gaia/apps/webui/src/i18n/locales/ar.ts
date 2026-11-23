@@ -4454,7 +4454,7 @@ const messages: Messages = {
     'mobileApp.push.action.refused': 'لا يمكن الإجابة عن هذا الطلب من إشعار. أجب عنه في المحادثة.',
     'mobileApp.push.action.otherPc': 'هذا الطلب من كمبيوتر آخر لديك. انتقل إلى ذلك الكمبيوتر في GAIA، ثم أجب عنه في المحادثة.',
     'mobileApp.push.action.failed': 'لم يقبل الكمبيوتر لديك الإجابة، لذا لم يتغيّر شيء. أجب عنه في المحادثة بدلًا من ذلك.',
-    'mobileApp.push.action.locked': 'افتح قفل هاتفك، ثم اضغط الزر مرة أخرى.',
+    'mobileApp.push.action.locked': 'افتح قفل هاتفك أولًا، ثم اضغط الزر مرة أخرى.',
     'mobileApp.pairing.welcome.title': 'استخدم GAIA من هاتفك',
     'mobileApp.pairing.welcome.body': 'يعمل GAIA على جهاز الكمبيوتر لديك وتبقى محادثاتك عليه. اقرن هذا الهاتف بالكمبيوتر لاستخدام GAIA هنا.',
     'mobileApp.pairing.welcome.start': 'اقرن مع الكمبيوتر',

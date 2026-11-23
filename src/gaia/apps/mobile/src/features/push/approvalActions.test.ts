@@ -162,7 +162,7 @@ describe('the notice', () => {
             body: 'This request was already answered or is no longer waiting, so nothing changed.',
             data: { gaiaNotice: true, route: '/chat/s_42' },
         });
-        expect(noticeContent('locked', 'en', null).body).toBe('Unlock your phone, then press the button again.');
+        expect(noticeContent('locked', 'en', null).body).toBe('Unlock your phone first, then tap the button again.');
         const ar = noticeContent('unreachable', 'ar', null);
         expect(ar.title).toBe('لم تُرسَل إجابتك');
         expect(ar.body).toMatch(/^تعذّر على GAIA الوصول/);
