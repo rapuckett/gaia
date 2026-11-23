@@ -4365,6 +4365,7 @@ const messages: Messages = {
     'mobileApp.error.http': 'ردّ GAIA بخطأ ({status}): {detail}',
     'mobileApp.error.httpNoDetail': 'ردّ GAIA بخطأ ({status}).',
     'mobileApp.error.agentInstallFailed': 'تعذّر تثبيت وكيل GAIA.',
+    'mobileApp.newChat.agent.cantDownload': 'لا يمكن تنزيل {name} هنا.',
     'mobileApp.error.featuredLibrariesFailed': 'تعذّر تحميل المكتبات المقترحة.',
     'mobileApp.error.modelListFailed': 'تعذّرت قراءة قائمة النماذج من خادم النماذج.',
     'mobileApp.error.pricesFailed': 'تعذّر تحميل الأسعار.',
