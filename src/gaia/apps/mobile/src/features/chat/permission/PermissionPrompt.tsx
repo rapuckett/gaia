@@ -318,7 +318,7 @@ function CallDetails({ facts, question }: { facts: CallFacts; question: string }
 
     return (
         <Stack gap="sm">
-            {shownDetail && riskNote ? <Collapsible text={shownDetail} /> : null}
+            {shownDetail && riskNote ? <Collapsible text={shownDetail} whole /> : null}
             {shownDetail && !riskNote ? (
                 <View style={{ direction: 'ltr' }} {...dirProp('ltr')}>
                     <Text role="label" tone="secondary" mono dir="ltr" align="ltr">
@@ -342,13 +342,13 @@ function CallDetails({ facts, question }: { facts: CallFacts; question: string }
                     {t('prompt.decodedCommand')}
                 </Text>
             ) : null}
-            {decoded ? <Collapsible text={visibleCommand(decoded)} testID="perm-decoded" /> : null}
+            {decoded ? <Collapsible text={visibleCommand(decoded)} whole testID="perm-decoded" /> : null}
             {reading && reading !== command ? (
                 <Text role="caption" tone="secondary">
                     {t('prompt.cmdReading')}
                 </Text>
             ) : null}
-            {reading && reading !== command ? <Collapsible text={visibleCommand(reading)} testID="perm-cmd-reading" /> : null}
+            {reading && reading !== command ? <Collapsible text={visibleCommand(reading)} whole testID="perm-cmd-reading" /> : null}
             {relayed?.folder ? inFolder(relayed.folder) : null}
             {relayed?.extras ? (
                 <Text role="caption" tone="secondary">
@@ -356,7 +356,7 @@ function CallDetails({ facts, question }: { facts: CallFacts; question: string }
                 </Text>
             ) : null}
             {calendar && hasArgs ? <CalendarDetails tool={tool} args={args} /> : null}
-            {calendar && !hasArgs && summary ? <Collapsible text={summary} /> : null}
+            {calendar && !hasArgs && summary ? <Collapsible text={summary} whole /> : null}
             {!detail && !code && !exactText && !relayed && !calendar && summary ? (
                 <Text role="caption" tone="secondary">
                     {visibleText(summary, true)}

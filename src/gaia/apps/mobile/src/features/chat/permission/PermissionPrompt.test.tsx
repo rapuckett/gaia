@@ -233,6 +233,13 @@ describe('PermissionPrompt shows what code and commands really do', () => {
         expect(escaped.shown()).toContain('del x');
     });
 
+    it('shows a long decoded command whole, with no Show all', async () => {
+        const lines = Array.from({ length: 20 }, (_, i) => `Write-Output line${i + 1}`).join('\n');
+        const { shown } = await mount(shell(`powershell -EncodedCommand ${utf16Base64(lines)}`));
+        expect(shown()).toContain('line20');
+        expect(shown()).not.toContain('Show all');
+    });
+
     it("says why a script can't be shown, keeps it out of the raw arguments, and notes the code risk", async () => {
         const { shown } = await mount(
             prompt({ tool: 'execute_python_file', toolLabel: undefined, alwaysScope: undefined, toolArgs: { file_path: '/home/u/run.py', _script: { unreadable: 'not_text' } } }),
