@@ -20,7 +20,7 @@ import { formatSize, middleTruncate } from '@webui/utils/format';
 import type { DocumentListResponse, IndexProgress } from '@/api/client.types';
 import { useT } from '@/i18n/useT';
 import { useLargeText } from '@/ui/theme/a11y';
-import { Badge, Button, Disclosure, Icon, IconButton, ListRow, ProgressLine, Row, Stack, Surface, Text } from '@/ui';
+import { Badge, Button, Disclosure, Icon, IconButton, ListRow, ProgressLine, Row, Stack, Text } from '@/ui';
 import { Eye, FileText, Link2, RotateCcw, Square, Trash2 } from '@/ui/icons';
 
 interface DocumentRowProps {
@@ -87,13 +87,7 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
     ) : (
         <Row gap="xs" wrap={largeText} testID="doc-actions">
             {status === 'failed' ? (
-                hint ? (
-                    retryButton
-                ) : (
-                    <Surface radius="sm" border="accent">
-                        {retryButton}
-                    </Surface>
-                )
+                retryButton
             ) : null}
             {onPreview && doc.filepath && status === 'complete' ? (
                 <IconButton icon={Eye} label={t('mobileApp.docs.previewShare', { name: doc.filename })} size="sm" onPress={() => onPreview(doc.id, doc.filename)} />
