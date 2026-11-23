@@ -8,6 +8,8 @@ import { Keyboard, Platform, ScrollView } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { AgentProblem, AgentProgram, AgentPrograms, StartScreen, SystemStatus } from '@/api/client.types';
+import { PC_ONLY_REFUSAL } from '@/api/constants';
+import { GaiaApiError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { translator } from '@/i18n/useT';
@@ -140,7 +142,7 @@ describeNative('AgentRecovery', () => {
     it('on a paired phone the PC refuses, says it is done on the PC and offers only Check again', async () => {
         useConnectionStore.setState({ connection: { baseUrl: 'https://pc.local:4443', pcId: 'pc-1', pinned: true } });
         const onRetry = jest.fn();
-        const client = await mount({ agentPrograms: listing() }, onRetry);
+        const client = await mount({ agentPrograms: new GaiaApiError(403, PC_ONLY_REFUSAL) }, onRetry);
         const reads = jest.spyOn(client, 'getAgentPrograms');
         expect(await screen.findByTestId('agent-recovery-pc-only')).toBeTruthy();
         expect(screen.queryByTestId('agent-recovery-download')).toBeNull();

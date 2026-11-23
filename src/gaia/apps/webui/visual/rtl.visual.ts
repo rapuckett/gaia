@@ -2515,7 +2515,7 @@ test('settings in the dark theme', async ({ page }) => {
     expect(await audit(page)).toEqual([]);
 });
 
-for (const [locale, theme] of [['ar', 'light'], ['ar', 'dark'], ['en', 'light']] as const) {
+for (const [locale, theme] of [['ar', 'light'], ['ar', 'dark'], ['en', 'light'], ['en', 'dark']] as const) {
     test(`image creation settings (${locale}, ${theme})`, async ({ page }) => {
         await open(page, '', locale, undefined, theme);
         await page.getByRole('button', { name: /Settings/ }).first().click();
@@ -2523,6 +2523,8 @@ for (const [locale, theme] of [['ar', 'light'], ['ar', 'dark'], ['en', 'light']]
         await expect(page.locator('#image-size')).toHaveValue('1280x720');
         const notice = page.locator('.settings-notice');
         await expect(notice).toBeVisible();
+        if (locale === 'en') await expect(notice).toContainText('Gemma 4 E4B, the chat model');
+        await shot(page, `image-settings-${locale}-${theme}`);
         // The notice hugs its two lines and button, never a stretched empty box.
         const { height } = (await notice.boundingBox())!;
         expect(height).toBeLessThan(160);
@@ -5375,6 +5377,18 @@ test.describe('first-run setup in the dark theme', () => {
             expect(await audit(page)).toEqual([]);
         });
     }
+});
+
+test('setup tight-model sheet says its warning once (en, dark)', async ({ page }) => {
+    const tight = SETUP_SCENES.find((s) => s.name === 'plan-tight-confirm')!;
+    await open(page, '', 'en', (p) => withSetup(p, tight.answers), 'dark');
+    await tight.reach(page);
+    const ask = page.getByRole('alertdialog');
+    await expect(ask).toContainText('Your PC may slow down while it runs.');
+    await expect(ask.locator('.btn-secondary')).toBeFocused();
+    await expect(ask).toHaveCSS('opacity', '1');
+    await shot(page, 'setup-en-dark-tight-confirm');
+    expect(await audit(page)).toEqual([]);
 });
 
 test.describe('first-run setup leaves no English in Arabic', () => {

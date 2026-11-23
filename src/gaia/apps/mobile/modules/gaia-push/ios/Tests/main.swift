@@ -29,6 +29,7 @@ check(p.route == "/chat/s_42", "an approval opens its chat")
 check((try? PushCrypto.open(ciphertext: v["ciphertext"] as! String, nonce: v["nonce"] as! String, key: v["key"] as! String, handle: "x")) == nil, "another handle fails")
 
 let en: [String: String] = [
+  "chatAlert.finished": "GAIA finished", "chatAlert.stopped": "GAIA stopped", "chatAlert.ended": "A chat stopped running",
   "chatAlert.needsApproval": "GAIA needs your approval", "chatAlert.question": "GAIA has a question",
   "mobileApp.push.title.needsYou": "GAIA needs you", "mobileApp.push.body.inChat": "In “{chat}”.",
   "mobileApp.push.body.approve": "In “{chat}”. Tap to review.", "mobileApp.push.body.approveNoChat": "Tap to review.",
@@ -44,6 +45,10 @@ check(PushText.compose(try payload("approval", ["chat_title": "Plan", "tool": "w
 check(PushText.compose(try payload("approval", ["chat_title": "Plan", "tool": "new_tool", "label": "doing it"]), say, find)!.body == "In “\(I("Plan"))”.\n\(I("doing it"))", "else the PC's label, isolated")
 check(PushText.compose(try payload("approval", ["chat_title": "Plan"]), say, find)!.body == "In “\(I("Plan"))”. Tap to review.", "else the tap line")
 check(PushText.compose(try payload("approval", ["ask": "question", "summary": "Which file?"]), say, find)! == ("GAIA has a question", I("Which file?")), "a question shows its text")
+check(PushText.compose(try payload("finished", ["outcome": "stopped"]), say, find)!.title == "GAIA stopped", "a stopped run is titled stopped")
+check(PushText.compose(try payload("finished", ["outcome": "ended"]), say, find)!.title == "A chat stopped running", "an ended run is titled ended")
+check(PushText.compose(try payload("finished", [:]), say, find)!.title == "GAIA finished", "no outcome keeps finished")
+check(PushText.compose(try payload("finished", ["outcome": "weird"]), say, find)!.title == "GAIA finished", "an unknown outcome keeps finished")
 check(PushText.compose(try payload("needs_you", [:]), say, find)! == ("GAIA needs you", "Tap to see what it needs."), "needs_you without a chat")
 check(PushPayload.clean("  Plan\u{202E}\u{7} for\n\tQ3 ", max: 80) == "Plan for Q3", "PC text: overrides and controls out, whitespace collapsed")
 check(PushPayload.clean(String(repeating: "x", count: 400), max: 300) == String(repeating: "x", count: 299) + "…", "PC text capped")
