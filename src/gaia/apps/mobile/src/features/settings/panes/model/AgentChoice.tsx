@@ -39,13 +39,15 @@ interface RowProps {
     hint?: string;
     /** A gaiacpp that can be had says it isn't downloaded yet. */
     showNotDownloaded: boolean;
+    /** Dimmed only when it can't be had here or the card is busy; a downloadable row stays at full strength. */
+    dimmed: boolean;
     /** Sits under the row's text inside its frame, and pressing it does not select the row. */
     action?: ReactNode;
     onPress: () => void;
 }
 
 /** One full-width radio row: the program's name, what it is, its size and tags. */
-function AgentRow({ option, program, selected, pickable, hint, showNotDownloaded, action, onPress }: RowProps) {
+function AgentRow({ option, program, selected, pickable, dimmed, hint, showNotDownloaded, action, onPress }: RowProps) {
     const t = useT();
     const off = agentOff(program);
     const size = program?.size_bytes ?? null;
@@ -55,6 +57,7 @@ function AgentRow({ option, program, selected, pickable, hint, showNotDownloaded
                 <Pressable
                     onPress={onPress}
                     disabled={!pickable}
+                    dimmed={dimmed}
                     accessibilityRole="radio"
                     accessibilityLabel={`${programName(option.id)} ${t(option.label)}`}
                     accessibilityHint={hint}
@@ -183,6 +186,7 @@ export function AgentChoice({ inSettings = false, disabled = false, pending = nu
                             program={p}
                             selected={selected === o.id}
                             pickable={!!p && !off && !getIt && !disabled && !busy}
+                            dimmed={!p || off || disabled || busy}
                             hint={off ? blocked?.text : o.id === 'gaiacpp' ? (note ?? undefined) : undefined}
                             showNotDownloaded={!!p && !agentInstalled(p) && !off}
                             action={showDownload ? (
