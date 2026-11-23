@@ -52,6 +52,12 @@ GPU_MEMORY_MARGIN_GB = 4.0
 #: reserve) while Gemma-4-E4B stays a plain fit; the unit test derives it.
 GPU_MEMORY_ENV = "GAIA_DEV_BACKEND_GPU_GB"
 GPU_MEMORY_MAX_GB = 1024.0
+#: Comma-separated model ids listed as already downloaded, after the defaults
+#: (``--downloaded`` overrides it). Device-check recipe for the phone's tight
+#: confirm sheet: GAIA_DEV_BACKEND_GPU_GB=32
+#: GAIA_DEV_BACKEND_DOWNLOADED=Qwen3.6-35B-A3B-GGUF gives a downloaded, tight
+#: Qwen3.6, so Settings > Agent & model > Use shows the sheet.
+DOWNLOADED_ENV = "GAIA_DEV_BACKEND_DOWNLOADED"
 HOST = "127.0.0.1"
 READY_TIMEOUT_SECONDS = 60.0
 #: Exit code for a bad invocation, as ``gaia uninstall`` uses.
@@ -180,6 +186,22 @@ def parse_gpu_gb(raw: Any, source: str) -> float:
             f"{GPU_MEMORY_MAX_GB:g}, such as 32; got {raw!r}."
         )
     return gb
+
+
+def parse_downloaded(raw: Any, source: str) -> List[str]:
+    """Model ids in comma-separated *raw*, each known to GAIA's MODELS catalog."""
+    from gaia.llm.lemonade_client import MODELS
+
+    known = {mr.model_id for mr in MODELS.values()}
+    ids = [part.strip() for part in str(raw).split(",")]
+    bad = [i for i in ids if i not in known]
+    if bad:
+        raise DevBackendError(
+            f"{source} names unknown model id(s) {bad!r}; use ids from MODELS "
+            "in src/gaia/llm/lemonade_client.py, comma-separated, such as "
+            "Qwen3.6-35B-A3B-GGUF."
+        )
+    return list(dict.fromkeys(ids))
 
 
 def fake_system_info(
@@ -586,6 +608,7 @@ def run(
     memory: bool = False,
     fresh: bool = False,
     gpu_gb: Optional[float] = None,
+    extra_downloaded: Optional[List[str]] = None,
 ) -> int:
     llm_port = llm_port if llm_port is not None else port + 1
     if llm_port == port:
@@ -613,6 +636,7 @@ def run(
         if fresh
         else list(dict.fromkeys([*INIT_PROFILES["gaia"]["models"], DEFAULT_TTS_MODEL]))
     )
+    downloaded = list(dict.fromkeys([*downloaded, *(extra_downloaded or [])]))
     if not fresh:
         mark_set_up()
     llm = _Server(
@@ -673,6 +697,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         help=f"fake PC memory in GB (default: ${GPU_MEMORY_ENV}); an integrated "
         "GPU sharing that RAM, so a big model can show as tight",
     )
+    parser.add_argument(
+        "--downloaded",
+        help=f"comma-separated model ids to list as already downloaded, after "
+        f"the defaults (default: ${DOWNLOADED_ENV})",
+    )
     args = parser.parse_args(argv)
     try:
         home = validate_home(args.home)
@@ -682,8 +711,20 @@ def main(argv: Optional[List[str]] = None) -> int:
             gpu_gb = parse_gpu_gb(args.gpu_memory_gb, "--gpu-memory-gb")
         elif GPU_MEMORY_ENV in os.environ:
             gpu_gb = parse_gpu_gb(os.environ[GPU_MEMORY_ENV], GPU_MEMORY_ENV)
+        extra = None
+        if args.downloaded is not None:
+            extra = parse_downloaded(args.downloaded, "--downloaded")
+        elif DOWNLOADED_ENV in os.environ:
+            extra = parse_downloaded(os.environ[DOWNLOADED_ENV], DOWNLOADED_ENV)
         return run(
-            args.port, home, args.llm_port, script, args.memory, args.fresh, gpu_gb
+            args.port,
+            home,
+            args.llm_port,
+            script,
+            args.memory,
+            args.fresh,
+            gpu_gb,
+            extra,
         )
     except DevBackendError as e:
         print(f"Error: {e}", file=sys.stderr)
