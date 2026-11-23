@@ -1383,8 +1383,12 @@ class ProviderSummaryNetwork(BaseModel):
     reachable: Optional[bool]
 
 
+# BaseModel, not WireModel: it drops unknown keys, so no secret field can leak through.
 class ProviderSummary(BaseModel):
-    """A provider as a paired device may see it: no key, key hint or address."""
+    """A provider with no key, key hint or address.
+
+    PC-only: ``GET /api/providers/list`` is ``not_on_listener`` for devices.
+    """
 
     id: str
     name: str
