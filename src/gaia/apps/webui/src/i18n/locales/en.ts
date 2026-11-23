@@ -1913,6 +1913,7 @@ export const enMessages = {
     'chat.modelQueue.waitingInLine': 'Waiting for another chat to finish, #{position} of {length} in line ({seconds}s)',
     'chat.modelQueue.priority': 'Waiting while a higher-priority request goes first ({seconds}s)',
     'chat.modelQueue.granted': 'Got the model after waiting {seconds}s',
+    'chat.status.queuedGpu': 'Waiting for the GPU, #{position} in line',
     'chat.renameFailed': 'Couldn\'t rename this chat: {error}',
     'chat.privateFailed': 'Couldn\'t change private mode for this chat: {error}',
     'chat.dropUploadFailed': 'Couldn\'t add {name} to your documents: {error}',

@@ -15,6 +15,9 @@ export function isProgressTick(event: StreamEvent): boolean {
 /** A status event's line for the user; the tool-list re-read is said in their language. */
 export function statusText(event: StreamEvent, t: Translate): string {
     if (event.phase === 'loading_tools') return t('chat.loadingTools');
+    if (event.phase === 'queued' && typeof event.queue_position === 'number') {
+        return t('chat.status.queuedGpu', { position: isolate(String(event.queue_position), 'ltr') });
+    }
     if (event.phase === 'model_queue' && event.queue) return queueText(event.queue, t);
     return (event.message || '').trim();
 }
@@ -84,7 +87,7 @@ export function agentEventToStep(event: StreamEvent, stepIdRef: { current: numbe
             if (event.message?.startsWith('Agent: ')) return null;
             return {
                 id, type: 'status',
-                label: event.message || event.status || t('activity.working'),
+                label: statusText(event, t) || event.status || t('activity.working'),
                 active: event.status === 'working',
                 ...(event.status === 'warning' ? { success: false } : {}),
                 timestamp: ts,
