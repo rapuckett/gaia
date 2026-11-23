@@ -301,8 +301,18 @@ def message_to_response(msg: dict) -> MessageResponse:
     )
 
 
-def doc_to_response(doc: dict) -> DocumentResponse:
-    """Convert database document dict to response model."""
+INDEX_FAILURE_AWAY = "could not be indexed; see the PC's server logs"
+
+
+def doc_to_response(doc: dict, *, away: bool = False) -> DocumentResponse:
+    """Convert database document dict to response model.
+
+    *away* is a caller away from the PC: the stored failure text can hold PC
+    paths and raw exception text, so it gets a fixed sentence instead.
+    """
+    last_error = doc.get("last_error")
+    if away and last_error:
+        last_error = INDEX_FAILURE_AWAY
     return DocumentResponse(
         id=doc["id"],
         filename=doc["filename"],
@@ -313,7 +323,7 @@ def doc_to_response(doc: dict) -> DocumentResponse:
         last_accessed_at=doc.get("last_accessed_at"),
         sessions_using=doc.get("sessions_using", 0),
         indexing_status=doc.get("indexing_status", "complete"),
-        last_error=doc.get("last_error"),
+        last_error=last_error,
         error_kind=doc.get("error_kind"),
     )
 
@@ -867,11 +877,24 @@ def safe_open_document(
     except FileNotFoundError:
         raise HTTPException(
             status_code=404,
-            detail=f"File not found: there is no file at {raw}. Check the path "
-            "for typos.",
+            detail=(
+                "File not found: there is no file at that path. Check the path "
+                "for typos."
+                if away
+                else f"File not found: there is no file at {raw}. Check the path "
+                "for typos."
+            ),
         )
     except OSError as exc:
-        raise HTTPException(status_code=400, detail=f"Cannot stat file: {exc}")
+        logger.warning("safe_open_document: cannot stat %s: %s", raw, exc)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cannot read that file. Check it is still on the PC."
+                if away
+                else f"Cannot stat file: {exc}"
+            ),
+        )
 
     # 3b. A folder gets its own answer so the caller can offer folder indexing.
     if stat.S_ISDIR(lst.st_mode):
@@ -879,8 +902,13 @@ def safe_open_document(
             status_code=400,
             detail={
                 "status": "is_folder",
-                "message": f"{raw} is a folder, not a file. Index it as a folder "
-                "to add the documents inside it.",
+                "message": (
+                    "That path is a folder, not a file. Index it as a folder "
+                    "to add the documents inside it."
+                    if away
+                    else f"{raw} is a folder, not a file. Index it as a folder "
+                    "to add the documents inside it."
+                ),
             },
         )
 
@@ -903,7 +931,14 @@ def safe_open_document(
     try:
         fd = os.open(str(resolved), flags)
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"File not found: {resolved}")
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "File not found: there is no file at that path."
+                if away
+                else f"File not found: {resolved}"
+            ),
+        )
     except OSError as exc:
         import errno
 
@@ -912,7 +947,15 @@ def safe_open_document(
                 status_code=400,
                 detail="Symlink documents are not allowed for security reasons",
             )
-        raise HTTPException(status_code=400, detail=f"Cannot open file: {exc}")
+        logger.warning("safe_open_document: cannot open %s: %s", resolved, exc)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cannot open that file. Check it is still on the PC."
+                if away
+                else f"Cannot open file: {exc}"
+            ),
+        )
 
     try:
         st = os.fstat(fd)

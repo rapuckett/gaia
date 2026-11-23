@@ -1798,7 +1798,9 @@ agent at once, so they take effect on its next step.
     **Request:** `{"path": "..."}`. Take a folder or file away from the chat.
     The agent's path validator then refuses everything under it, even inside a
     wider grant and under full access, and never offers it as an approval,
-    until it is added back.
+    until it is added back. The removal is audited, and one a paired device
+    makes is listed in the device's changes (`folderRemoved`, by the folder's
+    name).
   </Accordion>
 
   <Accordion title="PUT /api/sessions/{session_id}/environment/internet">

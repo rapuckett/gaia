@@ -2300,6 +2300,7 @@ const messages: Messages = {
     'settings.devices.change.gpuMemoryRevert': 'تراجع عن تغيير ذاكرة GPU',
     'settings.devices.change.npuMemlockFixed': 'رفع حد الذاكرة المقفلة لوحدة NPU',
     'settings.devices.change.folderAdded': 'منح محادثةً المجلد {folder}',
+    'settings.devices.change.folderRemoved': 'سحب المجلد {folder} من محادثة',
     'settings.devices.change.chatPermissionsAsk': 'جعل محادثةً تسأل قبل التنفيذ',
     'settings.devices.change.chatPermissionsFull': 'منح محادثةً وصولًا كاملًا',
     'settings.devices.change.connectorRemoved': 'أزال {connector}',

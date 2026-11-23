@@ -81,6 +81,11 @@ def record_folder_added(request: Request, path: str) -> None:
     record_device_change(request, "folderAdded", folder=folder_label(path))
 
 
+def record_folder_removed(request: Request, path: str) -> None:
+    """Note that the device behind *request* took the folder *path* from a chat."""
+    record_device_change(request, "folderRemoved", folder=folder_label(path))
+
+
 def folder_label(path: str) -> str:
     """*path* as a change row names it: its last part, never the PC path."""
     return (Path(path).name or path)[:DEVICE_CHANGE_PARAM_MAX]
