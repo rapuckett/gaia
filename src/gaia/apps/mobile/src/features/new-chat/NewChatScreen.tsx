@@ -3,7 +3,7 @@
 
 import { bracketParts } from '@webui/i18n/registry';
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
-import { View, type ScrollView } from 'react-native';
+import { Keyboard, View, type ScrollView } from 'react-native';
 
 import type { PermissionMode } from '@/api/client.types';
 import { useCreateSession, useDocuments, useGaiaClient, useMemorySettings, useStartScreen, useSystemStatus } from '@/data';
@@ -93,17 +93,29 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
     // While the chosen agent can't start a send would only fail: the text stays in the box, and nothing is held or queued.
     const agentProblem = assistant.agentProblem;
     const [keptForAgent, setKeptForAgent] = useState(false);
+    // The card is the way out of a dead end: keep it, buttons and all, above the composer as it appears or grows.
+    const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+    const showCard = useCallback(() => {
+        requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
+    }, []);
     if (keptForAgent && agentProblem === null) setKeptForAgent(false);
     const send = useCallback(
         (message: string) => {
             if (agentProblem) {
                 setKeptForAgent(true);
+                // The keyboard shrinks the body and hides the card: close it, then bring the card back once the body has grown.
+                const hidden = Keyboard.addListener('keyboardDidHide', () => {
+                    hidden.remove();
+                    showCard();
+                });
+                Keyboard.dismiss();
+                showCard();
                 return false;
             }
             if (starting) setHeld({ text: message });
             else void submit(message, queue.hold);
         },
-        [agentProblem, starting, submit, queue.hold],
+        [agentProblem, showCard, starting, submit, queue.hold],
     );
     useEffect(() => {
         if (starting || held === null || sentHeld.current === held) return;
@@ -197,10 +209,6 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
     }, [sending]);
     useEffect(measureDim, [measureDim]);
     // The card is the way out of a dead end: keep it, buttons and all, above the composer as it appears or grows.
-    const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
-    const showCard = useCallback(() => {
-        requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
-    }, []);
     const dimBehind = [dim.greeting, dim.composer].filter((r): r is DimRect => r !== null);
 
     return (
