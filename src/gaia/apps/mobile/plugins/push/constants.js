@@ -37,12 +37,15 @@ const STRING_KEYS = [
     'mobileApp.push.body.needsYouNoChat',
     'mobileApp.push.channel.needsYou',
     'mobileApp.push.channel.chats',
-    'notifications.approve',
+    'notifications.devices.review',
     'notifications.deny',
 ];
 
 /** The notification color: the default palette's accentSolid (light) in src/ui/tokens/generated.ts, which plugins can't import; src/pushPlugins.test.ts checks the copy. */
 const NOTIFICATION_ACCENT = '#B08D57';
+
+/** The approval card's tool labels (`tool.<id>.active`): an approval's alert names its tool only with the phone's own label. */
+const TOOL_LABEL_KEY = /^tool\.[a-z0-9_]+\.active$/;
 
 /** The NSE Info.plist key (PushActions.swift) and Android string-array (PushActions.kt) holding the open-only tools. */
 const OPEN_ONLY_PLIST_KEY = 'GAIAPushOpenOnlyTools';
@@ -66,6 +69,7 @@ module.exports = {
     STRING_LANGUAGES,
     OPEN_ONLY_PLIST_KEY,
     OPEN_ONLY_RESOURCE,
+    TOOL_LABEL_KEY,
     NOTIFICATION_ACCENT,
     androidResourceName,
 };

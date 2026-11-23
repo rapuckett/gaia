@@ -6,7 +6,7 @@ import { getLocale } from '@webui/i18n/registry';
 
 import { colors } from '@/ui/tokens/generated';
 
-const { NOTIFICATION_ACCENT, OPEN_ONLY_PLIST_KEY, OPEN_ONLY_RESOURCE, PUSH_LOC_KEY, STRING_KEYS, STRING_LANGUAGES, androidResourceName } = require('../plugins/push/constants');
+const { NOTIFICATION_ACCENT, OPEN_ONLY_PLIST_KEY, OPEN_ONLY_RESOURCE, PUSH_LOC_KEY, STRING_KEYS, STRING_LANGUAGES, TOOL_LABEL_KEY, androidResourceName } = require('../plugins/push/constants');
 const { androidOpenOnlyXml, androidStringsXml, iosStringsFile, openOnlyTools, pushStrings } = require('../plugins/push/strings');
 const { nseInfoPlist } = require('../plugins/push/withPushIos');
 const openOnlyJson = require('../modules/gaia-push/openOnlyTools.json');
@@ -17,9 +17,13 @@ describe('the notification strings generated at prebuild', () => {
             const messages = getLocale(lang).messages as Record<string, string>;
             const strings = pushStrings(lang) as Record<string, string>;
             const keys = Object.keys(strings);
-            expect(keys).toEqual(STRING_KEYS);
-            // Android labels an approval's buttons with these.
-            expect(keys).toEqual(expect.arrayContaining(['notifications.approve', 'notifications.deny']));
+            expect(keys.slice(0, STRING_KEYS.length)).toEqual(STRING_KEYS);
+            // Android labels an approval's buttons Review and Deny.
+            expect(STRING_KEYS).toEqual(expect.arrayContaining(['notifications.devices.review', 'notifications.deny']));
+            // An approval names its tool only with the phone's own label.
+            const tools = keys.slice(STRING_KEYS.length);
+            expect(tools.every((k) => TOOL_LABEL_KEY.test(k))).toBe(true);
+            expect(tools).toContain('tool.write_file.active');
             for (const key of keys) expect(strings[key]).toBe(messages[key]);
         }
     });

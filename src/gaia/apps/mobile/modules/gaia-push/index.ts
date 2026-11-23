@@ -15,15 +15,22 @@ export interface PushSecrets {
     key: string;
 }
 
-/** An approval notification's Approve or Deny, as Android hands it over; none of it is ever shown or logged. */
+/** A pressed Review or Deny, as Android hands it over: only its answer and token. `locked` when the phone was locked, then with no token. */
 export interface NativeApprovalAction {
     action: string;
+    token: string | null;
+    locked: boolean;
+}
+
+/** What a notification's buttons answer, from the record stored when it was posted; never shown or logged. */
+export interface NativeApprovalRecord {
     pcId: string;
     sessionId: string;
     approvalId: string;
     tool: string | null;
-    /** When this phone received the push, by its own clock (unix ms). */
+    /** When this phone received the push, and when the PC stops waiting, by this phone's clock (unix ms). */
     receivedAt: number;
+    expiresAt: number;
 }
 
 /** Rejections carry `code`: keychain, push_unavailable. */
@@ -41,11 +48,13 @@ export interface GaiaPushNative {
     removeAll(): Promise<void>;
     /** The app's own language for the iOS notification extension, or null to follow the phone; Android ignores it. */
     setLanguage(code: string | null): Promise<void>;
-    /** Titles the approval notification's Approve and Deny on iOS; Android labels them from its own strings. */
-    setApprovalActions(approveTitle: string, denyTitle: string): Promise<void>;
-    /** Android only: the Approve or Deny that opened or resumed the app before anything listened, once; null after that. */
+    /** Titles the approval notification's Review and Deny on iOS; Android labels them from its own strings. */
+    setApprovalActions(reviewTitle: string, denyTitle: string): Promise<void>;
+    /** The record a pressed button's token stands for, deleted as it is read (once, across restarts); null for any other token. */
+    claimApproval(token: string): Promise<NativeApprovalRecord | null>;
+    /** Android only: the Review or Deny that opened or resumed the app before anything listened, once; null after that. */
     takeApprovalAction?(): NativeApprovalAction | null;
-    /** Android only: an Approve or Deny pressed while something listens. */
+    /** Android only: a Review or Deny pressed while something listens. */
     addListener?(event: 'onApprovalAction', listener: (event: NativeApprovalAction) => void): EventSubscription;
 }
 

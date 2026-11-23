@@ -4,7 +4,6 @@
 package ai.amd.gaia.push
 
 import android.content.pm.PackageManager
-import androidx.core.app.NotificationManagerCompat
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -56,6 +55,13 @@ class GaiaPushModule : Module() {
 
     Function("takeApprovalAction") { take() }
 
+    // What a pressed button answers, once: the record is deleted as it is read, and its notification removed.
+    AsyncFunction("claimApproval") { token: String ->
+      val record = pushActionStore(context).claim(token) ?: return@AsyncFunction null
+      cancelApprovalNotification(context, record.tag, token)
+      record.toMap()
+    }
+
     OnStartObserving("onApprovalAction") {
       PushActionInbox.listen { take()?.let { sendEvent("onApprovalAction", it) } }
     }
@@ -65,10 +71,13 @@ class GaiaPushModule : Module() {
     }
   }
 
-  /** The pressed Approve or Deny, once; its notification is cleared now that GAIA is answering it. */
+  /**
+   * The pressed Review or Deny, once. One pressed or delivered while the phone is locked comes back `locked`, and its
+   * token is never handed over, so it stays unclaimed for a press after unlocking.
+   */
   private fun take(): Map<String, Any?>? {
     val request = PushActionInbox.take() ?: return null
-    NotificationManagerCompat.from(context).cancel(request.tag, PushInbox.NOTIFICATION_ID)
-    return request.toMap()
+    val locked = request.locked || deviceLocked(context)
+    return if (locked) mapOf("action" to request.answer, "token" to null, "locked" to true) else request.toMap()
   }
 }

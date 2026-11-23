@@ -8,10 +8,13 @@ internal sealed interface PushAction {
   /** Nothing shown: it didn't open with any paired PC's key, wasn't a payload this app reads, or was a replay. */
   data class Dropped(val reason: String) : PushAction
 
-  /** A badge update to zero: nothing left to count, so no notification should stay. */
-  object ClearAll : PushAction
+  /**
+   * A badge update. `clearAll` when it is zero: nothing left to count, so no notification should stay. `resolved` names
+   * approvals answered or expired elsewhere, whose notifications and stored actions go.
+   */
+  data class Badge(val clearAll: Boolean, val resolved: List<String>) : PushAction
 
-  /** `approval` is set when the notification carries Approve and Deny. */
+  /** `approval` is set when the notification carries Review and Deny. */
   data class Post(
     val channel: String,
     val tag: String,
@@ -38,6 +41,7 @@ internal object PushInbox {
     records: List<PushRecord>,
     accept: (PushRecord, Long) -> Boolean,
     say: (String) -> String,
+    find: (String) -> String?,
     openOnly: Set<String>,
     sdk: Int,
   ): PushAction {
@@ -45,8 +49,8 @@ internal object PushInbox {
     val payload = PushPayload.parse(opened.second) ?: return PushAction.Dropped("not a payload this app reads")
     if (!accept(opened.first, payload.seq)) return PushAction.Dropped("its seq isn't newer than the last one from its PC")
     // The launcher's dot follows the notifications on show; a badge count of zero means none should stay.
-    if (payload.kind == "badge") return if (payload.badge == 0) PushAction.ClearAll else PushAction.Dropped("a badge update the launcher counts itself")
-    val text = PushText.compose(payload, say) ?: return PushAction.Dropped("no text for kind ${payload.kind}")
+    if (payload.kind == "badge") return PushAction.Badge(payload.badge == 0, payload.resolved)
+    val text = PushText.compose(payload, say, find) ?: return PushAction.Dropped("no text for kind ${payload.kind}")
     val channel = if (payload.kind == "approval" || payload.kind == "needs_you") NEEDS_YOU else CHATS
     val tag = payload.sessionId?.let { "chat:$it" } ?: GENERIC_TAG
     val approval = PushActions.offered(payload, opened.first.pcId, openOnly, sdk)

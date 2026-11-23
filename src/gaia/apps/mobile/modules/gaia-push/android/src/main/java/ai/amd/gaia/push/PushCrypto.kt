@@ -49,6 +49,23 @@ internal object PushCrypto {
 
   private const val ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 
+  /** Unpadded base64url of `bytes`, the inverse of base64url(). */
+  fun base64urlEncode(bytes: ByteArray): String {
+    val out = StringBuilder()
+    var acc = 0
+    var bits = 0
+    for (b in bytes) {
+      acc = (acc shl 8) or (b.toInt() and 0xff)
+      bits += 8
+      while (bits >= 6) {
+        bits -= 6
+        out.append(ALPHABET[(acc shr bits) and 0x3f])
+      }
+    }
+    if (bits > 0) out.append(ALPHABET[(acc shl (6 - bits)) and 0x3f])
+    return out.toString()
+  }
+
   /** Unpadded base64url, the only form the PC and relay send; plain Kotlin, so it runs in JVM unit tests and on API 24. */
   fun base64url(text: String): ByteArray {
     if (text.length % 4 == 1) throw IllegalArgumentException("not unpadded base64url")

@@ -5,6 +5,7 @@ package ai.amd.gaia.push
 
 import android.app.Activity
 import android.app.Application
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -13,11 +14,12 @@ import expo.modules.core.interfaces.ApplicationLifecycleListener
 import expo.modules.core.interfaces.Package
 import expo.modules.core.interfaces.ReactActivityLifecycleListener
 
-/** Hands an approval notification's Approve or Deny to PushActionInbox, whether it started the app or resumed it. */
+/** Hands an approval notification's Review or Deny to PushActionInbox, whether it started the app or resumed it. */
 class GaiaPushPackage : Package {
   override fun createApplicationLifecycleListeners(context: Context): List<ApplicationLifecycleListener> =
     listOf(object : ApplicationLifecycleListener {
       override fun onCreate(application: Application) {
+        app = application
         application.registerActivityLifecycleCallbacks(FreshLaunches)
       }
     })
@@ -36,6 +38,12 @@ class GaiaPushPackage : Package {
     })
 }
 
+private var app: Context? = null
+
+/** Whether the phone is locked now. Unknown counts as locked, so nothing is answered from a locked phone. */
+internal fun deviceLocked(context: Context?): Boolean =
+  context?.getSystemService(KeyguardManager::class.java)?.isDeviceLocked ?: true
+
 /** Sees the real saved state, so an activity restored after its process died doesn't answer the approval again. */
 private object FreshLaunches : Application.ActivityLifecycleCallbacks {
   override fun onActivityPreCreated(activity: Activity, savedInstanceState: Bundle?) {
@@ -51,21 +59,12 @@ private object FreshLaunches : Application.ActivityLifecycleCallbacks {
   override fun onActivityDestroyed(activity: Activity) {}
 }
 
-private val EXTRAS = listOf(
-  PushActions.EXTRA_PC_ID,
-  PushActions.EXTRA_SESSION_ID,
-  PushActions.EXTRA_APPROVAL_ID,
-  PushActions.EXTRA_TOOL,
-  PushActions.EXTRA_RECEIVED_AT,
-  PushActions.EXTRA_TAG,
-)
-
-/** Takes the answer out of the intent once, so a recreated activity can't replay it. */
+/** Takes the token out of the intent once, so a recreated activity can't replay it, and notes whether the phone was locked. */
 private fun receive(intent: Intent?) {
   if (intent == null || PushActions.SPECS.none { it.intentAction == intent.action }) return
   val fromHistory = (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
-  val request = PushActionInbox.parse(intent.action, intent::getStringExtra, intent.getLongExtra(PushActions.EXTRA_RECEIVED_AT, 0), fromHistory)
+  val request = PushActionInbox.parse(intent.action, intent.getStringExtra(PushActions.EXTRA_TOKEN), deviceLocked(app), fromHistory)
   intent.action = Intent.ACTION_MAIN
-  EXTRAS.forEach(intent::removeExtra)
+  intent.removeExtra(PushActions.EXTRA_TOKEN)
   if (request != null) PushActionInbox.put(request)
 }
