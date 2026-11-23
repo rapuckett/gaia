@@ -56,7 +56,7 @@ function AgentRow({ option, program, selected, pickable, hint, showNotDownloaded
         >
             <Surface tone={selected ? 'accent' : 'card'} border={selected ? 'accent' : true} radius="md" padding="md">
                 <Row gap="sm" align="start">
-                    <Text tone={selected ? 'accent' : 'muted'}>{selected ? '●' : '○'}</Text>
+                    <Text tone={selected ? 'accent' : 'muted'}>{selected ? '\u25CF' : '\u25CB'}</Text>
                     <Stack gap="xs" flex={1}>
                         <Row gap="sm" wrap align="center">
                             <Text role="ui" weight="semibold" tone={off ? 'muted' : undefined}>{programName(option.id)}</Text>
