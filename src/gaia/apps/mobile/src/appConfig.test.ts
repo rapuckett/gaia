@@ -10,7 +10,7 @@ import { DEVELOPMENT_SCHEME } from '@/features/dev/devGallery';
 import { LOCALES } from '@webui/i18n/registry';
 import { colors } from '@/ui/tokens/generated';
 
-import appConfig, { readIosBundleId, readAppEnv, type AppEnv } from '../app.config';
+import appConfig, { readAndroidAppId, readApsEnvironment, readIosBundleId, readAppEnv, readPushConfig, type AppEnv } from '../app.config';
 
 function configFor(env: AppEnv): ExpoConfig {
     const saved = process.env.APP_ENV;
@@ -47,6 +47,43 @@ describe('app config', () => {
             if (saved === undefined) delete process.env.GAIA_IOS_BUNDLE_ID;
             else process.env.GAIA_IOS_BUNDLE_ID = saved;
         }
+    });
+
+    it('turns push off when GAIA_PUSH_RELAY_URL is unset, and leaves the push entitlement out', () => {
+        const ids = { ios: 'com.example.gaia', android: 'com.example.gaia' };
+        expect(readPushConfig('production', ids, {})).toBeNull();
+        expect(readPushConfig('production', ids, { GAIA_PUSH_RELAY_URL: '' })).toBeNull();
+        const config = configFor('production');
+        expect(config.extra?.push).toBeUndefined();
+        expect(pluginOptions(config, 'expo-notifications')).toEqual({ enableRemoteNotifications: false });
+        expect(pluginOptions(config, './plugins/withPush')).toEqual({ ios: null, android: null });
+    });
+
+    it('reads push from the environment: https only, the APNs environment, and Android only with a Firebase project', () => {
+        const ids = { ios: 'com.example.gaia', android: 'com.example.droid' };
+        const relay = { GAIA_PUSH_RELAY_URL: 'https://push.example.net/' };
+        expect(readPushConfig('development', ids, relay)).toEqual({
+            relayUrl: 'https://push.example.net',
+            ios: { appId: 'com.example.gaia', environment: 'sandbox' },
+            android: null,
+        });
+        expect(readPushConfig('production', ids, relay)?.ios?.environment).toBe('production');
+        expect(readPushConfig('production', ids, { ...relay, GAIA_APS_ENVIRONMENT: 'none' })?.ios).toBeNull();
+        expect(() => readPushConfig('production', ids, { GAIA_PUSH_RELAY_URL: 'http://push.example.net' })).toThrow(/https URL/);
+        expect(() => readPushConfig('production', ids, { GAIA_PUSH_RELAY_URL: 'https://push.example.net?x=1' })).toThrow(/no query/);
+        expect(() => readApsEnvironment('prod', 'production')).toThrow(/GAIA_APS_ENVIRONMENT .* "prod"/);
+
+        const file = (number: string) => () => JSON.stringify({ project_info: { project_number: number } });
+        const fcm = { ...relay, GAIA_FCM_SENDER_ID: '1234', GAIA_GOOGLE_SERVICES_FILE: '/x/google-services.json' };
+        expect(readPushConfig('production', ids, fcm, file('1234'))?.android).toEqual({ appId: 'com.example.droid', googleServicesFile: '/x/google-services.json' });
+        expect(() => readPushConfig('production', ids, fcm, file('9999'))).toThrow(/belongs to Firebase project 9999/);
+        expect(() => readPushConfig('production', ids, { ...relay, GAIA_FCM_SENDER_ID: '1234' })).toThrow(/needs both/);
+    });
+
+    it('takes the Android application id from the environment', () => {
+        expect(readAndroidAppId('production', {})).toBe('ai.amd.gaia.mobile');
+        expect(readAndroidAppId('development', { GAIA_ANDROID_APP_ID_DEV: 'com.example.dev' })).toBe('com.example.dev');
+        expect(() => readAndroidAppId('production', { GAIA_ANDROID_APP_ID: '1bad' })).toThrow(/GAIA_ANDROID_APP_ID .* "1bad"/);
     });
 
     it('gives the development build the scheme a gallery build checks for', () => {
