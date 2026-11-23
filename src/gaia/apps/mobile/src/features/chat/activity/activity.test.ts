@@ -55,6 +55,27 @@ describe('a model retry', () => {
     });
 });
 
+describe('waiting for the GPU', () => {
+    const queued = event({ type: 'status', status: 'working', phase: 'queued', queue_position: 2, message: 'Waiting for the GPU \u2014 2nd in line' });
+    const state = { waitingOnPerson: false, answering: false };
+
+    it('says the place in line in English', () => {
+        expect(liveStatusLine([queued], state, t)).toBe('Waiting for the GPU, #\u20662\u2069 in line');
+    });
+
+    it('says it in Arabic with the number kept left to right', () => {
+        const line = liveStatusLine([queued], state, translator('ar'));
+        expect(line).toContain('\u0641\u064a \u0627\u0646\u062a\u0638\u0627\u0631');
+        expect(line).toMatch(/\u20662\u2069/);
+        expect(line).not.toContain('2nd');
+    });
+
+    it('keeps the raw message for another phase', () => {
+        const other = event({ type: 'status', status: 'working', phase: 'warming', message: 'Warming up the model' });
+        expect(liveStatusLine([other], state, t)).toBe('Warming up the model');
+    });
+});
+
 describe('the steps filter', () => {
     const rows = consolidateSteps(
         stepsFromEvents(
