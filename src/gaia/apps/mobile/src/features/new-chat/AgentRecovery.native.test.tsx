@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform, ScrollView } from 'react-native';
+import { Keyboard, Platform, ScrollView } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { AgentProblem, AgentProgram, AgentPrograms, StartScreen, SystemStatus } from '@/api/client.types';
@@ -83,8 +83,18 @@ describeNative('the new chat when the chosen agent cannot start', () => {
         const { client, wrap } = wrapper({ status: READY, start: { ...START, skills_error: 'agent exited', agent_problem: MISSING }, agentPrograms: listing() });
         await render(<NewChatScreen onOpen={() => undefined} onChooseDocuments={() => undefined} initialText="Plan my week" />, { wrapper: wrap });
         await screen.findByTestId('agent-recovery');
+        jest.spyOn(Keyboard, 'isVisible').mockReturnValue(true);
+        const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
+        const scrollToEnd = jest.spyOn(ScrollView.prototype, 'scrollToEnd').mockImplementation(() => undefined);
+        jest.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+            cb(0);
+            return 0;
+        });
         await fireEvent.press(screen.getByTestId('composer-send'));
         expect(await screen.findByText(t('newChat.agent.kept'))).toBeTruthy();
+        expect(dismiss).toHaveBeenCalled();
+        expect(scrollToEnd).toHaveBeenCalledWith({ animated: false });
+        jest.restoreAllMocks();
         expect(screen.getByDisplayValue('Plan my week')).toBeTruthy();
         expect(client.created).toEqual([]);
         expect(client.sent).toEqual([]);

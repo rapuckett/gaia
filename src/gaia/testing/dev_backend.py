@@ -45,6 +45,13 @@ from typing import Any, Dict, List, Optional
 DEFAULT_REPLY = "Hello from the dev backend."
 #: GB of GPU memory the fake machine has beyond what its models need to load.
 GPU_MEMORY_MARGIN_GB = 4.0
+#: Sizes the fake machine's memory pool in GB (``--gpu-memory-gb`` overrides it).
+#: Set, the PC is an AMD integrated GPU sharing N GB of RAM, so GAIA keeps
+#: max(10 GB, 25%) of it for other apps and a big model can come out "tight".
+#: 32 (27 to 36 work) makes Qwen3.6-35B-A3B tight (fits, leaves apps under the
+#: reserve) while Gemma-4-E4B stays a plain fit; the unit test derives it.
+GPU_MEMORY_ENV = "GAIA_DEV_BACKEND_GPU_GB"
+GPU_MEMORY_MAX_GB = 1024.0
 HOST = "127.0.0.1"
 READY_TIMEOUT_SECONDS = 60.0
 #: Exit code for a bad invocation, as ``gaia uninstall`` uses.
@@ -161,11 +168,29 @@ def isolate_environment(home: Path, llm_url: str, memory: bool = False) -> None:
 # ── Fake LLM ────────────────────────────────────────────────────────────────
 
 
-def fake_system_info(model_ids: List[str]) -> Dict[str, Any]:
+def parse_gpu_gb(raw: Any, source: str) -> float:
+    """*raw* as a memory size in GB, or a :class:`DevBackendError` naming *source*."""
+    try:
+        gb = float(raw)
+    except (TypeError, ValueError):
+        gb = float("nan")
+    if not 0.0 < gb <= GPU_MEMORY_MAX_GB:
+        raise DevBackendError(
+            f"{source} must be a number of GB between 0 and "
+            f"{GPU_MEMORY_MAX_GB:g}, such as 32; got {raw!r}."
+        )
+    return gb
+
+
+def fake_system_info(
+    model_ids: List[str], gpu_gb: Optional[float] = None
+) -> Dict[str, Any]:
     """Lemonade's ``/system-info`` for a PC whose GPU holds *model_ids* with room.
 
     One GPU, no NPU, llama.cpp on GAIA's proven backend; its memory is what
     ``model_fit`` needs for every listed model at once, plus the margin.
+    With *gpu_gb* the PC is instead an integrated GPU on *gpu_gb* of shared RAM,
+    whatever the models need, so a model can fit and still leave apps too little.
     """
     from gaia.config import GaiaConfig
     from gaia.llm.lemonade_client import find_model_requirement
@@ -178,6 +203,28 @@ def fake_system_info(model_ids: List[str]) -> Dict[str, Any]:
             kv = kv_cache_gb(req.kv_bytes_per_token, req.min_ctx_size)
             need_gb += required_memory_gb(req.size_gb, kv)
     backend = GaiaConfig.TESTED_LLAMACPP_BACKENDS[0]
+    recipes = {
+        "llamacpp": {
+            "default_backend": backend,
+            "backends": {backend: {"state": "installed"}},
+        }
+    }
+    if gpu_gb is not None:
+        return {
+            "OS Version": "Windows 11",
+            "Physical Memory": f"{gpu_gb:g} GB",
+            "devices": {
+                "amd_igpu": [
+                    {
+                        "name": "Dev backend GPU",
+                        "available": True,
+                        "integrated": True,
+                        "vram_gb": gpu_gb,
+                    }
+                ]
+            },
+            "recipes": recipes,
+        }
     return {
         "devices": {
             "amd_gpu": [
@@ -189,22 +236,21 @@ def fake_system_info(model_ids: List[str]) -> Dict[str, Any]:
                 }
             ]
         },
-        "recipes": {
-            "llamacpp": {
-                "default_backend": backend,
-                "backends": {backend: {"state": "installed"}},
-            }
-        },
+        "recipes": recipes,
     }
 
 
 def build_fake_llm(
-    script: List[Dict[str, Any]], model: str, downloaded: Optional[List[str]] = None
+    script: List[Dict[str, Any]],
+    model: str,
+    downloaded: Optional[List[str]] = None,
+    gpu_gb: Optional[float] = None,
 ):
     """A FastAPI app speaking the slice of Lemonade's API a chat turn uses.
 
     *downloaded* names further models listed as downloaded beside *model*;
-    the speech model is served only when it is among them.
+    the speech model is served only when it is among them. *gpu_gb* sizes the
+    machine's memory (:func:`fake_system_info`).
     """
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -214,7 +260,11 @@ def build_fake_llm(
         KOKORO_VOICES,
         TTS_SAMPLE_RATE,
     )
-    from gaia.llm.lemonade_client import EMBEDDER_MODELS, GPU_CTX_SIZE
+    from gaia.llm.lemonade_client import (
+        EMBEDDER_MODELS,
+        GPU_CTX_SIZE,
+        LARGE_DEFAULT_MODEL_NAME,
+    )
     from gaia.version import LEMONADE_VERSION
 
     app = FastAPI()
@@ -250,13 +300,28 @@ def build_fake_llm(
 
     @app.get("/api/v1/system-info")
     def system_info():
-        return fake_system_info([model, *(downloaded or [])])
+        return fake_system_info([model, *(downloaded or [])], gpu_gb)
 
     @app.get("/api/v1/models")
-    def models():
+    def models(show_all: bool = False):
+        catalog_only = (
+            [
+                {
+                    "id": LARGE_DEFAULT_MODEL_NAME,
+                    "object": "model",
+                    "downloaded": False,
+                    "recipe": "llamacpp",
+                    "labels": [],
+                    "size": 21.7,
+                }
+            ]
+            if show_all and LARGE_DEFAULT_MODEL_NAME not in (downloaded or [])
+            else []
+        )
         return {
             "object": "list",
-            "data": [
+            "data": catalog_only
+            + [
                 {
                     "id": model_id,
                     "object": "model",
@@ -520,6 +585,7 @@ def run(
     script: List[Dict[str, Any]],
     memory: bool = False,
     fresh: bool = False,
+    gpu_gb: Optional[float] = None,
 ) -> int:
     llm_port = llm_port if llm_port is not None else port + 1
     if llm_port == port:
@@ -550,7 +616,9 @@ def run(
     if not fresh:
         mark_set_up()
     llm = _Server(
-        build_fake_llm(script, DEFAULT_MODEL_NAME, downloaded), llm_port, "fake-llm"
+        build_fake_llm(script, DEFAULT_MODEL_NAME, downloaded, gpu_gb),
+        llm_port,
+        "fake-llm",
     )
     llm.start()
     backend: Optional[_Server] = None
@@ -600,11 +668,23 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="start not set up, so a client lands on the first-run Setup wizard",
     )
+    parser.add_argument(
+        "--gpu-memory-gb",
+        help=f"fake PC memory in GB (default: ${GPU_MEMORY_ENV}); an integrated "
+        "GPU sharing that RAM, so a big model can show as tight",
+    )
     args = parser.parse_args(argv)
     try:
         home = validate_home(args.home)
         script = load_script(args.script)
-        return run(args.port, home, args.llm_port, script, args.memory, args.fresh)
+        gpu_gb = None
+        if args.gpu_memory_gb is not None:
+            gpu_gb = parse_gpu_gb(args.gpu_memory_gb, "--gpu-memory-gb")
+        elif GPU_MEMORY_ENV in os.environ:
+            gpu_gb = parse_gpu_gb(os.environ[GPU_MEMORY_ENV], GPU_MEMORY_ENV)
+        return run(
+            args.port, home, args.llm_port, script, args.memory, args.fresh, gpu_gb
+        )
     except DevBackendError as e:
         print(f"Error: {e}", file=sys.stderr)
         return EX_USAGE

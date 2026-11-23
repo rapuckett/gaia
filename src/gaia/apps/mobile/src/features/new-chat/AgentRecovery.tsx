@@ -3,6 +3,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, Platform, View } from 'react-native';
 
 import { AGENT_WHY } from '@webui/components/setup/agentPrograms';
 
@@ -56,6 +57,11 @@ export function AgentRecovery({ problem, answeredAt, onRetry, kept = false }: Ag
     useEffect(() => {
         retryRef.current = onRetry;
     });
+
+    const keptText = t('newChat.agent.kept');
+    useEffect(() => {
+        if (kept && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(keptText);
+    }, [kept, keptText]);
 
     // A fresh answer that still names a problem ends the wait, so the buttons work again.
     const [seenAt, setSeenAt] = useState(answeredAt);
@@ -126,7 +132,7 @@ export function AgentRecovery({ problem, answeredAt, onRetry, kept = false }: Ag
                 <Text role="ui" weight="semibold" accessibilityRole="alert">
                     {t(problem.code === 'gaiacpp_invalid' ? 'newChat.agent.invalid' : 'newChat.agent.missing', { name })}
                 </Text>
-                {kept ? <Text role="label" tone="secondary">{t('newChat.agent.kept')}</Text> : null}
+                {kept ? <View accessibilityLiveRegion="polite"><Text role="label" tone="secondary">{keptText}</Text></View> : null}
                 {cantDownload && !pcOnly ? <Line line={cantDownload} /> : null}
                 {checkFailed ? <Line line={checkFailed} /> : null}
                 {job && job.state !== 'idle' ? (
