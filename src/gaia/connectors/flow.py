@@ -61,7 +61,11 @@ from gaia.connectors.events import emit
 from gaia.connectors.pkce import compute_code_challenge, generate_code_verifier
 from gaia.connectors.prior_state import resolve_or_reject_empty_scopes
 from gaia.connectors.providers import get as get_provider
-from gaia.connectors.store import DEFAULT_ACCOUNT, peek_connection
+from gaia.connectors.store import (
+    DEFAULT_ACCOUNT,
+    connection_slot_in_use,
+    peek_connection,
+)
 
 if TYPE_CHECKING:
     from gaia.connectors.accounts import Account
@@ -810,8 +814,10 @@ async def revoke_provider_token(
       could not be resolved. ``revoke_error`` names which, so callers don't
       conflate "can't be revoked" with "wasn't tried".
     - ``revoke_supported=True, revoked_remotely=True`` — the provider's
-      revoke endpoint accepted the request (or there was no refresh token
-      stored to revoke in the first place).
+      revoke endpoint accepted the request.
+    - ``revoke_supported=True, revoked_remotely=False,
+      nothing_stored=True``: there was no refresh token to revoke, so no
+      provider call was made. This is distinct from a revoke that failed.
     - ``revoke_supported=True, revoked_remotely=False`` — the endpoint call
       failed; ``revoke_error`` carries why. The provider-side grant is still
       live and the caller must say so.
@@ -832,6 +838,7 @@ async def revoke_provider_token(
         return {
             "revoke_supported": False,
             "revoked_remotely": False,
+            "nothing_stored": False,
             "revoke_error": (
                 "this connection was forwarded to GAIA by another application "
                 "— the token belongs to that app, not GAIA, so revoking it "
@@ -840,6 +847,14 @@ async def revoke_provider_token(
                 "connected-apps page, to fully revoke access."
             ),
         }
+
+    # An empty slot needs no provider, so an unconfigured OAuth client can't mask it.
+    if (
+        blob is None
+        and provider_id in HAS_REVOKE_ENDPOINT
+        and not connection_slot_in_use(provider_id, slot=slot)
+    ):
+        return nothing_to_revoke(provider_id)
 
     try:
         provider = await asyncio.to_thread(get_provider, provider_id)
@@ -852,6 +867,7 @@ async def revoke_provider_token(
         return {
             "revoke_supported": False,
             "revoked_remotely": False,
+            "nothing_stored": False,
             "revoke_error": f"provider {provider_id!r} could not be resolved: {exc}",
         }
     # Read the attribute directly, never via getattr-with-default: a provider
@@ -861,8 +877,13 @@ async def revoke_provider_token(
     result: Dict[str, Any] = {
         "revoke_supported": bool(revoke_url),
         "revoked_remotely": False,
+        "nothing_stored": False,
         "revoke_error": None,
     }
+    refresh_token = (blob or {}).get("refresh_token")
+    if not refresh_token:
+        result["nothing_stored"] = True
+        return result
     if not revoke_url:
         return result
 
@@ -870,12 +891,6 @@ async def revoke_provider_token(
     # ``spec.oauth_provider_ref``, which every credential-name heuristic reads
     # as secret material, and the host identifies the provider just as exactly.
     revoke_host = urlsplit(revoke_url).netloc
-
-    refresh_token = (blob or {}).get("refresh_token")
-    if not refresh_token:
-        # Nothing stored to revoke — there is no live grant to leave behind.
-        result["revoked_remotely"] = True
-        return result
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -917,6 +932,86 @@ async def revoke_provider_token(
         response.status_code,
     )
     return result
+
+
+#: Whether each OAuth provider has a revoke endpoint, mirroring its ``revoke_url``.
+#: Static so a disconnect can answer without the provider's client configured.
+HAS_REVOKE_ENDPOINT: Dict[str, bool] = {
+    "google": True,
+    "microsoft": False,
+    "microsoft_work": False,
+}
+
+
+def nothing_to_revoke(provider_id: str) -> Dict[str, Any]:
+    """The revoke outcome for an account with no token stored: no live grant.
+
+    Matches what :func:`revoke_provider_token` reports for the same case, so a
+    provider with no revoke endpoint still says so. Reads nothing from the
+    keyring, so it answers on one that refuses reads.
+    """
+    if provider_id not in HAS_REVOKE_ENDPOINT:
+        return {
+            "revoke_supported": False,
+            "revoked_remotely": False,
+            "nothing_stored": False,
+            "revoke_error": f"provider {provider_id!r} could not be resolved",
+        }
+    return {
+        "revoke_supported": HAS_REVOKE_ENDPOINT[provider_id],
+        "revoked_remotely": False,
+        "nothing_stored": True,
+        "revoke_error": None,
+    }
+
+
+#: Where a user removes GAIA's access by hand, per OAuth provider id.
+REVOKE_PAGES: Dict[str, Tuple[str, str]] = {
+    "google": ("Google", "https://myaccount.google.com/permissions"),
+    "microsoft": ("Microsoft", "https://account.live.com/consent/Manage"),
+    "microsoft_work": ("Microsoft", "https://myapps.microsoft.com"),
+}
+
+
+def not_revoked_on_weak_keyring(
+    provider_id: str,
+    *,
+    uninspectable: bool = False,
+    account_type: Optional[str] = None,
+) -> Dict[str, Any]:
+    """The revoke outcome when the keyring refuses reads (weak or uninspectable).
+
+    Revoking needs the stored refresh token, which GAIA will not read from
+    such a keyring, so only the local copy is removed. ``revoke_error`` tells
+    the user where to revoke GAIA's access by hand. ``uninspectable`` is a
+    chain GAIA could not check, which may well be secure; ``account_type``
+    sends a work account saved under ``microsoft`` to the work page.
+    """
+    from gaia.connectors.providers.microsoft import ACCOUNT_TYPE_WORK
+
+    page_id = provider_id
+    if provider_id == "microsoft" and account_type == ACCOUNT_TYPE_WORK:
+        page_id = "microsoft_work"
+    label, page = REVOKE_PAGES.get(
+        page_id, (provider_id, "your account's connected-apps page")
+    )
+    if uninspectable:
+        why = "GAIA could not confirm the keyring on this PC is secure"
+        fix = "use a single system credential store"
+    else:
+        why = "The keyring on this PC is not secure"
+        fix = "switch to a secure credential store"
+    return {
+        "revoke_supported": False,
+        "revoked_remotely": False,
+        "nothing_stored": False,
+        "revoke_error": (
+            f"{why}, so GAIA removed the sign-in without reading it and did "
+            f"not revoke GAIA's access at {label}. To revoke it, remove GAIA "
+            f"at {page}. To keep using connectors, {fix}: "
+            "https://amd-gaia.ai/docs/security/connections"
+        ),
+    }
 
 
 async def _handle_callback(request: web.Request, flow_id: str) -> web.Response:

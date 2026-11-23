@@ -24,9 +24,11 @@ import { untrackedWarning } from '../../utils/untrackedWork';
 import { DiffCard } from '../render/DiffCard';
 import { PanelSection } from './PanelSection';
 import { useSessionPanelStore } from '../../stores/sessionPanelStore';
+import { isCodeFile } from './sessionFocus';
 import type { ChatFileChange, GitRepo, SessionChanges, SessionGit } from '../../types/sessionPanel';
 import { isolate, ref, type MessageKey, type Param } from '../../i18n/registry';
 import { tEn, useT, type Translate } from '../../i18n/useT';
+import { visibleName } from '../CalendarApproval';
 
 function baseName(path: string): string {
     const parts = path.split(/[\\/]/).filter(Boolean);
@@ -70,7 +72,10 @@ export function ChangesSection({ sessionId, busy, onJumpToMessage }: ChangesSect
             .then((res) => {
                 const loaded = expectShape(res, (r) => Array.isArray(r.files), "list of this chat's changes");
                 setChanges(loaded);
-                useSessionPanelStore.getState().setSignals(sessionId, { changedFiles: loaded.files.length });
+                useSessionPanelStore.getState().setSignals(sessionId, {
+                    changedFiles: loaded.files.length,
+                    changedCode: loaded.files.filter((f) => isCodeFile(f.path)).length,
+                });
                 setError(null);
             })
             .catch((err) => {
@@ -158,7 +163,7 @@ function ChangesBody({ sessionId, busy, changes, onChanged, onUndone, onJumpToMe
                     return (
                         <li key={f.path} className="sp-change">
                             <div className="sp-item-text">
-                                <span className="sp-item-name" dir="ltr" title={f.path}>{baseName(f.path)}</span>
+                                <span className="sp-item-name" dir="ltr" title={visibleName(f.path)}>{visibleName(baseName(f.path))}</span>
                                 <span className="sp-meta">
                                     {t(CHANGE_LABEL[f.change])}
                                     {f.additions != null && <> · <span className="sp-add">+{f.additions}</span> <span className="sp-del">−{f.deletions}</span></>}
@@ -173,7 +178,7 @@ function ChangesBody({ sessionId, busy, changes, onChanged, onUndone, onJumpToMe
                                     type="button"
                                     className="btn-icon-sm"
                                     onClick={() => onJumpToMessage(latest)}
-                                    aria-label={t('chg.goToLast', { name: baseName(f.path) })}
+                                    aria-label={t('chg.goToLast', { name: visibleName(baseName(f.path)) })}
                                     title={t('sp.goToTurn')}
                                 >
                                     <CornerDownRight size={12} />
@@ -301,8 +306,8 @@ function GitActions({ sessionId, busy, onCommitted }: { sessionId: string; busy:
         <div className="sp-git">
             {git.repos.map((repo) => (
                 <div key={repo.root} className="sp-git-repo">
-                    <span className="sp-meta" title={repo.root}>
-                        <GitBranch size={12} aria-hidden="true" /> {baseName(repo.root)} · {repo.branch}
+                    <span className="sp-meta" title={visibleName(repo.root)}>
+                        <GitBranch size={12} aria-hidden="true" /> {visibleName(baseName(repo.root))} · {visibleName(repo.branch)}
                         {repo.uncommitted.length === 0 && repo.files.length > 0 && ` · ${t('mobileApp.changes.git.committed')}`}
                     </span>
                     <span className="sp-actions-row">
@@ -396,8 +401,8 @@ function GitDialog({ sessionId, kind, repo, onClose, onDone }: {
                 <div className="modal-body sp-git-body">
                     <p className="sp-meta">
                         {kind === 'commit'
-                            ? t('chg.git.commitNote', { root: isolate(repo.root, 'ltr'), branch: isolate(repo.branch, 'ltr') })
-                            : t('chg.git.prNote', { branch: isolate(repo.branch, 'ltr'), remote: isolate(repo.remote ?? '', 'ltr') })}
+                            ? t('chg.git.commitNote', { root: isolate(visibleName(repo.root), 'ltr'), branch: isolate(visibleName(repo.branch), 'ltr') })
+                            : t('chg.git.prNote', { branch: isolate(visibleName(repo.branch), 'ltr'), remote: isolate(repo.remote ?? '', 'ltr') })}
                     </p>
                     <label className="sp-field">
                         <span>{t(kind === 'commit' ? 'mobileApp.changes.git.summary' : 'mobileApp.changes.git.prTitleField')}</span>
