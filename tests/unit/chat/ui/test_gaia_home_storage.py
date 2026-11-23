@@ -47,7 +47,7 @@ def homes(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client(homes):
-    return TestClient(create_app(db_path=":memory:"))
+    return TestClient(create_app(db_path=":memory:"), client=("127.0.0.1", 50000))
 
 
 @pytest.fixture

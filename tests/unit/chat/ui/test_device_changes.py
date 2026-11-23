@@ -6,7 +6,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import logging
+import os
 import uuid
 
 import pytest
@@ -224,3 +227,249 @@ def test_device_prompt_never_reaches_the_tunnel_or_a_pending_device(paired, call
 
     seen = asyncio.run(next_event(_as(app, caller, pending)))
     assert seen["type"] == "set_active_session"
+
+
+UI = {"X-Gaia-UI": "1"}
+
+
+def _kinds(clients, device_id):
+    page = clients["pc"].get(f"/api/devices/{device_id}/changes").json()
+    return [(c["kind"], c["params"]) for c in page["changes"]]
+
+
+@contextlib.contextmanager
+def _audited():
+    from gaia.security import audit_logger
+
+    lines = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record):
+            lines.append(record.getMessage())
+
+    handler, level = _Capture(), audit_logger.level
+    audit_logger.addHandler(handler)
+    audit_logger.setLevel(logging.INFO)
+    try:
+        yield lines
+    finally:
+        audit_logger.removeHandler(handler)
+        audit_logger.setLevel(level)
+
+
+def test_memory_wipe_is_gated_audited_and_listed(paired, monkeypatch):
+    from gaia.ui.routers import memory as memory_router
+
+    _, _, clients, phone, _ = paired
+    wiped = []
+
+    class _Store:
+        def clear_all(self):
+            wiped.append(1)
+            return {"knowledge": 1, "tool_history": 0, "conversations": 0}
+
+    monkeypatch.setattr(memory_router, "_get_store", _Store)
+    assert clients["tunnel"].delete("/api/memory/all", headers=UI).status_code == 403
+    assert wiped == []
+    with _audited() as lines:
+        assert clients["pc"].delete("/api/memory/all", headers=UI).status_code == 200
+        assert clients["phone"].delete("/api/memory/all", headers=UI).status_code == 200
+    assert lines == [f"APPROVAL | memory wiped | by device:{phone}"]
+    assert _kinds(clients, phone) == [("memoryWiped", {})]
+
+
+def test_connector_removal_is_gated_audited_and_listed(paired, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    import gaia.connectors as connections
+    from gaia.connectors import grants, store
+
+    _, _, clients, phone, _ = paired
+    monkeypatch.setattr(
+        "gaia.ui.routers.connectors.disconnect", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        connections, "revoke_connection_async", AsyncMock(return_value={})
+    )
+    monkeypatch.setattr(store, "clear_provider_credentials", lambda provider: None)
+    monkeypatch.setattr(grants, "revoke_all_grants_for", lambda provider: None)
+    from gaia.connectors.providers import _registry as provider_registry
+
+    # The forwarded route 404s a provider it doesn't know.
+    monkeypatch.setitem(provider_registry, "acme", object())
+    routes = ("/api/connectors/google", "/v1/connections/acme")
+    for route in routes:
+        assert clients["tunnel"].delete(route, headers=UI).status_code == 403
+    with _audited() as lines:
+        for route in routes:
+            assert clients["pc"].delete(route, headers=UI).status_code == 204
+            # A revoke drops the provider, so the phone's delete needs it back.
+            provider_registry["acme"] = object()
+            assert clients["phone"].delete(route, headers=UI).status_code == 204
+    assert lines == [
+        f"APPROVAL | connector google removed | by device:{phone}",
+        f"APPROVAL | connector acme removed | by device:{phone}",
+    ]
+    assert [kind for kind, _ in _kinds(clients, phone)] == ["connectorRemoved"] * 2
+    assert {params["connector_id"] for _, params in _kinds(clients, phone)} == {
+        "google",
+        "acme",
+    }
+
+
+def test_undo_limits_from_a_device_are_audited_listed_and_hide_the_folder(
+    paired, monkeypatch
+):
+    from gaia.agents.base import file_snapshots
+    from gaia.home import gaia_home
+
+    _, _, clients, phone, _ = paired
+    folder = str(gaia_home() / "snapshots")
+    monkeypatch.setattr(
+        file_snapshots,
+        "usage",
+        lambda: {"bytes": 0, "turns": 0, "path": folder},
+    )
+    monkeypatch.setattr(file_snapshots, "prune", lambda days, size: None)
+    body = {"retention_days": 1, "max_mb": 10}
+    with _audited() as lines:
+        pc = clients["pc"].put("/api/settings/undo", json=body, headers=UI)
+        phone_put = clients["phone"].put("/api/settings/undo", json=body, headers=UI)
+    assert pc.json()["path"] == folder
+    assert clients["pc"].get("/api/settings/undo").json()["path"] == folder
+    for resp in (phone_put, clients["phone"].get("/api/settings/undo")):
+        assert resp.status_code == 200
+        assert resp.json()["path"] == "GAIA's folder/snapshots".replace("/", os.sep)
+    assert lines == [
+        f"APPROVAL | undo history limits set to 1 days and 10 MB | by device:{phone}"
+    ]
+    assert _kinds(clients, phone) == [("undoLimitsChanged", {"days": 1, "mb": 10})]
+
+
+def test_spending_and_chat_mode_changes_from_a_device_are_listed(paired):
+    app, _, clients, phone, _ = paired
+    session_id = app.state.db.create_session(title="Phone chat")["id"]
+    for client in (clients["pc"], clients["phone"]):
+        for limit in (5.0, None):
+            resp = client.put(
+                "/api/spending/limit", json={"limit_usd": limit}, headers=UI
+            )
+            assert resp.status_code == 200, resp.text
+        assert client.post("/api/spending/allow-month", headers=UI).status_code == 200
+        for mode in ("full_access", "ask"):
+            resp = client.put(
+                f"/api/chat/permissions/{session_id}", json={"mode": mode}, headers=UI
+            )
+            assert resp.status_code == 200, resp.text
+    assert _kinds(clients, phone) == [
+        ("chatPermissionsAsk", {}),
+        ("chatPermissionsFull", {}),
+        ("spendingAllowedMonth", {}),
+        ("spendingLimitCleared", {}),
+        ("spendingLimitSet", {"limit": 5.0}),
+    ]
+
+
+def test_memory_wipe_scrub_failure_hides_the_file_path_from_a_device(
+    paired, monkeypatch
+):
+    from gaia.agents.base.memory_store import MemoryScrubError
+    from gaia.ui.routers import memory as memory_router
+
+    _, _, clients, _, _ = paired
+    raw = "Memory at /Users/someone/.gaia/memory.db was erased, but locked"
+
+    class _Store:
+        def clear_all(self):
+            raise MemoryScrubError(raw)
+
+    monkeypatch.setattr(memory_router, "_get_store", _Store)
+    on_pc = clients["pc"].delete("/api/memory/all", headers=UI)
+    on_phone = clients["phone"].delete("/api/memory/all", headers=UI)
+    assert on_pc.status_code == on_phone.status_code == 500
+    assert on_pc.json()["detail"] == raw
+    assert "memory.db" not in on_phone.json()["detail"]
+    assert "erase again" in on_phone.json()["detail"]
+
+
+def test_index_folder_errors_hide_the_raw_exception_from_a_device(paired, monkeypatch):
+    from pathlib import Path
+    from unittest.mock import patch
+
+    from gaia.ui import session_environment
+
+    monkeypatch.setattr(session_environment, "relayed", lambda _session: False)
+
+    _, _, clients, _, _ = paired
+    folder = Path.home() / "indexed"
+    folder.mkdir()
+    (folder / "notes.md").write_text("# Notes")
+    session = clients["pc"].post("/api/sessions", json={"folders": [str(folder)]})
+    session_id = session.json()["id"]
+
+    async def broken(_path, **_kwargs):
+        raise RuntimeError(f"cannot read {folder}/notes.md")
+
+    body = {"folder_path": str(folder), "recursive": False}
+    with patch("gaia.ui.server._index_document", broken):
+        on_pc = clients["pc"].post("/api/documents/index-folder", json=body)
+        on_phone = clients["phone"].post(
+            f"/api/documents/index-folder?session_id={session_id}", json=body
+        )
+    assert on_pc.status_code == on_phone.status_code == 200
+    assert on_pc.json()["errors"] == [f"notes.md: cannot read {folder}/notes.md"]
+    errors = on_phone.json()["errors"]
+    assert len(errors) == 1 and errors[0].startswith("notes.md:")
+    assert "cannot read" not in errors[0] and str(folder) not in errors[0]
+
+
+def test_removing_a_chat_folder_is_audited_and_listed_for_a_device_only(
+    paired, monkeypatch
+):
+    from pathlib import Path
+
+    from gaia.ui import session_environment
+
+    monkeypatch.setattr(session_environment, "relayed", lambda _session: False)
+
+    _, _, clients, phone, _ = paired
+    folder = Path.home() / "taxes"
+    folder.mkdir()
+    session_id = (
+        clients["pc"]
+        .post("/api/sessions", json={"folders": [str(folder)]})
+        .json()["id"]
+    )
+    url = f"/api/sessions/{session_id}/environment/folders/remove"
+
+    with _audited() as lines:
+        assert clients["pc"].post(url, json={"path": str(folder)}).status_code == 200
+    assert lines == [f"APPROVAL | folder {folder} taken from chat {session_id} | by pc"]
+    assert _kinds(clients, phone) == []
+
+    with _audited() as lines:
+        assert clients["phone"].post(url, json={"path": str(folder)}).status_code == 200
+    assert lines == [
+        f"APPROVAL | folder {folder} taken from chat {session_id} | by device:{phone}"
+    ]
+    assert _kinds(clients, phone) == [("folderRemoved", {"folder": "taxes"})]
+
+
+def test_library_listing_hides_a_failed_row_reason_from_a_device(paired):
+    app, _, clients, _, _ = paired
+    raw = "cannot read /Users/someone/Documents/taxes.pdf: boom"
+    doc = app.state.db.add_document(
+        filename="taxes.pdf",
+        filepath="/Users/someone/Documents/taxes.pdf",
+        file_hash="h1",
+        file_size=1,
+        chunk_count=0,
+    )
+    app.state.db.update_document_status(doc["id"], "failed", last_error=raw)
+
+    on_pc = clients["pc"].get("/api/documents")
+    on_phone = clients["phone"].get("/api/documents")
+    assert on_pc.status_code == on_phone.status_code == 200
+    assert on_pc.json()["documents"][0]["last_error"] == raw
+    shown = on_phone.json()["documents"][0]["last_error"]
+    assert shown == "could not be indexed; see the PC's server logs"

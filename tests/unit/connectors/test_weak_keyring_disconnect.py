@@ -612,7 +612,9 @@ def test_the_ui_route_reports_the_local_only_outcome(
     app = FastAPI()
     app.include_router(router_mod.router)
 
-    resp = TestClient(app).delete(f"{router_mod.router.prefix}/google?all=true")
+    resp = TestClient(app, client=("127.0.0.1", 50000)).delete(
+        f"{router_mod.router.prefix}/google?all=true"
+    )
 
     assert resp.status_code == 204, resp.text
     assert recorder.items == {}
@@ -642,7 +644,9 @@ def test_the_ui_route_says_nothing_is_stored_for_every_provider(
     app = FastAPI()
     app.include_router(router_mod.router)
 
-    resp = TestClient(app).delete(f"{router_mod.router.prefix}/{provider}?all=true")
+    resp = TestClient(app, client=("127.0.0.1", 50000)).delete(
+        f"{router_mod.router.prefix}/{provider}?all=true"
+    )
 
     assert resp.status_code == 204, resp.text
     (name, payload), *_ = events
@@ -705,7 +709,9 @@ def test_the_ui_route_says_nothing_stored_without_an_oauth_client(
     app = FastAPI()
     app.include_router(router_mod.router)
 
-    resp = TestClient(app).delete(f"{router_mod.router.prefix}/{provider}")
+    resp = TestClient(app, client=("127.0.0.1", 50000)).delete(
+        f"{router_mod.router.prefix}/{provider}"
+    )
 
     assert resp.status_code == 204, resp.text
     (name, payload), *_ = events

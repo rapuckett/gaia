@@ -584,8 +584,10 @@ for (const [title, locale, name] of [
 
 for (const locale of ['en', 'ar']) {
     test(`a browser without the API token is told how to sign in (${locale})`, async ({ page }, info) => {
-        await open(page, '', locale, (p) => p.route('**/api/**', (route) =>
-            route.fulfill({ status: 401, json: { detail: 'Sign in with the link gaia chat --ui prints.', code: 'ui_token_required' } })));
+        await open(page, '', locale, async (p) => {
+            await p.route('**/api/**', (route) =>
+                route.fulfill({ status: 401, json: { detail: 'Sign in with the link gaia chat --ui prints.', code: 'ui_token_required' } }));
+        });
         const notice = page.getByRole('alert');
         await expect(notice).toContainText(translateBare(locale, 'auth.signIn.title'));
         await expect(notice).toContainText('gaia chat --ui');
@@ -656,8 +658,10 @@ for (const locale of ['en', 'ar']) {
         test(`a long skill list stays inside a ${width}x${height} window (${locale})`, async ({ page }) => {
             await page.setViewportSize({ width, height });
             const skills = Array.from({ length: 24 }, (_, i) => ({ ...SKILL_LIST[0], name: `skill-${String(i).padStart(2, '0')}` }));
-            await open(page, '', locale, (p) => p.route((url) => url.pathname === '/api/skills', (route) =>
-                route.fulfill({ json: { skills, invalid: {} } })));
+            await open(page, '', locale, async (p) => {
+                await p.route((url) => url.pathname === '/api/skills', (route) =>
+                    route.fulfill({ json: { skills, invalid: {} } }));
+            });
             const box = page.locator('.new-chat textarea').first();
             await box.fill('/');
             const menu = page.locator('.skill-menu');

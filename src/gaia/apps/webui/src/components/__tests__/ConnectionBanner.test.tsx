@@ -340,7 +340,7 @@ describe('a failed model download', () => {
     it('says the download failed in the interface language', () => {
         useChatStore.setState({ locale: 'ar', systemStatus: { ...healthy, download_progress: progress('error') } as SystemStatus });
         render(<ConnectionBanner />);
-        expect(screen.getByRole('alert')).toHaveTextContent('تعذّر تنزيل');
+        expect(screen.getByRole('alert')).toHaveTextContent('فشل تنزيل');
         expect(screen.getByRole('button', { name: /إعادة المحاولة/ })).toBeInTheDocument();
         useChatStore.setState({ locale: 'en' });
     });
