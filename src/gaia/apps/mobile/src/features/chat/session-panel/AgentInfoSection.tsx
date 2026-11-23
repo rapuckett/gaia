@@ -1,11 +1,11 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { AgentTool } from '@/api/client.types';
+import type { AgentCapabilities, AgentTool } from '@/api/client.types';
 import { useCapabilities } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { useT, type Translate } from '@/i18n/useT';
-import { Notice, Row, Stack, Text } from '@/ui';
+import { Badge, Notice, Row, Stack, Text } from '@/ui';
 import { isolate } from '@webui/i18n/registry';
 import type { MessageKey } from '@webui/i18n/registry';
 
@@ -39,12 +39,23 @@ export function AgentInfoSection({ sessionId, live }: SectionProps) {
     const query = useCapabilities(sessionId, { enabled: open, live });
     return (
         <PanelSection id="tools" title={t('tools.title')}>
-            <ToolList tools={query.data?.tools} error={query.error} />
+            <ToolList tools={query.data?.tools} program={query.data?.program ?? null} error={query.error} />
         </PanelSection>
     );
 }
 
-function ToolList({ tools, error }: { tools: AgentTool[] | undefined; error: unknown }) {
+/** "Runs on gaiacpp", tagged Beta: said only for the native agent. */
+function ProgramLine() {
+    const t = useT();
+    return (
+        <Row gap="sm" align="center" wrap>
+            <Text role="caption" tone="secondary">{t('tools.program', { name: isolate('gaiacpp', 'ltr') })}</Text>
+            <Badge label={t.bare('setup.agent.beta')} accessibilityLabel={t('setup.agent.beta')} />
+        </Row>
+    );
+}
+
+function ToolList({ tools, program, error }: { tools: AgentTool[] | undefined; program: AgentCapabilities['program']; error: unknown }) {
     const t = useT();
     if (isPcRefusal(error)) return <PcOnlyNotice testID="tools-pc-only" />;
     if (error) {
@@ -53,33 +64,44 @@ function ToolList({ tools, error }: { tools: AgentTool[] | undefined; error: unk
         return <Notice tone="danger" message={failure.text} detail={failure.detail} />;
     }
     if (!tools) return <Text tone="muted">{t('sp.checking')}</Text>;
-    if (tools.length === 0) return <Text tone="secondary">{t('tools.empty')}</Text>;
+    const beta = program === 'gaiacpp' ? <ProgramLine /> : null;
+    if (tools.length === 0) {
+        return (
+            <Stack gap="sm">
+                {beta}
+                <Text tone="secondary">{t('tools.empty')}</Text>
+            </Stack>
+        );
+    }
     return (
-        <Stack gap="md" accessibilityRole="list">
-            {groupTools(tools).map(([category, group]) => (
-                <Stack key={category} gap="sm">
-                    <Row gap="sm">
-                        <Text role="label" weight="semibold" accessibilityRole="header">
-                            {categoryLabel(category, t)}
-                        </Text>
-                        <Text role="caption" tone="muted">
-                            {String(group.length)}
-                        </Text>
-                    </Row>
-                    {group.map((tool) => (
-                        <Stack key={tool.name} gap="xs">
-                            <Text mono weight="medium">
-                                {isolate(tool.name, 'ltr')}
+        <Stack gap="md">
+            {beta}
+            <Stack gap="md" accessibilityRole="list">
+                {groupTools(tools).map(([category, group]) => (
+                    <Stack key={category} gap="sm">
+                        <Row gap="sm">
+                            <Text role="label" weight="semibold" accessibilityRole="header">
+                                {categoryLabel(category, t)}
                             </Text>
-                            {tool.description ? (
-                                <Text role="caption" tone="muted" numberOfLines={2}>
-                                    {tool.description.split('\n', 1)[0]!.trim()}
+                            <Text role="caption" tone="muted">
+                                {String(group.length)}
+                            </Text>
+                        </Row>
+                        {group.map((tool) => (
+                            <Stack key={tool.name} gap="xs">
+                                <Text mono weight="medium">
+                                    {isolate(tool.name, 'ltr')}
                                 </Text>
-                            ) : null}
-                        </Stack>
-                    ))}
-                </Stack>
-            ))}
+                                {tool.description ? (
+                                    <Text role="caption" tone="muted" numberOfLines={2}>
+                                        {tool.description.split('\n', 1)[0]!.trim()}
+                                    </Text>
+                                ) : null}
+                            </Stack>
+                        ))}
+                    </Stack>
+                ))}
+            </Stack>
         </Stack>
     );
 }
