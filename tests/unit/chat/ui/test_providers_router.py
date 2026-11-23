@@ -1612,7 +1612,7 @@ def test_a_missing_ca_file_lemond_was_given_is_not_blamed(
     model_list["ca_problem"] = "should not be shown"
     lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
-    assert resp.status_code == 401
+    assert resp.status_code == 422
     assert "did not accept that key" in resp.json()["detail"]
     assert model_list["keys_checked"] == [KEY]
 

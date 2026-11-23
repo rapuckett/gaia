@@ -93,16 +93,24 @@ def client(google_provider, monkeypatch):
     app = create_app(db_path=":memory:")
     with TestClient(_as_caller(app), client=("127.0.0.1", 50000)) as c:
         c.browser, c.audited = browser, audited
+        c.ui_token = app.state.ui_api_token
         yield c
         for flow_id in list(flow._pending):
             c.portal.call(flow.cancel_flow, flow_id)
 
 
-def _post(client, caller, path, body):
+def _headers(client, caller):
     headers = {**UI, "x-test-caller": caller}
+    if caller not in CALLERS:
+        # The wrapper hides app.state, so conftest can't add the PC's token.
+        headers["Authorization"] = f"Bearer {client.ui_token}"
     if caller == "tunnel":
         headers["X-Forwarded-For"] = "203.0.113.7"
-    return client.post(path, json=body, headers=headers)
+    return headers
+
+
+def _post(client, caller, path, body):
+    return client.post(path, json=body, headers=_headers(client, caller))
 
 
 def _start_on_phone(client, port=51234):
@@ -240,12 +248,7 @@ async def test_a_phone_sign_in_expires(google_provider, monkeypatch):
 def test_only_the_pc_or_the_owner_may_cancel_a_phone_sign_in(client, caller, status):
     flow_id, _ = _start_on_phone(client)
     resp = client.delete(
-        f"/api/connectors/_flows/{flow_id}",
-        headers={
-            **UI,
-            "x-test-caller": caller,
-            **({"X-Forwarded-For": "203.0.113.7"} if caller == "tunnel" else {}),
-        },
+        f"/api/connectors/_flows/{flow_id}", headers=_headers(client, caller)
     )
     assert resp.status_code == status, resp.text
     assert (flow_id in flow._pending) is (status == 403)
