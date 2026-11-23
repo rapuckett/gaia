@@ -29,6 +29,7 @@ const KEYS = {
     npuMemlockFixed: `${P}npuMemlockFixed`,
     folderAdded: `${P}folderAdded`,
     imageSettingsChanged: `${P}imageSettingsChanged`,
+    folderRemoved: `${P}folderRemoved`,
     chatPermissionsAsk: `${P}chatPermissionsAsk`,
     chatPermissionsFull: `${P}chatPermissionsFull`,
     connectorRemoved: `${P}connectorRemoved`,

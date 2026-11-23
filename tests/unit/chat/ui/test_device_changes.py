@@ -368,3 +368,108 @@ def test_spending_and_chat_mode_changes_from_a_device_are_listed(paired):
         ("spendingLimitCleared", {}),
         ("spendingLimitSet", {"limit": 5.0}),
     ]
+
+
+def test_memory_wipe_scrub_failure_hides_the_file_path_from_a_device(
+    paired, monkeypatch
+):
+    from gaia.agents.base.memory_store import MemoryScrubError
+    from gaia.ui.routers import memory as memory_router
+
+    _, _, clients, _, _ = paired
+    raw = "Memory at /Users/someone/.gaia/memory.db was erased, but locked"
+
+    class _Store:
+        def clear_all(self):
+            raise MemoryScrubError(raw)
+
+    monkeypatch.setattr(memory_router, "_get_store", _Store)
+    on_pc = clients["pc"].delete("/api/memory/all", headers=UI)
+    on_phone = clients["phone"].delete("/api/memory/all", headers=UI)
+    assert on_pc.status_code == on_phone.status_code == 500
+    assert on_pc.json()["detail"] == raw
+    assert "memory.db" not in on_phone.json()["detail"]
+    assert "erase again" in on_phone.json()["detail"]
+
+
+def test_index_folder_errors_hide_the_raw_exception_from_a_device(paired, monkeypatch):
+    from pathlib import Path
+    from unittest.mock import patch
+
+    from gaia.ui import session_environment
+
+    monkeypatch.setattr(session_environment, "relayed", lambda _session: False)
+
+    _, _, clients, _, _ = paired
+    folder = Path.home() / "indexed"
+    folder.mkdir()
+    (folder / "notes.md").write_text("# Notes")
+    session = clients["pc"].post("/api/sessions", json={"folders": [str(folder)]})
+    session_id = session.json()["id"]
+
+    async def broken(_path, **_kwargs):
+        raise RuntimeError(f"cannot read {folder}/notes.md")
+
+    body = {"folder_path": str(folder), "recursive": False}
+    with patch("gaia.ui.server._index_document", broken):
+        on_pc = clients["pc"].post("/api/documents/index-folder", json=body)
+        on_phone = clients["phone"].post(
+            f"/api/documents/index-folder?session_id={session_id}", json=body
+        )
+    assert on_pc.status_code == on_phone.status_code == 200
+    assert on_pc.json()["errors"] == [f"notes.md: cannot read {folder}/notes.md"]
+    errors = on_phone.json()["errors"]
+    assert len(errors) == 1 and errors[0].startswith("notes.md:")
+    assert "cannot read" not in errors[0] and str(folder) not in errors[0]
+
+
+def test_removing_a_chat_folder_is_audited_and_listed_for_a_device_only(
+    paired, monkeypatch
+):
+    from pathlib import Path
+
+    from gaia.ui import session_environment
+
+    monkeypatch.setattr(session_environment, "relayed", lambda _session: False)
+
+    _, _, clients, phone, _ = paired
+    folder = Path.home() / "taxes"
+    folder.mkdir()
+    session_id = (
+        clients["pc"]
+        .post("/api/sessions", json={"folders": [str(folder)]})
+        .json()["id"]
+    )
+    url = f"/api/sessions/{session_id}/environment/folders/remove"
+
+    with _audited() as lines:
+        assert clients["pc"].post(url, json={"path": str(folder)}).status_code == 200
+    assert lines == [f"APPROVAL | folder {folder} taken from chat {session_id} | by pc"]
+    assert _kinds(clients, phone) == []
+
+    with _audited() as lines:
+        assert clients["phone"].post(url, json={"path": str(folder)}).status_code == 200
+    assert lines == [
+        f"APPROVAL | folder {folder} taken from chat {session_id} | by device:{phone}"
+    ]
+    assert _kinds(clients, phone) == [("folderRemoved", {"folder": "taxes"})]
+
+
+def test_library_listing_hides_a_failed_row_reason_from_a_device(paired):
+    app, _, clients, _, _ = paired
+    raw = "cannot read /Users/someone/Documents/taxes.pdf: boom"
+    doc = app.state.db.add_document(
+        filename="taxes.pdf",
+        filepath="/Users/someone/Documents/taxes.pdf",
+        file_hash="h1",
+        file_size=1,
+        chunk_count=0,
+    )
+    app.state.db.update_document_status(doc["id"], "failed", last_error=raw)
+
+    on_pc = clients["pc"].get("/api/documents")
+    on_phone = clients["phone"].get("/api/documents")
+    assert on_pc.status_code == on_phone.status_code == 200
+    assert on_pc.json()["documents"][0]["last_error"] == raw
+    shown = on_phone.json()["documents"][0]["last_error"]
+    assert shown == "could not be indexed; see the PC's server logs"

@@ -1542,6 +1542,8 @@ Deleting a chat deletes its copies.
   <Accordion title="GET /api/documents">
     List all documents in the global library.
 
+    A paired device or tunnel caller gets `filepath` home-relative (`~/Documents/manual.pdf`, or just the file name outside the home folder); the PC gets the full path.
+
     **Response:**
     ```json
     {
@@ -1873,7 +1875,9 @@ agent at once, so they take effect on its next step.
     **Request:** `{"path": "..."}`. Take a folder or file away from the chat.
     The agent's path validator then refuses everything under it, even inside a
     wider grant and under full access, and never offers it as an approval,
-    until it is added back.
+    until it is added back. The removal is audited, and one a paired device
+    makes is listed in the device's changes (`folderRemoved`, by the folder's
+    name).
   </Accordion>
 
   <Accordion title="PUT /api/sessions/{session_id}/environment/internet">

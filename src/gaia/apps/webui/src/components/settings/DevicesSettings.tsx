@@ -61,6 +61,7 @@ const CHANGE_KINDS = {
     npuMemlockFixed: ['settings.devices.change.npuMemlockFixed', []],
     folderAdded: ['settings.devices.change.folderAdded', ['folder']],
     imageSettingsChanged: ['settings.devices.change.imageSettingsChanged', ['model']],
+    folderRemoved: ['settings.devices.change.folderRemoved', ['folder']],
     skillAdded: ['settings.devices.change.skillAdded', ['name']],
     skillAddedCode: ['settings.devices.change.skillAddedCode', ['name']],
     connectorSetup: ['settings.devices.change.connectorSetup', ['connector']],
