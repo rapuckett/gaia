@@ -110,6 +110,19 @@ describe('backend errors read as one sentence', () => {
         expect(banner?.details).toBeUndefined();
     });
 
+    it('says a failed download in GAIA\'s words with the display name, and keeps the PC\'s text on the detail line', () => {
+        const id = 'Qwen3.6-35B-A3B-GGUF';
+        const raw = 'Lemonade /pull returned 404: {"detail":"Not Found"}';
+        const failed = { state: 'error', model_name: id, percent: 0, file: null, file_index: 1, total_files: 1, downloaded_bytes: 0, total_bytes: 0, message: raw } as const;
+        const banner = pickBanner(withStatus({ download_progress: failed }), null, t, null, { modelNames: { [id]: 'Qwen3.6 35B A3B' } });
+        expect(banner?.title).toBe(t('mobileApp.model.downloadFailedShort', { model: '\u2066Qwen3.6 35B A3B\u2069' }));
+        expect(banner?.title).not.toContain(id);
+        expect(banner?.message).toBeUndefined();
+        expect(banner?.detail).toBe(`\u2066${raw}\u2069`);
+        expect(banner).toMatchObject({ id: 'download', tone: 'danger', downloadRetry: id });
+        expect(pickBanner(withStatus({ download_progress: failed }), null, t)?.title).toContain('Qwen3.6-35B-A3B-GGUF');
+    });
+
     it('glosses a download of unknown size once in Arabic', () => {
         const title = pickBanner(withStatus({ download_progress: { state: 'starting', model_name: 'M', percent: 0, file: null, file_index: 0, total_files: 0, downloaded_bytes: 0, total_bytes: 0, message: null } }), null, translator('ar'))?.title ?? '';
         expect(title.match(/large download/g)).toHaveLength(1);

@@ -58,7 +58,7 @@ export function pickBanner(
     fetchError: unknown,
     t: Translate,
     goalStoreError?: string | null,
-    pick?: { load?: PickLoad | null; name?: string | null; awayHint?: boolean; slow?: boolean; slowPending?: boolean; lost?: boolean },
+    pick?: { load?: PickLoad | null; name?: string | null; awayHint?: boolean; slow?: boolean; slowPending?: boolean; lost?: boolean; modelNames?: Record<string, string> },
 ): Banner | null {
     // An unreachable PC's last status is stale; the web drops it too (App.tsx applyStatus).
     if (fetchError && !pick?.slowPending && (pick?.lost || fetchError instanceof GaiaNetworkError)) status = undefined;
@@ -66,7 +66,8 @@ export function pickBanner(
     if (progress?.state === 'downloading' || progress?.state === 'starting' || progress?.state === 'error') {
         const name = progress.model_name || status?.default_model_name || '';
         if (progress.state === 'error') {
-            return { id: 'download', tone: 'danger', title: t('banner.download.failed', { name }), message: progress.message ?? undefined, dismissible: true, downloadRetry: name };
+            const label = pick?.modelNames?.[name] ?? shortModelName(name);
+            return { id: 'download', tone: 'danger', title: t('mobileApp.model.downloadFailedShort', { model: isolate(label, 'ltr') }), detail: progress.message ? isolate(progress.message, 'ltr') : undefined, dismissible: true, downloadRetry: name };
         }
         const knownSize = progress.total_bytes ? `${gb(progress.total_bytes, 1)} ${GB_UNIT}` : null;
         const file = progress.file ? t('banner.download.file', { index: progress.file_index, total: progress.total_files }) : undefined;
