@@ -66,6 +66,8 @@ export function ListRow({
     const { colors, space } = useTheme();
     const largeText = useLargeText();
     const [held, setHeld] = useState(false);
+    // The whole row height stays tappable: the pressable grows to the trailing control's height.
+    const [trailingHeight, setTrailingHeight] = useState(0);
     const pressable = !!onPress || !!onLongPress;
     const split = pressable && !!trailing;
     const content = (
@@ -116,12 +118,17 @@ export function ListRow({
                         {({ highlight }) => (
                             <>
                                 <PressMirror highlight={highlight} onChange={setHeld} />
-                                <View style={{ ...surface, backgroundColor: 'transparent', paddingEnd: 0 }}>{content}</View>
+                                <View style={{ ...surface, minHeight: Math.max(surface.minHeight, trailingHeight), backgroundColor: 'transparent', paddingEnd: 0 }}>{content}</View>
                             </>
                         )}
                     </Pressable>
                 </View>
-                <View style={{ flexShrink: 0, paddingVertical: space.sm, alignSelf: largeText ? 'flex-start' : 'center', opacity: held ? 0.72 : 1 }}>{trailing}</View>
+                <View
+                    onLayout={(e) => setTrailingHeight(e.nativeEvent.layout.height)}
+                    style={{ flexShrink: 0, paddingVertical: space.sm, alignSelf: largeText ? 'flex-start' : 'center', opacity: held ? 0.72 : 1 }}
+                >
+                    {trailing}
+                </View>
             </View>
         );
     }
