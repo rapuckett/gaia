@@ -20,7 +20,7 @@ import { formatSize, middleTruncate } from '@webui/utils/format';
 import type { DocumentListResponse, IndexProgress } from '@/api/client.types';
 import { useT } from '@/i18n/useT';
 import { useLargeText } from '@/ui/theme/a11y';
-import { Badge, Button, Disclosure, Icon, IconButton, ListRow, ProgressLine, Row, Stack, Text } from '@/ui';
+import { Badge, Button, Disclosure, Icon, IconButton, ListRow, ProgressLine, Row, Stack, Surface, Text } from '@/ui';
 import { Eye, FileText, Link2, RotateCcw, Square, Trash2 } from '@/ui/icons';
 
 interface DocumentRowProps {
@@ -70,20 +70,30 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
             <Badge tone="warning" label={t('docs.missing')} />
         ) : null;
 
+    const retryButton = (
+        <Button
+            size="sm"
+            variant={hint ? 'secondary' : 'ghost'}
+            icon={RotateCcw}
+            label={retrying ? t('docs.retrying') : t('docs.retry')}
+            accessibilityLabel={t('docs.retryAria', { name: doc.filename })}
+            disabled={retrying}
+            onPress={() => onRetry(doc.id)}
+        />
+    );
+
     const actions = running ? (
         <Button size="sm" variant="secondary" icon={Square} label={t('docs.cancel')} accessibilityLabel={t('docs.cancelIndexingAria', { name: doc.filename })} onPress={() => onCancel(doc.id)} />
     ) : (
         <Row gap="xs" wrap={largeText} testID="doc-actions">
             {status === 'failed' ? (
-                <Button
-                    size="sm"
-                    variant={hint ? 'secondary' : 'ghost'}
-                    icon={RotateCcw}
-                    label={retrying ? t('docs.retrying') : t('docs.retry')}
-                    accessibilityLabel={t('docs.retryAria', { name: doc.filename })}
-                    disabled={retrying}
-                    onPress={() => onRetry(doc.id)}
-                />
+                hint ? (
+                    retryButton
+                ) : (
+                    <Surface radius="sm" border="accent">
+                        {retryButton}
+                    </Surface>
+                )
             ) : null}
             {onPreview && doc.filepath && status === 'complete' ? (
                 <IconButton icon={Eye} label={t('mobileApp.docs.previewShare', { name: doc.filename })} size="sm" onPress={() => onPreview(doc.id, doc.filename)} />

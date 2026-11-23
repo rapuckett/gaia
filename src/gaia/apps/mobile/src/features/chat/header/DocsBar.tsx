@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
-import { View } from 'react-native';
 
 import { pluralKey } from '@webui/i18n/registry';
 import { dateLocale } from '@webui/i18n/translator';
@@ -81,12 +80,7 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
                     {label}
                 </Text>
             </Row>
-            <Row gap="xs" wrap>
-                {onManage ? (
-                    <View style={{ minHeight: 48, justifyContent: 'center' }}>
-                        <Button variant="secondary" label={t('docsBar.manage')} onPress={onManage} testID="docs-manage" />
-                    </View>
-                ) : null}
+            <Row gap="xs" wrap align="center">
                 {visible.map((doc) => {
                     const failed = doc.indexing_status === 'failed';
                     return (
@@ -115,6 +109,7 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
                 {expanded && hidden > 0 ? (
                     <Button variant="secondary" size="sm" label={t('docsBar.less')} onPress={() => setExpanded(false)} />
                 ) : null}
+                {onManage ? <Button variant="secondary" label={t('docsBar.manage')} onPress={onManage} testID="docs-manage" /> : null}
             </Row>
             {limitHit ? (
                 <Notice
