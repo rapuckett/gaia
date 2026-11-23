@@ -18,7 +18,7 @@ import { SelectionSummary } from '../../../setup/steps/Checklist';
 import { MarkedRow, Warn } from '../../../setup/steps/ModelRows';
 import { fitLine, purposeChips, purposeLine, skipCaveat, statusText, tooBigText } from '../../../setup/steps/modelsView';
 import { useConfirmSheet } from '../../../setup/sheets/ConfirmSheet';
-import { lowDiskRequest, noFitRequest, serverConfirmRequest, setupConfirmFrom } from '../../../setup/sheets/setupConfirm';
+import { lowDiskRequest, noFitAsk, serverConfirmRequest, setupConfirmFrom } from '../../../setup/sheets/setupConfirm';
 import { useDownloadQueue } from './downloadQueue';
 import { LocalError } from './LocalError';
 
@@ -37,7 +37,9 @@ function ChecklistRow({ entry: e, ticked, disabled, progress, imagesCovered, can
     const t = useT();
     const locale = useLocaleCode();
     const downloading = progress?.state === 'downloading' && progress.bytes_total > 0;
-    const warning = e.fits === false ? tooBigText(e, t, locale) : !ticked ? skipCaveat(e, t, imagesCovered) : null;
+    const tight = e.fits === true && !!e.tight;
+    const caveat = !ticked ? skipCaveat(e, t, imagesCovered) : null;
+    const warning = e.fits === false ? tooBigText(e, t, locale) : caveat ?? (tight ? t('setup.models.warn.tight') : null);
     const status = downloading
         ? t('setup.models.status.downloading', { done: ltrIn(locale, formatBytes(progress.bytes_done)), total: ltrIn(locale, formatBytes(progress.bytes_total)) })
         : statusText(e, t, locale);
@@ -134,8 +136,8 @@ export function LocalModels() {
         setNotice(null);
         if (!ackNoFit) {
             const big = tooBig(catalog, sel).filter((e) => !e.downloaded || e.id === sel.defaultChat);
-            if (big.length > 0 && big.every((e) => e.need_gb != null)) {
-                const request = noFitRequest(big.map((e) => ({ name: e.name, why: tooBigText(e, t, locale) })), t);
+            const request = noFitAsk(big, t, locale);
+            if (request) {
                 if (await ask(request)) await apply(plan, sel, true, ackDisk);
                 return;
             }

@@ -438,6 +438,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
         data: local([HAVE, model(WANT.id, { ...WANT, download_progress: { model_name: WANT.id, state: 'downloading', percent: 42, downloaded_bytes: 9.8e9, total_bytes: 23.3e9, file: null, file_index: 1, total_files: 1, message: null } }), WANT_SMALL]),
     },
     // SET-MODEL-20: eight models, so the search field shows (`model-search`); the same with a miss typed into it.
+    'model-tight': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE, { ...WANT, downloaded: true, tight: true }]) },
     'model-many': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local(MANY) },
     'model-search-miss': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, search: 'zzz-no-such-model', data: local(MANY) },
     // SET-MODEL-24: a model row with its Details section expanded.
@@ -604,6 +605,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'perm-chats': { section: 'permissions', gpuMemory: GPU, data: PERM_CHATS },
     // SET-VOICE-03: Preview; `#tap=read-aloud-preview` starts a preview that never finishes, so the button reads Stop reading beside a spinner (no audio plays).
     'voice-preview': { section: 'voice', gpuMemory: GPU, data: { speechSettings: SPEECH }, override: { speak: never } },
+    // SET-VOICE-08: the PC says read aloud is unavailable; the pane shows only the notice.
+    'read-aloud-unavailable': { section: 'voice', gpuMemory: GPU, data: { speechSettings: { ...SPEECH, voices: [], available: false, unavailable_reason: 'No verified voice on this PC' } } },
     // SET-MODEL-08: Fireworks blocked by Local only, shown on its own tab.
     'model-local-only-blocked': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { providers: blockedProviders } },
     // SET-MODEL-09: the providers call fails; the notice has Check again.

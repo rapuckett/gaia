@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 
 import { formatSize, ltrIn } from '@webui/components/setup/format';
 import {
-    catalogOf, chooseChat, initialSelection, recommendedSelection, shortfall, toggle,
+    catalogOf, chooseChat, initialSelection, recommendedSelection, shortfall, toggle, tooBig,
 } from '@webui/components/setup/selection';
 import type { SetupModelProgress } from '@webui/types';
 
@@ -18,7 +18,7 @@ import { NpuNotReady } from '../npu/NpuNotReady';
 import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
 import { useConfirmSheet } from '../sheets/ConfirmSheet';
-import { serverConfirmRequest, setupConfirmFrom } from '../sheets/setupConfirm';
+import { noFitAsk, serverConfirmRequest, setupConfirmFrom } from '../sheets/setupConfirm';
 import { ModelChecklist, SelectionSummary } from './Checklist';
 import { MarkedRow } from './ModelRows';
 import { JobModels } from './JobSections';
@@ -118,6 +118,13 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
     const showGpu = gpu?.applies && gpu.total_gb != null && gpu.gpu_gb != null;
 
     const commit = async (acknowledgeNoFit: boolean): Promise<void> => {
+        if (!acknowledgeNoFit) {
+            const request = noFitAsk(tooBig(catalog, selection).filter((e) => !e.downloaded || e.id === selection.defaultChat), t, locale);
+            if (request) {
+                if (await ask(request)) await commit(true);
+                return;
+            }
+        }
         try {
             await save.mutateAsync({ plan, selection, acknowledgeNoFit });
             close();

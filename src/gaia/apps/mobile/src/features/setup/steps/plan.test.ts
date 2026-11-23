@@ -5,7 +5,9 @@ import { initialSelection } from '@webui/components/setup/selection';
 import type { PreflightReport, SetupCatalogEntry, SetupPlan } from '@webui/types';
 import type { ProviderSummary } from '@webui/types/api.gen';
 
-import { cloudIsBlocked, planView, startOptions } from './plan';
+import type { Translate } from '@/i18n/useT';
+
+import { cloudIsBlocked, planReasons, planView, startOptions } from './plan';
 
 const entry = (e: Partial<SetupCatalogEntry>): SetupCatalogEntry => ({
     id: 'm', name: 'M', roles: ['chat'], purpose: '', if_skipped: null, recipe: null, size_gb: 10, full_size_gb: 10,
@@ -75,5 +77,30 @@ describe('startOptions', () => {
         const ticked = { ...selection, ticked: new Set([...selection.ticked, 'extra']) };
         expect(startOptions(p, ticked, true, true)).toEqual({ acknowledgeLowDisk: true, keepTrying: true, extraModels: ['extra'] });
         expect(startOptions(p, selection, false, false).extraModels).toEqual([]);
+    });
+});
+
+describe('planReasons', () => {
+    const say = (key: string) => key;
+    const t = say as unknown as Translate;
+    const big = entry({ id: 'big', fits: false, fit_code: 'memory', planned: false, selected: false, recommended: false });
+    const reasons = (catalog: SetupCatalogEntry[], left: number | null | undefined, chosen: boolean) => {
+        const p = { ...plan(catalog, 100), left_for_apps_gb: left };
+        return planReasons(view(p), chosen, t, 'en');
+    };
+
+    it('puts the headroom line after "evaluated" and before the fit line, only for GAIA\'s own pick with a known figure', () => {
+        expect(reasons([chat, big], 12, false)).toEqual([
+            'setup.plan.why.evaluated', 'setup.plan.why.headroom', 'setup.plan.why.fits', 'setup.plan.why.private', 'setup.plan.why.bigger',
+        ]);
+        expect(reasons([chat, big], 12, true)).not.toContain('setup.plan.why.headroom');
+        expect(reasons([chat, big], null, false)).not.toContain('setup.plan.why.headroom');
+        expect(reasons([chat, big], undefined, false)).not.toContain('setup.plan.why.headroom');
+    });
+
+    it('swaps the fit line for the tight note and drops the bigger-model pitch for a tight chat model', () => {
+        expect(reasons([{ ...chat, tight: true }, big], 1, false)).toEqual([
+            'setup.plan.why.evaluated', 'setup.plan.why.headroom', 'setup.models.warn.tight', 'setup.plan.why.private',
+        ]);
     });
 });

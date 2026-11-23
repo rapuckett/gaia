@@ -5,6 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 
+import { createFakeClient } from '@/api/fake';
+import { GaiaClientProvider } from '@/data';
+import { translator } from '@/i18n/useT';
+
 import type { Message } from '@/api/client.types';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
@@ -24,14 +28,16 @@ const reply = (content: string): Message => ({
     rag_sources: null,
 });
 
-const show = (content: string) =>
+const show = (content: string, available?: boolean) =>
     render(
-        <QueryClientProvider client={new QueryClient()}>
-            <ThemeProvider>
-                <SheetHost>
-                    <AssistantBubble message={reply(content)} />
-                </SheetHost>
-            </ThemeProvider>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+            <GaiaClientProvider client={createFakeClient(available === undefined ? {} : { speechSettings: { voice: 'af_heart', speed: 100, auto: false, min_speed: 50, max_speed: 200, voices: [], available } }) as never}>
+                <ThemeProvider>
+                    <SheetHost>
+                        <AssistantBubble message={reply(content)} />
+                    </SheetHost>
+                </ThemeProvider>
+            </GaiaClientProvider>
         </QueryClientProvider>,
     );
 
@@ -45,5 +51,20 @@ describeNative('AssistantBubble screen-reader grouping', () => {
         while (node && node.props.accessible !== true && node.props.accessible !== false) node = node.parent;
         expect(node?.props.accessible).toBe(true);
         expect(node?.props.accessibilityActions?.length).toBeGreaterThan(0);
+    });
+});
+
+describeNative('AssistantBubble read aloud button', () => {
+    const label = translator('en')('readAloud.read');
+
+    it('is hidden once the PC says its voice is not offered', async () => {
+        await show('A spoken answer.', false);
+        await new Promise((r) => setTimeout(r, 50));
+        expect(screen.queryByLabelText(label)).toBeNull();
+    });
+
+    it('is shown when the PC offers its voice', async () => {
+        await show('A spoken answer.', true);
+        expect(await screen.findByLabelText(label)).toBeTruthy();
     });
 });
