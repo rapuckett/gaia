@@ -5,7 +5,7 @@ import type { SetupCatalogEntry, SetupModelProgress, SetupRole, SetupTest } from
 
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
-import type { GaiaClient, GpuMemoryStatus, PreflightReport, SetupPlan, SetupRunStatus } from '@/api/client.types';
+import type { AgentPrograms, GaiaClient, GpuMemoryStatus, PreflightReport, SetupPlan, SetupRunStatus } from '@/api/client.types';
 
 import type { SetupStage } from './flow';
 
@@ -262,7 +262,18 @@ const providers = (localOnly: boolean): NonNullable<FakeClientData['providers']>
     };
 };
 
+/** Python in use, and gaiacpp not on the PC but offered for download. */
+export const AGENT_PROGRAMS: AgentPrograms = {
+    current: 'gaiapy',
+    programs: [
+        { id: 'gaiapy', installed: true, size_bytes: 412_000_000, can_download: false, unavailable_reason: null, unavailable_code: null },
+        { id: 'gaiacpp', installed: false, size_bytes: 9_400_000, can_download: true, unavailable_reason: null, unavailable_code: null },
+    ],
+    download: { state: 'idle', bytes_done: 0, bytes_total: null, error: null },
+};
+
 export const COMMON: FakeClientData = {
+    agentPrograms: AGENT_PROGRAMS,
     setupPlan: PLAN,
     setupStatus: { state: 'idle' },
     gpuMemory: NO_GPU,
@@ -351,6 +362,10 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'gpu/keep': scene('gpu', { gpuMemory: GPU_KEEP }),
     'key/default': scene('key'),
     'key/no-key': scene('key', { lemonadeTarget: { ...COMMON.lemonadeTarget!, source: 'gaia' } }),
+    // FR-AGENT-01: gaiacpp that this release can't download: dimmed, Not installed, and why under it.
+    'models/agent-blocked': scene('models', {
+        agentPrograms: { ...AGENT_PROGRAMS, programs: AGENT_PROGRAMS.programs.map((p) => (p.id === 'gaiacpp' ? { ...p, can_download: false, size_bytes: null, unavailable_reason: 'No gaiacpp build for this GAIA release.', unavailable_code: 'no_release' as const } : p)) },
+    }),
     'models/all-present': scene('models', { setupPlan: PLAN_PRESENT }),
     'models/default': scene('models'),
     'models/disk-short': scene('models', { setupPlan: PLAN_SHORT }),

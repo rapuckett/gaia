@@ -21,6 +21,7 @@ import { Cloud, Cpu } from '@/ui/icons';
 
 import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
+import { AgentChoice } from './model/AgentChoice';
 import { CloudPrices } from './model/CloudPrices';
 import { CloudSpending } from './model/CloudSpending';
 import { GpuMemory } from './model/GpuMemory';
@@ -93,6 +94,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
     return (
         <Stack gap="lg" paddingX="lg" paddingY="md">
             {serverDown ? <ModelServerDownNotice detail={serverDetail} inPane /> : null}
+            <AgentChoice inSettings />
             <ModelInUse
                 active={active}
                 readFailed={!!activeQuery.error}
