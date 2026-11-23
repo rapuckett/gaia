@@ -10,10 +10,11 @@ import { useRouteNoticeStore } from '@/state/routeNotice';
 
 import { chatFromLink, chatToRestore } from './launch';
 import { activeChatId, openChat } from './navigation';
+import { useQuickActionRouting } from './quickActions';
 
 /**
  * The app's routing on top of the file routes: reopens the last chat once at launch, opens the
- * chat a `?session=` link names, remembers the open chat, and keeps the list fresh.
+ * chat a `?session=` link names, opens the app icon's New chat, remembers the open chat, and keeps the list fresh.
  */
 export function RoutingEffects() {
     const router = useRouter();
@@ -28,6 +29,7 @@ export function RoutingEffects() {
     }, [load]);
 
     useSessionSync(useCallback((id: string) => openChat(router, id), [router]));
+    useQuickActionRouting(router);
 
     useEffect(() => {
         const open = activeChatId(pathname);

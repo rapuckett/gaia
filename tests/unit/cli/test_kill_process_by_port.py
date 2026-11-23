@@ -206,6 +206,7 @@ class TestKillProcessByPort:
         assert "Cannot inspect port 4200" in result["message"]
         assert "netstat" in result["message"]
 
+    @pytest.mark.real_port_listeners
     def test_undecodable_netstat_output_does_not_surface_as_an_error(self, mocker):
         """OEM-codepage bytes used to raise UnicodeDecodeError and exit 1."""
         mocker.patch("sys.platform", "win32")

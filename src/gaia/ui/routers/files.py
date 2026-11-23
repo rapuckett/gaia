@@ -36,7 +36,12 @@ from gaia.security import (
     AllowedPathsEnvError,
     secret_read_refusal,
 )
-from gaia.upload_names import place_copy, reserve_copy_path, upload_copy_stem
+from gaia.upload_names import (
+    place_copy,
+    reserve_copy_path,
+    upload_copy_stem,
+    upload_url_name,
+)
 from gaia.utils.text_decoding import file_encoding
 from gaia.utils.user_folders import documents_dir
 
@@ -307,15 +312,30 @@ def _holds_device_private(folder: Path) -> bool:
     return any(session_environment.within(str(p), target) for p in private)
 
 
-def device_pick_refusal(path: str) -> Optional[str]:
+DevicePickCode = Literal["device_folder_outside_home", "device_folder_withheld"]
+
+
+@dataclass(frozen=True)
+class DevicePickRefusal:
+    """Why a paired device can't pick a folder: a stable code and the PC's sentence."""
+
+    code: DevicePickCode
+    message: str
+
+    def http_error(self) -> HTTPException:
+        return _device_refusal(self.code, self.message)
+
+
+def device_pick_refusal(path: str) -> Optional[DevicePickRefusal]:
     """Why a paired device can't pick *path*, or None; never names a PC path."""
     resolved = Path(os.path.expanduser(path)).resolve()
     if not is_within_document_roots(resolved):
-        return OUTSIDE_HOME_REFUSAL
+        return DevicePickRefusal("device_folder_outside_home", OUTSIDE_HOME_REFUSAL)
     if device_withholds(resolved) or _holds_device_private(resolved):
-        return (
+        return DevicePickRefusal(
+            "device_folder_withheld",
             "GAIA doesn't give a paired device this folder: it holds "
-            "credentials or keys."
+            "credentials or keys.",
         )
     return None
 
@@ -388,7 +408,7 @@ async def upload_media(request: Request, name: str = Query(..., min_length=1)):
             ),
         )
 
-    stem = upload_copy_stem(name)[:_MEDIA_NAME_CHARS].rstrip("._-")
+    stem = upload_copy_stem(name)[:_MEDIA_NAME_CHARS].rstrip(" ._-") or "attachment"
     dest_path: Optional[Path] = None
     file_size = 0
     try:
@@ -433,7 +453,7 @@ async def upload_media(request: Request, name: str = Query(..., min_length=1)):
     return FileUploadResponse(
         filename=unique_name,
         original_name=name,
-        url=f"/api/files/uploads/{unique_name}",
+        url=f"/api/files/uploads/{upload_url_name(unique_name)}",
         size=file_size,
         content_type="application/octet-stream",
         is_image=False,
@@ -543,7 +563,7 @@ async def upload_file(file: UploadFile = File(...)):
     return FileUploadResponse(
         filename=unique_name,
         original_name=original_name,
-        url=f"/api/files/uploads/{unique_name}",
+        url=f"/api/files/uploads/{upload_url_name(unique_name)}",
         size=file_size,
         content_type=content_type,
         is_image=is_image,
@@ -754,7 +774,13 @@ async def open_file_or_folder(request: OpenFileRequest):
     raw_path = Path(file_path)
     reveal = request.reveal
 
-    resolved = raw_path.resolve(strict=False)
+    try:
+        resolved = raw_path.resolve(strict=False)
+    except (ValueError, OSError) as e:  # too long for the OS
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid path: {session_environment.path_error_reason(e)}",
+        ) from e
 
     # Security: restrict to user's home directory FIRST, before ANY
     # filesystem operations (is_symlink/exists can throw PermissionError
@@ -774,10 +800,16 @@ async def open_file_or_folder(request: OpenFileRequest):
             raise HTTPException(
                 status_code=400, detail="Symbolic links are not supported"
             )
+        exists = resolved.exists()
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
+    except OSError as e:  # POSIX resolve() lets a too-long path through
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid path: {session_environment.path_error_reason(e)}",
+        ) from e
 
-    if not resolved.exists():
+    if not exists:
         raise HTTPException(status_code=404, detail="Path not found")
 
     if request.launch:

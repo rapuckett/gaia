@@ -83,6 +83,7 @@ PC_OR_DEVICE = {
     "DELETE /api/automations/{ref}",
     "DELETE /api/connectors/_flows/{flow_id}",
     "DELETE /api/connectors/{connector_id}",
+    "DELETE /api/connectors/{connector_id}/accounts/{account_id}",
     "DELETE /api/connectors/{connector_id}/activations/{agent_id:path}",
     "DELETE /api/devices/pairing",
     "DELETE /api/devices/{device_id}",
@@ -101,6 +102,7 @@ PC_OR_DEVICE = {
     "GET /api/memory/stream-inference",
     "GET /api/messaging/discord",
     "GET /api/setup/report/{name}",
+    "PATCH /api/schedules/{name:path}",
     "POST /api/agents/install",
     "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/flows/{flow_id}/complete",
@@ -234,6 +236,7 @@ REMOTE = {
     "GET /api/memory/conversations",
     "GET /api/memory/conversations/search",
     "GET /api/memory/conversations/{session_id}",
+    "GET /api/memory/embedder",
     "GET /api/memory/embedding-coverage",
     "GET /api/memory/entities",
     "GET /api/memory/entities/{entity}",
@@ -290,11 +293,8 @@ REMOTE = {
     "GET /v1/connections",
     "GET /v1/connections/",
     "GET /v1/connections/{provider}",
-    "GET /v1/email/calendar/events",
-    "GET /v1/email/health",
-    "GET /v1/email/init",
-    "GET /v1/email/version",
     "MOUNT /api/files/uploads",
+    "PATCH /api/connectors/{connector_id}/accounts/{account_id}",
     "PATCH /api/sessions/{session_id}/private",
     "POST /api/chat/cancel",
     "POST /api/chat/confirm-tool",
@@ -339,25 +339,12 @@ REMOTE = {
     "POST /api/skills/link/preview",
     "POST /api/speech",
     "POST /api/spending/allow-month",
+    "POST /api/system/download-progress/dismiss",
     "POST /api/system/load-model",
     "POST /api/system/unload-model",
     "POST /api/system/warm-up",
-    "POST /v1/email/archive",
-    "POST /v1/email/calendar/events",
-    "POST /v1/email/calendar/events/preview",
-    "POST /v1/email/calendar/events/respond",
-    "POST /v1/email/confirm",
-    "POST /v1/email/draft",
-    "POST /v1/email/init",
-    "POST /v1/email/prescan",
-    "POST /v1/email/quarantine",
-    "POST /v1/email/search",
-    "POST /v1/email/send",
-    "POST /v1/email/triage",
-    "POST /v1/email/triage/batch",
-    "POST /v1/email/unarchive",
-    "POST /v1/email/unquarantine",
     "PUT /api/chat/permissions/{session_id}",
+    "PUT /api/memory/embedder",
     "PUT /api/memory/knowledge/{knowledge_id}",
     "PUT /api/memory/settings",
     "PUT /api/providers/local/context",
@@ -1135,7 +1122,7 @@ def test_one_report_at_a_time_from_any_caller(setup, monkeypatch):
         return out
 
     monkeypatch.setattr(setup_router, "write_report", write_report)
-    monkeypatch.setattr(setup_router, "build_plan", lambda: {})
+    monkeypatch.setattr(setup_router, "build_plan", lambda **_: {})
     first = {}
 
     def make():

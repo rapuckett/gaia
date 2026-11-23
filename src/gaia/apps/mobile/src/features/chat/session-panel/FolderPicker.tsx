@@ -5,7 +5,8 @@ import { useState } from 'react';
 
 import { useBrowseFiles } from '@/data';
 import { QUICK_LINK_LABELS, visibleEntries } from '@/features/files/fileBrowserModel';
-import { useT } from '@/i18n/useT';
+import { folderRefusalNotice } from '@/features/files/folderRefusal';
+import { useT, type Translate } from '@/i18n/useT';
 import { Button, Chip, Icon, IconButton, ListRow, Notice, Row, Stack, Switch, Text, TextField } from '@/ui';
 import { ArrowUp, Folder, X } from '@/ui/icons';
 import { isolate } from '@webui/i18n/registry';
@@ -20,6 +21,12 @@ interface FolderPickerProps {
     /** Why adding the chosen folder failed, shown under the list. */
     error?: unknown;
     busy?: boolean;
+}
+
+function pickErrorProps(error: unknown, t: Translate): { message: string; detail?: string } {
+    const refused = folderRefusalNotice(error, t);
+    if (refused) return { message: refused.text, detail: refused.detail };
+    return failureNoticeProps(error, t, { withReason: 'mobileApp.env.folderChangeFailed', noReason: 'mobileApp.env.folderChangeFailedShort' });
 }
 
 /** Pick a folder on the PC to give the chat, by tapping through folders or typing its path. */
@@ -95,7 +102,7 @@ export function FolderPicker({ sessionId, onPick, onClose, error, busy }: Folder
             </Stack>
             {browse.error ? <Notice tone="danger" {...failureNoticeProps(browse.error, t, { withReason: 'mobileApp.env.browseFailed', noReason: 'mobileApp.env.browseFailedShort' })} testID="folder-picker-browse-error" /> : null}
             {listing?.folder_refusal ? <Notice tone="warning" message={listing.folder_refusal} /> : null}
-            {error ? <Notice tone="danger" {...failureNoticeProps(error, t, { withReason: 'mobileApp.env.folderChangeFailed', noReason: 'mobileApp.env.folderChangeFailedShort' })} testID="folder-picker-error" /> : null}
+            {error ? <Notice tone="danger" {...pickErrorProps(error, t)} testID="folder-picker-error" /> : null}
             <Row gap="sm" stack>
                 <Button label={t('sp.cancel')} variant="ghost" onPress={onClose} />
                 <Button

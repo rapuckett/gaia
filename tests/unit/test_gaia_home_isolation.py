@@ -94,3 +94,52 @@ def test_a_broken_realpath_still_keeps_tests_out_of_the_real_home(monkeypatch):
     with pytest.raises(pytest.fail.Exception, match="real home"):
         sqlite3.connect(str(_REAL_GAIA_HOME / "never-created.db"))
     assert not (_REAL_GAIA_HOME / "never-created.db").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the account home comes from pwd")
+def test_a_hand_set_home_does_not_move_the_guarded_gaia_home(tmp_path):
+    """A caller's HOME=<tmp> must not become the folder the guard protects."""
+    import pwd
+    import subprocess
+    import sys
+
+    account_gaia = Path(pwd.getpwuid(os.getuid()).pw_dir) / ".gaia"
+    root = Path(__file__).resolve().parents[2]
+    script = (
+        "import importlib.util, sys\n"
+        "from pathlib import Path\n"
+        "spec = importlib.util.spec_from_file_location('root_conftest', sys.argv[1])\n"
+        "mod = importlib.util.module_from_spec(spec)\n"
+        "spec.loader.exec_module(mod)\n"
+        "print(mod._REAL_GAIA_HOME)\n"
+        "print(mod._is_real_gaia_home(Path(sys.argv[2]) / 'probe'))\n"
+        "print(mod._is_real_gaia_home(Path(sys.argv[3]) / '.gaia' / 'probe'))\n"
+    )
+    hand_set_home = tmp_path / "home"
+    hand_set_home.mkdir()
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("_GAIA_TEST_REAL_HOME", "GAIA_HOME", "HOME")
+    }
+    env["HOME"] = str(hand_set_home)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            script,
+            str(root / "conftest.py"),
+            str(account_gaia),
+            str(hand_set_home),
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    guarded, account_is_guarded, tmp_is_guarded = result.stdout.split("\n")[:3]
+    assert Path(guarded) == account_gaia
+    assert account_is_guarded == "True"
+    assert tmp_is_guarded == "False"

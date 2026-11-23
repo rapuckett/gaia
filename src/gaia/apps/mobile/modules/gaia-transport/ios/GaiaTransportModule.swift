@@ -10,7 +10,7 @@ private let tokenPrefix = "gaiad_"
 private let probeSeconds: TimeInterval = 5
 private let redeemSeconds: TimeInterval = 30
 // Longer than the app's own longest wait for a quiet stream (a turn queued for the model).
-private let requestIdleSeconds: TimeInterval = 15 * 60
+private let requestIdleSeconds: TimeInterval = 17 * 60
 
 /// Talks to a paired PC over TLS pinned to its certificate. The device token stays in the
 /// Keychain: native code adds it to each request, and JavaScript never sees it.

@@ -174,14 +174,14 @@ def test_no_note_when_nothing_waits(home, dialog):
 def test_every_folder_waits_against_one_shared_deadline(home, dialog, monkeypatch):
     import time
 
-    monkeypatch.setattr(protected_folders, "MACOS_PROMPT_WAIT_S", 0.3)
+    monkeypatch.setattr(protected_folders, "MACOS_PROMPT_WAIT_S", 1.0)
     dialog["held"].update({"Documents", "Downloads", "Desktop"})
 
     started = time.monotonic()
     states = macos_access([home / n for n in ("Documents", "Downloads", "Desktop")])
 
     assert set(states.values()) == {ASKING}
-    assert time.monotonic() - started < 0.6
+    assert time.monotonic() - started < 2.0
 
 
 def test_a_folder_macos_denied_says_where_to_allow_it(home, dialog):

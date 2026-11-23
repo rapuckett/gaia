@@ -4,6 +4,7 @@
 /** Pure parsing and validation of the generic render cards (issue #2108), shared by the web and phone UIs. */
 
 import type { AgentStep, RenderCardData, StreamEvent } from '../types';
+import { addCard } from './connectCards';
 
 /** Render cap for table rows and columns, list items, and key_value items. */
 export const MAX_ITEMS = 500;
@@ -101,7 +102,7 @@ export function isListPayload(value: unknown): value is ListPayload {
 export function cardsFromSteps(steps: AgentStep[] | undefined): RenderCardData[] | undefined {
     const cards = (steps || [])
         .filter((s) => typeof s.render === 'string' && s.render.length > 0)
-        .map((s) => ({ render: s.render as string, data: s.data }));
+        .reduce<RenderCardData[]>((acc, s) => addCard(acc, { render: s.render as string, data: s.data }), []);
     return cards.length > 0 ? cards : undefined;
 }
 

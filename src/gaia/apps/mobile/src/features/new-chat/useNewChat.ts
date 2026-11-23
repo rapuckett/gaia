@@ -7,6 +7,7 @@ import { AppState } from 'react-native';
 import type { StartScreen } from '@webui/types';
 
 import { useStartScreen } from '@/data';
+import { folderRefusalNotice } from '@/features/files/folderRefusal';
 import { describeError, describeHttpFailure, useT } from '@/i18n/useT';
 import { useChatStreamStore } from '@/state/chatStreams';
 import type { Translate } from '@/i18n/useT';
@@ -22,8 +23,8 @@ export function useFirstSend(deps: NewChatDeps, initialText: string) {
     const t = useT();
     const flowDeps = (): FirstSendDeps => ({
         ...deps,
-        describeError: (err) => describeHttpFailure(err, t).text,
-        describeDetail: (err) => describeHttpFailure(err, t).detail,
+        describeError: (err) => (folderRefusalNotice(err, t) ?? describeHttpFailure(err, t)).text,
+        describeDetail: (err) => (folderRefusalNotice(err, t) ?? describeHttpFailure(err, t)).detail,
         firstNotSent: t('newChat.firstNotSent'),
     });
     // The controller owns the box text, so it must outlive re-renders.

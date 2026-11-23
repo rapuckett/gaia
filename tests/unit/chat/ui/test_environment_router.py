@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from gaia.security import PathValidator
 from gaia.ui import session_environment
 from gaia.ui.database import ChatDatabase
+from gaia.ui.routers.files import OUTSIDE_HOME_REFUSAL
 from gaia.ui.server import create_app
 
 
@@ -286,6 +287,13 @@ def test_adding_a_removed_folder_back_releases_it(
     )
 
 
+def _accept_unprofiled_sidecar(monkeypatch):
+    """Let a session name an agent the registry doesn't know, whatever ran first."""
+    from gaia.ui.routers import sessions as sessions_router
+
+    monkeypatch.setattr(sessions_router, "_agent_type_unknown", lambda *_a: False)
+
+
 def test_unknown_session_is_404(client):
     assert client.get("/api/sessions/nope/environment").status_code == 404
 
@@ -293,9 +301,12 @@ def test_unknown_session_is_404(client):
 def test_a_relayed_agent_is_reported_unenforced_and_changes_are_refused(
     client, folder, monkeypatch
 ):
-    # The email sidecar runs as its own process and keeps its own network rules.
+    # A sidecar with no relay profile keeps its own file and network rules.
+    _accept_unprofiled_sidecar(monkeypatch)
     monkeypatch.setattr(session_environment, "relayed", lambda _session: True)
-    session_id = client.post("/api/sessions", json={"agent_type": "email"}).json()["id"]
+    session_id = client.post(
+        "/api/sessions", json={"agent_type": "other-sidecar"}
+    ).json()["id"]
     body = client.get(f"/api/sessions/{session_id}/environment").json()
     assert body["enforced"] is False
     assert body["internet_enforced"] is False
@@ -321,7 +332,7 @@ def test_a_relayed_agent_is_reported_unenforced_and_changes_are_refused(
 @pytest.fixture
 def relayed_gaia(monkeypatch):
     """The flagship runs as a daemon sidecar, as on an installed GAIA."""
-    from gaia.ui.email_sidecar import daemon_client
+    from gaia.ui.sidecar import daemon_client
 
     monkeypatch.setattr(session_environment, "relayed", lambda _session: True)
     agent = SimpleNamespace(api_version="2.21", asked=[])
@@ -517,8 +528,10 @@ def test_a_device_is_refused_a_credentials_folder_that_the_pc_may_add(
 ):
     refused = phone.post("/api/sessions", json={"folders": [str(credentials)]})
     assert refused.status_code == 403
-    assert "credentials" in refused.json()["detail"]
-    assert str(Path.home()) not in refused.json()["detail"]
+    detail = refused.json()["detail"]
+    assert detail["code"] == "device_folder_withheld"
+    assert "credentials" in detail["message"]
+    assert str(Path.home()) not in refused.text
     assert _chat_count(client) == 0
 
     session_id = phone.post("/api/sessions", json={}).json()["id"]
@@ -527,9 +540,17 @@ def test_a_device_is_refused_a_credentials_folder_that_the_pc_may_add(
         json={"path": str(credentials)},
     )
     assert added.status_code == 403
-    assert added.json()["detail"] == refused.json()["detail"]
+    assert added.json()["detail"] == detail
     assert str(credentials.resolve()) not in _granted(client, session_id)
     assert _phone_changes(client) == []
+
+    check = phone.post(
+        "/api/environment/folders/check", json={"path": str(credentials)}
+    )
+    assert check.json() == {
+        "refusal": detail["message"],
+        "code": "device_folder_withheld",
+    }
 
     pc = client.post(
         f"/api/sessions/{session_id}/environment/folders",
@@ -546,7 +567,12 @@ def test_a_device_is_refused_a_folder_outside_the_home_folder(
     assert not outside.resolve().is_relative_to(Path.home().resolve())
     refused = phone.post("/api/sessions", json={"folders": [str(outside)]})
     assert refused.status_code == 403
-    assert "home folder" in refused.json()["detail"]
+    detail = refused.json()["detail"]
+    assert detail == {
+        "code": "device_folder_outside_home",
+        "message": OUTSIDE_HOME_REFUSAL,
+    }
+    assert str(outside) not in refused.text
     assert _chat_count(client) == 0
 
     session_id = phone.post("/api/sessions", json={}).json()["id"]
@@ -555,7 +581,14 @@ def test_a_device_is_refused_a_folder_outside_the_home_folder(
         json={"path": str(outside)},
     )
     assert added.status_code == 403
+    assert added.json()["detail"] == detail
     assert _phone_changes(client) == []
+
+    check = phone.post("/api/environment/folders/check", json={"path": str(outside)})
+    assert check.json() == {
+        "refusal": OUTSIDE_HOME_REFUSAL,
+        "code": "device_folder_outside_home",
+    }
 
 
 def test_a_relayed_agent_that_takes_folders_can_start_with_one(
@@ -586,7 +619,7 @@ def test_a_relayed_agent_that_cannot_start_refuses_the_folder_and_says_why(
     client, folder, relayed_gaia, monkeypatch
 ):
     from gaia.daemon.sidecars.errors import SidecarError
-    from gaia.ui.email_sidecar import daemon_client
+    from gaia.ui.sidecar import daemon_client
 
     def fail(_agent_id):
         raise SidecarError("sidecar crashed")
@@ -600,9 +633,13 @@ def test_a_relayed_agent_that_cannot_start_refuses_the_folder_and_says_why(
     assert _chat_count(client) == 0
 
 
-def test_the_email_agent_cannot_start_with_a_folder(client, folder, relayed_gaia):
+def test_an_unprofiled_sidecar_cannot_start_with_a_folder(
+    client, folder, relayed_gaia, monkeypatch
+):
+    _accept_unprofiled_sidecar(monkeypatch)
     refused = client.post(
-        "/api/sessions", json={"agent_type": "email", "folders": [str(folder)]}
+        "/api/sessions",
+        json={"agent_type": "other-sidecar", "folders": [str(folder)]},
     )
     assert refused.status_code == 400
     assert "runs as its own process" in refused.text
@@ -691,8 +728,8 @@ def test_a_path_allowed_at_a_relayed_prompt_is_listed(
     client, gaia_session_id, relayed_gaia, tmp_path, approved
 ):
     from gaia.ui import _chat_helpers as helpers
-    from gaia.ui.email_sidecar import relay
-    from gaia.ui.email_sidecar.profiles import GAIA_PROFILE
+    from gaia.ui.sidecar import relay
+    from gaia.ui.sidecar.profiles import GAIA_PROFILE
     from gaia.ui.sse_handler import SSEOutputHandler
 
     target = tmp_path / "words.txt"

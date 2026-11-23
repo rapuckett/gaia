@@ -33,6 +33,17 @@ _PRELUDE = textwrap.dedent("""
     """)
 
 
+def _reap_stubs(psutil_module, procs):
+    """Stop the stubs a test left behind, then fail if any is still running."""
+    for proc in procs:
+        try:
+            proc.kill()
+        except (psutil_module.NoSuchProcess, psutil_module.AccessDenied):
+            continue  # gone, or exiting and no longer killable on Windows
+    _, alive = psutil_module.wait_procs(procs, timeout=5)
+    assert not alive, f"stub processes outlived the test: {alive}"
+
+
 @pytest.fixture(autouse=True)
 def _no_stub_outlives_its_test():
     """A failed assertion can skip disconnect(); stop what this test started."""
@@ -42,12 +53,39 @@ def _no_stub_outlives_its_test():
     leftover = [
         p for p in psutil.Process().children(recursive=True) if p.pid not in before
     ]
-    for proc in leftover:
-        try:
-            proc.kill()
-        except psutil.NoSuchProcess:
-            continue  # it exited on its own
-    psutil.wait_procs(leftover, timeout=5)
+    _reap_stubs(psutil, leftover)
+
+
+class _StubProcess:
+    """A child process stand-in whose kill() can fail the way Windows does."""
+
+    def __init__(self, kill_error=None):
+        self._kill_error = kill_error
+
+    def kill(self):
+        if self._kill_error is not None:
+            raise self._kill_error
+
+
+def test_the_cleanup_tolerates_a_stub_that_is_already_exiting(monkeypatch):
+    """Windows raises AccessDenied for a stub caught mid-exit (#8376)."""
+    psutil = pytest.importorskip("psutil")
+    monkeypatch.setattr(psutil, "wait_procs", lambda procs, timeout=None: ([], []))
+    _reap_stubs(
+        psutil,
+        [
+            _StubProcess(psutil.AccessDenied(1)),
+            _StubProcess(psutil.NoSuchProcess(2)),
+        ],
+    )
+
+
+def test_the_cleanup_fails_when_a_stub_outlives_the_test(monkeypatch):
+    psutil = pytest.importorskip("psutil")
+    stuck = _StubProcess(psutil.AccessDenied(3))
+    monkeypatch.setattr(psutil, "wait_procs", lambda procs, timeout=None: ([], procs))
+    with pytest.raises(AssertionError, match="outlived the test"):
+        _reap_stubs(psutil, [stuck])
 
 
 def _stub(tmp_path, body):
@@ -1671,9 +1709,9 @@ def test_redaction_stays_linear_on_long_non_ascii_secrets():
     ]
     for secret, text in cases:
         t = StdioTransport(sys.executable, args=["--api-key", secret])
-        started = time.perf_counter()
+        started = time.thread_time()
         t.redact(text)
-        took = time.perf_counter() - started
+        took = time.thread_time() - started
         assert took < 0.25, f"{took:.2f}s for a {len(secret)}-character secret"
 
 
@@ -1814,10 +1852,10 @@ def test_a_secret_repeating_through_the_text_is_redacted_whole():
     t = StdioTransport(sys.executable, args=["--api-key", "abababab"])
     assert t.redact("x " + "ab" * 10 + "a y") == "x <redacted>a y"
     t = StdioTransport(sys.executable, args=["--api-key", "a" * 40])
-    started = time.perf_counter()
+    started = time.thread_time()
     assert t.redact("a" * 1_000_000) == "<redacted>"
     # In one step, not once per character.
-    assert time.perf_counter() - started < 0.2
+    assert time.thread_time() - started < 0.2
 
 
 def _dense_escapes(near: str, size: int) -> list:

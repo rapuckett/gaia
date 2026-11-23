@@ -124,16 +124,20 @@ def _restore_environ():
 
 
 @pytest.fixture(autouse=True)
-def _isolate_gaia_config(tmp_path, monkeypatch):
+def _isolate_gaia_config(tmp_path_factory, monkeypatch):
     """Keep unit tests off the developer's real ``~/.gaia/config.json``.
 
     ``GAIA_CONFIG_FILE`` is resolved at import time, so patching ``HOME`` is
     not enough.
+
+    The config gets its own folder, not ``tmp_path``: any config read leaves
+    ``config.json.lock`` beside the file, and ``tmp_path`` belongs to the test.
     """
     from gaia import config as config_mod
 
-    monkeypatch.setattr(config_mod, "GAIA_CONFIG_DIR", tmp_path)
-    monkeypatch.setattr(config_mod, "GAIA_CONFIG_FILE", tmp_path / "config.json")
+    config_dir = tmp_path_factory.mktemp("gaia-config")
+    monkeypatch.setattr(config_mod, "GAIA_CONFIG_DIR", config_dir)
+    monkeypatch.setattr(config_mod, "GAIA_CONFIG_FILE", config_dir / "config.json")
 
 
 @pytest.fixture(autouse=True)
@@ -194,6 +198,19 @@ def _forget_engine_start_failure(monkeypatch):
     from gaia.llm import lemonade_client
 
     monkeypatch.setattr(lemonade_client, "_ENGINE_START_FAILURE", None)
+
+
+@pytest.fixture(autouse=True)
+def _forget_agent_registry():
+    """A server test's startup leaves its agent registry behind; the next chat test must not inherit it.
+
+    With no hub agents installed (as in CI) that registry is empty, so a later
+    chat turn answers "GAIA's assistant isn't installed" instead of running.
+    Cleared before the test, since a ``monkeypatch`` undo can put it back after.
+    """
+    helpers = sys.modules.get("gaia.ui._chat_helpers")
+    if helpers is not None:
+        helpers.set_agent_registry(None)
 
 
 #: The home this run started with; a test that moves it keeps ``<its home>/.gaia``.
@@ -259,7 +276,7 @@ def user_terminal(monkeypatch):
 _DAEMON_SPAWN_MESSAGE = (
     "Unit test tried to spawn a real GAIA daemon (gaia.daemon.client."
     "_spawn_and_wait). Mock the daemon boundary instead — e.g. monkeypatch "
-    "gaia.ui.email_sidecar.daemon_client.acquire_handle or "
+    "gaia.ui.sidecar.daemon_client.acquire_handle or "
     "gaia.daemon.client.start_or_attach. Real daemons belong in tests/integration/."
 )
 
@@ -399,6 +416,11 @@ def pytest_configure(config):
         "real_lemonade: keep the caller's LEMONADE_BASE_URL; with "
         "GAIA_TEST_ALLOW_REAL_LEMONADE=1 also let the test spawn or kill a "
         "real Lemonade server",
+    )
+    config.addinivalue_line(
+        "markers",
+        "real_port_listeners: keep the real gaia.ports.listeners_on_port "
+        "(its lsof/netstat call is mocked by the test)",
     )
     config.addinivalue_line(
         "markers",
@@ -643,6 +665,22 @@ def _forbid_real_lemonade_all_session(tmp_path_factory):
         )
 
 
+@pytest.fixture(autouse=True)
+def _dead_lemonade_address_is_not_a_stopped_server(monkeypatch):
+    """A dead Lemonade address in a unit test stands in for a model server the
+    test fakes at a higher layer, so the Agent UI must not fail a turn over it.
+    A test of that check puts the real probe back itself."""
+    import importlib.util
+
+    if importlib.util.find_spec("fastapi") is None:
+        yield
+        return
+    from gaia.ui import _chat_helpers
+
+    monkeypatch.setattr(_chat_helpers, "_stopped_users_server", lambda: None)
+    yield
+
+
 _LEMONADE_ENV_VARS = ("LEMONADE_BASE_URL", "LEMONADE_HOST", "LEMONADE_PORT")
 # The caller's values, for the tests that opt in to keeping them.
 _CALLER_LEMONADE_ENV: dict = {}
@@ -700,6 +738,32 @@ def _forbid_real_lemonade(request, monkeypatch):
     caught = _REAL_LEMONADE_ATTEMPTS[before:]
     if caught:
         pytest.fail(_REAL_LEMONADE_MESSAGE.format(action=caught[0][1]), pytrace=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_port_listeners(request, monkeypatch):
+    """Make port lookups find nothing, so no test is handed a real process to stop.
+
+    A test that exercises the real lookup marks itself real_port_listeners (or
+    real_lemonade / integration / real_model); its own patches run later and win.
+    """
+    if any(
+        request.node.get_closest_marker(m)
+        for m in ("real_port_listeners", *_REAL_LEMONADE_MARKERS)
+    ):
+        return
+    # Import the by-name importers first: one first imported mid-test would
+    # keep the stand-in for the rest of the session.
+    from gaia import cli, ports  # noqa: F401
+    from gaia.llm import lemonade_client  # noqa: F401
+
+    real = ports.listeners_on_port
+    for name, module in list(sys.modules.items()):
+        if (
+            name.startswith("gaia")
+            and getattr(module, "listeners_on_port", None) is real
+        ):
+            monkeypatch.setattr(module, "listeners_on_port", lambda port: [])
 
 
 @pytest.fixture

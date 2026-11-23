@@ -11,6 +11,7 @@ import type {
     PickedFile,
     Session,
     SessionList,
+    SessionSearchResponse,
     ToolConfirmRequest,
     UserInputRequest,
     UserInputResult,
@@ -131,7 +132,15 @@ export function useDeleteSession(openId?: string | null, onDeletedOpenChat?: () 
     const queryClient = useQueryClient();
     return useMutation<unknown, Error, string>({
         mutationFn: (id) => requireClient(client).deleteSession(id),
-        onSuccess: (_data, id) => {
+        onSuccess: async (_data, id) => {
+            // Drop in-flight list refetches (rename, pin) that were answered before the delete.
+            await queryClient.cancelQueries({ queryKey: queryKeys.sessions });
+            queryClient.setQueryData<SessionList>(queryKeys.sessions, (list) =>
+                list && { ...list, sessions: list.sessions.filter((s) => s.id !== id) },
+            );
+            queryClient.setQueriesData<SessionSearchResponse>({ queryKey: ['sessionSearch'] }, (found) =>
+                found && { ...found, results: found.results.filter((r) => r.session_id !== id) },
+            );
             // The open chat's screen would refetch a chat that is gone.
             queryClient.removeQueries({ queryKey: queryKeys.session(id) });
             queryClient.removeQueries({ queryKey: queryKeys.messages(id) });
