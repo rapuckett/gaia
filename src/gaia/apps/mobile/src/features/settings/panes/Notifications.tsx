@@ -4,6 +4,7 @@
 import type { MessageKey } from '@webui/i18n/registry';
 import type { AlertEvent, AlertMode } from '@webui/utils/alertSettings.core';
 
+import { PushSettingsRow } from '@/features/push/PushSettingsRow';
 import { useT } from '@/i18n/useT';
 import { useAlertSettings } from '@/state/alertSettings';
 import { Card, SegmentedControl, Stack, Switch, Text } from '@/ui';
@@ -31,6 +32,9 @@ export default function Notifications() {
             <Text role="label" tone="secondary">
                 {t('settings.alerts.lede')}
             </Text>
+            <SettingsAnchor name="push">
+                <PushSettingsRow />
+            </SettingsAnchor>
             <SettingsAnchor name="alerts">
                 <Card>
                     <Stack gap="lg">

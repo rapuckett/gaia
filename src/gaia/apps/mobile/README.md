@@ -184,6 +184,19 @@ the native fingerprint needs a new build.
   (`100.64.0.0/10`) and relay addresses, which the PC reports at `/api/devices/me/routes`. A pairing
   code may name home addresses only. `EXPO_PUBLIC_GAIA_RELAY_DOMAIN` builds in the relay's domain;
   unset, the app refuses every relay address.
+- **Push notifications are off unless `GAIA_PUSH_RELAY_URL` is set** (the https push relay this
+  build registers with). Without it the build has no push entitlement, notification extension,
+  notification permission or messaging service. With it:
+  - iOS gets push, a Notification Service Extension (`<bundle id>.NotificationService`, which
+    needs its own provisioning profile) and a Keychain group shared with it.
+    `GAIA_APS_ENVIRONMENT` (`development` or `production`) follows `APP_ENV` when unset; `none`
+    leaves iOS push out.
+  - Android gets push only from a Firebase project: set `GAIA_FCM_SENDER_ID` and
+    `GAIA_GOOGLE_SERVICES_FILE` (the path to its `google-services.json`) together.
+    `GAIA_ANDROID_APP_ID` (production) and `GAIA_ANDROID_APP_ID_DEV` (development) change the
+    Android package.
+  - The notification text is generated at prebuild from the webui catalogs (`plugins/push/`). The
+    payload's encryption is documented in `src/features/push/pushCrypto.ts`.
 - **Android C++ compiles** run at most `GAIA_BUILD_JOBS` (default 4) at a time in each module.
 - **iOS builds with fastlane:** `bundle exec fastlane ios check` (an unsigned simulator build),
   `ios device` and `ios sideload` (a signed build on your own iPhone). Every account value comes
