@@ -6,23 +6,31 @@ import { AccessibilityInfo, Keyboard, useWindowDimensions, View } from 'react-na
 import { useKeyboardState } from 'react-native-keyboard-controller';
 import Animated, { FadeInDown, FadeOut, FadeOutDown, useReducedMotion } from 'react-native-reanimated';
 
+import { cmdReading, decodedPowerShell } from '@webui/components/shownText';
 import { isolate, pluralKey, type Say } from '@webui/i18n/registry';
 import type { GaiaNotification } from '@webui/types/agent';
 import {
     alwaysScopeWith,
+    CODE_TOOLS,
     COMMAND_SUMMARY_TOOLS,
     EXACT_SUMMARY_TOOLS,
     formatCountdown,
+    MAIL_ADDRESS_FIELDS,
+    MAIL_FIELDS,
+    type MailHeader,
     outsideFolderPath,
     PATH_ACCESS_TOOL,
     permissionPromptText,
     PROJECT_TRUST_TOOL,
     PROMPT_CODE_PREVIEW_LINES,
     requiresFreshConsent,
+    SCRIPT_UNREADABLE,
     shortScope,
     shownArgs,
     shownField,
+    shownScript,
     splitCommandSummary,
+    splitMailHeader,
     summarizeField,
 } from '@webui/utils/permissionPrompts.core';
 import {
@@ -90,7 +98,7 @@ function CodeBox({ lines, testID }: { lines: { text: string; tone?: CodeTone }[]
 }
 
 /** Code or JSON, collapsed past the web's line count. */
-function Collapsible({ text, limit = PROMPT_CODE_PREVIEW_LINES }: { text: string; limit?: number }) {
+function Collapsible({ text, limit = PROMPT_CODE_PREVIEW_LINES, testID }: { text: string; limit?: number; testID?: string }) {
     const t = useT();
     const [expanded, setExpanded] = useState(false);
     const lines = text.replace(/^\n+|\n+$/g, '').split('\n');
@@ -98,7 +106,7 @@ function Collapsible({ text, limit = PROMPT_CODE_PREVIEW_LINES }: { text: string
     const shown = long && !expanded ? lines.slice(0, limit) : lines;
     return (
         <Stack gap="xs">
-            <CodeBox lines={shown.map((text) => ({ text }))} />
+            <CodeBox lines={shown.map((text) => ({ text }))} testID={testID} />
             {long ? (
                 <Pressable
                     onPress={() => setExpanded((v) => !v)}
@@ -193,6 +201,31 @@ function CalendarDetails({ tool, args }: { tool: string; args: Record<string, un
     );
 }
 
+/** An email's header lines under translated labels; every value stays exactly as it will be sent. */
+function MailFacts({ header }: { header: MailHeader }) {
+    const t = useT();
+    const labels = new Map(MAIL_FIELDS);
+    return (
+        <Stack gap="xs" testID="perm-mail-header">
+            {header.fields.map(([label, value], i) => {
+                const key = labels.get(label);
+                return (
+                    <Stack key={i} gap="xs">
+                        {key ? (
+                            <Text role="caption" tone="muted">
+                                {t(key)}
+                            </Text>
+                        ) : null}
+                        <Text role="label" dir={MAIL_ADDRESS_FIELDS.has(label) ? 'ltr' : 'auto'}>
+                            {value}
+                        </Text>
+                    </Stack>
+                );
+            })}
+        </Stack>
+    );
+}
+
 /** What the call does, in the order the web card shows it. */
 function CallDetails({ prompt }: { prompt: GaiaNotification }) {
     const t = useT();
@@ -203,7 +236,13 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
     const riskNote = typeof args._risk_note === 'string' ? args._risk_note : '';
     const outsidePath = outsideFolderPath(riskNote);
     const folder = riskNote && typeof args.working_directory === 'string' ? args.working_directory : '';
-    const code = typeof args.code === 'string' && args.code.trim() ? args.code : '';
+    // A file is approved on its content too: the path alone does not say what runs.
+    const script = shownScript(tool, args);
+    const code = typeof args.code === 'string' && args.code.trim() ? args.code : script?.text?.trim() ? script.text : '';
+    // GAIA screens a script's text but can't see what it does when it runs.
+    const codeNote = (code || CODE_TOOLS.has(tool)) && !riskNote ? t('prompt.codeRisk') : '';
+    // The script is on the card already; the raw arguments don't repeat it.
+    const detailArgs = script ? Object.fromEntries(Object.entries(args).filter(([key]) => key !== '_script')) : args;
     const exactText =
         typeof args._exact_text === 'string'
             ? args._exact_text
@@ -220,11 +259,15 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
     const { shown, coded: detailCoded } = shownField(field.key, detail);
     const shownDetail = own ? '' : shown;
     const command = typeof args.command === 'string' ? args.command : relayed?.command ?? '';
+    // What the command runs when its own text hides it: base64 PowerShell, cmd's ^ escapes.
+    const decoded = command ? decodedPowerShell(command) : '';
+    const reading = command.includes('^') ? cmdReading(command) : '';
     const hidden =
         detailCoded ||
         [code, relayed?.extras].some(unseen) ||
-        unseenCommand(command) ||
+        [command, decoded].some(unseenCommand) ||
         [args.path, folder, relayed?.folder].some(unseenStrict);
+    const mail = exactText ? splitMailHeader(exactText) : null;
     const inFolder = (path: string) => (
         <Text role="caption" tone="secondary">
             {t.bare('prompt.in')} <Text mono>{markName(path)}</Text>
@@ -248,8 +291,42 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
                 </Text>
             ) : null}
             {code ? <Collapsible text={visibleText(code, true)} /> : null}
-            {exactText ? <Collapsible text={exactText} /> : null}
+            {script?.text != null && !script.text.trim() ? (
+                <Text role="caption" tone="secondary" testID="perm-script-empty">
+                    {t('prompt.scriptEmpty')}
+                </Text>
+            ) : null}
+            {script?.hiddenLines ? (
+                <Text role="caption" tone="warning" testID="perm-script-more">
+                    {t.plural('prompt.scriptMoreLines', script.hiddenLines, { n: script.hiddenLines })}
+                </Text>
+            ) : null}
+            {script?.unreadable ? (
+                <Text role="caption" tone="warning" testID="perm-script-unreadable">
+                    {t(SCRIPT_UNREADABLE[script.unreadable])}
+                </Text>
+            ) : null}
+            {codeNote ? (
+                <Text role="caption" tone="warning" testID="perm-code-risk">
+                    {codeNote}
+                </Text>
+            ) : null}
+            {mail?.before ? <Collapsible text={mail.before} /> : null}
+            {mail ? <MailFacts header={mail} /> : null}
+            {exactText ? <Collapsible text={mail ? mail.body : exactText} testID="perm-exact-text" /> : null}
             {relayed ? <Collapsible text={visibleCommand(relayed.command)} /> : null}
+            {decoded ? (
+                <Text role="caption" tone="secondary">
+                    {t('prompt.decodedCommand')}
+                </Text>
+            ) : null}
+            {decoded ? <Collapsible text={visibleCommand(decoded)} testID="perm-decoded" /> : null}
+            {reading && reading !== command ? (
+                <Text role="caption" tone="secondary">
+                    {t('prompt.cmdReading')}
+                </Text>
+            ) : null}
+            {reading && reading !== command ? <Collapsible text={visibleCommand(reading)} testID="perm-cmd-reading" /> : null}
             {hidden ? (
                 <Text role="caption" tone="warning" testID="perm-hidden-note">
                     {t('prompt.hiddenChars')}
@@ -281,7 +358,7 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
                     onToggle={() => setShowArgs((v) => !v)}
                     testID="perm-details"
                 >
-                    <Collapsible text={visibleText(JSON.stringify(shownArgs(args), null, 2), true)} />
+                    <Collapsible text={visibleText(JSON.stringify(shownArgs(detailArgs), null, 2), true)} />
                 </Disclosure>
             ) : null}
         </Stack>

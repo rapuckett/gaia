@@ -197,3 +197,44 @@ describe('PermissionPrompt shows what will really run', () => {
         expect(shown()).toContain('perm-hidden-note');
     });
 });
+
+describe('PermissionPrompt shows what code and commands really do', () => {
+    const utf16Base64 = (text: string) => btoa([...text].map((c) => String.fromCharCode(c.charCodeAt(0), 0)).join(''));
+    const shell = (command: string) => prompt({ tool: 'run_shell_command', toolLabel: undefined, alwaysScope: undefined, toolArgs: { command } });
+
+    it("shows the line an encoded PowerShell command runs, and cmd's reading of ^ escapes", async () => {
+        const encoded = await mount(shell(`powershell -EncodedCommand ${utf16Base64('Remove-Item x')}`));
+        expect(encoded.shown()).toContain('The encoded part runs this:');
+        expect(encoded.shown()).toContain('Remove-Item x');
+
+        const escaped = await mount(shell('de^l x'));
+        expect(escaped.shown()).toContain('Windows reads it as:');
+        expect(escaped.shown()).toContain('del x');
+    });
+
+    it("says why a script can't be shown, keeps it out of the raw arguments, and notes the code risk", async () => {
+        const { shown } = await mount(
+            prompt({ tool: 'execute_python_file', toolLabel: undefined, alwaysScope: undefined, toolArgs: { file_path: '/home/u/run.py', _script: { unreadable: 'not_text' } } }),
+        );
+        expect(shown()).toContain("This file isn't text, so its code can't be shown.");
+        expect(shown()).toContain('perm-code-risk');
+        expect(shown()).not.toContain('_script');
+    });
+
+    it('notes the code risk on a code tool and shows its emoji as written', async () => {
+        const code = 'print("\u{1F468}‍\u{1F469}‍\u{1F467} ❤️")';
+        const { shown } = await mount(prompt({ tool: 'run_python', toolLabel: undefined, alwaysScope: undefined, toolArgs: { code } }));
+        expect(shown()).toContain('\u{1F468}‍\u{1F469}‍\u{1F467} ❤️');
+        expect(shown()).toContain('perm-code-risk');
+        expect(shown()).not.toContain('perm-hidden-note');
+    });
+
+    it("shows a mail's header fields apart from its body", async () => {
+        const { shown } = await mount(
+            prompt({ tool: 'send_now', toolLabel: undefined, alwaysScope: undefined, toolArgs: { _exact_text: 'To: ada@example.com\nSubject: Lunch\n\nSee you at noon.' } }),
+        );
+        expect(shown()).toContain('ada@example.com');
+        expect(shown()).toContain('See you at noon.');
+        expect(shown()).not.toContain('Subject: Lunch');
+    });
+});
