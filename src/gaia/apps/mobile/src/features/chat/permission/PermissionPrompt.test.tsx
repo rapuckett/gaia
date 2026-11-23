@@ -238,4 +238,31 @@ describe('PermissionPrompt shows what code and commands really do', () => {
         expect(shown()).toContain('See you at noon.');
         expect(shown()).not.toContain('Subject: Lunch');
     });
+    const lines20 = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join('\n');
+
+    it('shows the question only for fresh-consent tools, after the details', async () => {
+        const path = await mount(prompt({ tool: 'allow_path_access', toolArgs: { path: '/x/notes', kind: 'folder' } }));
+        const write = await mount(prompt({ toolArgs: { file_path: 'a.txt', content: 'hello' } }));
+        const order = path.shown();
+        expect(order).toContain('Allow it for this chat?');
+        expect(order.indexOf('/x/notes')).toBeLessThan(order.indexOf('Allow it for this chat?'));
+        expect(write.shown()).not.toContain('GAIA needs your OK');
+        const share = await mount(prompt({ tool: 'share_engineering_context', alwaysScope: undefined, toolArgs: {} }));
+        expect(share.shown()).toContain('GAIA needs your OK');
+    });
+
+    it('shows a long mail body and a relayed command whole, with no show-more link', async () => {
+        const mail = await mount(prompt({ tool: 'send_now', toolLabel: undefined, alwaysScope: undefined, toolArgs: { _exact_text: `To: ada@example.com\nSubject: Lunch\n\n${lines20}` } }));
+        const cmd = await mount(prompt({ tool: 'run_shell_command', toolLabel: undefined, alwaysScope: undefined, summary: lines20 }));
+        for (const { shown } of [mail, cmd]) {
+            expect(shown()).toContain('line 1"');
+            expect(shown()).toContain('line 20');
+            expect(shown()).not.toMatch(/Show (all|more|less)/i);
+        }
+    });
+
+    it('shows the path of a path-access prompt as a line of its own', async () => {
+        const { shown } = await mount(prompt({ tool: 'allow_path_access', toolArgs: { path: '/x/notes', kind: 'folder' } }));
+        expect(shown().split('/x/notes').length - 1).toBeGreaterThanOrEqual(2);
+    });
 });
