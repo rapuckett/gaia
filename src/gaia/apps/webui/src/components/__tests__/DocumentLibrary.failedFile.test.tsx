@@ -280,7 +280,7 @@ describe('a file the model server was too busy to embed', () => {
         const stats = document.querySelector('.doc-stats')!;
         expect(stats).toHaveTextContent('1 to retry');
         expect(stats).not.toHaveTextContent('waiting for the model server');
-        expect(stats).toHaveTextContent("1 couldn't be read");
+        expect(stats.textContent!.replace(/[\u2066-\u2069]/g, '')).toContain("1 couldn't be read");
     });
 
     it('asks for a Retry when the add fails, instead of promising GAIA adds it later', async () => {

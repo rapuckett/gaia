@@ -1,0 +1,24 @@
+{
+  "name": "gaia-push-relay-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker that relays end-to-end encrypted push notifications from GAIA on a PC to its paired phones through APNs and FCM.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:dry-run": "wrangler deploy --dry-run --outdir dist",
+    "migrate:local": "wrangler d1 migrations apply DB --local",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261121.1",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2",
+    "vitest": "5.1.1",
+    "wrangler": "4.166.0"
+  }
+}

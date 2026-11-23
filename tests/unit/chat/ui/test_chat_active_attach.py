@@ -72,7 +72,7 @@ def test_attach_streams_existing_run(client):
     """Attach replays a run's buffered events then closes on DONE."""
     run_manager._runs["live"] = _FakeRun("live")
 
-    async def fake_attach(session_id):
+    async def fake_attach(session_id, away=False):
         assert session_id == "live"
         yield 'data: {"type": "chunk", "content": "hi"}\n\n'
         yield 'data: {"type": "done", "content": "hi"}\n\n'

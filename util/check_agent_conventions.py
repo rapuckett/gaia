@@ -25,7 +25,6 @@ Run via: ``python util/lint.py --agents`` or ``python util/check_agent_conventio
 """
 
 import ast
-import json
 import sys
 from pathlib import Path
 from typing import List, Tuple

@@ -555,3 +555,111 @@ def test_allowed_device_refused_a_hard_link_to_a_credential(device, home):
     assert "IdentityFile" not in resp.text
     listing = device.get("/api/files/browse", params={"path": str(home / "project")})
     assert "notes-copy.md" not in {e["name"] for e in listing.json()["entries"]}
+
+
+@pytest.fixture
+def app_data(home, monkeypatch):
+    """Folders that hold device-private or credential folders inside them."""
+    support = home / "Library" / "Application Support"
+    (support / "Slack").mkdir(parents=True)
+    (support / "Slack" / "notes.md").write_text("slack-secret\n")
+    (support / "Notes").mkdir()
+    (support / "Notes" / "plan.md").write_text("plan\n")
+    gh = home / ".config" / "gh"
+    gh.mkdir(parents=True)
+    (gh / "hosts.yml").write_text("oauth_token: gh-secret\n")
+    monkeypatch.setattr(
+        gaia_security,
+        "SECRET_DIRECTORIES",
+        {*gaia_security.SECRET_DIRECTORIES, str(gh)},
+    )
+    return home
+
+
+def test_device_cannot_pick_a_folder_holding_private_folders(app, device, app_data):
+    def check(client, path):
+        return client.post(
+            "/api/environment/folders/check", json={"path": str(path)}, headers=UI
+        ).json()["refusal"]
+
+    home = app_data
+    for holder in (home / "Library" / "Application Support", home / ".config"):
+        refusal = check(device, holder)
+        assert "credentials" in refusal and str(home) not in refusal
+    assert check(device, home / "Library" / "Application Support" / "Notes") is None
+    # Home is the picker's start; the grant refuses it as too broad, by name only.
+    refusal = check(device, home)
+    assert "home" in refusal and str(home) not in refusal
+
+    pc = TestClient(app, client=PC)
+    assert check(pc, home / ".config") is None
+    assert str(home) in check(pc, home)
+
+
+def test_device_folder_index_and_add_skip_private_files(app, device, wide, app_data):
+    home, indexed_by = app_data, []
+
+    def index(client, **params):
+        resp = client.post(
+            "/api/documents/index-folder",
+            json={"folder_path": str(home / "Library" / "Application Support")},
+            params=params,
+            headers=UI,
+        )
+        assert resp.status_code == 200, resp.text
+        indexed_by.append({d["filename"] for d in resp.json()["documents"]})
+
+    index(device, session_id=wide)
+    assert indexed_by[-1] == {"plan.md"}
+    slack = str(home / "Library" / "Application Support" / "Slack" / "notes.md")
+    added = device.post(
+        "/api/documents/upload-path",
+        json={"filepath": slack},
+        params={"session_id": wide},
+        headers=UI,
+    )
+    assert added.status_code == 403
+    assert added.json()["detail"]["code"] == "credentials_withheld"
+    assert "slack-secret" not in added.text and str(home) not in added.text
+
+    pc = TestClient(app, client=PC)
+    index(pc)
+    assert indexed_by[-1] == {"plan.md", "notes.md"}
+    assert (
+        pc.post(
+            "/api/documents/upload-path", json={"filepath": slack}, headers=UI
+        ).status_code
+        == 200
+    )
+
+
+def test_document_refusals_away_from_the_pc_name_no_pc_folder(
+    app, device, chat, home, outside
+):
+    body = {"folder_path": str(outside)}
+    away = device.post(
+        "/api/documents/index-folder",
+        json=body,
+        params={"session_id": chat},
+        headers=UI,
+    )
+    assert away.status_code == 403
+    assert str(home) not in away.text and str(outside) not in away.text
+    pc = TestClient(app, client=PC).post(
+        "/api/documents/index-folder", json=body, headers=UI
+    )
+    assert pc.status_code == 403 and str(outside) in pc.text
+
+
+def test_file_status_leaves_withheld_paths_unchecked_away_from_the_pc(
+    app, device, home
+):
+    paths = [str(home / ".ssh" / "config"), str(home / "project" / "notes.md")]
+
+    def status(client):
+        resp = client.post("/api/files/status", json={"paths": paths}, headers=UI)
+        assert resp.status_code == 200, resp.text
+        return [entry.get("exists") for entry in resp.json()["files"]]
+
+    assert status(device) == [None, True]
+    assert status(TestClient(app, client=PC)) == [True, True]

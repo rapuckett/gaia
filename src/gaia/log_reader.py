@@ -240,10 +240,10 @@ def stored_secrets() -> Tuple[List[str], List[str]]:
 
 
 def _keyring_slots(*usernames: str) -> List[Optional[str]]:
-    from gaia.connectors._keyring import keyring
+    from gaia.connectors import keyring_access
     from gaia.connectors.store import SERVICE_NAME
 
-    return [keyring.get_password(SERVICE_NAME, name) for name in usernames]
+    return [keyring_access.read(SERVICE_NAME, name) for name in usernames]
 
 
 def _cloud_keys() -> List[Optional[str]]:

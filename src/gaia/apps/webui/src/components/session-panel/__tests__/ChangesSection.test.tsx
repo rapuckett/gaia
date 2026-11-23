@@ -369,7 +369,7 @@ describe('ChangesSection git line marks hidden characters', () => {
         expect(line.textContent).toContain('repo[U+202E]x · fix[U+202E]y');
         expect(line.getAttribute('title')).toBe('C:\\repo[U+202E]x');
         fireEvent.click(screen.getByRole('button', { name: /Commit…/ }));
-        expect(screen.getByRole('dialog')).toHaveTextContent('In C:\\repo[U+202E]x on fix[U+202E]y.');
+        expect(screen.getByRole('dialog').textContent!.replace(/[\u2066-\u2069]/g, '')).toContain('In C:\\repo[U+202E]x on fix[U+202E]y.');
         expect(document.body.innerHTML).not.toContain(rlo);
     });
 });
