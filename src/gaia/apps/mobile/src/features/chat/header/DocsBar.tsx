@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
+import { View } from 'react-native';
 
 import { pluralKey } from '@webui/i18n/registry';
 import { dateLocale } from '@webui/i18n/translator';
@@ -40,6 +41,7 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
     const waitingCount = failedDocs.filter((d) => waitsForServerReturn(d.error_kind)).length;
     const retryCount = failedDocs.filter((d) => needsRetry(d.error_kind)).length;
     const unreadableCount = failedCount - waitingCount - retryCount;
+    const summaryTone = unreadableCount + retryCount > 0 ? 'danger' : waitingCount > 0 ? 'warning' : 'success';
     const readable = docs.length - failedCount;
     const label = t.compose((say) =>
         [
@@ -74,21 +76,23 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
     return (
         <Stack paddingX="lg" paddingY="xs" gap="xs" testID="docs-bar">
             <Row gap="xs">
-                <Icon icon={failedCount > 0 ? CircleAlert : CircleCheck} size="sm" tone={failedCount > 0 ? 'danger' : 'success'} />
+                <Icon icon={failedCount > 0 ? CircleAlert : CircleCheck} size="sm" tone={summaryTone} />
                 <Text role="label" tone="secondary" accessibilityLabel={failedCount > 0 ? label : t.plural('docsBar.aria', readable)}>
                     {label}
                 </Text>
             </Row>
             <Row gap="xs" wrap>
                 {onManage ? (
-                    <Button variant="secondary" size="sm" label={t('docsBar.manage')} onPress={onManage} testID="docs-manage" />
+                    <View style={{ minHeight: 48, justifyContent: 'center' }}>
+                        <Button variant="secondary" size="sm" label={t('docsBar.manage')} onPress={onManage} testID="docs-manage" />
+                    </View>
                 ) : null}
                 {visible.map((doc) => {
                     const failed = doc.indexing_status === 'failed';
                     return (
                         <Surface key={doc.id} tone="card" radius="full" border padding="xs">
                             <Row gap="xs">
-                                <Icon icon={failed ? CircleAlert : FileText} size="sm" tone={failed ? 'danger' : 'secondary'} />
+                                <Icon icon={failed ? CircleAlert : FileText} size="sm" tone={failed ? (waitsForServerReturn(doc.error_kind) ? 'warning' : 'danger') : 'secondary'} />
                                 <Pressable
                                     accessibilityLabel={failed ? t(waitsForServerReturn(doc.error_kind) ? 'docsBar.serverTitle' : needsRetry(doc.error_kind) ? 'docsBar.busyTitle' : 'docsBar.failedTitle', { name: doc.filename }) : doc.filename}
                                     minSize={32}

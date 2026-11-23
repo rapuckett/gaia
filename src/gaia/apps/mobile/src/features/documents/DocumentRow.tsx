@@ -77,7 +77,7 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
             {status === 'failed' ? (
                 <Button
                     size="sm"
-                    variant={hint ? 'ghost' : 'secondary'}
+                    variant={hint ? 'secondary' : 'ghost'}
                     icon={RotateCcw}
                     label={retrying ? t('docs.retrying') : t('docs.retry')}
                     accessibilityLabel={t('docs.retryAria', { name: doc.filename })}
