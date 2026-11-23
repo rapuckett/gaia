@@ -45,8 +45,10 @@ export interface PressableProps {
     accessible?: boolean;
     /** Minimum hit area in points; 48 unless a parent already guarantees it. */
     minSize?: number;
-    /** Sizes to its content (a short label in a row of text); a horizontal hit slop keeps the target `minSize` wide. */
+    /** Sizes to its content (a short label in a row of text); hit slop keeps the target `minSize` wide and tall without changing the layout. */
     inline?: boolean;
+    /** With `inline`: keeps the content's own height, so a link inside a paragraph's rhythm doesn't grow; the target is `minSize` tall through hit slop. */
+    hugHeight?: boolean;
     /** Android: an icon-only control's borderless ripple, a circle of half the target. */
     round?: boolean;
     /**
@@ -76,19 +78,23 @@ export function Pressable({
     accessible,
     minSize = PRESSABLE_MIN_SIZE,
     inline,
+    hugHeight,
     round,
     shape,
     testID,
 }: PressableProps) {
     const { colors } = useTheme();
     const [width, setWidth] = useState(0);
+    const [height, setHeight] = useState(0);
     const [box, setBox] = useState<{ width: number; height: number } | null>(null);
     const clip = RIPPLE && shape != null;
     const slop = inline ? Math.max(0, Math.ceil((minSize - width) / 2)) : 0;
     // A clipped shape keeps the full target through hit slop, since its own bounds are smaller.
     const ringX = clip && box ? Math.max(0, Math.ceil((minSize - box.width) / 2)) : 0;
     const ringY = clip && box ? Math.max(0, Math.ceil((minSize - box.height) / 2)) : 0;
-    const hitSlop = slop || ringX || ringY ? { left: slop + ringX, right: slop + ringX, top: ringY, bottom: ringY } : undefined;
+    // Where an inline link keeps its content's height, the target grows by slop, not layout.
+    const slopY = inline ? Math.max(0, Math.ceil((minSize - height) / 2)) : 0;
+    const hitSlop = slop || ringX || ringY || slopY ? { left: slop + ringX, right: slop + ringX, top: ringY + slopY, bottom: ringY + slopY } : undefined;
     const pressable = (
         <RNPressable
             onPress={onPress}
@@ -115,10 +121,10 @@ export function Pressable({
                         : { color: colors.ripple, borderless: false, foreground: true }
                     : undefined
             }
-            onLayout={inline ? (e) => setWidth(e.nativeEvent.layout.width) : undefined}
+            onLayout={inline ? (e) => { setWidth(e.nativeEvent.layout.width); setHeight(e.nativeEvent.layout.height); } : undefined}
             style={({ pressed }) => ({
                 minWidth: inline || clip ? undefined : minSize,
-                minHeight: clip ? undefined : minSize,
+                minHeight: clip || (inline && hugHeight) ? undefined : minSize,
                 justifyContent: 'center',
                 opacity: dimmed ? 0.45 : pressed && !RIPPLE ? 0.72 : 1,
             })}
