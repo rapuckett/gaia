@@ -4241,6 +4241,7 @@ export const enMessages = {
     'mobileApp.error.http': 'GAIA answered with an error ({status}): {detail}',
     'mobileApp.error.httpNoDetail': 'GAIA answered with an error ({status}).',
     'mobileApp.error.agentInstallFailed': 'The GAIA agent could not be installed.',
+    'mobileApp.newChat.agent.cantDownload': "{name} can't be downloaded here.",
     'mobileApp.error.featuredLibrariesFailed': 'Could not load suggested libraries.',
     'mobileApp.error.modelListFailed': 'Couldn’t read the model list from the model server.',
     'mobileApp.error.pricesFailed': 'Prices could not be loaded.',
