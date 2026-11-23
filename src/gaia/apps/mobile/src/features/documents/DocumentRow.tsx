@@ -14,6 +14,7 @@ import {
     progressPercent,
     splitFailureReason,
 } from '@webui/utils/documentLibrary.core';
+import { serverFailureText, waitsForServerReturn } from '@webui/utils/documentFailure';
 import { formatSize, middleTruncate } from '@webui/utils/format';
 
 import type { DocumentListResponse, IndexProgress } from '@/api/client.types';
@@ -50,6 +51,8 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
     const size = isolate(formatSize(doc.file_size), 'ltr');
     const running = isIndexing(status);
     const hint = failureHint(t, doc.error_kind);
+    const serverReason = serverFailureText(doc.error_kind, t);
+    const waiting = waitsForServerReturn(doc.error_kind);
     const reason = doc.last_error ? splitFailureReason(doc.last_error) : null;
     const pct = progress ? progressPercent(progress) : null;
     const indexingText = startedAt ? t.hint(t('docs.indexingLabel'), elapsed(startedAt, now)) : t('docs.indexing');
@@ -57,9 +60,9 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
     const badge =
         status === 'failed' ? (
             <Badge
-                tone="danger"
-                label={hint ? t('docs.cantRead') : t('docs.failed')}
-                accessibilityLabel={doc.last_error ? t('docs.failedAria', { error: doc.last_error }) : t('docs.indexingFailed')}
+                tone={waiting ? 'warning' : 'danger'}
+                label={hint ? t('docs.cantRead') : waiting ? t('docs.waiting') : t('docs.failed')}
+                accessibilityLabel={doc.last_error ? t(waiting ? 'docs.waitingAria' : 'docs.failedAria', { error: doc.last_error }) : t('docs.indexingFailed')}
             />
         ) : status === 'cancelled' ? (
             <Badge tone="neutral" label={t('docs.cancelled')} />
@@ -139,13 +142,14 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
             {status === 'failed' ? (
                 <Stack gap="xs" paddingX="lg" paddingY="xs">
                     {hint ? <Text role="caption" tone="secondary">{hint}</Text> : null}
+                    {serverReason ? <Text role="caption" tone="secondary">{serverReason}</Text> : null}
                     {reason && reason.more ? (
                         <Disclosure title={reason.summary} open={reasonOpen} onToggle={() => setReasonOpen((o) => !o)}>
                             <Text role="caption" tone="muted" dir="ltr" align="ltr">{reason.more}</Text>
                         </Disclosure>
                     ) : reason ? (
                         <Text role="caption" tone="muted" dir="ltr" align="ltr">{reason.summary}</Text>
-                    ) : !hint ? (
+                    ) : !hint && !serverReason ? (
                         <Text role="caption" tone="secondary">{t('docs.noReason')}</Text>
                     ) : null}
                 </Stack>

@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { pluralKey } from '@webui/i18n/registry';
 import { dateLocale } from '@webui/i18n/translator';
+import { needsRetry, waitsForServerReturn } from '@webui/utils/documentFailure';
 import { indexLimitHit, PASSAGES_AT_ONCE, SEARCHED_AT_ONCE } from '@webui/utils/docsLimits.core';
 import { middleTruncate } from '@webui/utils/format';
 
@@ -34,12 +35,18 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
         .sort((a, b) => (b.last_accessed_at || b.indexed_at || '').localeCompare(a.last_accessed_at || a.indexed_at || ''));
     if (docs.length === 0) return null;
 
-    const failedCount = docs.filter((d) => d.indexing_status === 'failed').length;
+    const failedDocs = docs.filter((d) => d.indexing_status === 'failed');
+    const failedCount = failedDocs.length;
+    const waitingCount = failedDocs.filter((d) => waitsForServerReturn(d.error_kind)).length;
+    const retryCount = failedDocs.filter((d) => needsRetry(d.error_kind)).length;
+    const unreadableCount = failedCount - waitingCount - retryCount;
     const readable = docs.length - failedCount;
     const label = t.compose((say) =>
         [
             readable > 0 ? say(pluralKey('docsBar.count', readable), { n: readable }) : null,
-            failedCount > 0 ? say(pluralKey('docsBar.failed', failedCount), { n: failedCount }) : null,
+            unreadableCount > 0 ? say(pluralKey('docsBar.failed', unreadableCount), { n: unreadableCount }) : null,
+            waitingCount > 0 ? say(pluralKey('docsBar.serverWaiting', waitingCount), { n: waitingCount }) : null,
+            retryCount > 0 ? say(pluralKey('docsBar.needsRetry', retryCount), { n: retryCount }) : null,
         ]
             .filter(Boolean)
             .join(' · '),
@@ -83,7 +90,7 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
                             <Row gap="xs">
                                 <Icon icon={failed ? CircleAlert : FileText} size="sm" tone={failed ? 'danger' : 'secondary'} />
                                 <Pressable
-                                    accessibilityLabel={failed ? t('docsBar.failedTitle', { name: doc.filename }) : doc.filename}
+                                    accessibilityLabel={failed ? t(waitsForServerReturn(doc.error_kind) ? 'docsBar.serverTitle' : needsRetry(doc.error_kind) ? 'docsBar.busyTitle' : 'docsBar.failedTitle', { name: doc.filename }) : doc.filename}
                                     minSize={32}
                                 >
                                     <Ltr>{middleTruncate(doc.filename, 24)}</Ltr>

@@ -15,6 +15,7 @@ import type { Translate } from '@webui/i18n/translator';
 import { describeFolderResult } from '@webui/utils/documentLibrary.core';
 import { cleanPastedPath } from '@webui/utils/pastedPath';
 import { examplePath } from '@webui/utils/platform';
+import { serverNotAddedText } from '@webui/utils/documentFailure';
 import { describeUploadError, unsupportedTypeMessage, type UploadErrorInput, type UploadErrorView } from '@webui/utils/uploadErrors.core';
 
 import { fileRefusalText, isFileRefusal, isKnownRefusalCode } from '../files/fileRefusal';
@@ -118,7 +119,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
 
     function indexedLine(document: DocumentResponse, filename: string, attachError: Error | null): AddLine {
         const name = isolateUnit(document.filename || filename);
-        if (document.indexing_status === 'failed') return { kind: 'unreadable', message: t('docs.notAdded', { name }) };
+        if (document.indexing_status === 'failed') return { kind: 'unreadable', message: serverNotAddedText(document.error_kind, name, t) ?? t('docs.notAdded', { name }) };
         if (attachError) return attachFailed(filename, attachError);
         if (!chatId) holdForNextChat([document.id]);
         return { kind: 'done', message: chatId ? t('docs.attached', { name, chat: chatName ?? '' }) : t('docs.willAttach', { name }) };
