@@ -115,6 +115,12 @@ export function AgentRecovery({ problem, answeredAt, onRetry, kept = false }: Ag
     const job = isPcRefusal(download.failure) ? null : download.job;
     const downloading = job?.state === 'downloading';
     const busy = downloading || switching || retrying;
+
+    const startingText = t('newChat.agent.starting');
+    const showStarting = retrying && !downloading;
+    useEffect(() => {
+        if (showStarting && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(startingText);
+    }, [showStarting, startingText]);
     const program = listing?.programs.find((p) => p.id === NAME) ?? null;
     const name = programName(NAME);
     const code = program && !program.can_download ? program.unavailable_code : null;
@@ -138,10 +144,12 @@ export function AgentRecovery({ problem, answeredAt, onRetry, kept = false }: Ag
                 {job && job.state !== 'idle' ? (
                     <AgentDownloadRow job={job} name={NAME} onRetry={() => void download.start()} interrupted={download.interrupted} failure={download.failure} />
                 ) : null}
-                {retrying && !downloading ? (
+                {showStarting ? (
                     <Row gap="sm" align="center">
-                        <Spinner size="sm" accessibilityLabel={t('newChat.agent.starting')} />
-                        <Text role="label" tone="secondary" accessibilityRole="summary">{t('newChat.agent.starting')}</Text>
+                        <Spinner size="sm" />
+                        <View accessibilityLiveRegion="polite">
+                            <Text role="label" tone="secondary" accessibilityRole="summary">{startingText}</Text>
+                        </View>
                     </Row>
                 ) : null}
                 {pcOnly ? (

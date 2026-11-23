@@ -92,4 +92,18 @@ describeNative('AgentRecovery accessibility', () => {
         expect(touchables().find((x) => x.testID === 'agent-recovery-use-python')?.disabled).toBe(true);
         expect(walk().find((n) => n.props.accessibilityRole === 'progressbar')?.props.accessibilityValue).toMatchObject({ now: 40 });
     });
+
+    it('"Starting the agent" is read once: no spinner label, a polite live region, one iOS announcement', async () => {
+        const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+        announce.mockClear();
+        await mount();
+        await fireEvent.press(screen.getByTestId('agent-recovery-use-python'));
+        const text = await screen.findByText(t('newChat.agent.starting'));
+        expect(text).toBeTruthy();
+        const nodes = walk();
+        expect(nodes.some((n) => n.props.accessibilityRole === 'progressbar')).toBe(false);
+        const live = nodes.find((n) => n.props.accessibilityLiveRegion === 'polite');
+        expect(JSON.stringify(live)).toContain(t('newChat.agent.starting'));
+        expect(announce.mock.calls.filter((c) => c[0] === t('newChat.agent.starting'))).toHaveLength(Platform.OS === 'ios' ? 1 : 0);
+    });
 });
