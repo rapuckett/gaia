@@ -67,8 +67,11 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                     {m.state === 'loaded' ? (
                         <Badge label={t.bare('settings.model.loaded')} accessibilityLabel={t('settings.model.loaded')} tone="success" />
                     ) : null}
-                    {m.fits === true && !blocked ? (
+                    {m.fits === true && !blocked && !m.tight ? (
                         <Badge label={t.bare('mobileApp.settings.model.fits')} accessibilityLabel={t('mobileApp.settings.model.fits')} tone="success" />
+                    ) : null}
+                    {m.fits === true && !blocked && m.tight ? (
+                        <Badge label={t.bare('settings.model.tight')} accessibilityLabel={t('setup.models.warn.tight')} tone="warning" />
                     ) : null}
                     {m.custom ? <Badge label={t.bare('settings.model.custom')} accessibilityLabel={t('settings.model.custom')} /> : null}
                     {m.size_gb ? <Badge label={isolate(`${m.size_gb} GB`)} /> : null}

@@ -86,6 +86,7 @@ export function fitLine(e: SetupCatalogEntry, t: Translate, locale: string): str
 
 /** Why a model doesn't fit: its real reason, never "too big" for one no backend here runs. */
 export function tooBigText(e: SetupCatalogEntry, t: Translate, locale: string): string {
+    if (e.fits === true && e.tight) return t('setup.models.warn.tight');
     if (e.fit_code === 'npu') return t('setup.models.warn.npu');
     if (e.fit_code === 'backend') return t('setup.models.warn.backend');
     return e.need_gb != null && e.capacity_gb != null

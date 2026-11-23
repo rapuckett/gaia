@@ -445,6 +445,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
         data: local([HAVE, model(WANT.id, { ...WANT, download_progress: { model_name: WANT.id, state: 'downloading', percent: 42, downloaded_bytes: 9.8e9, total_bytes: 23.3e9, file: null, file_index: 1, total_files: 1, message: null } }), WANT_SMALL]),
     },
     // SET-MODEL-20: eight models, so the search field shows (`model-search`); the same with a miss typed into it.
+    'model-tight': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE, { ...WANT, downloaded: true, tight: true }]) },
     'model-many': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local(MANY) },
     'model-search-miss': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, search: 'zzz-no-such-model', data: local(MANY) },
     // SET-MODEL-24: a model row with its Details section expanded.

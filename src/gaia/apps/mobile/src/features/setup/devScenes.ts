@@ -30,7 +30,7 @@ export interface SetupScene {
     agentWait?: 'failed' | 'interrupted';
 }
 
-export type ConfirmScene = 'low-disk' | 'no-fit-many' | 'no-fit-one' | 'server-low-disk' | 'server-no-fit';
+export type ConfirmScene = 'low-disk' | 'no-fit-many' | 'no-fit-one' | 'no-fit-tight' | 'server-low-disk' | 'server-no-fit';
 
 const entry = (over: Partial<SetupCatalogEntry> & { id: string }): SetupCatalogEntry => ({
     name: over.id, roles: ['chat'], purpose: 'Answers your chats', if_skipped: null, recipe: 'llamacpp', size_gb: 1, full_size_gb: 1,
@@ -65,7 +65,7 @@ const PLAN: SetupPlan = {
     lemonade: { mode: 'gaia', url: 'http://127.0.0.1:13305/api/v1', reachable: true },
     chat_model: { id: GEMMA_ID, user_set: false, size_gb: 5.97, downloaded: false },
     recommended_model: GEMMA_ID, decided_after_server: false, memory_gb: 16, memory_source: 'AMD iGPU',
-    capacity_gb: 16, disk: { path: 'C:\\Users\\you\\.cache\\huggingface\\hub', free_gb: 25.3, source: 'lemonade' },
+    capacity_gb: 16, left_for_apps_gb: 7.8, disk: { path: 'C:\\Users\\you\\.cache\\huggingface\\hub', free_gb: 25.3, source: 'lemonade' },
     download_gb: 6.3, disk_warning: null, skipped_models: [], options: [], models: [], catalog: CATALOG,
     components: COMPONENTS,
     backends: [
@@ -84,6 +84,13 @@ const PLAN: SetupPlan = {
     },
 };
 
+// A tight model reaches the plan only when the person picked it in Customize; the ladder recommends Gemma.
+const QWEN_TIGHT = entry({ ...QWEN, fits: true, tight: true, planned: true, selected: true, need_gb: 27.1, capacity_gb: 32 });
+const PLAN_TIGHT: SetupPlan = {
+    ...PLAN, chat_model: { id: QWEN_ID, user_set: true, size_gb: 23.3, downloaded: false }, recommended_model: GEMMA_ID,
+    memory_gb: 32, capacity_gb: 32, download_gb: 23.6,
+    catalog: [{ ...GEMMA, planned: false, selected: false }, EMBED, QWEN_TIGHT, NPU, MINE, FLM, SPEECH, VOICE, IMAGES],
+};
 const PLAN_COLD: SetupPlan = { ...PLAN, lemonade: { mode: 'gaia', url: null, reachable: false }, decided_after_server: true, catalog: [] };
 const PLAN_PRESENT: SetupPlan = { ...PLAN, download_gb: 0, catalog: CATALOG.map((e) => (e.planned ? { ...e, downloaded: true, size_gb: 0 } : e)) };
 const PLAN_SHORT: SetupPlan = { ...PLAN, disk: { ...PLAN.disk, path: PLAN.disk?.path ?? null, source: 'lemonade', free_gb: 2.1 } };
@@ -338,6 +345,7 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'confirm/low-disk': scene('plan', { setupPlan: PLAN_SHORT }, { confirm: 'low-disk' }),
     'confirm/no-fit-many': scene('plan', {}, { confirm: 'no-fit-many' }),
     'confirm/no-fit-one': scene('plan', {}, { confirm: 'no-fit-one' }),
+    'confirm/no-fit-tight': scene('plan', {}, { confirm: 'no-fit-tight' }),
     'confirm/server-low-disk': scene('download', { setupStatus: RUN_VERIFY_FAILED }, { confirm: 'server-low-disk' }),
     'confirm/server-no-fit': scene('plan', {}, { confirm: 'server-no-fit' }),
     'download/agent-failed': scene('download', { setupStatus: RUN_AGENT_COMPONENT_FAILED }),
@@ -381,10 +389,12 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'models/long': scene('models', { setupPlan: PLAN_LONG }),
     'models/npu-not-ready': scene('models', { setupPlan: PLAN_NPU_NOT_READY }),
     'models/npu-unusable': scene('models', { setupPlan: PLAN_NPU_UNUSABLE }),
+    'models/tight': scene('models', { setupPlan: PLAN_TIGHT }),
     'models/untested-no-vision': scene('models', { setupPlan: PLAN_NO_VISION }),
     'plan/default': scene('plan'),
     'plan/disk-short': scene('plan', { setupPlan: PLAN_SHORT }),
     'plan/local-only': scene('plan', { providers: providers(true) }),
+    'plan/tight': scene('plan', { setupPlan: PLAN_TIGHT }),
     'plan/long': scene('plan', { setupPlan: PLAN_LONG }),
     'ready/cards': scene('ready', { setupStatus: RUN_READY, setupPlan: PLAN_DONE, start: START_CARDS }),
     'ready/default': scene('ready', { setupStatus: RUN_READY, setupPlan: PLAN_DONE }),

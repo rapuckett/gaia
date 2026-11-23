@@ -22,6 +22,7 @@ import { SetupScreen, type SetupStepContext } from './SetupScreen';
 import { SETUP_STEPS } from './steps';
 import { SeedOffer } from './steps/CheckOffer';
 import { usePlanScreenRequest } from './steps/planScreenRequest';
+import { usePlanSelection } from './steps/planSelection';
 
 const noop = () => undefined;
 
@@ -61,6 +62,8 @@ function confirmRequest(kind: ConfirmScene, t: ReturnType<typeof useT>): Confirm
             return lowDiskRequest({ needGb: 30.4, freeGb: 2.1, freeUpGb: 28.3 }, t);
         case 'no-fit-one':
             return noFitRequest([{ name: 'Qwen3.6 35B A3B (Multimodal)', why: 'needs 26.8 GB and this PC has 16 GB for models' }], t);
+        case 'no-fit-tight':
+            return noFitRequest([{ name: 'Qwen3.6 35B A3B (Multimodal)', why: t('setup.models.warn.tight'), tight: true }], t);
         case 'no-fit-many':
             return noFitRequest(
                 [
@@ -92,6 +95,8 @@ export function SetupSceneView({ found }: { found: SetupScene }) {
     const [client] = useState(() => {
         // The plan step opens this screen on arrival, as it does when another step asks for it.
         useQueuedModels.setState({ ids: found.queued ?? [] });
+        // The selection store is global; a scene seeds its own from its plan.
+        usePlanSelection.getState().setSelection(null);
         if (found.screen) usePlanScreenRequest.getState().request({ screen: found.screen, from: 'check' });
         return setupSceneClient(found);
     });

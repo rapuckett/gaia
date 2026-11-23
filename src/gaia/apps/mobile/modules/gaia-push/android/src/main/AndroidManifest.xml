@@ -1,0 +1,2 @@
+<!-- The messaging service is declared by plugins/push/withPushAndroid.js, only in builds with push. -->
+<manifest />
