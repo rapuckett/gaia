@@ -10,6 +10,7 @@ import type { FetchLike } from '@/platform/fetch.types';
 import { pinnedFetch } from '@/platform/pinnedFetch';
 
 import { gaiaPush } from '../../../modules/gaia-push';
+import { isActionNotice } from './actionNotice';
 import { createPcPushClient } from './pcPushClient';
 import { pushAvailable, pushBuildConfig } from './pushConfig';
 import { newPushKey } from './pushCrypto';
@@ -132,8 +133,12 @@ export function installPush(): void {
     if (installed || !pushAvailable()) return;
     installed = true;
     // The app's own banners cover a chat in the foreground; a push that arrives then only goes to Notification Center.
+    // Its notice that an answer from a notification wasn't sent shows as a banner: the action has just opened the app.
     Notifications.setNotificationHandler({
-        handleNotification: async () => ({ shouldShowBanner: false, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: true }),
+        handleNotification: async (notification) => {
+            const notice = isActionNotice(notification.request.content.data);
+            return { shouldShowBanner: notice, shouldShowList: true, shouldPlaySound: notice, shouldSetBadge: true };
+        },
     });
     // Queued behind any registration in flight, so it can't save again after the unpair. Unregistering deletes the
     // handle at the relay now, whatever the permission, and an offline delete is retried on every start (sweepStale).
