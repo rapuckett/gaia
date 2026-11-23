@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 export * from './activeRuns';
+export * from './agentPrograms';
 export * from './agents';
 export * from './automations';
 export * from './capabilities';
