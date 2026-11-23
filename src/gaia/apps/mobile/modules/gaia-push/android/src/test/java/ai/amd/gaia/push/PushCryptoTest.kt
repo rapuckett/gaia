@@ -59,4 +59,21 @@ class PushCryptoTest {
     )
     assertEquals("Tap to review.", PushText.compose(payload("""{"label":"doing it"}"""), say)!!.second)
   }
+
+  @Test
+  fun titlesAFinishedRunByItsOutcome() {
+    val strings = mapOf(
+      "chatAlert.finished" to "GAIA finished",
+      "chatAlert.stopped" to "GAIA stopped",
+      "chatAlert.ended" to "A chat stopped running",
+    )
+    fun title(params: String): String {
+      val p = PushPayload.parse("""{"v":1,"kind":"finished","params":$params,"route":"/","seq":5}    """.toByteArray())!!
+      return PushText.compose(p, { strings[it] ?: it }, strings::get)!!.first
+    }
+    assertEquals("GAIA stopped", title("""{"outcome":"stopped"}"""))
+    assertEquals("A chat stopped running", title("""{"outcome":"ended"}"""))
+    assertEquals("GAIA finished", title("{}"))
+    assertEquals("GAIA finished", title("""{"outcome":"weird"}"""))
+  }
 }

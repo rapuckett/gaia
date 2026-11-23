@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImageSettings } from '../ImageSettings';
 import { ApiError } from '../../../services/api';
 import * as api from '../../../services/imageApi';
+import * as chatApi from '../../../services/api';
 import { useChatStore } from '../../../stores/chatStore';
 import { useModelStore } from '../../../stores/modelStore';
 
@@ -77,6 +78,19 @@ describe('ImageSettings', () => {
         expect(notice).not.toContain('Gemma-4-E4B-it-GGUF');
         fireEvent.click(screen.getByRole('button', { name: 'Choose a chat model' }));
         expect(useChatStore.getState().settingsSection).toBe('model');
+    });
+
+    it('loads the model names itself, so the notice names the chat model by its display name', async () => {
+        mockedApi.getImageSettings.mockResolvedValue({
+            ...SETTINGS, chat_model: 'Gemma-4-E4B-it-GGUF', chat_model_creates_images: false,
+        });
+        useModelStore.setState({ names: {} });
+        vi.spyOn(chatApi, 'listProviderModels').mockResolvedValue({
+            provider: 'local', models: [{ id: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B' }],
+        } as never);
+        render(<ImageSettings />);
+        await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Gemma 4 E4B'));
+        expect(screen.getByRole('status').textContent).not.toContain('Gemma-4-E4B-it-GGUF');
     });
 
     it('says when the saved model is gone instead of showing another as chosen', async () => {

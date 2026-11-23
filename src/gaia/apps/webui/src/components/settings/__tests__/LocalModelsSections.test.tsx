@@ -89,6 +89,19 @@ describe('Settings > Models on this PC', () => {
         expect(mocked.downloadSetupModel).not.toHaveBeenCalled();
     });
 
+    it('says the tight-model warning once when every model fits but is tight, and keeps per-model lines otherwise', async () => {
+        const tight = { ...on(QWEN), fits: true as const, tight: true, need_gb: 14, capacity_gb: 16 };
+        mocked.getSetupPlan.mockResolvedValue(plan([tight, on(GEMMA), on(EMBED), GPT_OSS]));
+        render(<LocalModelsSections />);
+        await screen.findByRole('group', { name: 'Models on this PC' });
+        fireEvent.click(screen.getByText('More models GAIA can download (1)'));
+        fireEvent.click(row('gpt-oss 20B'));
+        fireEvent.click(screen.getByRole('button', { name: 'Apply: download 12.1 GB' }));
+        const sheet = await screen.findByRole('alertdialog');
+        expect(sheet).toHaveTextContent('Your PC may slow down while it runs. A smaller model keeps it quick.');
+        expect(sheet).not.toHaveTextContent('Qwen3.6-35B-A3B:');
+    });
+
     it('asks before downloading past the free disk space', async () => {
         mocked.getSetupPlan.mockResolvedValue(plan([on(QWEN), on(GEMMA), on(EMBED), GPT_OSS], { disk: { path: 'C:\\hub', free_gb: 5, source: 'lemonade' } }));
         render(<LocalModelsSections />);

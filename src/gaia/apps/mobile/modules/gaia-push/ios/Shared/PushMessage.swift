@@ -13,6 +13,8 @@ struct PushPayload {
   /// The tool id an approval is for, when the PC sends it; only `[a-z0-9_]` ids are kept, for the open-only list.
   let tool: String?
   let ask: String?
+  /// How a `finished` run ended when it wasn't done: `stopped` or `ended`; any other value counts as absent.
+  let outcome: String?
   let route: String
   let sessionId: String?
   let approvalId: String?
@@ -46,6 +48,7 @@ struct PushPayload {
     label = PushPayload.clean(params["label"], max: 300)
     tool = text(params["tool"]).flatMap { $0.range(of: "^[a-z0-9_]{1,64}$", options: .regularExpression) != nil ? $0 : nil }
     ask = text(params["ask"])
+    outcome = text(params["outcome"]).flatMap { $0 == "stopped" || $0 == "ended" ? $0 : nil }
     sessionId = text(root["session_id"])
     approvalId = text(root["approval_id"])
     route = PushPayload.safeRoute(root["route"] as? String, sessionId: sessionId)
@@ -122,7 +125,7 @@ enum PushText {
       tap = "approve"
       detail = nil
     case "finished":
-      title = say("chatAlert.finished")
+      title = say(p.outcome.map { "chatAlert.\($0)" } ?? "chatAlert.finished")
       tap = "read"
       detail = p.summary.map(isolate)
     case "failed":

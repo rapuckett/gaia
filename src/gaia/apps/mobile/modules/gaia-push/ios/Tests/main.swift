@@ -30,6 +30,7 @@ check(p.route == "/chat/s_42", "an approval opens its chat")
 check((try? PushCrypto.open(ciphertext: v["ciphertext"] as! String, nonce: v["nonce"] as! String, key: v["key"] as! String, handle: "x")) == nil, "another handle fails")
 
 let en: [String: String] = [
+  "chatAlert.finished": "GAIA finished", "chatAlert.stopped": "GAIA stopped", "chatAlert.ended": "A chat stopped running",
   "chatAlert.needsApproval": "GAIA needs your approval", "chatAlert.question": "GAIA has a question",
   "mobileApp.push.title.needsYou": "GAIA needs you", "mobileApp.push.body.inChat": "In “{chat}”.",
   "mobileApp.push.body.approve": "In “{chat}”. Tap to review.", "mobileApp.push.body.approveNoChat": "Tap to review.",
@@ -73,6 +74,10 @@ check(PushActions.openOnlyTools(Bundle(for: NSObject.self)) == nil, "a bundle wi
 let data = PushActions.approvalData(approve, pcId: "pc1", receivedAt: Date(timeIntervalSince1970: 1_795_000_000))
 check(data["pc_id"] as? String == "pc1" && data["session_id"] as? String == "s_42" && data["approval_id"] as? String == ids["approval_id"] as? String
   && data["received_at"] as? Int64 == 1_795_000_000_000 && data["tool"] as? String == "write_file", "the hidden data names the PC, chat, approval, tool and arrival")
+check(PushText.compose(try payload("finished", ["outcome": "stopped"]), say)!.title == "GAIA stopped", "a stopped run is titled stopped")
+check(PushText.compose(try payload("finished", ["outcome": "ended"]), say)!.title == "A chat stopped running", "an ended run is titled ended")
+check(PushText.compose(try payload("finished", [:]), say)!.title == "GAIA finished", "no outcome keeps finished")
+check(PushText.compose(try payload("finished", ["outcome": "weird"]), say)!.title == "GAIA finished", "an unknown outcome keeps finished")
 check(PushPayload.clean("  Plan\u{202E}\u{7} for\n\tQ3 ", max: 80) == "Plan for Q3", "PC text: overrides and controls out, whitespace collapsed")
 check(PushPayload.clean(String(repeating: "x", count: 400), max: 300) == String(repeating: "x", count: 299) + "…", "PC text capped")
 check((try? PushPayload(json: JSONSerialization.data(withJSONObject: ["v": 1, "kind": "approval", "route": "/"]))) == nil, "no seq: rejected")

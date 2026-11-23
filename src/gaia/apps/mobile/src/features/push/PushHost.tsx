@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import * as Notifications from 'expo-notifications';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 
@@ -11,7 +11,9 @@ import { useActiveRuns, useSessions } from '@/data';
 import { useGaiaClient } from '@/data/GaiaClientProvider';
 import { confirmPermission } from '@/data/mutations';
 import { alertsBetween } from '@/features/banners/chatAlerts';
+import { activeChatId } from '@/features/nav/navigation';
 import { translator, useLocaleCode } from '@/i18n/useT';
+import { useAlertSettings } from '@/state/alertSettings';
 import { useChatStreamStore } from '@/state/chatStreams';
 import { useConnectionStore } from '@/state/connection';
 import { useLocaleStore } from '@/state/locale';
@@ -126,10 +128,12 @@ function useBadgeResync() {
     const sessions = useSessions().data?.sessions;
     const active = useActiveRuns().data;
     const granted = usePushStore((s) => s.permission === 'granted');
+    const modes = useAlertSettings((s) => s.modes);
+    const openId = activeChatId(usePathname());
     useEffect(() => {
         if (!granted || Platform.OS !== 'ios' || !sessions || !active) return;
-        Notifications.setBadgeCountAsync(chatBadgeCount(sessions, active)).catch((error: unknown) => console.error('Could not set the app badge', error));
-    }, [granted, sessions, active]);
+        Notifications.setBadgeCountAsync(chatBadgeCount(sessions, active, modes, openId)).catch((error: unknown) => console.error('Could not set the app badge', error));
+    }, [granted, sessions, active, modes, openId]);
 }
 
 /** Push on the phone: registration on start and on each new pairing, the explainer, tap routing and the badge. Renders only the explainer. */

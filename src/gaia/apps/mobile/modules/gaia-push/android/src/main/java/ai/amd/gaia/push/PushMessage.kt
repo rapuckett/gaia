@@ -15,6 +15,8 @@ internal data class PushPayload(
   /** The tool id an approval is for, when the PC sends it; only `[a-z0-9_]` ids are kept, for the open-only list. */
   val tool: String?,
   val ask: String?,
+  /** How a `finished` run ended when it wasn't done: `stopped` or `ended`; any other value counts as absent. */
+  val outcome: String?,
   val route: String,
   val sessionId: String?,
   /** The approval or question a prompt is (confirm-tool's `confirm_id` for an approval); never shown or logged. */
@@ -55,6 +57,7 @@ internal data class PushPayload(
         clean(params, "label", 300),
         text(params, "tool")?.takeIf { TOOL.matches(it) },
         text(params, "ask"),
+        text(params, "outcome")?.takeIf { it == "stopped" || it == "ended" },
         safeRoute(root.optString("route").ifEmpty { null }, sessionId),
         sessionId,
         text(root, "approval_id"),
@@ -127,7 +130,7 @@ internal object PushText {
       }
       // Only "GAIA needs your approval in <chat>": Approve can be pressed from the lock screen, which shows no tool detail.
       p.kind == "approval" -> { title = say("chatAlert.needsApproval"); tap = "approve"; detail = null }
-      p.kind == "finished" -> { title = say("chatAlert.finished"); tap = "read"; detail = p.summary?.let(::isolate) }
+      p.kind == "finished" -> { title = say(p.outcome?.let { "chatAlert.$it" } ?: "chatAlert.finished"); tap = "read"; detail = p.summary?.let(::isolate) }
       p.kind == "failed" -> { title = say("chatAlert.failed"); tap = "problem"; detail = p.summary?.let(::isolate) }
       p.kind == "needs_you" -> { title = say("mobileApp.push.title.needsYou"); tap = "needsYou"; detail = p.label?.let(::isolate) }
       else -> return null
