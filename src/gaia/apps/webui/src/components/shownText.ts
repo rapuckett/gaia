@@ -8,6 +8,25 @@ function isEncodedFlag(token: string): boolean {
     return name === 'e' || name === 'ec' || (name.length >= 3 && 'encodedcommand'.startsWith(name));
 }
 
+/** UTF-16LE as `new TextDecoder('utf-16le', { fatal: true })` reads it, which Hermes on the phone lacks. */
+function utf16le(bytes: Uint8Array): string {
+    if (bytes.length % 2) throw new TypeError('odd byte count for UTF-16LE');
+    let out = '';
+    for (let at = 0; at < bytes.length; at += 2) {
+        const unit = bytes[at] | (bytes[at + 1] << 8);
+        if (unit >= 0xdc00 && unit <= 0xdfff) throw new TypeError('lone low surrogate in UTF-16LE');
+        if (unit >= 0xd800 && unit <= 0xdbff) {
+            const low = at + 3 < bytes.length ? bytes[at + 2] | (bytes[at + 3] << 8) : -1;
+            if (low < 0xdc00 || low > 0xdfff) throw new TypeError('lone high surrogate in UTF-16LE');
+            out += String.fromCharCode(unit, low);
+            at += 2;
+        } else {
+            out += String.fromCharCode(unit);
+        }
+    }
+    return out.startsWith('﻿') ? out.slice(1) : out;
+}
+
 /** The script a `powershell -EncodedCommand <base64>` line runs, decoded; '' when it carries none. */
 export function decodedPowerShell(command: string): string {
     const tokens = command.split(/\s+/).filter(Boolean);
@@ -18,7 +37,7 @@ export function decodedPowerShell(command: string): string {
         const payload = tokens[at + 1].replace(/^["']|["']$/g, '');
         try {
             const bytes = Uint8Array.from(atob(payload), (c) => c.charCodeAt(0));
-            return new TextDecoder('utf-16le', { fatal: true }).decode(bytes);
+            return utf16le(bytes);
         } catch (err) {
             // Not base64 of UTF-16: there is no script to show, and the original stays on the card.
             console.debug('EncodedCommand operand is not base64 UTF-16LE', err);
