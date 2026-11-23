@@ -1,8 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useRef, useState, type ComponentRef, type ReactNode, type Ref } from 'react';
-import { Platform, Pressable, TextInput, View, useWindowDimensions, type KeyboardTypeOptions, type ReturnKeyTypeOptions } from 'react-native';
+import { useEffect, useRef, useState, type ComponentRef, type ReactNode, type Ref } from 'react';
+import { AccessibilityInfo, Platform, Pressable, TextInput, View, useWindowDimensions, type KeyboardTypeOptions, type ReturnKeyTypeOptions } from 'react-native';
 import { CircleAlert } from 'lucide-react-native';
 import { useDirection, useT } from '@/i18n/useT';
 import { Eye, EyeOff } from '../icons';
@@ -108,6 +108,10 @@ export function TextField({
         inner.current = node;
         assignRef(inputRef, node);
     };
+    // The live region speaks on Android only; iOS needs the announcement.
+    useEffect(() => {
+        if (error && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(error);
+    }, [error]);
     const [revealed, setRevealed] = useState(false);
     const canReveal = !!secureTextEntry && !!revealable;
     const end = canReveal ? (

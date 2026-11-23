@@ -3,7 +3,7 @@
 
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { tooSmall, touchables, unnamed, walk } from '@/test-support/a11y';
@@ -18,6 +18,16 @@ const wrap = ({ children }: { children: ReactNode }) => (
 );
 
 describeNative('TextField accessibility', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('an error is announced once on iOS, and again only when it changes', async () => {
+        const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+        const view = await render(<TextField value="" onChangeText={jest.fn()} label="Name" error="Name is required" />, { wrapper: wrap });
+        await view.rerender(<TextField value="a" onChangeText={jest.fn()} label="Name" error="Name is required" />);
+        await view.rerender(<TextField value="a" onChangeText={jest.fn()} label="Name" error="Too short" />);
+        expect(announce.mock.calls.map((c) => c[0])).toEqual(Platform.OS === 'ios' ? ['Name is required', 'Too short'] : []);
+    });
+
     it('the search input carries the field name and nothing else in the field is a stop', async () => {
         await render(<SearchField value="" onChangeText={jest.fn()} placeholder="Search" accessibilityLabel="Search chats" />, { wrapper: wrap });
         expect(screen.getByLabelText('Search chats')).toBeTruthy();
