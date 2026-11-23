@@ -90,9 +90,9 @@ export function NotificationCenterScreen({ onBack, onOpenChat, receiptId }: { on
         >
             <Stack paddingX="gutter" paddingY="sm">
                 <Row gap="sm" wrap accessibilityRole="tablist">
-                    <Chip label={t('notifications.filter.all')} selected={filter === null} onPress={() => setNotificationFilter(null)} />
+                    <Chip role="tab" label={t('notifications.filter.all')} selected={filter === null} onPress={() => setNotificationFilter(null)} />
                     {FILTER_ORDER.map((kind) => (
-                        <Chip key={kind} label={t(FILTER_LABELS[kind])} selected={filter === kind} onPress={() => setNotificationFilter(kind)} />
+                        <Chip key={kind} role="tab" label={t(FILTER_LABELS[kind])} selected={filter === kind} onPress={() => setNotificationFilter(kind)} />
                     ))}
                 </Row>
             </Stack>

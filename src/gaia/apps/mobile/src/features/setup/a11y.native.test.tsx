@@ -163,11 +163,26 @@ describeNative('the models screen accessibility', () => {
 const job = (fields: Partial<AgentDownload>): AgentDownload => ({ state: 'downloading', bytes_done: 40, bytes_total: 100, error: null, ...fields });
 const rowIn = (j: AgentDownload) => render(<AgentDownloadRow job={j} name="gaiacpp" onRetry={jest.fn()} />, { wrapper: wrapper(planOf(entry({}))) });
 
+describeNative('the models screen "Other options" link', () => {
+    it('is a button that keeps its text height and reaches a 48 pt target through hit slop', async () => {
+        const plan = planOf(entry({ reads_images: true }));
+        usePlanSelection.getState().setSelection(initialSelection(plan));
+        await render(<ModelsScreen ctx={ctxOf(plan)} close={jest.fn()} />, { wrapper: wrapper(plan) });
+        await screen.findByText(t('setup.models.title'));
+        const link = touchables().find((x) => x.name === t('setup.job.otherVision'));
+        expect(link?.role).toBe('button');
+        expect(link?.expanded).toBe(false);
+        expect(link!.minHeight).toBeGreaterThanOrEqual(48);
+        expect((link!.node.props as { style: { minHeight?: number } }).style).not.toHaveProperty('minHeight', 48);
+    });
+});
+
 describeNative('the agent download row accessibility', () => {
     it('a running download has a progress bar with its value', async () => {
         await rowIn(job({}));
         const bar = walk().find((n) => n.props.accessibilityRole === 'progressbar');
         expect(bar?.props.accessibilityValue).toMatchObject({ min: 0, max: 100, now: 40 });
+        expect(String(bar?.props.accessibilityLabel)).toContain('gaiacpp');
     });
 
     it('a failure is an alert, and Retry is a named, enabled button at 44 pt', async () => {

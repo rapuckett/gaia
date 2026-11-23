@@ -41,6 +41,14 @@ describeNative('DocumentRow accessibility', () => {
         for (const t of list) expect(t.name).toContain('notes.pdf');
     });
 
+    it('the row label reaches a screen reader without swallowing the action buttons', async () => {
+        await mount(doc({ indexed_at: '2026-11-14T10:00:00Z' }));
+        const row = walk().find((n) => n.props.accessible === true && /notes\.pdf, /.test(String(n.props.accessibilityLabel)));
+        expect(row).toBeTruthy();
+        expect(JSON.stringify(row)).not.toContain('Remove notes.pdf');
+        expect(touchables().some((t) => /^Remove/.test(t.name))).toBe(true);
+    });
+
     it('a failed document names its Retry and says why, in that order', async () => {
         await mount(doc({ indexing_status: 'failed', last_error: 'RAG indexing failed for notes.pdf: the file is damaged' }));
         const list = touchables();

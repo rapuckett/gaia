@@ -22,6 +22,7 @@ describeNative('TextField accessibility', () => {
 
     it('an error is announced once on iOS, and again only when it changes', async () => {
         const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+        announce.mockClear();
         const view = await render(<TextField value="" onChangeText={jest.fn()} label="Name" error="Name is required" />, { wrapper: wrap });
         await view.rerender(<TextField value="a" onChangeText={jest.fn()} label="Name" error="Name is required" />);
         await view.rerender(<TextField value="a" onChangeText={jest.fn()} label="Name" error="Too short" />);

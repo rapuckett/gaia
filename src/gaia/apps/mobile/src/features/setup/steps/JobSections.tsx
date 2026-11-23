@@ -11,7 +11,7 @@ import {
 import type { SetupCatalogEntry, SetupPlan } from '@webui/types';
 
 import { useLocaleCode, useT } from '@/i18n/useT';
-import { Badge, Card, Row, Stack, Text } from '@/ui';
+import { Badge, Card, Pressable, Row, Stack, Text } from '@/ui';
 
 import { MarkedRow, ModelRadio, SupportBadge, Warn } from './ModelRows';
 
@@ -117,9 +117,11 @@ export function JobModels({ plan, selection, onSelection, disabled }: {
                         <Stack gap="xs">
                             <Text dir="ltr">{t('setup.job.visionBuiltIn', { name })}</Text>
                             <Text role="caption" tone="success">{t('setup.job.nothingMore')}</Text>
-                            <Text role="label" tone="accent" onPress={() => setShowVision((v) => !v)} accessibilityRole="button">
-                                {showVision ? t('setup.job.hideVision') : t('setup.job.otherVision')}
-                            </Text>
+                            <Pressable inline hugHeight onPress={() => setShowVision((v) => !v)} aria-expanded={showVision}>
+                                <Text role="label" tone="accent">
+                                    {showVision ? t('setup.job.hideVision') : t('setup.job.otherVision')}
+                                </Text>
+                            </Pressable>
                         </Stack>
                     </Card>
                 ) : (

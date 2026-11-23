@@ -140,7 +140,7 @@ export function AgentRecovery({ problem, answeredAt, onRetry, kept = false }: Ag
                 ) : null}
                 {retrying && !downloading ? (
                     <Row gap="sm" align="center">
-                        <Spinner size="sm" />
+                        <Spinner size="sm" accessibilityLabel={t('newChat.agent.starting')} />
                         <Text role="label" tone="secondary" accessibilityRole="summary">{t('newChat.agent.starting')}</Text>
                     </Row>
                 ) : null}

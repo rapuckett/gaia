@@ -13,11 +13,13 @@ export interface ProgressLineProps {
     /** 0 to 1; leave it out for an indeterminate line. */
     value?: number;
     label?: string;
+    /** What a screen reader calls the bar; defaults to `label`. For a bar with no visible text beside it. */
+    accessibilityLabel?: string;
 }
 
 const SEGMENT = 0.4;
 
-export function ProgressLine({ value, label }: ProgressLineProps) {
+export function ProgressLine({ value, label, accessibilityLabel }: ProgressLineProps) {
     const { colors, radius, space } = useTheme();
     const rtl = useDirection() === 'rtl';
     const reduced = useReducedMotion();
@@ -44,7 +46,7 @@ export function ProgressLine({ value, label }: ProgressLineProps) {
         <View
             accessible
             accessibilityRole="progressbar"
-            accessibilityLabel={label}
+            accessibilityLabel={accessibilityLabel ?? label}
             accessibilityValue={indeterminate ? undefined : { min: 0, max: 100, now: Math.round(clamped * 100) }}
             style={{ gap: space.xs }}
         >

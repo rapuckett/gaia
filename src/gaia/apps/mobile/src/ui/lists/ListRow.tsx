@@ -73,7 +73,11 @@ export function ListRow({
     const content = (
         <Row gap="md" align={largeText ? 'start' : 'center'}>
             {leading ? <FirstLine role="ui" maxScale={titleMaxScale}>{leading}</FirstLine> : null}
-            <View style={{ flex: 1, minWidth: 0 }}>
+            {/* A row that isn't pressable keeps its label on the text block, so a trailing control stays a stop of its own. */}
+            <View
+                style={{ flex: 1, minWidth: 0 }}
+                {...(!pressable && accessibilityLabel ? { accessible: true, accessibilityLabel } : null)}
+            >
                 <Text role="ui" weight={selected || emphasized ? 'semibold' : 'medium'} numberOfLines={titleLines} largeLines={titleLargeLines} ellipsize={titleEllipsize} maxScale={titleMaxScale}>
                     {title}
                 </Text>

@@ -114,7 +114,7 @@ export default function ReadAloud() {
                                 onPress={preview.toggle}
                                 testID="read-aloud-preview"
                             />
-                            {preview.loading ? <Spinner size="sm" /> : null}
+                            {preview.loading ? <Spinner size="sm" accessibilityLabel={t('settings.loading')} /> : null}
                         </Row>
                         <Text role="label" tone="muted">
                             {t('readAloud.settings.englishOnly')}

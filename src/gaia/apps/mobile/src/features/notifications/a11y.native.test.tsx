@@ -60,6 +60,8 @@ describeNative('the notification center accessibility', () => {
         await mount();
         const chips = () => touchables().filter((x) => x.name === t('notifications.filter.all') || x.name === t('notifications.filter.errors'));
         expect(chips().map((c) => c.selected)).toEqual([true, false]);
+        expect(chips().map((c) => c.role)).toEqual(['tab', 'tab']);
+        expect(walk().some((n) => n.props.accessibilityRole === 'tablist')).toBe(true);
         await fireEvent.press(screen.getByText(t('notifications.filter.errors')));
         expect(chips().map((c) => c.selected)).toEqual([false, true]);
     });
