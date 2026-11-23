@@ -81,6 +81,7 @@ describeNative('the new chat when the chosen agent cannot start', () => {
         const { client, wrap } = wrapper({ status: READY, start: { ...START, skills_error: 'agent exited', agent_problem: MISSING }, agentPrograms: listing() });
         await render(<NewChatScreen onOpen={() => undefined} onChooseDocuments={() => undefined} initialText="Plan my week" />, { wrapper: wrap });
         await screen.findByTestId('agent-recovery');
+        jest.spyOn(Keyboard, 'isVisible').mockReturnValue(true);
         const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
         const scrollToEnd = jest.spyOn(ScrollView.prototype, 'scrollToEnd').mockImplementation(() => undefined);
         jest.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {

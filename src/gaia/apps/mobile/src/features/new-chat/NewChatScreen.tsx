@@ -104,11 +104,13 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
             if (agentProblem) {
                 setKeptForAgent(true);
                 // The keyboard shrinks the body and hides the card: close it, then bring the card back once the body has grown.
-                const hidden = Keyboard.addListener('keyboardDidHide', () => {
-                    hidden.remove();
-                    showCard();
-                });
-                Keyboard.dismiss();
+                if (Keyboard.isVisible()) {
+                    const hidden = Keyboard.addListener('keyboardDidHide', () => {
+                        hidden.remove();
+                        showCard();
+                    });
+                    Keyboard.dismiss();
+                }
                 showCard();
                 return false;
             }
