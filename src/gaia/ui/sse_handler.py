@@ -65,6 +65,14 @@ from gaia.utils.json_string import (
 
 logger = logging.getLogger(__name__)
 
+
+def short_id(value: Optional[str]) -> str:
+    """First 6 characters of an approval id, for logs that end up in bundles."""
+    if not value:
+        return "none"
+    return value[:6] + "..." if len(value) > 6 else value
+
+
 _SUMMARY_CHAR_CAP = 300
 #: How much of an MCP tool's text output a tool row carries.
 _MCP_OUTPUT_CHAR_CAP = 16_000
@@ -2647,10 +2655,9 @@ class SSEOutputHandler(OutputHandler):
         with self._confirm_lock:
             if confirm_id is not None and confirm_id != self._confirm_id:
                 logger.warning(
-                    "Dropped a tool decision for confirm_id %s: the live prompt "
-                    "is %s",
-                    confirm_id,
-                    self._confirm_id,
+                    "Dropped a tool decision for prompt %s: the live prompt is %s",
+                    short_id(confirm_id),
+                    short_id(self._confirm_id),
                 )
                 return False
             if self._confirm_event is None:
@@ -2915,7 +2922,7 @@ class SSEOutputHandler(OutputHandler):
         except SidecarError as exc:
             logger.warning(
                 "Could not tell the sidecar that prompt %s timed out: %s",
-                confirm_id,
+                short_id(confirm_id),
                 exc,
             )
 

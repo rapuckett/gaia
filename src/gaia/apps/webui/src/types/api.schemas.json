@@ -17790,6 +17790,18 @@
       "session_id": {
         "title": "Session Id",
         "type": "string"
+      },
+      "source": {
+        "anyOf": [
+          {
+            "const": "notification",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Source"
       }
     },
     "required": [
