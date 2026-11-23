@@ -2403,6 +2403,8 @@ export const enMessages = {
     'settings.devices.change.connectorRemoved': 'Removed {connector}',
     'settings.devices.change.gitCommitted': 'Committed changes in {folder}',
     'settings.devices.change.gitPullRequest': 'Opened a pull request from {folder}',
+    'settings.devices.change.agentProgramDownloaded': 'Downloaded the agent program {program}',
+    'settings.devices.change.agentProgramSwitched': 'Switched the agent program to {program}',
     'settings.devices.change.goalApproved': 'Approved a goal',
     'settings.devices.change.goalRejected': 'Rejected a goal',
     'settings.devices.change.scheduleCreated': 'Created the schedule {name}',

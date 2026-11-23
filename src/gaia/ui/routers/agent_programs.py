@@ -14,7 +14,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
 from gaia.daemon.sidecars import fetch, gaiacpp_fetch
@@ -26,10 +26,10 @@ from gaia.daemon.sidecars.errors import (
     SidecarError,
 )
 from gaia.logger import get_logger
+from gaia.ui.devices.changes import record_device_change
 from gaia.ui.security import (
     FLAGSHIP_AGENT_ID,
-    refuse_on_device_listener,
-    require_local_pc,
+    require_pc_or_allowed_device,
     require_ui_header,
 )
 
@@ -222,8 +222,7 @@ def _listing() -> Dict[str, Any]:
     }
 
 
-# The program this PC runs is chosen on the PC; a paired device has no use for it.
-@router.get("/api/agent-programs", dependencies=[Depends(refuse_on_device_listener)])
+@router.get("/api/agent-programs")
 async def list_agent_programs():
     """Both agent programs, with install state, size and any running download."""
     return await run_in_threadpool(_listing)
@@ -286,7 +285,8 @@ def _refuse_while_agent_is_busy() -> None:
         )
 
 
-def _start_download() -> Dict[str, Any]:
+def _start_download() -> tuple[Dict[str, Any], bool]:
+    """The job, and whether this call started it (False: one was already running)."""
     installed = fetch.native_flagship()
     if (
         installed is not None
@@ -300,28 +300,28 @@ def _start_download() -> Dict[str, Any]:
         _refuse_while_agent_is_busy()
     with _lock:
         if _job["state"] == "downloading":
-            return dict(_job)
+            return dict(_job), False
         _job.update(state="downloading", bytes_done=0, bytes_total=None, error=None)
     threading.Thread(target=_run_download, name="gaiacpp-download", daemon=True).start()
-    return _job_view()
+    return _job_view(), True
 
 
-# Downloads and installs a program on this PC, so only someone at this PC may ask.
+# Installs a program on this PC: the PC, or a device the PC has allowed, may ask.
 @router.post(
     "/api/agent-programs/{program_id}/download",
     status_code=202,
-    dependencies=[Depends(require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def start_agent_program_download(program_id: str):
+async def start_agent_program_download(program_id: str, http_request: Request):
     """Start downloading gaiacpp in the background; poll the same path with GET."""
     _require_gaiacpp(program_id)
-    return await run_in_threadpool(_start_download)
+    job, started = await run_in_threadpool(_start_download)
+    if started:
+        record_device_change(http_request, "agentProgramDownloaded", program=program_id)
+    return job
 
 
-@router.get(
-    "/api/agent-programs/{program_id}/download",
-    dependencies=[Depends(refuse_on_device_listener)],
-)
+@router.get("/api/agent-programs/{program_id}/download")
 async def agent_program_download_status(program_id: str):
     """Bytes downloaded so far, the total when known, and how it ended."""
     _require_gaiacpp(program_id)

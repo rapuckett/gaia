@@ -1231,8 +1231,11 @@ def _flagship_agent_setting() -> tuple[str, bool]:
     return fetch.saved_flagship(), fetch.native_flagship() is not None
 
 
-def _set_flagship_agent(choice: str) -> None:
-    """Save the agent choice and stop the running agent so the next message starts the new one."""
+def _set_flagship_agent(choice: str) -> bool:
+    """Save the agent choice and stop the running agent so the next message starts the new one.
+
+    Returns True when the saved choice changed.
+    """
     from gaia.config import GaiaConfig
     from gaia.daemon.sidecars import fetch
     from gaia.daemon.sidecars.errors import SidecarError
@@ -1242,7 +1245,7 @@ def _set_flagship_agent(choice: str) -> None:
 
     saved = GaiaConfig.load().flagship_agent
     if choice == saved:
-        return
+        return False
     if choice == fetch.NATIVE_FLAGSHIP and fetch.native_flagship() is None:
         looked = ", ".join(str(p) for p in fetch.native_flagship_candidates())
         raise HTTPException(
@@ -1255,7 +1258,7 @@ def _set_flagship_agent(choice: str) -> None:
     if saved is None and choice == fetch.PYTHON_FLAGSHIP:
         # Already what runs here; saving it makes the terminal UI use it too.
         GaiaConfig.save_key("flagship_agent", choice)
-        return
+        return True
     from gaia.ui.setup_runner import runner as setup_runner
 
     setup = setup_runner.status() or {}
@@ -1288,6 +1291,7 @@ def _set_flagship_agent(choice: str) -> None:
                 f"running could not be stopped: {e} Restart GAIA to switch."
             ),
         ) from e
+    return True
 
 
 def _resolve_dynamic_tools_setting() -> tuple[bool, bool]:
@@ -1365,7 +1369,9 @@ def _load_newly_selected_model(db: ChatDatabase) -> None:
 
 
 #: Settings a paired device may change: the ones PC Settings shows.
-DEVICE_SETTINGS = frozenset({"custom_model", "dynamic_tools", "network_policy"})
+DEVICE_SETTINGS = frozenset(
+    {"custom_model", "dynamic_tools", "flagship_agent", "network_policy"}
+)
 
 
 def _refuse_device_only_fields(request: SettingsUpdateRequest) -> None:
@@ -1509,9 +1515,12 @@ async def update_settings(
         "flagship_agent" in request.model_fields_set
         and request.flagship_agent is not None
     ):
-        # Changes the program this PC runs, so only someone at this PC may ask.
-        security.require_local_pc(http_request)
-        await run_in_threadpool(_set_flagship_agent, request.flagship_agent)
+        # Changes the program this PC runs: the PC, or an allowed device, may ask.
+        security.require_pc_or_allowed_device(http_request)
+        if await run_in_threadpool(_set_flagship_agent, request.flagship_agent):
+            record_device_change(
+                http_request, "agentProgramSwitched", program=request.flagship_agent
+            )
 
     policy_warnings: List[str] = []
     policy_notices: List[Dict[str, Any]] = []

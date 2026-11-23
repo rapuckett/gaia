@@ -64,7 +64,6 @@ PC_ONLY = {
     "DELETE /api/devices/routes/{kind}",
     "GET /api/connectors/_debug",
     "GET /api/connectors/eval-mailbox",
-    "POST /api/agent-programs/{program_id}/download",
     "POST /api/auth/launch-code",
     "POST /api/connectors/eval-mailbox",
     "POST /api/devices/listener",
@@ -105,6 +104,7 @@ PC_OR_DEVICE = {
     "GET /api/messaging/discord",
     "GET /api/setup/report/{name}",
     "PATCH /api/schedules/{name:path}",
+    "POST /api/agent-programs/{program_id}/download",
     "POST /api/agents/install",
     "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/flows/{flow_id}/complete",
@@ -159,8 +159,6 @@ PC_OR_DEVICE = {
 }
 
 NOT_ON_LISTENER = {
-    "GET /api/agent-programs",
-    "GET /api/agent-programs/{program_id}/download",
     "GET /api/providers",
 }
 
@@ -200,6 +198,8 @@ REMOTE = {
     "DELETE /api/sessions/{session_id}/messages/{message_id}/and-below",
     "DELETE /api/skills/{name}",
     "DELETE /api/skills/{name}/preferences",
+    "GET /api/agent-programs",
+    "GET /api/agent-programs/{program_id}/download",
     "GET /api/agents",
     "GET /api/agents/catalog",
     "GET /api/agents/{agent_id}/install-status",
@@ -2067,6 +2067,54 @@ def test_an_allowed_device_installs_the_flagship_only(setup, monkeypatch):
     assert len(started) == 1
     assert _newest_changes(app, device, 1) == [("agentInstalled", {})]
     assert len(audit.lines) == 1 and device.device_id in audit.lines[0]
+
+
+def test_an_allowed_device_downloads_and_switches_the_agent_program(setup, monkeypatch):
+    from gaia.ui.routers import agent_programs, system
+
+    app, clients, device = setup
+    started, switched = [], []
+    monkeypatch.setattr(
+        agent_programs,
+        "_start_download",
+        lambda: started.append(1) or ({"state": "downloading"}, len(started) < 3),
+    )
+    monkeypatch.setattr(
+        system, "_set_flagship_agent", lambda choice: switched.append(choice) or True
+    )
+    ui = {"X-Gaia-UI": "1"}
+    url = "/api/agent-programs/gaiacpp/download"
+    for caller in ("tunnel", "pending"):
+        assert clients[caller].post(url, headers=ui).status_code == 403, caller
+        put = clients[caller].put(
+            "/api/settings", json={"flagship_agent": "gaiacpp"}, headers=ui
+        )
+        assert put.status_code == 403, caller
+    assert started == [] and switched == []
+
+    def program_rows():
+        return [
+            row
+            for row in _newest_changes(app, device, 50)
+            if row[0].startswith("agentProgram")
+        ]
+
+    assert program_rows() == []
+
+    assert clients["pc"].post(url, headers=ui).status_code == 202
+    assert program_rows() == []
+
+    assert clients["device"].post(url, headers=ui).status_code == 202
+    again = clients["device"].post(url, headers=ui)  # already running: no new row
+    assert again.status_code == 202
+    put = clients["device"].put(
+        "/api/settings", json={"flagship_agent": "gaiacpp"}, headers=ui
+    )
+    assert put.status_code == 200, put.text
+    assert program_rows() == [
+        ("agentProgramDownloaded", {"program": "gaiacpp"}),
+        ("agentProgramSwitched", {"program": "gaiacpp"}),
+    ]
 
 
 def test_an_allowed_device_sets_the_default_permission_mode(setup):

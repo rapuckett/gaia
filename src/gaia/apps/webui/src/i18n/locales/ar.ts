@@ -2403,6 +2403,8 @@ const messages: Messages = {
     'settings.devices.change.connectorRemoved': 'أزال {connector}',
     'settings.devices.change.gitCommitted': 'أودع التغييرات في {folder}',
     'settings.devices.change.gitPullRequest': 'فتح طلب سحب من {folder}',
+    'settings.devices.change.agentProgramDownloaded': 'نزّل برنامج الوكيل {program}',
+    'settings.devices.change.agentProgramSwitched': 'بدّل برنامج الوكيل إلى {program}',
     'settings.devices.change.goalApproved': 'وافق على هدف',
     'settings.devices.change.goalRejected': 'رفض هدفًا',
     'settings.devices.change.scheduleCreated': 'أنشأ الجدول {name}',

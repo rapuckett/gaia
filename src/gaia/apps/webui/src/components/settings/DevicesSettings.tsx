@@ -75,6 +75,8 @@ const CHANGE_KINDS = {
     connectorRemoved: ['settings.devices.change.connectorRemoved', ['connector']],
     gitCommitted: ['settings.devices.change.gitCommitted', ['folder']],
     gitPullRequest: ['settings.devices.change.gitPullRequest', ['folder']],
+    agentProgramDownloaded: ['settings.devices.change.agentProgramDownloaded', ['program']],
+    agentProgramSwitched: ['settings.devices.change.agentProgramSwitched', ['program']],
     goalApproved: ['settings.devices.change.goalApproved', []],
     goalRejected: ['settings.devices.change.goalRejected', []],
     scheduleCreated: ['settings.devices.change.scheduleCreated', ['name']],
