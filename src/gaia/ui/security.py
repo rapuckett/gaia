@@ -555,24 +555,30 @@ class ApiTokenMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
+        kind = scope["type"]
         path = scope.get("path", "")
-        method = scope.get("method", "")
-        request = Request(scope)
-        # Whatever the path: the web UI, the docs and the ?token= bootstrap too.
-        if on_device_listener(request):
+        method = scope.get("method", "WEBSOCKET")
+        # Whatever the path or protocol: the web UI, the docs, websockets too.
+        if kind in ("http", "websocket") and scope.get(LISTENER_SCOPE_KEY) is not None:
             if scope.get(DEVICE_AUTH_SCOPE_KEY) is not True:
                 logger.error(
                     "Device listener served %s %s without device auth; refused",
                     method,
                     path,
                 )
-                await _send_rejection(send, 401, "This request skipped device auth.")
+                if kind == "websocket":
+                    await send({"type": "websocket.close", "code": 1008})
+                else:
+                    await _send_rejection(
+                        send, 401, "This request skipped device auth."
+                    )
                 return
             await self.app(scope, receive, send)
             return
+        if kind != "http":
+            await self.app(scope, receive, send)
+            return
+        request = Request(scope)
         if not path.startswith(GUARDED_PREFIXES):
             await self.app(scope, receive, send)
             return
