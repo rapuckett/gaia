@@ -45,11 +45,11 @@ enum PushCrypto {
   }
 
   /// Opens a push and checks it isn't a replay: its `seq` must be newer than the last one accepted from that PC.
-  static func openFresh(ciphertext: String, nonce: String) throws -> PushPayload {
+  static func openFresh(ciphertext: String, nonce: String) throws -> (pcId: String, payload: PushPayload) {
     let opened = try open(ciphertext: ciphertext, nonce: nonce, keys: try PushKeychain.allKeys())
     let payload = try PushPayload(json: opened.plain)
     guard try PushKeychain.accept(opened.pcId, key: opened.key.key, seq: payload.seq) else { throw PushCryptoError.replay }
-    return payload
+    return (opened.pcId, payload)
   }
 
   static func base64url(_ text: String) -> Data? {

@@ -13,10 +13,11 @@ const {
     KEYCHAIN_GROUP_SUFFIX,
     NSE_BUNDLE_SUFFIX,
     NSE_TARGET,
+    OPEN_ONLY_PLIST_KEY,
     PUSH_LOC_KEY,
     STRING_LANGUAGES,
 } = require('./constants');
-const { iosStringsFile, pushStrings } = require('./strings');
+const { iosStringsFile, openOnlyTools, pushStrings } = require('./strings');
 
 const APP_ROOT = path.resolve(__dirname, '../..');
 // The Swift the extension compiles: its entry point, and the files it shares with the gaia-push module.
@@ -68,6 +69,10 @@ ${STRING_LANGUAGES.map((l) => `		<string>${l}</string>`).join('\n')}
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>${KEYCHAIN_GROUP_PLIST_KEY}</key>
 	<string>${keychainGroups(bundleId).shared}</string>
+	<key>${OPEN_ONLY_PLIST_KEY}</key>
+	<array>
+${openOnlyTools().map((t) => `		<string>${t}</string>`).join('\n')}
+	</array>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>
@@ -249,4 +254,4 @@ function withoutPushIos(config) {
     });
 }
 
-module.exports = { withPushIos, withoutPushIos, keychainGroups };
+module.exports = { withPushIos, withoutPushIos, keychainGroups, nseInfoPlist };

@@ -10,7 +10,7 @@ struct PushPayload {
   let chatTitle: String?
   let summary: String?
   let label: String?
-  /// The tool id an approval is for, when the PC sends it; only `[a-z0-9_]` ids are kept, to look up its label.
+  /// The tool id an approval is for, when the PC sends it; only `[a-z0-9_]` ids are kept, for the open-only list.
   let tool: String?
   let ask: String?
   let route: String
@@ -101,15 +101,15 @@ struct PushPayload {
 }
 
 /// The title and body a notification shows for a payload, in one language; nil for a badge-only payload.
-/// `say` gives a catalog key's text; `find` gives it only when the strings have that key.
+/// `say` gives a catalog key's text.
 enum PushText {
   /// First-strong isolate: server text keeps its own direction inside either language's sentence.
   static func isolate(_ text: String) -> String { "\u{2068}\(text)\u{2069}" }
 
-  static func compose(_ p: PushPayload, _ say: (String) -> String, _ find: (String) -> String?) -> (title: String, body: String)? {
+  static func compose(_ p: PushPayload, _ say: (String) -> String) -> (title: String, body: String)? {
     let title: String
     let tap: String
-    // The detail line: our own words for the tool, else the PC's words as sent (isolated).
+    // The detail line: the PC's words as sent (isolated).
     let detail: String?
     switch p.kind {
     case "approval" where p.ask == "question":
@@ -117,9 +117,10 @@ enum PushText {
       tap = "answer"
       detail = p.summary.map(isolate)
     case "approval":
+      // Only "GAIA needs your approval in <chat>": Approve can be pressed from the lock screen, which shows no tool detail.
       title = say("chatAlert.needsApproval")
       tap = "approve"
-      detail = p.tool.flatMap { find("tool.\($0).active") } ?? p.label.map(isolate)
+      detail = nil
     case "finished":
       title = say("chatAlert.finished")
       tap = "read"

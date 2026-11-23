@@ -9,7 +9,7 @@ const path = require('path');
 const { AndroidConfig, withAndroidManifest, withDangerousMod } = require('expo/config-plugins');
 
 const { NOTIFICATION_ACCENT, STRING_LANGUAGES } = require('./constants');
-const { androidStringsXml, pushStrings } = require('./strings');
+const { androidOpenOnlyXml, androidStringsXml, openOnlyTools, pushStrings } = require('./strings');
 
 const SERVICE = 'ai.amd.gaia.push.GaiaMessagingService';
 const EXPO_SERVICE = 'expo.modules.notifications.service.ExpoFirebaseMessagingService';
@@ -58,6 +58,7 @@ function withPushAndroid(config, { scheme }) {
                 path.join(res, 'values', 'gaia_push_colors.xml'),
                 `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="gaia_push_accent">${NOTIFICATION_ACCENT}</color>\n</resources>\n`,
             );
+            fs.writeFileSync(path.join(res, 'values', 'gaia_push_open_only.xml'), androidOpenOnlyXml(openOnlyTools()));
             for (const lang of STRING_LANGUAGES) {
                 const dir = path.join(res, lang === 'en' ? 'values' : `values-${lang}`);
                 fs.mkdirSync(dir, { recursive: true });

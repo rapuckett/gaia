@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import ExpoModulesCore
+import UserNotifications
 
 /// Each paired PC's push handle, relay credentials and payload key, kept in the Keychain; see PushKeychain.
 public class GaiaPushModule: Module {
@@ -45,6 +46,13 @@ public class GaiaPushModule: Module {
 
     AsyncFunction("setLanguage") { (code: String?) throws in
       try guarded("save") { try PushKeychain.saveLanguage(code) }
+    }
+
+    // The approval category, titled in the app's language; other categories (none today) are kept.
+    AsyncFunction("setApprovalActions") { (approveTitle: String, denyTitle: String) async in
+      let center = UNUserNotificationCenter.current()
+      let others = await center.notificationCategories().filter { $0.identifier != PushActions.category }
+      center.setNotificationCategories(others.union([PushActions.approvalCategory(approveTitle: approveTitle, denyTitle: denyTitle)]))
     }
   }
 }

@@ -12,11 +12,13 @@ internal data class PushPayload(
   val chatTitle: String?,
   val summary: String?,
   val label: String?,
-  /** The tool id an approval is for, when the PC sends it; only `[a-z0-9_]` ids are kept, to look up its label. */
+  /** The tool id an approval is for, when the PC sends it; only `[a-z0-9_]` ids are kept, for the open-only list. */
   val tool: String?,
   val ask: String?,
   val route: String,
   val sessionId: String?,
+  /** The approval or question a prompt is (confirm-tool's `confirm_id` for an approval); never shown or logged. */
+  val approvalId: String?,
   val badge: Int?,
   /** The PC's counter for this phone, only ever increasing. */
   val seq: Long,
@@ -55,6 +57,7 @@ internal data class PushPayload(
         text(params, "ask"),
         safeRoute(root.optString("route").ifEmpty { null }, sessionId),
         sessionId,
+        text(root, "approval_id"),
         badge,
         seq,
         whole(root, "ts"),
@@ -108,27 +111,22 @@ internal data class PushPayload(
   }
 }
 
-/**
- * The title and body a notification shows, worded through `say` (catalog key to text) and `find` (the same, or null
- * when the strings lack the key); null for a badge-only payload.
- */
+/** The title and body a notification shows, worded through `say` (catalog key to text); null for a badge-only payload. */
 internal object PushText {
   /** First-strong isolate: server text keeps its own direction inside either language's sentence. */
   fun isolate(text: String) = "\u2068$text\u2069"
 
-  fun compose(p: PushPayload, say: (String) -> String, find: (String) -> String?): Pair<String, String>? {
+  fun compose(p: PushPayload, say: (String) -> String): Pair<String, String>? {
     val title: String
     val tap: String
-    // The detail line: our own words for the tool, else the PC's words as sent (isolated).
+    // The detail line: the PC's words as sent (isolated).
     val detail: String?
     when {
       p.kind == "approval" && p.ask == "question" -> {
         title = say("chatAlert.question"); tap = "answer"; detail = p.summary?.let(::isolate)
       }
-      p.kind == "approval" -> {
-        title = say("chatAlert.needsApproval"); tap = "approve"
-        detail = p.tool?.let { find("tool.$it.active") } ?: p.label?.let(::isolate)
-      }
+      // Only "GAIA needs your approval in <chat>": Approve can be pressed from the lock screen, which shows no tool detail.
+      p.kind == "approval" -> { title = say("chatAlert.needsApproval"); tap = "approve"; detail = null }
       p.kind == "finished" -> { title = say("chatAlert.finished"); tap = "read"; detail = p.summary?.let(::isolate) }
       p.kind == "failed" -> { title = say("chatAlert.failed"); tap = "problem"; detail = p.summary?.let(::isolate) }
       p.kind == "needs_you" -> { title = say("mobileApp.push.title.needsYou"); tap = "needsYou"; detail = p.label?.let(::isolate) }

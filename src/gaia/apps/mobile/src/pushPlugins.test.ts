@@ -6,8 +6,10 @@ import { getLocale } from '@webui/i18n/registry';
 
 import { colors } from '@/ui/tokens/generated';
 
-const { NOTIFICATION_ACCENT, PUSH_LOC_KEY, STRING_KEYS, STRING_LANGUAGES, TOOL_LABEL_KEY, androidResourceName } = require('../plugins/push/constants');
-const { androidStringsXml, iosStringsFile, pushStrings } = require('../plugins/push/strings');
+const { NOTIFICATION_ACCENT, OPEN_ONLY_PLIST_KEY, OPEN_ONLY_RESOURCE, PUSH_LOC_KEY, STRING_KEYS, STRING_LANGUAGES, androidResourceName } = require('../plugins/push/constants');
+const { androidOpenOnlyXml, androidStringsXml, iosStringsFile, openOnlyTools, pushStrings } = require('../plugins/push/strings');
+const { nseInfoPlist } = require('../plugins/push/withPushIos');
+const openOnlyJson = require('../modules/gaia-push/openOnlyTools.json');
 
 describe('the notification strings generated at prebuild', () => {
     it('come from the webui catalogs, in every shipped language', () => {
@@ -15,10 +17,9 @@ describe('the notification strings generated at prebuild', () => {
             const messages = getLocale(lang).messages as Record<string, string>;
             const strings = pushStrings(lang) as Record<string, string>;
             const keys = Object.keys(strings);
-            expect(keys.slice(0, STRING_KEYS.length)).toEqual(STRING_KEYS);
-            const tools = keys.slice(STRING_KEYS.length);
-            expect(tools.every((k) => TOOL_LABEL_KEY.test(k))).toBe(true);
-            expect(tools).toContain('tool.write_file.active');
+            expect(keys).toEqual(STRING_KEYS);
+            // Android labels an approval's buttons with these.
+            expect(keys).toEqual(expect.arrayContaining(['notifications.approve', 'notifications.deny']));
             for (const key of keys) expect(strings[key]).toBe(messages[key]);
         }
     });
@@ -32,6 +33,15 @@ describe('the notification strings generated at prebuild', () => {
 
     it("color notifications with the default palette's solid accent", () => {
         expect(NOTIFICATION_ACCENT).toBe(colors.light.accentSolid);
+    });
+
+    it('carry the open-only tools to both phones, from the one list', () => {
+        expect(openOnlyTools()).toEqual(openOnlyJson.tools);
+        expect(OPEN_ONLY_PLIST_KEY).toBe('GAIAPushOpenOnlyTools');
+        expect(nseInfoPlist('com.example.gaia') as string).toContain(`<key>${OPEN_ONLY_PLIST_KEY}</key>\n\t<array>\n`);
+        const xml = androidOpenOnlyXml(['send_email', 'run_shell']) as string;
+        expect(xml).toContain(`<string-array name="${OPEN_ONLY_RESOURCE}">\n        <item>send_email</item>\n        <item>run_shell</item>\n    </string-array>`);
+        expect(androidOpenOnlyXml([]) as string).toContain(`<string-array name="${OPEN_ONLY_RESOURCE}">\n    </string-array>`);
     });
 
     it('escape Android resource text', () => {

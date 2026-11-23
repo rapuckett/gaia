@@ -20,7 +20,7 @@ public class GaiaPushAppDelegate: ExpoAppDelegateSubscriber {
     }
     let badge: Int
     do {
-      let payload = try PushCrypto.openFresh(ciphertext: sealed, nonce: nonce)
+      let payload = try PushCrypto.openFresh(ciphertext: sealed, nonce: nonce).payload
       guard let count = payload.badge else {
         completionHandler(.noData)
         return

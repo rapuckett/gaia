@@ -39,23 +39,31 @@ final class NotificationService: UNNotificationServiceExtension {
       Self.log.error("A push arrived without its sealed payload; showing the generic alert.")
       return nil
     }
+    let pcId: String
     let payload: PushPayload
     do {
-      payload = try PushCrypto.openFresh(ciphertext: sealed, nonce: nonce)
+      (pcId, payload) = try PushCrypto.openFresh(ciphertext: sealed, nonce: nonce)
     } catch {
       // Never log the payload: only which step failed.
       Self.log.error("Couldn't open a push (\(String(describing: error), privacy: .public)); showing the generic alert.")
       return nil
     }
-    guard let text = PushText.compose(payload, strings.say, strings.find) else { return nil }
+    guard let text = PushText.compose(payload, strings.say) else { return nil }
     let content = UNMutableNotificationContent()
     content.title = text.title
     content.body = text.body
     content.sound = .default
     if let badge = payload.badge { content.badge = NSNumber(value: badge) }
     content.threadIdentifier = payload.threadId
+    var data: [String: Any] = ["route": payload.route]
+    let openOnly = PushActions.openOnlyTools()
+    if openOnly == nil, payload.kind == "approval" { Self.log.error("This build has no open-only tool list, so approvals get no Approve or Deny.") }
+    if PushActions.offered(payload, openOnly: openOnly) {
+      content.categoryIdentifier = PushActions.category
+      data["approval"] = PushActions.approvalData(payload, pcId: pcId, receivedAt: Date())
+    }
     // expo-notifications reads a remote notification's data from "body".
-    content.userInfo = ["body": ["route": payload.route]]
+    content.userInfo = ["body": data]
     return content
   }
 }
@@ -74,12 +82,5 @@ private struct Strings {
 
   func say(_ key: String) -> String {
     bundle.localizedString(forKey: key, value: nil, table: nil)
-  }
-
-  /// The key's text, or nil when the strings don't have it (a tool newer than this build).
-  func find(_ key: String) -> String? {
-    let missing = "\u{0}"
-    let text = bundle.localizedString(forKey: key, value: missing, table: nil)
-    return text == missing ? nil : text
   }
 }

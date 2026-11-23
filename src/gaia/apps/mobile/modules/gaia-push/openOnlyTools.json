@@ -1,0 +1,4 @@
+{
+  "_about": "Tool ids whose approval notifications offer only Open, never Approve or Deny, on both phones. Empty until the owner decides T-420 (which risky actions need an OK on the PC itself). Read by src/features/push/approvalActions.ts and written into the native builds by plugins/push.",
+  "tools": []
+}

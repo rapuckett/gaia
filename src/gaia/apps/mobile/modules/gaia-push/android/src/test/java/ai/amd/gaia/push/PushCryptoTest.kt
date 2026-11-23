@@ -43,17 +43,20 @@ class PushCryptoTest {
   }
 
   @Test
-  fun wordsAnApprovalWithItsToolLabelFirst() {
+  fun wordsAnApprovalWithOnlyItsChat() {
     val strings = mapOf(
       "chatAlert.needsApproval" to "GAIA needs your approval",
-      "mobileApp.push.body.inChat" to "In “{chat}”.",
       "mobileApp.push.body.approve" to "In “{chat}”. Tap to review.",
-      "tool.write_file.active" to "Writing file",
+      "mobileApp.push.body.approveNoChat" to "Tap to review.",
     )
     fun payload(params: String) = PushPayload.parse("""{"v":1,"kind":"approval","params":$params,"route":"/","seq":5}    """.toByteArray())!!
-    val i = { s: String -> "⁨$s⁩" }
-    assertEquals("In “${i("Plan")}”.\nWriting file", PushText.compose(payload("""{"chat_title":"Plan","tool":"write_file","label":"writing file"}"""), { strings[it] ?: it }, strings::get)!!.second)
-    assertEquals("In “${i("Plan")}”.\n${i("doing it")}", PushText.compose(payload("""{"chat_title":"Plan","tool":"new_tool","label":"doing it"}"""), { strings[it] ?: it }, strings::get)!!.second)
-    assertEquals("In “${i("Plan")}”. Tap to review.", PushText.compose(payload("""{"chat_title":"Plan"}"""), { strings[it] ?: it }, strings::get)!!.second)
+    val i = { s: String -> "\u2068$s\u2069" }
+    val say = { k: String -> strings[k] ?: k }
+    // No tool, label or path: Approve can be pressed from the lock screen.
+    assertEquals(
+      "GAIA needs your approval" to "In “${i("Plan")}”. Tap to review.",
+      PushText.compose(payload("""{"chat_title":"Plan","tool":"write_file","label":"writing /etc/hosts"}"""), say),
+    )
+    assertEquals("Tap to review.", PushText.compose(payload("""{"label":"doing it"}"""), say)!!.second)
   }
 }

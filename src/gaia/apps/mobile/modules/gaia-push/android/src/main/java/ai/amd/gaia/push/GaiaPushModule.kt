@@ -4,6 +4,7 @@
 package ai.amd.gaia.push
 
 import android.content.pm.PackageManager
+import androidx.core.app.NotificationManagerCompat
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -47,5 +48,27 @@ class GaiaPushModule : Module() {
 
     // Android words notifications from resources, which already follow the app's language.
     AsyncFunction("setLanguage") { _: String? -> }
+
+    // The action buttons are labeled from those resources too, when each notification is posted.
+    AsyncFunction("setApprovalActions") { _: String, _: String -> }
+
+    Events("onApprovalAction")
+
+    Function("takeApprovalAction") { take() }
+
+    OnStartObserving("onApprovalAction") {
+      PushActionInbox.listen { take()?.let { sendEvent("onApprovalAction", it) } }
+    }
+
+    OnStopObserving("onApprovalAction") {
+      PushActionInbox.listen(null)
+    }
+  }
+
+  /** The pressed Approve or Deny, once; its notification is cleared now that GAIA is answering it. */
+  private fun take(): Map<String, Any?>? {
+    val request = PushActionInbox.take() ?: return null
+    NotificationManagerCompat.from(context).cancel(request.tag, PushInbox.NOTIFICATION_ID)
+    return request.toMap()
   }
 }
