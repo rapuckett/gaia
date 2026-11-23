@@ -5,6 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import {
+    AGENT_DOWNLOAD_POLL_MS,
     AGENT_EVENT_TYPES,
     ATTACH_HEADER_TIMEOUT_MS,
     chatSpendingPath,
@@ -101,6 +102,8 @@ describe('endpoints', () => {
     });
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
         agentInstallStatus: ['GET'],
+        agentProgramDownload: ['GET', 'POST'],
+        agentPrograms: ['GET'],
         deviceChanges: ['GET'],
         agents: ['GET'],
         agentsInstall: ['POST'],
@@ -327,6 +330,7 @@ describe("webui's stream rules", () => {
         ['components/ModelStatusPill.tsx', 'POLL_MS', MODEL_STATUS_OPEN_POLL_MS],
         ['components/settings/MessagingSettings.tsx', 'POLL_MS', DISCORD_POLL_MS],
         ['components/ModelNeededDialog.tsx', 'POLL_MS', DOWNLOAD_POLL_MS],
+        ['components/setup/AgentDownload.tsx', 'POLL_MS', AGENT_DOWNLOAD_POLL_MS],
         ['components/ModelNeededDialog.tsx', 'NO_ROW_LIMIT', DOWNLOAD_NO_ROW_LIMIT],
         ['components/ModelNeededDialog.tsx', 'MISS_LIMIT', DOWNLOAD_MISS_LIMIT],
         ['stores/modelNeededStore.ts', 'CHECK_LIMIT_MS', MODEL_NEED_CHECK_LIMIT_MS],

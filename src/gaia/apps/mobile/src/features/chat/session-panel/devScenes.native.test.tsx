@@ -33,4 +33,10 @@ const mount = (state: SessionPanelGalleryState) =>
         await screen.findByTestId('changes-body');
         expect(screen.queryByText("Review this chat's changes")).toBeNull();
     });
+
+    it('runsOnCpp says it runs on gaiacpp, with no folder error', async () => {
+        await mount('runsOnCpp');
+        expect((await screen.findAllByText(/gaiacpp/)).length).toBeGreaterThan(0);
+        expect(screen.queryByText(/Session not found/)).toBeNull();
+    });
 });

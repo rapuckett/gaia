@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 
 import type { StartScreen, SystemStatus } from '@webui/types';
+import type { AgentPrograms } from '@/api/client.types';
+import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
@@ -28,8 +30,12 @@ import { NewChatScreen } from './NewChatScreen';
  * `new-chat-folder-picker` (the picker open, folders only), `new-chat-folder-picked` (the picked folder, its path and a clear),
  * `new-chat-folder-refused` (the PC refused a credentials folder as the chat was made, coded `device_folder_withheld`),
  * `new-chat-folder-outside-home` (the same for a folder outside the PC's home folder, `device_folder_outside_home`).
+ * NC-15, the chosen gaiacpp can't start, in place of NC-13: `new-chat-agent-missing` (Download gaiacpp again and Use the
+ * Python agent; `#tap=composer-send` keeps the text and says so), `new-chat-agent-invalid` (it failed its check),
+ * `new-chat-agent-cant-download` (this release has none to download: the reason, no Download), `new-chat-agent-downloading`
+ * (a download the PC started, followed), `new-chat-agent-pc-only` (the PC keeps both ways out to itself: Check again).
  */
-export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'new-chat-doc-brief', 'create-failed', 'skill-prompt', 'new-chat-folder-own-fixed', 'new-chat-folder-own-add', 'new-chat-folder-project-fixed', 'new-chat-folder-project-add', 'new-chat-folder-picker', 'new-chat-folder-picked', 'new-chat-folder-refused', 'new-chat-folder-outside-home'] as const;
+export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'new-chat-doc-brief', 'create-failed', 'skill-prompt', 'new-chat-folder-own-fixed', 'new-chat-folder-own-add', 'new-chat-folder-project-fixed', 'new-chat-folder-project-add', 'new-chat-folder-picker', 'new-chat-folder-picked', 'new-chat-folder-refused', 'new-chat-folder-outside-home', 'new-chat-agent-missing', 'new-chat-agent-invalid', 'new-chat-agent-cant-download', 'new-chat-agent-downloading', 'new-chat-agent-pc-only'] as const;
 export type NewChatScene = (typeof NEW_CHAT_SCENES)[number];
 
 const READY = {
@@ -73,8 +79,38 @@ const DOC = (n: number, name: string) => ({
 });
 const DOCUMENTS = [DOC(1, 'board-notes.pdf'), DOC(2, 'q3-summary.md'), DOC(3, 'forecast.csv')];
 
+const GAIACPP_MISSING = { code: 'gaiacpp_missing' as const, detail: 'gaiacpp is chosen as the agent but it is not installed on this PC (looked in: /Users/Shared/GAIA/bin/gaiacpp).' };
+const AGENT_PROBLEMS: Partial<Record<NewChatScene, StartScreen>> = {
+    'new-chat-agent-missing': { ...START, skills_error: 'gaiacpp is not installed', agent_problem: GAIACPP_MISSING },
+    'new-chat-agent-invalid': { ...START, skills_error: 'gaiacpp failed its check', agent_problem: { code: 'gaiacpp_invalid', detail: 'gaiacpp no longer matches its download: sha256 3f1c… expected 9ab0….' } },
+    'new-chat-agent-cant-download': { ...START, skills_error: 'gaiacpp is not installed', agent_problem: GAIACPP_MISSING },
+    'new-chat-agent-downloading': { ...START, skills_error: 'gaiacpp is not installed', agent_problem: GAIACPP_MISSING },
+    'new-chat-agent-pc-only': { ...START, skills_error: 'gaiacpp is not installed', agent_problem: GAIACPP_MISSING },
+};
+const AGENT_LISTING: AgentPrograms = {
+    current: 'gaiacpp',
+    programs: [
+        { id: 'gaiapy', installed: true, size_bytes: null, can_download: false, unavailable_reason: null },
+        { id: 'gaiacpp', installed: false, size_bytes: 9_400_000, can_download: true, unavailable_reason: null },
+    ],
+    download: { state: 'idle', bytes_done: 0, bytes_total: null, error: null },
+};
+const AGENT_DOWNLOADING = { state: 'downloading' as const, bytes_done: 3_100_000, bytes_total: 9_400_000, error: null };
+const AGENT_LISTINGS: Partial<Record<NewChatScene, AgentPrograms | Error>> = {
+    'new-chat-agent-cant-download': {
+        ...AGENT_LISTING,
+        programs: AGENT_LISTING.programs.map((p) => (p.id === 'gaiacpp' ? { ...p, can_download: false, unavailable_code: 'no_release' as const, unavailable_reason: 'No gaiacpp build for this GAIA release.' } : p)),
+    },
+    'new-chat-agent-downloading': { ...AGENT_LISTING, download: AGENT_DOWNLOADING },
+    'new-chat-agent-pc-only': new GaiaApiError(403, PC_ONLY_REFUSAL),
+};
+
 function clientFor(state: NewChatScene) {
     const base = { start: START, status: READY };
+    const agentStart = AGENT_PROBLEMS[state];
+    if (agentStart) {
+        return createFakeClient({ ...base, start: agentStart, agentPrograms: AGENT_LISTINGS[state] ?? AGENT_LISTING, ...(state === 'new-chat-agent-downloading' ? { agentDownloads: [AGENT_DOWNLOADING] } : {}) });
+    }
     if (state === 'new-chat-setup-failed') {
         return createFakeClient({ ...base, status: { ...READY, model_loaded: null, setup_error: 'The model download stopped at 41%.' } as unknown as SystemStatus });
     }
