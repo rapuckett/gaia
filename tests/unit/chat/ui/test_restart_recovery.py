@@ -13,6 +13,7 @@ which is how a server tells an earlier app in its own process from itself.
 """
 
 import asyncio
+import itertools
 import os
 import sqlite3
 import sys
@@ -78,7 +79,12 @@ def runtime(tmp_path):
     state = SimpleNamespace(
         session_locks={}, chat_semaphore=asyncio.BoundedSemaphore(1)
     )
-    request = SimpleNamespace(app=SimpleNamespace(state=state), headers={})
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=state),
+        headers={},
+        scope={},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
     server = SimpleNamespace(
         _stream_chat_response=helpers._stream_chat_response,
         _get_chat_response=helpers._get_chat_response,
@@ -536,11 +542,18 @@ def _as_server(name):
     return patch.object(process_owner, "_TOKEN", name)
 
 
+@pytest.fixture
+def advancing_clock(monkeypatch):
+    """Every save gets a later time; real ones can tie within one Windows clock tick."""
+    ticks = itertools.count()
+    monkeypatch.setattr(ChatDatabase, "_now", lambda self: _at(next(ticks)))
+
+
 def _chunk(text):
     return f'data: {{"type": "chunk", "content": "{text}"}}\n\n'
 
 
-async def test_two_servers_in_one_chat_keep_their_own_turns(tmp_path):
+async def test_two_servers_in_one_chat_keep_their_own_turns(tmp_path, advancing_clock):
     """Each server's turn is its own row: A's text never lands in B's turn, and
     A's ending never erases B's marker."""
     path = str(tmp_path / "chat.db")
@@ -574,7 +587,7 @@ async def test_two_servers_in_one_chat_keep_their_own_turns(tmp_path):
     ]
 
 
-async def test_another_servers_reply_does_not_end_this_turn(tmp_path):
+async def test_another_servers_reply_does_not_end_this_turn(tmp_path, advancing_clock):
     """A later reply in the chat that is not this turn's leaves its marker."""
     path = str(tmp_path / "chat.db")
     db = ChatDatabase(path)

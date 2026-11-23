@@ -3,9 +3,22 @@
 
 import { Fragment } from 'react';
 import { useT } from '../i18n/useT';
-import { calendarFacts, calendarWhen, CALENDAR_WRITE_TOOLS, unseenWith, visibleWith } from '../utils/calendarApproval.core';
+import { calendarFacts, calendarWhen } from '../utils/calendarApproval.core';
 
-export { CALENDAR_WRITE_TOOLS, unseenWith, visibleWith };
+export {
+    CALENDAR_WRITE_TOOLS,
+    markStrayDirection,
+    noticeText,
+    unseen,
+    unseenCommand,
+    unseenStrict,
+    unseenWith,
+    visibleCommand,
+    visibleName,
+    visibleStrict,
+    visibleText,
+    visibleWith,
+} from '../utils/calendarApproval.core';
 
 function Name({ value }: { value: string }) {
     return <bdi dir="auto">{value}</bdi>;
@@ -22,7 +35,7 @@ export function CalendarApproval({ tool, args }: { tool: string; args: Record<st
                 <Fragment key={label}>
                     <dt>{label}</dt>
                     <dd>
-                        {value.kind === 'text' ? <Name value={value.text} /> : <When when={value.when} />}
+                        {value.kind === 'text' ? (value.dir ? <bdi dir={value.dir}>{value.text}</bdi> : <Name value={value.text} />) : <When when={value.when} />}
                     </dd>
                 </Fragment>
             ))}

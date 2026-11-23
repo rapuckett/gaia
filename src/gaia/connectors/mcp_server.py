@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from gaia.config import mcp_servers_path
+from gaia.connectors import keyring_access
 from gaia.connectors.errors import ConnectorsError, InvalidConfigValueError
 from gaia.connectors.handler import register_handler
 from gaia.connectors.spec import ConnectorSpec
@@ -368,6 +369,8 @@ class McpServerHandler:
         account_id: Optional[str] = None,
     ) -> None:
         """Remove the MCP server entry, keyring slots, and per-agent grants."""
+        # Checked first so an unusable keyring leaves mcp_servers.json untouched.
+        keyring_access.check_delete()
         # Remove from mcp_servers.json.
         servers = _read_mcp_servers_json()
         usernames = {f"{spec.id}:{env_key}" for env_key in spec.mcp_env_keys}

@@ -1051,6 +1051,7 @@ export const motion = {
         standard: 200,
         Slow: 320,
         Spring: 440,
+        Wash: 900,
         Press: 80,
         Spin: 900,
         Blink: 1000,

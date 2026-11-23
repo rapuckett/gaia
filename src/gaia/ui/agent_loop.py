@@ -545,6 +545,7 @@ class AgentLoop:
         db = self._db
 
         def _run_agent() -> None:
+            fresh_agent = None  # built for this tick alone, so closed after it
             try:
                 import gaia.ui._chat_helpers as _helpers
 
@@ -609,7 +610,7 @@ class AgentLoop:
                 else:
                     # Run the heavier sync work inline (we're in a thread).
                     try:
-                        from gaia_agent.agent import GaiaAgent, GaiaAgentConfig
+                        from gaiapy.agent import GaiaAgent, GaiaAgentConfig
                     except ImportError as e:
                         raise RuntimeError(
                             agent_import_error_message(
@@ -623,7 +624,10 @@ class AgentLoop:
                     rag_paths, lib_paths = _helpers._resolve_rag_paths(
                         db, session.get("document_ids", [])
                     )
-                    allowed = _helpers._compute_allowed_paths(rag_paths + lib_paths)
+                    allowed = _helpers._with_attachments(
+                        _helpers._compute_allowed_paths(rag_paths + lib_paths),
+                        _helpers._chat_upload_paths(db, session_id, []),
+                    )
                     config = GaiaAgentConfig(
                         model_id=model_id,
                         streaming=False,
@@ -637,9 +641,12 @@ class AgentLoop:
                         surface="agent_ui",
                     )
                     with _helpers.writing_tool_registry():
-                        agent = GaiaAgent(config)
+                        agent = fresh_agent = GaiaAgent(config)
                     _helpers._register_agent_memory_ops(agent)
                     agent.console = sse_handler
+                    # The tick's input is GAIA's own goal prompt, not the user's words;
+                    # a queued extraction would also keep this throwaway agent alive.
+                    agent._auto_extract_enabled = False
 
                 _helpers._restore_model_history(agent, db, session_id, tick_prompt)
 
@@ -676,6 +683,14 @@ class AgentLoop:
                         )
                 finally:
                     sse_handler.signal_done()
+                    # After done: a slow MCP server stopping must not delay the tick.
+                    if fresh_agent is not None:
+                        try:
+                            fresh_agent.close()
+                        except Exception as exc:  # noqa: BLE001 — logged, tick ended
+                            logger.warning(
+                                "AgentLoop: closing the tick's agent failed: %s", exc
+                            )
 
         def _billed_model() -> Optional[str]:
             """The model the tick ran on; a hybrid tick bills its route's model."""

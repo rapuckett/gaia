@@ -58,6 +58,12 @@ const FAILED = [
     BOARD,
 ];
 
+const WAITING = [
+    doc('w1', 'supplier-contracts.pdf', 6_200_000, { filepath: '/Users/Shared/Documents/supplier-contracts.pdf', indexing_status: 'failed', error_kind: 'model_server_down', last_error: 'RAG indexing failed for supplier-contracts.pdf: connection refused by the model server', indexed_at: undefined }),
+    FAILED[0]!,
+    BOARD,
+];
+
 const LONG = Array.from({ length: 24 }, (_, i) => doc(`l${i}`, i % 5 === 0 ? `quarterly-financial-review-for-the-board-of-directors-draft-${i}.pdf` : `document-${i + 1}.${['pdf', 'txt', 'md', 'xlsx'][i % 4]}`, 40_000 + i * 173_000, { indexed_at: ago(10 + i * 90) }));
 
 const CONTRACTS = [
@@ -110,6 +116,8 @@ export const DOCUMENTS_SCENES: Record<string, DocumentsScene> = {
     attached: scene({ docs: MIXED, attached: ['d1', 'd2'], start: { note: { key: 'docs.attached', params: { name: 'q3-board-deck.pdf', chat: '“Board prep”' } } } }),
     indexing: scene({ docs: INDEXING, data: { documentStatuses: PROGRESS }, start: { indexing: SEEDED_CLOCK } }),
     failed: scene({ docs: FAILED }),
+    // DOC-41: one document waiting on the model server, one that can't be read, one indexed.
+    waiting: scene({ docs: WAITING }),
     // Cancelled and File missing at the top, which the long `failed` list pushes below the first screen.
     'failed-more': scene({ docs: [FAILED[5]!, FAILED[6]!, FAILED[4]!, BOARD] }),
     long: scene({ docs: LONG }),

@@ -19,9 +19,9 @@ from .. import session_environment as env
 from .. import session_outputs
 from ..database import ChatDatabase
 from ..dependencies import get_db
-from ..devices.changes import record_folder_added
+from ..devices.changes import record_folder_added, record_folder_removed
 from ..models import WireModel
-from ..security import allowed_device, audit_approval
+from ..security import allowed_device, audit_approval, detail_for
 from .files import DevicePickCode, device_pick_refusal
 
 logger = get_logger(__name__)
@@ -80,7 +80,7 @@ class OutputItem(WireModel):
     """Something the chat produced, tied to the answer that made it."""
 
     id: str
-    kind: Literal["file", "export", "image", "document", "memory", "schedule"]
+    kind: Literal["file", "export", "image", "audio", "document", "memory", "schedule"]
     name: str
     path: Optional[str]
     detail: Optional[str]
@@ -176,7 +176,9 @@ async def add_folder(
     try:
         await asyncio.to_thread(env.add_folder, db, session_id, body.path)
     except env.EnvironmentChangeError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(
+            status_code=400, detail=detail_for(http_request, str(e))
+        ) from e
     audit_approval(http_request, f"folder {body.path} given to chat {session_id}")
     record_folder_added(http_request, body.path)
     return await _describe(db, session)
@@ -200,7 +202,7 @@ async def check_folder(body: FolderRequest, http_request: Request) -> dict:
     try:
         await asyncio.to_thread(env.check_folder, body.path)
     except env.EnvironmentChangeError as e:
-        return {"refusal": str(e)}
+        return {"refusal": detail_for(http_request, str(e))}
     return {"refusal": None}
 
 
@@ -210,14 +212,21 @@ async def check_folder(body: FolderRequest, http_request: Request) -> dict:
     response_model_exclude_unset=True,
 )
 async def remove_folder(
-    session_id: str, body: FolderRequest, db: ChatDatabase = Depends(get_db)
+    session_id: str,
+    body: FolderRequest,
+    http_request: Request,
+    db: ChatDatabase = Depends(get_db),
 ):
     """Take a folder or file away from the chat; refused from its next step."""
     session = _session(db, session_id)
     try:
         await asyncio.to_thread(env.remove_folder, db, session_id, body.path)
     except env.EnvironmentChangeError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+        raise HTTPException(
+            status_code=409, detail=detail_for(http_request, str(e))
+        ) from e
+    audit_approval(http_request, f"folder {body.path} taken from chat {session_id}")
+    record_folder_removed(http_request, body.path)
     return await _describe(db, session)
 
 

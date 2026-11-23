@@ -30,6 +30,11 @@ export function PlanWithScreens({ ctx }: { ctx: SetupStepContext }) {
             openModels: opener('models'),
             openKey: opener('key'),
             openGpu: opener('gpu'),
+            confirmNoFit: (request, proceed) => {
+                void ask(request).then((ok) => {
+                    if (ok) proceed();
+                });
+            },
             confirmLowDisk: (short, proceed) => {
                 void ask(lowDiskRequest(short, t)).then((ok) => {
                     if (ok) proceed(true);

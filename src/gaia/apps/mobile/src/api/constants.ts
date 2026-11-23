@@ -14,6 +14,8 @@ export const UI_HEADERS = {
 
 export const ENDPOINTS = {
     agentInstallStatus: '/api/agents/{agent_id}/install-status',
+    agentProgramDownload: '/api/agent-programs/{program_id}/download',
+    agentPrograms: '/api/agent-programs',
     agents: '/api/agents',
     agentsInstall: '/api/agents/install',
     automation: '/api/automations/{ref}',
@@ -209,6 +211,11 @@ export function logReadPath(source: string, params: { file?: string | null; afte
 
 export function agentInstallStatusPath(agentId: string): string {
     return ENDPOINTS.agentInstallStatus.replace('{agent_id}', encodeURIComponent(agentId));
+}
+
+/** Only gaiacpp is downloaded this way; the PC answers 404 for any other program. */
+export function agentProgramDownloadPath(programId: 'gaiacpp'): string {
+    return ENDPOINTS.agentProgramDownload.replace('{program_id}', encodeURIComponent(programId));
 }
 
 export function connectorActivationPath(connectorId: string, agentId: string): string {
@@ -557,6 +564,8 @@ export const MODEL_STATUS_OPEN_POLL_MS = 3_000;
 export const MODEL_STATUS_POLL_MS = 15_000;
 /** How often a model download's progress is read, and how many missing or failed reads end the wait. */
 export const DOWNLOAD_POLL_MS = 1_000;
+/** How often a gaiacpp download is read while it runs (webui's setup/AgentDownload.tsx). */
+export const AGENT_DOWNLOAD_POLL_MS = 1_000;
 export const DOWNLOAD_NO_ROW_LIMIT = 15;
 export const DOWNLOAD_MISS_LIMIT = 5;
 /** How often a Reconnect waiting on the PC's OS key-store prompt asks again; the web UI's CONNECT_RETRY_MS. */
@@ -586,7 +595,7 @@ export const AGENT_EVENT_TYPES: ReadonlySet<string> = new Set([
     'status', 'step', 'thinking', 'commentary', 'plan',
     'tool_start', 'tool_end', 'tool_result', 'tool_args', 'tool_confirm', 'skill_use', 'agent_error',
     'permission_request', 'needs_confirmation', 'needs_input', 'policy_alert',
-    'followup_taken', 'followup_returned', 'followup_unavailable', 'context_usage',
+    'followup_taken', 'followup_returned', 'followup_unavailable', 'context_usage', 'draft',
 ]);
 
 /** Once the run reaches one of these, a permission prompt or question before it is no longer waiting. */

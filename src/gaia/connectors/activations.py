@@ -51,7 +51,6 @@ Atomicity guarantees mirror :mod:`gaia.connectors.grants`:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -82,6 +81,11 @@ class ActivationsLedgerCorrupt(ConnectorsError):
     def __init__(self, message: str, path: Path) -> None:
         super().__init__(message)
         self.path = path
+
+
+def activations_path() -> Path:
+    """Where the activation ledger lives, resolved now."""
+    return _activations_path()
 
 
 def _activations_path() -> Path:
@@ -289,22 +293,11 @@ def is_agent_active(connector_id: str, agent_id: str) -> bool:
     return bool(load_activations().get(connector_id, {}).get(agent_id, False))
 
 
-async def activate_agent_async(connector_id: str, agent_id: str) -> None:
-    """Async wrapper around :func:`activate_agent` for native-async callers."""
-    await asyncio.to_thread(activate_agent, connector_id, agent_id)
-
-
-async def deactivate_agent_async(connector_id: str, agent_id: str) -> None:
-    """Async wrapper around :func:`deactivate_agent`."""
-    await asyncio.to_thread(deactivate_agent, connector_id, agent_id)
-
-
 __all__ = [
     "SCHEMA_VERSION",
     "activate_agent",
-    "activate_agent_async",
+    "activations_path",
     "deactivate_agent",
-    "deactivate_agent_async",
     "is_agent_active",
     "list_agent_activations",
     "load_activations",

@@ -18,6 +18,7 @@ import os
 import platform
 import shutil
 import threading
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Literal, Optional
@@ -26,6 +27,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Upl
 from fastapi.responses import FileResponse
 from starlette.requests import ClientDisconnect
 
+from gaia import security as gaia_security
 from gaia.audio.media import MEDIA_EXTENSIONS, prune_older_than
 from gaia.env import child_env
 from gaia.home import default_gaia_home, gaia_home
@@ -34,7 +36,12 @@ from gaia.security import (
     AllowedPathsEnvError,
     secret_read_refusal,
 )
-from gaia.upload_names import place_copy, reserve_copy_path, upload_copy_stem
+from gaia.upload_names import (
+    place_copy,
+    reserve_copy_path,
+    upload_copy_stem,
+    upload_url_name,
+)
 from gaia.utils.text_decoding import file_encoding
 from gaia.utils.user_folders import documents_dir
 
@@ -53,7 +60,7 @@ from ..models import (
     QuickLink,
     WireModel,
 )
-from ..security import allowed_device, is_local_pc, require_local_pc
+from ..security import allowed_device, detail_for, is_local_pc, require_local_pc
 from ..turn_summary import is_openable
 from ..utils import (
     ALLOWED_EXTENSIONS,
@@ -118,6 +125,10 @@ OUTSIDE_HOME_REFUSAL = (
     "PC's own folder picker does."
 )
 
+CREDENTIALS_WITHHELD_REFUSAL = (
+    "GAIA doesn't show this away from the PC: it holds credentials or keys."
+)
+
 router = APIRouter(tags=["files"])
 
 
@@ -163,7 +174,7 @@ def _refuse_remote_secret(resolved: Path) -> None:
     if secret_read_refusal(resolved):
         raise _device_refusal(
             "credentials_withheld",
-            "GAIA doesn't show this away from the PC: it holds credentials or keys.",
+            CREDENTIALS_WITHHELD_REFUSAL,
         )
 
 
@@ -289,6 +300,18 @@ def device_withholds(path: Path) -> bool:
     return bool(secret_read_refusal(path)) or _device_private(path)
 
 
+def _holds_device_private(folder: Path) -> bool:
+    """Whether a credential or device-private folder lies inside *folder*."""
+    home, target = str(Path.home()), str(folder)
+    if session_environment.within(target, home) and session_environment.within(
+        home, target
+    ):
+        # The picker opens on home; granting it is refused as too broad instead.
+        return False
+    private = [*_device_private_folders(), *gaia_security.SECRET_DIRECTORIES]
+    return any(session_environment.within(str(p), target) for p in private)
+
+
 DevicePickCode = Literal["device_folder_outside_home", "device_folder_withheld"]
 
 
@@ -308,7 +331,7 @@ def device_pick_refusal(path: str) -> Optional[DevicePickRefusal]:
     resolved = Path(os.path.expanduser(path)).resolve()
     if not is_within_document_roots(resolved):
         return DevicePickRefusal("device_folder_outside_home", OUTSIDE_HOME_REFUSAL)
-    if device_withholds(resolved):
+    if device_withholds(resolved) or _holds_device_private(resolved):
         return DevicePickRefusal(
             "device_folder_withheld",
             "GAIA doesn't give a paired device this folder: it holds "
@@ -339,7 +362,7 @@ def _refuse_picker_read(resolved: Path, scope: _ReadScope) -> None:
     if device_withholds(resolved):
         raise _device_refusal(
             "credentials_withheld",
-            "GAIA doesn't show this away from the PC: it holds credentials or keys.",
+            CREDENTIALS_WITHHELD_REFUSAL,
         )
 
 
@@ -378,11 +401,14 @@ async def upload_media(request: Request, name: str = Query(..., min_length=1)):
     if declared > shutil.disk_usage(upload_root).free:
         raise HTTPException(
             status_code=507,
-            detail=f"There is not enough free space on the drive holding "
-            f"{upload_root} for this recording.",
+            detail=detail_for(
+                request,
+                f"There is not enough free space on the drive holding "
+                f"{upload_root} for this recording.",
+            ),
         )
 
-    stem = upload_copy_stem(name)[:_MEDIA_NAME_CHARS].rstrip("._-")
+    stem = upload_copy_stem(name)[:_MEDIA_NAME_CHARS].rstrip(" ._-") or "attachment"
     dest_path: Optional[Path] = None
     file_size = 0
     try:
@@ -408,8 +434,11 @@ async def upload_media(request: Request, name: str = Query(..., min_length=1)):
         logger.error("Could not save recording %s: %s", name, e)
         raise HTTPException(
             status_code=507,
-            detail=f"Could not save this recording: {e}. Check that the drive "
-            f"holding {upload_root} has room for it.",
+            detail=detail_for(
+                request,
+                f"Could not save this recording: {e}. Check that the drive "
+                f"holding {upload_root} has room for it.",
+            ),
         ) from e
     unique_name = dest_path.name
 
@@ -424,7 +453,7 @@ async def upload_media(request: Request, name: str = Query(..., min_length=1)):
     return FileUploadResponse(
         filename=unique_name,
         original_name=name,
-        url=f"/api/files/uploads/{unique_name}",
+        url=f"/api/files/uploads/{upload_url_name(unique_name)}",
         size=file_size,
         content_type="application/octet-stream",
         is_image=False,
@@ -534,7 +563,7 @@ async def upload_file(file: UploadFile = File(...)):
     return FileUploadResponse(
         filename=unique_name,
         original_name=original_name,
-        url=f"/api/files/uploads/{unique_name}",
+        url=f"/api/files/uploads/{upload_url_name(unique_name)}",
         size=file_size,
         content_type=content_type,
         is_image=is_image,
@@ -745,7 +774,13 @@ async def open_file_or_folder(request: OpenFileRequest):
     raw_path = Path(file_path)
     reveal = request.reveal
 
-    resolved = raw_path.resolve(strict=False)
+    try:
+        resolved = raw_path.resolve(strict=False)
+    except (ValueError, OSError) as e:  # too long for the OS
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid path: {session_environment.path_error_reason(e)}",
+        ) from e
 
     # Security: restrict to user's home directory FIRST, before ANY
     # filesystem operations (is_symlink/exists can throw PermissionError
@@ -765,10 +800,16 @@ async def open_file_or_folder(request: OpenFileRequest):
             raise HTTPException(
                 status_code=400, detail="Symbolic links are not supported"
             )
+        exists = resolved.exists()
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
+    except OSError as e:  # POSIX resolve() lets a too-long path through
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid path: {session_environment.path_error_reason(e)}",
+        ) from e
 
-    if not resolved.exists():
+    if not exists:
         raise HTTPException(status_code=404, detail="Path not found")
 
     if request.launch:
@@ -834,13 +875,15 @@ def _launch_file(resolved: Path) -> dict:
 
 
 @router.post("/api/files/status", response_model=FileStatusResponse)
-async def file_status(request: FileStatusRequest):
+async def file_status(http_request: Request, request: FileStatusRequest):
     """Whether each path still exists, and its modification time.
 
     The side rail calls this to show files deleted or changed since the turn
-    that wrote them. Paths outside the home folder are reported unchecked.
+    that wrote them. Paths outside the home folder are reported unchecked, and
+    so, away from the PC, are paths a paired device is kept out of.
     """
     home = Path.home()
+    away = not is_local_pc(http_request)
     entries = []
     for raw in request.paths:
         if not raw or "\x00" in raw:
@@ -851,15 +894,25 @@ async def file_status(request: FileStatusRequest):
         except ValueError:
             entries.append(FileStatusEntry(path=raw))
             continue
+        if away and device_withholds(resolved):
+            entries.append(FileStatusEntry(path=raw))
+            continue
         try:
             stat = resolved.stat()
         except FileNotFoundError:
             entries.append(FileStatusEntry(path=raw, exists=False))
             continue
         except OSError as e:
-            raise HTTPException(
-                status_code=500, detail=f"Could not check {resolved.name}: {e}"
-            ) from e
+            if away:
+                cid = uuid.uuid4().hex[:8]
+                logger.error("Could not check %s (id=%s): %s", resolved, cid, e)
+                detail = (
+                    f"Could not check {resolved.name}; see the PC's server logs "
+                    f"(id={cid})."
+                )
+            else:
+                detail = f"Could not check {resolved.name}: {e}"
+            raise HTTPException(status_code=500, detail=detail) from e
         entries.append(
             FileStatusEntry(path=raw, exists=resolved.is_file(), mtime=stat.st_mtime)
         )

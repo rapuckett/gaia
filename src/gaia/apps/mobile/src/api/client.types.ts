@@ -7,8 +7,10 @@ import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
     ActiveModel,
     ActiveRuns,
+    AgentDownload,
     AgentInfo,
     AgentMcpServer,
+    AgentPrograms,
     ChatPerformance,
     CloudPriceList,
     ConnectorListEntry,
@@ -51,6 +53,7 @@ import type {
     StartScreen,
     StreamEvent,
     SystemStatus,
+    FlagshipAgent,
     WarmUpStatus,
 } from '@webui/types';
 import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
@@ -91,8 +94,12 @@ export type { AgentInstallStatus } from '@webui/services/api';
 export type {
     ActiveModel,
     ActiveRuns,
+    AgentDownload,
     AgentInfo,
     AgentMcpServer,
+    AgentProblem,
+    AgentProgram,
+    AgentPrograms,
     ChatPerformance,
     CloudPriceList,
     ConnectorListEntry,
@@ -141,6 +148,7 @@ export type {
     StartScreen,
     StreamEvent,
     SystemStatus,
+    FlagshipAgent,
     UnavailableConnectorRow,
     WarmUpStatus,
 } from '@webui/types';
@@ -512,8 +520,17 @@ export interface GaiaClient {
     markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
     /** The PC's settings, among them `network_policy` (Local only). */
     getSettings(options?: RequestOptions): Promise<Settings>;
-    /** Saves the custom model ID (`''` clears it) or the dynamic-tools switch; answers the settings as now saved, with the custom ID's `model_status`. */
-    updateSettings(patch: { custom_model?: string; dynamic_tools?: boolean }, options?: RequestOptions): Promise<Settings>;
+    /**
+     * Saves the custom model ID (`''` clears it), the dynamic-tools switch or the agent program; answers the settings as now
+     * saved, with the custom ID's `model_status`. An agent program not on the PC is a 422, and a switch while an answer runs a 409.
+     */
+    updateSettings(patch: { custom_model?: string; dynamic_tools?: boolean; flagship_agent?: FlagshipAgent }, options?: RequestOptions): Promise<Settings>;
+    /** Both agent programs (gaiapy, gaiacpp): which is saved, whether each is on the PC, and any gaiacpp download running. */
+    getAgentPrograms(options?: RequestOptions): Promise<AgentPrograms>;
+    /** Starts gaiacpp's download on the PC, or joins the one running; follow it with `getAgentDownload`. */
+    startAgentDownload(options?: RequestOptions): Promise<AgentDownload>;
+    /** The gaiacpp download: bytes so far, the total when known, and how it ended; `idle` once the PC has restarted. */
+    getAgentDownload(options?: RequestOptions): Promise<AgentDownload>;
     /** Turns Local only on or off. The PC alone may change it: 403 from a phone. */
     setNetworkPolicy(policy: Settings['network_policy'], options?: RequestOptions): Promise<Settings>;
     /** The PC's log groups and the file names each has now. */

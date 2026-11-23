@@ -47,7 +47,7 @@ def homes(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client(homes):
-    return TestClient(create_app(db_path=":memory:"))
+    return TestClient(create_app(db_path=":memory:"), client=("127.0.0.1", 50000))
 
 
 @pytest.fixture
@@ -75,7 +75,7 @@ def test_blob_document_lifecycle_uses_gaia_home(homes, client, mock_index_docume
     assert resp.status_code == 200, resp.text
     doc = resp.json()
     stored = Path(doc["filepath"])
-    assert stored.parent == gaia_home / "documents"
+    assert stored.parent == gaia_home / "chat" / "documents"
 
     reindex = client.post(f"/api/documents/{doc['id']}/reindex")
     assert reindex.status_code == 200, reindex.text

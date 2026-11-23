@@ -40,6 +40,8 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
     const hasDetails = !!(m.display_name || facts || m.evidence || (m.custom && m.source_url));
     const anyBusy = busy !== null;
     const blocked = m.available === false;
+    const hasAction = current ? blocked : !blocked && !progress;
+    const hasRemove = !!m.custom && !current && !progress;
 
     return (
         <Surface tone={current ? 'accent' : 'primary'} radius="md" padding="sm">
@@ -67,8 +69,11 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                     {m.state === 'loaded' ? (
                         <Badge label={t.bare('settings.model.loaded')} accessibilityLabel={t('settings.model.loaded')} tone="success" />
                     ) : null}
-                    {m.fits === true && !blocked ? (
+                    {m.fits === true && !blocked && !m.tight ? (
                         <Badge label={t.bare('mobileApp.settings.model.fits')} accessibilityLabel={t('mobileApp.settings.model.fits')} tone="success" />
+                    ) : null}
+                    {m.fits === true && !blocked && m.tight ? (
+                        <Badge label={t.bare('settings.model.tight')} accessibilityLabel={t('setup.models.warn.tight')} tone="warning" />
                     ) : null}
                     {m.custom ? <Badge label={t.bare('settings.model.custom')} accessibilityLabel={t('settings.model.custom')} /> : null}
                     {m.size_gb ? <Badge label={isolate(`${m.size_gb} GB`)} /> : null}
@@ -118,6 +123,7 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                         </Row>
                     </Stack>
                 ) : null}
+                {hasAction || hasRemove ? (
                 <Row gap="sm" wrap stack>
                     {current && blocked ? (
                         <Text role="label" tone="danger">{t('settings.model.inUseBlocked')}</Text>
@@ -142,7 +148,7 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                             testID={`model-use-${m.id}`}
                         />
                     )}
-                    {m.custom && !current && !progress ? (
+                    {hasRemove ? (
                         <Button
                             variant="ghost"
                             label={t.bare('settings.models.remove')}
@@ -154,6 +160,7 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                         />
                     ) : null}
                 </Row>
+                ) : null}
             </Stack>
         </Surface>
     );

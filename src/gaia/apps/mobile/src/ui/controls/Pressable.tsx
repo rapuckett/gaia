@@ -28,6 +28,8 @@ export interface PressableProps {
     onPress?: () => void;
     onLongPress?: () => void;
     disabled?: boolean;
+    /** Dims the control; defaults to `disabled`. False keeps a disabled control at full strength, like the desktop's not-yet-downloaded agent row. */
+    dimmed?: boolean;
     accessibilityLabel?: string;
     accessibilityHint?: string;
     accessibilityRole?: AccessibilityRole;
@@ -60,6 +62,7 @@ export function Pressable({
     onPress,
     onLongPress,
     disabled,
+    dimmed = disabled,
     accessibilityLabel,
     accessibilityHint,
     accessibilityRole = 'button',
@@ -117,7 +120,7 @@ export function Pressable({
                 minWidth: inline || clip ? undefined : minSize,
                 minHeight: clip ? undefined : minSize,
                 justifyContent: 'center',
-                opacity: disabled ? 0.45 : pressed && !RIPPLE ? 0.72 : 1,
+                opacity: dimmed ? 0.45 : pressed && !RIPPLE ? 0.72 : 1,
             })}
         >
             {({ pressed }) => (typeof children === 'function' ? children({ pressed, highlight: pressed && !RIPPLE }) : children)}

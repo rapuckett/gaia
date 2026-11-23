@@ -61,7 +61,7 @@ describe('message actions', () => {
         const client = await setup(0);
         await fireEvent(screen.getByText(question.content), 'longPress');
         await fireEvent.press(screen.getByLabelText(t('msg.delete')));
-        expect(await screen.findByText(t('msg.confirmDeleteAria'))).toBeTruthy();
+        expect(await screen.findByText(t('mobileApp.msg.deleteTitle'))).toBeTruthy();
         expect(client.deletedOne).toEqual([]);
         await fireEvent.press(screen.getByLabelText(t('msg.delete')));
         await waitFor(() => expect(client.deletedOne).toEqual([{ sessionId: 's', messageId: 7 }]));

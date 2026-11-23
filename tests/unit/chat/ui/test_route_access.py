@@ -64,6 +64,7 @@ PC_ONLY = {
     "DELETE /api/devices/routes/{kind}",
     "GET /api/connectors/_debug",
     "GET /api/connectors/eval-mailbox",
+    "POST /api/auth/launch-code",
     "POST /api/connectors/eval-mailbox",
     "POST /api/devices/listener",
     "POST /api/devices/pairing",
@@ -82,12 +83,16 @@ PC_ONLY = {
 PC_OR_DEVICE = {
     "DELETE /api/automations/{ref}",
     "DELETE /api/connectors/_flows/{flow_id}",
+    "DELETE /api/connectors/{connector_id}",
+    "DELETE /api/connectors/{connector_id}/accounts/{account_id}",
     "DELETE /api/connectors/{connector_id}/activations/{agent_id:path}",
     "DELETE /api/devices/pairing",
     "DELETE /api/devices/{device_id}",
     "DELETE /api/goals/{goal_id}",
+    "DELETE /api/memory/all",
     "DELETE /api/providers/{provider}/key",
     "DELETE /api/schedules/{name:path}",
+    "DELETE /v1/connections/{provider}",
     "GET /api/automations",
     "GET /api/devices",
     "GET /api/devices/status",
@@ -98,6 +103,8 @@ PC_OR_DEVICE = {
     "GET /api/memory/stream-inference",
     "GET /api/messaging/discord",
     "GET /api/setup/report/{name}",
+    "PATCH /api/schedules/{name:path}",
+    "POST /api/agent-programs/{program_id}/download",
     "POST /api/agents/install",
     "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/flows/{flow_id}/complete",
@@ -146,6 +153,7 @@ PC_OR_DEVICE = {
     "PUT /api/goals/{goal_id}/reject",
     "PUT /api/goals/{goal_id}/status",
     "PUT /api/goals/{goal_id}/tasks/{task_id}",
+    "PUT /api/images/settings",
     "PUT /api/schedules/{name:path}",
     "PUT /api/system/model-server/backend",
 }
@@ -179,11 +187,9 @@ WEB = {
 # may not change.
 REMOTE = {
     "DELETE /api/chat/permissions/{session_id}/grants",
-    "DELETE /api/connectors/{connector_id}",
     "DELETE /api/connectors/{connector_id}/grants/{agent_id:path}",
     "DELETE /api/documents/{doc_id}",
     "DELETE /api/gpu-memory/pending",
-    "DELETE /api/memory/all",
     "DELETE /api/memory/knowledge/{knowledge_id}",
     "DELETE /api/providers/local/custom/{model_id}",
     "DELETE /api/sessions/{session_id}",
@@ -192,7 +198,8 @@ REMOTE = {
     "DELETE /api/sessions/{session_id}/messages/{message_id}/and-below",
     "DELETE /api/skills/{name}",
     "DELETE /api/skills/{name}/preferences",
-    "DELETE /v1/connections/{provider}",
+    "GET /api/agent-programs",
+    "GET /api/agent-programs/{program_id}/download",
     "GET /api/agents",
     "GET /api/agents/catalog",
     "GET /api/agents/{agent_id}/install-status",
@@ -224,6 +231,7 @@ REMOTE = {
     "GET /api/goals/{goal_id}",
     "GET /api/gpu-memory",
     "GET /api/health",
+    "GET /api/images/settings",
     "GET /api/lemonade/detect",
     "GET /api/lemonade/target",
     "GET /api/mcp/servers",
@@ -234,6 +242,7 @@ REMOTE = {
     "GET /api/memory/conversations",
     "GET /api/memory/conversations/search",
     "GET /api/memory/conversations/{session_id}",
+    "GET /api/memory/embedder",
     "GET /api/memory/embedding-coverage",
     "GET /api/memory/entities",
     "GET /api/memory/entities/{entity}",
@@ -290,11 +299,8 @@ REMOTE = {
     "GET /v1/connections",
     "GET /v1/connections/",
     "GET /v1/connections/{provider}",
-    "GET /v1/email/calendar/events",
-    "GET /v1/email/health",
-    "GET /v1/email/init",
-    "GET /v1/email/version",
     "MOUNT /api/files/uploads",
+    "PATCH /api/connectors/{connector_id}/accounts/{account_id}",
     "PATCH /api/sessions/{session_id}/private",
     "POST /api/chat/cancel",
     "POST /api/chat/confirm-tool",
@@ -339,25 +345,12 @@ REMOTE = {
     "POST /api/skills/link/preview",
     "POST /api/speech",
     "POST /api/spending/allow-month",
+    "POST /api/system/download-progress/dismiss",
     "POST /api/system/load-model",
     "POST /api/system/unload-model",
     "POST /api/system/warm-up",
-    "POST /v1/email/archive",
-    "POST /v1/email/calendar/events",
-    "POST /v1/email/calendar/events/preview",
-    "POST /v1/email/calendar/events/respond",
-    "POST /v1/email/confirm",
-    "POST /v1/email/draft",
-    "POST /v1/email/init",
-    "POST /v1/email/prescan",
-    "POST /v1/email/quarantine",
-    "POST /v1/email/search",
-    "POST /v1/email/send",
-    "POST /v1/email/triage",
-    "POST /v1/email/triage/batch",
-    "POST /v1/email/unarchive",
-    "POST /v1/email/unquarantine",
     "PUT /api/chat/permissions/{session_id}",
+    "PUT /api/memory/embedder",
     "PUT /api/memory/knowledge/{knowledge_id}",
     "PUT /api/memory/settings",
     "PUT /api/providers/local/context",
@@ -1135,7 +1128,7 @@ def test_one_report_at_a_time_from_any_caller(setup, monkeypatch):
         return out
 
     monkeypatch.setattr(setup_router, "write_report", write_report)
-    monkeypatch.setattr(setup_router, "build_plan", lambda: {})
+    monkeypatch.setattr(setup_router, "build_plan", lambda **_: {})
     first = {}
 
     def make():
@@ -2074,6 +2067,170 @@ def test_an_allowed_device_installs_the_flagship_only(setup, monkeypatch):
     assert len(started) == 1
     assert _newest_changes(app, device, 1) == [("agentInstalled", {})]
     assert len(audit.lines) == 1 and device.device_id in audit.lines[0]
+
+
+@pytest.fixture
+def agent_program_env(tmp_path, monkeypatch):
+    """gaiacpp looks installed, and the config and GAIA home are throwaway."""
+    import gaia.config as config_mod
+    from gaia.daemon.sidecars import fetch
+
+    pc_home = tmp_path / "pc-home"
+    monkeypatch.setenv("GAIA_HOME", str(pc_home))
+    monkeypatch.setattr(config_mod, "GAIA_CONFIG_FILE", pc_home / "config.json")
+    monkeypatch.setattr(fetch, "native_flagship", lambda: pc_home / "bin" / "gaiacpp")
+    return pc_home
+
+
+def _program_rows(app, device):
+    return [
+        row
+        for row in _newest_changes(app, device, 50)
+        if row[0].startswith("agentProgram")
+    ]
+
+
+def test_an_allowed_device_downloads_and_switches_the_agent_program(
+    setup, monkeypatch, agent_program_env
+):
+    from gaia.ui.routers import agent_programs, system
+
+    app, clients, device = setup
+    started, switched = [], []
+    monkeypatch.setattr(
+        agent_programs,
+        "_start_download",
+        lambda: started.append(1) or ({"state": "downloading"}, len(started) < 3),
+    )
+    monkeypatch.setattr(
+        system,
+        "_set_flagship_agent",
+        lambda choice, request: switched.append(choice) or True,
+    )
+    ui = {"X-Gaia-UI": "1"}
+    url = "/api/agent-programs/gaiacpp/download"
+    put_body = {"flagship_agent": "gaiacpp"}
+    refused = {
+        "tunnel": "isn't allowed over mobile access",
+        "pending": "device_pending",
+    }
+    for caller, why in refused.items():
+        for resp in (
+            clients[caller].post(url, headers=ui),
+            clients[caller].put("/api/settings", json=put_body, headers=ui),
+        ):
+            assert resp.status_code == 403, caller
+            assert why in resp.text, (caller, resp.text)
+    assert started == [] and switched == []
+    assert _program_rows(app, device) == []
+
+    assert clients["pc"].post(url, headers=ui).status_code == 202
+    assert _program_rows(app, device) == []
+
+    assert clients["device"].post(url, headers=ui).status_code == 202
+    again = clients["device"].post(url, headers=ui)  # already running: no new row
+    assert again.status_code == 202
+    put = clients["device"].put("/api/settings", json=put_body, headers=ui)
+    assert put.status_code == 200, put.text
+    assert _program_rows(app, device) == [
+        ("agentProgramDownloaded", {"program": "gaiacpp"}),
+        ("agentProgramSwitched", {"program": "gaiacpp"}),
+    ]
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [False, HTTPException(409, "chat running"), HTTPException(422, "not installed")],
+    ids=["unchanged", "409", "422"],
+)
+def test_a_switch_that_changes_nothing_records_nothing_and_saves_no_other_field(
+    setup, monkeypatch, agent_program_env, outcome
+):
+    from gaia.ui.routers import system
+
+    app, clients, device = setup
+    before = _program_rows(app, device)
+
+    def stub(choice, request):
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(system, "_set_flagship_agent", stub)
+    saved = []
+    monkeypatch.setattr(
+        "gaia.config.GaiaConfig.save_key", lambda key, value: saved.append(key)
+    )
+    resp = clients["device"].put(
+        "/api/settings",
+        json={"flagship_agent": "gaiacpp"},
+        headers={"X-Gaia-UI": "1"},
+    )
+    assert resp.status_code == (200 if outcome is False else outcome.status_code)
+    assert _program_rows(app, device) == before
+    assert saved == []
+
+
+def test_a_switch_saved_but_not_stopped_is_still_recorded(
+    setup, monkeypatch, agent_program_env
+):
+    import gaia.config as config_mod
+    from gaia.daemon.sidecars.errors import SidecarError
+    from gaia.ui.sidecar import daemon_client
+
+    app, clients, device = setup
+    config_mod.GaiaConfig.save_key("flagship_agent", "gaiapy")
+    before = _program_rows(app, device)
+
+    def refuse_stop(agent_id="email"):
+        raise SidecarError(f"daemon down; log in {agent_program_env}/logs")
+
+    monkeypatch.setattr(daemon_client, "stop_sidecar", refuse_stop)
+    resp = clients["device"].put(
+        "/api/settings",
+        json={"flagship_agent": "gaiacpp"},
+        headers={"X-Gaia-UI": "1"},
+    )
+    assert resp.status_code == 500
+    assert str(agent_program_env) not in resp.text
+    assert _program_rows(app, device)[len(before) :] == [
+        ("agentProgramSwitched", {"program": "gaiacpp"})
+    ]
+
+
+def test_a_phone_is_not_shown_the_pcs_paths_in_agent_program_errors(
+    setup, monkeypatch, agent_program_env
+):
+    from gaia.daemon.sidecars import fetch
+    from gaia.ui.routers import agent_programs
+
+    app, clients, device = setup
+    import gaia.config as config_mod
+
+    config_mod.GaiaConfig.save_key("flagship_agent", "gaiapy")
+    monkeypatch.setattr(fetch, "native_flagship", lambda: None)
+    monkeypatch.setattr(
+        fetch,
+        "native_flagship_candidates",
+        lambda: [agent_program_env / "bin" / "gaiacpp"],
+    )
+    monkeypatch.setitem(
+        agent_programs._job, "error", f"cannot write {agent_program_env}/bin/gaiacpp"
+    )
+    ui = {"X-Gaia-UI": "1"}
+    put = {"flagship_agent": "gaiacpp"}
+    for path in (
+        "/api/agent-programs/gaiacpp/download",
+        "/api/agent-programs",
+    ):
+        assert str(agent_program_env) in clients["pc"].get(path, headers=ui).text
+        phone = clients["device"].get(path, headers=ui)
+        assert phone.status_code == 200 and str(agent_program_env) not in phone.text
+    pc_put = clients["pc"].put("/api/settings", json=put, headers=ui)
+    phone_put = clients["device"].put("/api/settings", json=put, headers=ui)
+    assert pc_put.status_code == phone_put.status_code == 422
+    assert str(agent_program_env) in pc_put.text
+    assert str(agent_program_env) not in phone_put.text
 
 
 def test_an_allowed_device_sets_the_default_permission_mode(setup):

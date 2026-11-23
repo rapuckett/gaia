@@ -25,20 +25,6 @@ from .lemonade import _NATIVE_TC_KEY, LemonadeContextOverflowError
 
 logger = logging.getLogger(__name__)
 
-
-def __getattr__(name: str):
-    # The Anthropic SDK costs ~0.9 s to import; load it on first use.
-    if name == "anthropic":
-        try:
-            import anthropic
-        except ImportError as e:
-            raise AttributeError(
-                f"module {__name__!r}: anthropic is not installed"
-            ) from e
-        return anthropic
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-5"
 
 #: Context window every current Claude model provides, in tokens. Used to size
@@ -257,22 +243,36 @@ def _check_empty_reply(stop_reason: str, api_blocks: List[dict]) -> None:
     )
 
 
+_UNLOADED = object()
+
+
+def __getattr__(name: str):
+    """Load the Anthropic SDK the first time ``anthropic`` is read here.
+
+    Other modules import this one for its constants, so the SDK must not load
+    with it. ``None`` stands for "not installed", as the old guarded import did.
+    """
+    if name != "anthropic":
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    try:
+        import anthropic as sdk  # pylint: disable=import-outside-toplevel
+    except ImportError:
+        sdk = None
+    globals()["anthropic"] = sdk
+    return sdk
+
+
 def _require_anthropic():
-    # A name in globals is a test double (None simulates a missing SDK).
-    if "anthropic" in globals():
-        sdk = globals()["anthropic"]
-    else:
-        try:
-            import anthropic as sdk
-        except ImportError:
-            sdk = None
-    if sdk is None:
+    anthropic = globals().get("anthropic", _UNLOADED)
+    if anthropic is _UNLOADED:
+        anthropic = __getattr__("anthropic")
+    if anthropic is None:
         raise ImportError(
             "The 'anthropic' package is required for --use-claude. "
             "Install it with: uv pip install anthropic "
             '(or the eval extras: uv pip install -e ".[eval]")'
         )
-    return sdk
+    return anthropic
 
 
 #: Usage counters read off every response. ``input_tokens`` is the uncached
@@ -1333,7 +1333,16 @@ class ClaudeProvider(LLMClient):
     def vision(self, images: list[bytes], prompt: str, **kwargs) -> str:
         import base64  # pylint: disable=import-outside-toplevel
 
-        image_b64 = base64.b64encode(images[0]).decode()
+        from gaia.utils.image_alpha import (  # pylint: disable=import-outside-toplevel
+            flatten_image_bytes,
+        )
+
+        from ..vlm_client import (  # pylint: disable=import-outside-toplevel
+            detect_image_mime_type,
+        )
+
+        image = flatten_image_bytes(images[0])
+        image_b64 = base64.b64encode(image).decode()
         messages = [
             {
                 "role": "user",
@@ -1342,7 +1351,7 @@ class ClaudeProvider(LLMClient):
                         "type": "image",
                         "source": {
                             "type": "base64",
-                            "media_type": "image/jpeg",
+                            "media_type": detect_image_mime_type(image),
                             "data": image_b64,
                         },
                     },

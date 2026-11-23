@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from gaia.browser.picked import MAX_ELEMENTS as _MAX_PAGE_ELEMENTS
+from gaia.browser.picked import PageElement
 from gaia.version import __version__ as _gaia_version
 
 from .devices import (
@@ -354,6 +356,11 @@ class SettingsResponse(BaseModel):
     # True when GAIA_DYNAMIC_TOOLS is set ⇒ the env wins ⇒ the UI toggle
     # reflects the effective value and disables (no silent no-op).
     dynamic_tools_locked: bool = False
+    # The program that is the GAIA agent; ~/.gaia/config.json, shared with the terminal UI.
+    # A plain string: a harness a newer GAIA saved still shows, so Settings can change it.
+    flagship_agent: str = "gaiapy"
+    # False when gaiacpp is not installed on this PC, so it cannot be chosen.
+    gaiacpp_available: bool = False
     # The shared policy file, not the Agent UI database. Local only clears
     # saved cloud selections and removes runtime cloud keys when it is enabled.
     network_policy: Literal["cloud_allowed", "local_ai_only"] = "cloud_allowed"
@@ -402,6 +409,15 @@ class SettingsUpdateRequest(BaseModel):
             "'goal_driven' (execute approved goals). Default: 'goal_driven'. "
             "'autonomous' (observe, infer, and execute own goals) is not "
             "implemented yet and is rejected (#2005)."
+        ),
+    )
+    flagship_agent: Optional[Literal["gaiapy", "gaiacpp"]] = Field(
+        None,
+        description=(
+            "Which program is the GAIA agent: gaiapy (the Python agent) or "
+            "gaiacpp (the native C++ agent, beta). Applies from the next "
+            "message. Choosing gaiacpp where it is not installed is refused. "
+            "Omit the field to leave the choice unchanged."
         ),
     )
     dynamic_tools: Optional[bool] = Field(
@@ -495,8 +511,8 @@ class CreateSessionRequest(BaseModel):
     private: bool = False
     agent_type: Optional[str] = Field(None, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
     device: Optional[str] = None
-    # Mailbox provider for email-backed agents. Gmail by default; "microsoft"
-    # routes the email agent to the Outlook backend (see EmailAgentConfig).
+    # Mailbox the mail tools read; None reads every connected one, "microsoft"
+    # only Outlook.
     mail_provider: Optional[str] = Field(None, pattern=r"^(google|microsoft)$")
     # Folders the chat may read and write from its first message.
     folders: List[str] = Field(default_factory=list)
@@ -605,6 +621,10 @@ class ChatRequest(BaseModel):
     document_ids: Optional[List[str]] = None
     stream: bool = True
     agent_type: Optional[str] = Field(None, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
+    #: Elements the user picked in the browser pane (the composer's chips).
+    page_elements: Optional[List[PageElement]] = Field(
+        None, max_length=_MAX_PAGE_ELEMENTS
+    )
 
 
 class SourceInfo(BaseModel):
@@ -679,6 +699,8 @@ class AgentStepResponse(BaseModel):
     declined: Optional[bool] = None
     # Nobody answered its prompt in time; it never ran either.
     timedOut: Optional[bool] = None
+    # GAIA's own rule stopped it; nobody was asked, so nobody declined.
+    refused: Optional[bool] = None
     # GAIA turned this call down itself; no prompt was shown, so not the user's no.
     autoDeclined: Optional[bool] = None
     active: bool = False
@@ -695,7 +717,7 @@ class AgentStepResponse(BaseModel):
     mcpOutput: Optional[McpOutputResponse] = None
     latencyMs: Optional[float] = None
     # Render-map card persistence (#2109): populated ONLY when the source
-    # tool_result event carried a ``render`` kind (e.g. "email_pre_scan") —
+    # tool_result event carried a ``render`` kind (e.g. "table") —
     # render-less tool results keep today's summary-only persistence, a
     # deliberate retention cap since a full tool payload can carry raw email
     # bodies. Without these fields pydantic's default extra='ignore' would
@@ -833,6 +855,7 @@ class MessageResponse(BaseModel):
     agent_steps: Optional[List[AgentStepResponse]] = None
     stats: Optional[InferenceStatsResponse] = None
     turn_summary: Optional[TurnSummaryResponse] = None
+    page_elements: Optional[List[PageElement]] = None
     # Notices from indexing files into the document library during this turn.
     library_notices: Optional[List[str]] = None
     # The user's Stop ended this reply before it finished.

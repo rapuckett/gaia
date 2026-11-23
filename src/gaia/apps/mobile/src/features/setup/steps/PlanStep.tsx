@@ -3,8 +3,8 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 
-import { formatFitGb, formatSize, ltrIn } from '@webui/components/setup/format';
-import { initialSelection } from '@webui/components/setup/selection';
+import { formatSize, ltrIn } from '@webui/components/setup/format';
+import { cantRunHere, catalogOf, initialSelection, tooBig } from '@webui/components/setup/selection';
 import type { SetupCatalogEntry, SetupComponent, SetupPlan, SetupRunStatus } from '@webui/types';
 
 import type { SetupRunOptions } from '@/api/client.types';
@@ -16,9 +16,13 @@ import { Button, Card, Disclosure, Ltr, Notice, Pressable, Row, Spinner, Stack, 
 
 import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
-import { cloudIsBlocked, planView, startOptions, type PlanView } from './plan';
+import { noFitAsk } from '../sheets/setupConfirm';
+import { AgentWait } from './AgentWait';
+import { cloudIsBlocked, planReasons, planView, startOptions, type PlanView } from './plan';
 import { usePlanOpeners } from './planOpeners';
+import { tooBigText } from './modelsView';
 import { usePlanSelection } from './planSelection';
+import { useAgentFirst } from './useAgentFirst';
 
 type Where = 'local' | 'cloud';
 type ContentState = 'active' | 'done' | 'failed' | undefined;
@@ -136,19 +140,8 @@ function LocalCard({ view, chatChosen, picked, disabled, onPick }: {
 }) {
     const t = useT();
     const locale = useLocaleCode();
-    const { chat, bigger } = view;
-    const reasons: string[] = [];
-    if (!chatChosen) reasons.push(t('setup.plan.why.evaluated'));
-    if (chat?.need_gb != null && chat.capacity_gb != null && chat.fits) {
-        reasons.push(t('setup.plan.why.fits', { need: ltrIn(locale, formatFitGb(chat.need_gb)), have: ltrIn(locale, formatFitGb(chat.capacity_gb)) }));
-    }
-    reasons.push(t('setup.plan.why.private'));
-    if (view.onNpu) reasons.push(t('setup.plan.why.noImagesNpu'));
-    if (bigger?.need_gb != null && bigger.capacity_gb != null) {
-        reasons.push(t('setup.plan.why.bigger', {
-            name: bigger.name, need: ltrIn(locale, formatFitGb(bigger.need_gb)), have: ltrIn(locale, formatFitGb(bigger.capacity_gb)),
-        }));
-    }
+    const { chat } = view;
+    const reasons = planReasons(view, chatChosen, t, locale);
     const after = view.totals.afterGb;
     return (
         <RadioCard
@@ -199,9 +192,11 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     const start = useStartSetup();
     const backend = useApplyTestedBackend();
     const { selection, setSelection, keepTrying } = usePlanSelection();
+    const agent = useAgentFirst();
     const [where, setWhere] = useState<Where>('local');
     const [listOpen, setListOpen] = useState(false);
     const [detailsOpen, setDetailsOpen] = useState(false);
+    const [cantRunText, setCantRunText] = useState<string | null>(null);
 
     // The plan seeds the selection once, from what is planned and on disk.
     useEffect(() => {
@@ -240,12 +235,39 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     const picked: Where = cloudBlocked ? 'local' : where;
     const cloud = picked === 'cloud';
     const busy = start.isPending || backend.isPending;
-    const proceed = (acknowledgeLowDisk: boolean) => goLocal(startOptions(plan, selection, acknowledgeLowDisk, keepTrying));
-    const onContinue = () => {
-        if (cloud) openers.openKey?.();
-        else if (short && openers.confirmLowDisk) openers.confirmLowDisk(short, proceed);
+    // An agent picked on Customize is had and saved first, so setup's test chat talks to it.
+    const proceed = (acknowledgeLowDisk: boolean) => void agent.begin(() => goLocal(startOptions(plan, selection, acknowledgeLowDisk, keepTrying)));
+    const lowDiskThenGo = () => {
+        if (short && openers.confirmLowDisk) openers.confirmLowDisk(short, proceed);
         else proceed(false);
     };
+    const onContinue = () => {
+        if (cloud) {
+            openers.openKey?.();
+            return;
+        }
+        setCantRunText(null);
+        const big = tooBig(catalogOf(plan), selection).filter((e) => !e.downloaded || e.id === selection.defaultChat);
+        // Nothing here can run it: no confirm can make it work, so it blocks the download.
+        const cantRun = big.find(cantRunHere);
+        if (cantRun) {
+            const key = cantRun.id === selection.defaultChat ? 'setup.models.cantRun.chat' : 'setup.models.cantRun.other';
+            setCantRunText(t(key, { name: cantRun.name, why: tooBigText(cantRun, t, locale) }));
+            return;
+        }
+        const request = noFitAsk(big, t, locale);
+        if (request && openers.confirmNoFit) openers.confirmNoFit(request, lowDiskThenGo);
+        else lowDiskThenGo();
+    };
+
+    if (agent.held) {
+        return (
+            <Stack gap="md">
+                <Text role="title" weight="semibold" accessibilityRole="header">{t('setup.plan.title')}</Text>
+                <AgentWait agent={agent} />
+            </Stack>
+        );
+    }
 
     return (
         <Stack gap="md">
@@ -274,6 +296,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
                     })}
                 />
             ) : null}
+            {cantRunText && !cloud ? <Notice tone="danger" message={cantRunText} /> : null}
             {startError ? <StartError error={startError} /> : null}
 
             {cloud ? null : (

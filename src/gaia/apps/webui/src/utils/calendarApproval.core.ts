@@ -142,6 +142,74 @@ export function visibleWith(kept: ReadonlySet<string>, value: string, multiline:
     return multiline ? shown : shown.replace(/\n/g, '[U+000A]');
 }
 
+/** Prose, marked the way the approval card marks it. */
+export function visibleText(value: string, multiline: boolean): string {
+    return visibleWith(KEPT_AS_WRITTEN, value, multiline);
+}
+
+/** Bidi isolates the translator wraps around each half and param; they cannot reverse a name. */
+const TRANSLATION_ISOLATE = /([\u2066-\u2069])/;
+
+/** A notification line marked like the approval card, its translation isolates kept. */
+export function noticeText(text: string): string {
+    return text.split(TRANSLATION_ISOLATE).map((part, i) => (i % 2 ? part : visibleText(part, true))).join('');
+}
+
+const KEPT_IN_NAMES: ReadonlySet<string> = new Set();
+const KEPT_IN_COMMANDS: ReadonlySet<string> = new Set(['\u0009', '\u000A']);
+const codeOf = (char: string) => `[U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}]`;
+const strictly = (char: string, kept: ReadonlySet<string>) => variationSelector(char) || hidden(char, kept);
+
+/**
+ * A path, URL, id, program or "always allow" label on an approval card, as
+ * `visible_strict` (`person_approval.py`) writes it: joiners, direction marks,
+ * tab, CR, LF and every variation selector are codes too, since in a name they
+ * can only make it read as another.
+ */
+export function visibleStrict(value: string): string {
+    return [...value].map((char) => (strictly(char, KEPT_IN_NAMES) ? codeOf(char) : char)).join('');
+}
+
+/** A command on an approval card: the name rule for its words, its tabs and line breaks kept. */
+export function visibleCommand(value: string): string {
+    return [...value.replace(/\r\n/g, '\n')].map((char) => (strictly(char, KEPT_IN_COMMANDS) ? codeOf(char) : char)).join('');
+}
+
+/** Whether `visibleStrict` would show a code. */
+export function unseenStrict(value: unknown): boolean {
+    return typeof value === 'string' && [...value].some((char) => strictly(char, KEPT_IN_NAMES));
+}
+
+/** Whether `visibleCommand` would show a code. */
+export function unseenCommand(value: unknown): boolean {
+    return typeof value === 'string' && [...value.replace(/\r\n/g, '\n')].some((char) => strictly(char, KEPT_IN_COMMANDS));
+}
+
+/** A file name or path from a tool, marked the way the approval card marks it. */
+export function visibleName(value: string): string {
+    return visibleText(value, false);
+}
+
+const OVERRIDES = /[\u202A-\u202E]/;
+const ISOLATE_OPEN = /[\u2066-\u2068]/;
+const ISOLATE_CLOSE = '\u2069';
+
+/** Marks overrides and unpaired isolates, which nobody types on purpose; paired isolates, marks and joiners stay. */
+export function markStrayDirection(text: string): string {
+    return text.split('\n').map((line) => {
+        const chars = [...line];
+        const stray = new Set<number>();
+        const open: number[] = [];
+        chars.forEach((char, at) => {
+            if (OVERRIDES.test(char)) stray.add(at);
+            else if (ISOLATE_OPEN.test(char)) open.push(at);
+            else if (char === ISOLATE_CLOSE && open.pop() === undefined) stray.add(at);
+        });
+        open.forEach((at) => stray.add(at));
+        return chars.map((char, at) => (stray.has(at) ? visibleText(char, false) : char)).join('');
+    }).join('\n');
+}
+
 /** `HIDDEN_NOTE` plus what `calendar_tools.py` adds to it; a Python test keeps them equal. */
 // english: must equal the backend's note, which the approval card compares against
 const UNSEEN_NOTE = "This text holds characters that don't show. Those that hide or reorder text " +
@@ -156,6 +224,11 @@ export function unseenWith(kept: ReadonlySet<string>, value: unknown): boolean {
         if (point >= 0xE0100 && point <= 0xE01EF) return true;
         return variationSelector(char) ? !selectorFits(chars, at) : hidden(char, kept);
     });
+}
+
+/** Whether prose would show a code on the approval card. */
+export function unseen(value: unknown): boolean {
+    return unseenWith(KEPT_AS_WRITTEN, value);
 }
 
 const FENCE_OPEN = '<<<UNTRUSTED_TEXT>>>';
@@ -243,7 +316,8 @@ export function calendarWhen(start: string, end: string, locale: string): Calend
     return { text: shown, allDay: false };
 }
 
-export type CalendarFactValue = { kind: 'text'; text: string } | { kind: 'when'; when: CalendarWhen };
+/** ``dir: 'ltr'`` marks a value that reads left to right in any language, such as an address. */
+export type CalendarFactValue = { kind: 'text'; text: string; dir?: 'ltr' } | { kind: 'when'; when: CalendarWhen };
 
 export interface CalendarFacts {
     rows: Array<{ label: string; value: CalendarFactValue }>;
@@ -264,17 +338,21 @@ export function calendarFacts(tool: string, args: Record<string, unknown>, t: Tr
     };
     const when = (label: string, start: unknown, end: unknown) =>
         rows.push({ label, value: { kind: 'when', when: calendarWhen(text(start), text(end), t.locale) } });
+    const account = () => {
+        const shown = text(args.calendar_account);
+        if (shown) rows.push({ label: t('permission.calendar.account'), value: { kind: 'text', text: shown, dir: 'ltr' } });
+    };
 
     if (tool === 'calendar/create_calendar_event') {
         named(t('permission.calendar.title'), args.title);
         when(t('permission.calendar.when'), args.start, args.end);
-        named(t('permission.calendar.account'), args.calendar_account);
+        account();
         named(t('permission.calendar.location'), args.location);
         named(t('permission.calendar.description'), args.description, true);
     } else {
         named(t('permission.calendar.event'), args.expected_title);
         when(t('permission.calendar.when'), args.expected_start, '');
-        named(t('permission.calendar.account'), args.calendar_account);
+        account();
         named(t('permission.calendar.newTitle'), args.new_title);
         if (text(args.new_start)) when(t('permission.calendar.newTime'), args.new_start, args.new_end);
         named(t('permission.calendar.newLocation'), args.new_location);

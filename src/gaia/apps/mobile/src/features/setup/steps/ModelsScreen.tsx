@@ -5,12 +5,13 @@ import { useMemo } from 'react';
 
 import { formatSize, ltrIn } from '@webui/components/setup/format';
 import {
-    catalogOf, chooseChat, initialSelection, recommendedSelection, shortfall, toggle,
+    catalogOf, chooseChat, initialSelection, recommendedSelection, shortfall, toggle, tooBig,
 } from '@webui/components/setup/selection';
 import type { SetupModelProgress } from '@webui/types';
 
 import { GaiaApiError } from '@/api/errors';
 import { useGpuMemory, useSaveModelChoices, useSetupPlan } from '@/data';
+import { AgentChoice } from '@/features/settings/panes/model/AgentChoice';
 import { describeHttpFailure, technicalDetail, useLocaleCode, useT } from '@/i18n/useT';
 import { Button, Notice, Pressable, Row, Spinner, Stack, Text } from '@/ui';
 
@@ -18,7 +19,8 @@ import { NpuNotReady } from '../npu/NpuNotReady';
 import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
 import { useConfirmSheet } from '../sheets/ConfirmSheet';
-import { serverConfirmRequest, setupConfirmFrom } from '../sheets/setupConfirm';
+import { noFitAsk, serverConfirmRequest, setupConfirmFrom } from '../sheets/setupConfirm';
+import { useAgentPick } from './agentPick';
 import { ModelChecklist, SelectionSummary } from './Checklist';
 import { MarkedRow } from './ModelRows';
 import { JobModels } from './JobSections';
@@ -82,6 +84,7 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
     const planQuery = useSetupPlan();
     const plan = ctx.plan ?? planQuery.data;
     const { selection, setSelection, keepTrying, setKeepTrying } = usePlanSelection();
+    const { pick, setPick } = useAgentPick();
     const gpu = useGpuMemory().data;
     const { openGpu } = usePlanOpeners();
     const save = useSaveModelChoices();
@@ -118,6 +121,13 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
     const showGpu = gpu?.applies && gpu.total_gb != null && gpu.gpu_gb != null;
 
     const commit = async (acknowledgeNoFit: boolean): Promise<void> => {
+        if (!acknowledgeNoFit) {
+            const request = noFitAsk(tooBig(catalog, selection).filter((e) => !e.downloaded || e.id === selection.defaultChat), t, locale);
+            if (request) {
+                if (await ask(request)) await commit(true);
+                return;
+            }
+        }
         try {
             await save.mutateAsync({ plan, selection, acknowledgeNoFit });
             close();
@@ -147,6 +157,8 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
                     {openGpu ? <Button variant="ghost" size="sm" label={t('setup.found.changeMemory')} disabled={locked} onPress={openGpu} /> : null}
                 </Stack>
             ) : null}
+
+            <AgentChoice disabled={locked} pending={pick?.id ?? null} onPending={setPick} />
 
             <JobModels plan={plan} selection={selection} onSelection={setSelection} disabled={locked} />
 

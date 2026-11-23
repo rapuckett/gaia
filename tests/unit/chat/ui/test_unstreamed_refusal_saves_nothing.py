@@ -67,7 +67,7 @@ def test_the_refusal_leaves_the_chat_free_for_a_streamed_send(
         headers=UI,
     )
 
-    async def _no_reply(db, session, request):
+    async def _no_reply(db, session, request, away=False):
         return
         yield  # pragma: no cover - an async generator that yields nothing
 

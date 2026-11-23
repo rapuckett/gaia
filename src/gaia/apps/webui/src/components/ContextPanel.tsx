@@ -11,13 +11,14 @@ import type { ChatPerformance, ContextUsage, TurnPerformance } from '../types';
 import { ref } from '../i18n/registry';
 import { useT, type Translate } from '../i18n/useT';
 import { exact, hitRate, latestTurn, MIN_TOKENS_TO_RATE, pct, pctLabel, placement, secondsShort, tokensShort } from '../utils/contextPanel.core';
+import { formatWindow } from './modelMeta';
 import './ContextPanel.css';
 
-/** "1.2K", with the exact count on hover. */
-function Tokens({ n }: { n: number | null | undefined }) {
+/** "1.2K", with the exact count on hover; a *window* reads as Settings lists it ("64K"). */
+function Tokens({ n, window = false }: { n: number | null | undefined; window?: boolean }) {
     const t = useT();
     if (n == null) return <span className="cp-unknown">{t('ctx.unknown')}</span>;
-    return <span title={t('ctx.tokens', { n: exact(n) })} dir="ltr">{tokensShort(n)}</span>;
+    return <span title={t('ctx.tokens', { n: exact(n) })} dir="ltr">{window ? formatWindow(n) : tokensShort(n)}</span>;
 }
 
 /** "1.2 s", with milliseconds on hover. */
@@ -159,6 +160,7 @@ function TurnStats({ turn }: { turn: TurnPerformance }) {
 function Cost({ cost }: { cost: TurnPerformance['cost'] }) {
     const t = useT();
     if (cost.kind === 'local') return <span title={t('ctx.costLocalTitle')}>{t('ctx.costLocal')}</span>;
+    if (cost.kind === 'no_reply') return <span>{t('rail.costNoReply')}</span>;
     if (cost.kind === 'unreported') return <span className="cp-unknown">{t('ctx.costUnreported')}</span>;
     if (cost.kind === 'estimate' && cost.usd != null) {
         return (
@@ -306,11 +308,11 @@ export function ContextDetails({ sessionId, busy, onUsage }: ContextDetailsProps
                     <>
                         <p className="cp-lead">
                             <strong>{t('ctx.used', { pct: pct(usage.used, usage.window) })}</strong>
-                            {' · '}<Tokens n={usage.used} /> {t.bare('ctx.of')} <Tokens n={usage.window} /> {t.bare('ctx.tokensWord')}
+                            {' · '}<Tokens n={usage.used} /> {t.bare('ctx.of')} <Tokens n={usage.window} window /> {t.bare('ctx.tokensWord')}
                             {usage.model && <> · <span className="cp-model" dir="ltr">{usage.model}</span></>}
                             {usage.model_window != null && usage.model_window > usage.window && (
                                 <span className="cp-window-note" title={t('ctx.windowTitle')}>
-                                    {' '}· {t.bare('ctx.gaiaUses')} <Tokens n={usage.window} /> {t.bare('ctx.ofModel')} <Tokens n={usage.model_window} />
+                                    {' '}· {t.bare('ctx.gaiaUses')} <Tokens n={usage.window} window /> {t.bare('ctx.ofModel')} <Tokens n={usage.model_window} window />
                                 </span>
                             )}
                             {usage.tokenizer && !usage.tokenizer.exact && (
