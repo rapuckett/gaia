@@ -58,8 +58,8 @@ export function describe(node: Json): Touchable {
         minHeight: (style?.minHeight ?? 0) + (slop.top ?? 0) + (slop.bottom ?? 0),
         minWidth: (style?.minWidth ?? 0) + (slop.left ?? 0) + (slop.right ?? 0),
         checked: pick(p['aria-checked'] as boolean | 'mixed' | undefined, state.checked),
-        selected: pick(p['aria-selected'] as boolean | undefined, state.selected),
-        expanded: pick(p['aria-expanded'] as boolean | undefined, state.expanded),
+        selected: pick(p['aria-selected'] as boolean | undefined, state.selected as boolean | undefined),
+        expanded: pick(p['aria-expanded'] as boolean | undefined, state.expanded as boolean | undefined),
         disabled: !!pick(p['aria-disabled'] as boolean | undefined, state.disabled),
         busy: !!pick(p['aria-busy'] as boolean | undefined, state.busy),
     };

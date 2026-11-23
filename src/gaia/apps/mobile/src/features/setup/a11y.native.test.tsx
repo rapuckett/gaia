@@ -50,7 +50,7 @@ const planOf = (...catalog: SetupCatalogEntry[]): SetupPlan => ({
 const wrapper = (plan: SetupPlan) => {
     const client = createFakeClient({ setupPlan: plan, modelServer: { reachable: false } as never });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    return ({ children }: { children: ReactNode }) => (
+    const Wrapper = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
@@ -61,6 +61,7 @@ const wrapper = (plan: SetupPlan) => {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
+    return Wrapper;
 };
 
 const ctxOf = (plan: SetupPlan) => ({ locked: false, plan, run: null, goTo: jest.fn(), startedRun: jest.fn() }) as unknown as SetupStepContext;
