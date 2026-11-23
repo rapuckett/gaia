@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { Shortfall } from '@webui/components/setup/selection';
+import type { ConfirmRequest } from '../sheets/setupConfirm';
 import { createContext, useContext } from 'react';
 
 /** The screens the plan step leads to. An opener is unset until its screen is registered in PLAN_SCREENS. */
@@ -12,6 +13,8 @@ export interface PlanOpeners {
     openKey?: () => void;
     /** "Change how memory is split": the GPU memory screen. */
     openGpu?: () => void;
+    /** Continue on a tight or too-big model: asks to go on anyway, then calls `proceed`. */
+    confirmNoFit?: (request: ConfirmRequest, proceed: () => void) => void;
     /** Low space, Continue: asks to go on anyway, then calls `proceed(true)`. */
     confirmLowDisk?: (short: Shortfall, proceed: (acknowledgeLowDisk: boolean) => void) => void;
 }
