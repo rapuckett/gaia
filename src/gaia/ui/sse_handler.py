@@ -2655,7 +2655,7 @@ class SSEOutputHandler(OutputHandler):
         with self._confirm_lock:
             if confirm_id is not None and confirm_id != self._confirm_id:
                 logger.warning(
-                    "Dropped a tool decision for prompt %s: the live prompt " "is %s",
+                    "Dropped a tool decision for prompt %s: the live prompt is %s",
                     short_id(confirm_id),
                     short_id(self._confirm_id),
                 )
