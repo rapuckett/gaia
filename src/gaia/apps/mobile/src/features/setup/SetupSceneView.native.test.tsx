@@ -27,6 +27,7 @@ const NEW_SCENES: Record<string, string> = {
     'confirm/low-disk': 'Change models',
     'confirm/no-fit-many': 'Download them anyway?',
     'confirm/no-fit-one': 'Download it anyway?',
+    'confirm/no-fit-tight': 'Use it anyway',
     'confirm/server-low-disk': 'Download anyway',
     'confirm/server-no-fit': 'Use it anyway',
     'download/finish': 'Finish setup',

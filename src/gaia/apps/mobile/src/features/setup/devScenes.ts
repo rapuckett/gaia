@@ -26,7 +26,7 @@ export interface SetupScene {
     offer?: { pick: 'gaia' | 'external'; key?: string; confirming?: boolean };
 }
 
-export type ConfirmScene = 'low-disk' | 'no-fit-many' | 'no-fit-one' | 'server-low-disk' | 'server-no-fit';
+export type ConfirmScene = 'low-disk' | 'no-fit-many' | 'no-fit-one' | 'no-fit-tight' | 'server-low-disk' | 'server-no-fit';
 
 const entry = (over: Partial<SetupCatalogEntry> & { id: string }): SetupCatalogEntry => ({
     name: over.id, roles: ['chat'], purpose: 'Answers your chats', if_skipped: null, recipe: 'llamacpp', size_gb: 1, full_size_gb: 1,
@@ -323,6 +323,7 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'confirm/low-disk': scene('plan', { setupPlan: PLAN_SHORT }, { confirm: 'low-disk' }),
     'confirm/no-fit-many': scene('plan', {}, { confirm: 'no-fit-many' }),
     'confirm/no-fit-one': scene('plan', {}, { confirm: 'no-fit-one' }),
+    'confirm/no-fit-tight': scene('plan', {}, { confirm: 'no-fit-tight' }),
     'confirm/server-low-disk': scene('download', { setupStatus: RUN_VERIFY_FAILED }, { confirm: 'server-low-disk' }),
     'confirm/server-no-fit': scene('plan', {}, { confirm: 'server-no-fit' }),
     'download/agent-failed': scene('download', { setupStatus: RUN_AGENT_COMPONENT_FAILED }),

@@ -6,13 +6,14 @@ import { join } from 'path';
 
 import { stripIsolates } from '@webui/i18n/registry';
 import { translator } from '@webui/i18n/translator';
+import type { SetupCatalogEntry } from '@webui/types';
 
 import { GaiaApiError } from '@/api/errors';
 import type { Translate } from '@/i18n/useT';
 
 import { createConfirmBroker } from './ConfirmSheet';
 import { logsByStage } from './logLines';
-import { lowDiskRequest, noFitRequest, redownloadRequest, serverConfirmRequest, setupConfirmFrom, type ConfirmRequest } from './setupConfirm';
+import { lowDiskRequest, noFitAsk, noFitRequest, redownloadRequest, serverConfirmRequest, setupConfirmFrom, type ConfirmRequest } from './setupConfirm';
 
 type Say = (key: string, params?: Record<string, string>) => string;
 const say: Say = (key, params) => `${key}${params ? JSON.stringify(params) : ''}`;
@@ -78,6 +79,19 @@ describe('confirm wording', () => {
         const many = noFitRequest([{ name: 'A', why: 'a' }, { name: 'B', why: 'b' }], t);
         expect(many.title).toBe('setup.confirm.noFitMany');
         expect(many.body).toEqual(['A: a', 'B: b']);
+    });
+
+    it('asks the tight wording only when every asked model is tight, and the may-not-fit wording for a mix', () => {
+        const model = (e: Partial<SetupCatalogEntry>) => ({ id: 'a', name: 'A', fits: true, tight: true, need_gb: 12, capacity_gb: 14, ...e }) as SetupCatalogEntry;
+        const tightOnly = noFitAsk([model({})], t, 'en')!;
+        expect(tightOnly.title).toContain('setup.confirm.tightOne');
+        expect(tightOnly.confirmLabel).toBe('setup.confirm.useAnyway');
+        expect(tightOnly.body).toEqual(['A: setup.models.warn.tight']);
+        const mixed = noFitAsk([model({}), model({ id: 'b', name: 'B', fits: false, tight: false })], t, 'en')!;
+        expect(mixed.title).toBe('setup.confirm.noFitMany');
+        expect(mixed.confirmLabel).toBe('setup.confirm.downloadAnyway');
+        expect(noFitAsk([model({ need_gb: null })], t, 'en')).toBeNull();
+        expect(noFitAsk([], t, 'en')).toBeNull();
     });
 
     it('low disk is one composed sentence with each value isolated, and no cap on the title', () => {

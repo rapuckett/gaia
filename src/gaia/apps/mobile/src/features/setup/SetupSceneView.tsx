@@ -38,6 +38,8 @@ function confirmRequest(kind: ConfirmScene, t: ReturnType<typeof useT>): Confirm
             return lowDiskRequest({ needGb: 30.4, freeGb: 2.1, freeUpGb: 28.3 }, t);
         case 'no-fit-one':
             return noFitRequest([{ name: 'Qwen3.6 35B A3B (Multimodal)', why: 'needs 26.8 GB and this PC has 16 GB for models' }], t);
+        case 'no-fit-tight':
+            return noFitRequest([{ name: 'Qwen3.6 35B A3B (Multimodal)', why: t('setup.models.warn.tight'), tight: true }], t);
         case 'no-fit-many':
             return noFitRequest(
                 [
