@@ -14,6 +14,9 @@ import { DownloadChip } from './DownloadChip';
 import { useConfirmSheet } from './sheets/ConfirmSheet';
 import { lowDiskRequest, noFitRequest, serverConfirmRequest, type ConfirmRequest } from './sheets/setupConfirm';
 import { useQueuedModels } from './optionalModels';
+import { SeedAgentCompare } from '@/features/settings/panes/model/AgentChoice';
+import { AgentWait } from './steps/AgentWait';
+import type { useAgentFirst } from './steps/useAgentFirst';
 import { SetupFooterBar, SetupFooterProvider } from './SetupFooter';
 import { SetupScreen, type SetupStepContext } from './SetupScreen';
 import { SETUP_STEPS } from './steps';
@@ -30,6 +33,26 @@ function SceneStep({ stage }: { stage: SetupStage }) {
     if (!Step) throw new Error(`Setup has no body registered for the ${stage} step.`);
     const ctx: SetupStepContext = { stage, run, plan, locked: false, again: false, goTo: noop, startedRun: noop, finish: noop };
     return <Step ctx={ctx} />;
+}
+
+/** The agent wait on a fixture, since the real one needs a held run. */
+function SceneAgentWait({ kind }: { kind: 'failed' | 'interrupted' }) {
+    const agent: ReturnType<typeof useAgentFirst> = {
+        pick: { id: 'gaiacpp', download: true, current: 'gaiapy' },
+        setPick: noop,
+        held: true,
+        job: { state: 'failed', bytes_done: 4_200_000, bytes_total: 9_400_000, error: kind === 'failed' ? 'gaiacpp-0.4.1-macos-arm64.tar.gz: checksum does not match the release manifest' : null },
+        interrupted: kind === 'interrupted',
+        failure: null,
+        error: null,
+        saving: false,
+        begin: () => Promise.resolve(),
+        carryOn: noop,
+        cancel: noop,
+        retry: noop,
+        retryDownload: () => Promise.resolve(),
+    };
+    return <AgentWait agent={agent} />;
 }
 
 /** Each confirm sheet worded by the same builders the steps ask with. */
@@ -90,7 +113,9 @@ export function SetupSceneView({ found }: { found: SetupScene }) {
                                     <Stack gap="lg" padding="lg">
                                         {found.chip ? <DownloadChip onPress={noop} /> : null}
                                         <SeedOffer.Provider value={found.offer ?? null}>
-                                            <SceneStep stage={found.stage} />
+                                            <SeedAgentCompare.Provider value={!!found.agentCompareOpen}>
+                                                {found.agentWait ? <SceneAgentWait kind={found.agentWait} /> : <SceneStep stage={found.stage} />}
+                                            </SeedAgentCompare.Provider>
                                         </SeedOffer.Provider>
                                         {found.confirm ? <ConfirmOpen kind={found.confirm} /> : null}
                                     </Stack>

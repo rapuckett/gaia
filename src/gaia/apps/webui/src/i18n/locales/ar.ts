@@ -4504,6 +4504,7 @@ const messages: Messages = {
     'mobileApp.pairing.pinMismatch': 'تغيّرت شهادة الأمان على جهاز الكمبيوتر، لذا توقّف هذا الهاتف عن الاتصال به. إذا أعدت ضبط الاقتران على الكمبيوتر، فاقرن هذا الهاتف مرة أخرى.',
     'mobileApp.composer.answerFailedShort': 'تعذّر إرسال إجابتك.',
     'mobileApp.chat.detachFailedShort': 'تعذّرت إزالة {name} من هذه المحادثة.',
+    'mobileApp.msg.deleteTitle': 'حذف هذه الرسالة؟',
     'mobileApp.chat.privateFailedShort': 'تعذّر تغيير الوضع الخاص لهذه المحادثة.',
     'mobileApp.chat.renameFailedShort': 'تعذّرت إعادة تسمية هذه المحادثة.',
     'mobileApp.chg.errorShort': 'تعذّر حصر تغييرات هذه المحادثة.',

@@ -97,12 +97,12 @@ function CodeBox({ lines, testID }: { lines: { text: string; tone?: CodeTone }[]
     );
 }
 
-/** Code or JSON, collapsed past the web's line count. */
-function Collapsible({ text, limit = PROMPT_CODE_PREVIEW_LINES, testID }: { text: string; limit?: number; testID?: string }) {
+/** Code or JSON, collapsed past the web's line count; `whole` shows every line, for text the person approves as it reads. */
+function Collapsible({ text, limit = PROMPT_CODE_PREVIEW_LINES, whole, testID }: { text: string; limit?: number; whole?: boolean; testID?: string }) {
     const t = useT();
     const [expanded, setExpanded] = useState(false);
     const lines = text.replace(/^\n+|\n+$/g, '').split('\n');
-    const long = lines.length > limit;
+    const long = !whole && lines.length > limit;
     const shown = long && !expanded ? lines.slice(0, limit) : lines;
     return (
         <Stack gap="xs">
@@ -128,7 +128,6 @@ function ChangePreview({ args }: { args: Record<string, unknown> }) {
     const [expanded, setExpanded] = useState(false);
     const change = fileChange(args);
     if (!change) return null;
-    const hidden = change.kind === 'edit' ? fileUnseen(args.old_content) || fileUnseen(args.new_content) : fileUnseen(change.text);
     const long = change.kind === 'edit' && change.lines.length > CHANGE_PREVIEW_LINES;
     const lines = change.kind === 'edit' ? (long && !expanded ? change.lines.slice(0, CHANGE_PREVIEW_LINES) : change.lines) : [];
     const more = t('prompt.showAllLines', { n: change.kind === 'edit' ? change.lines.length : 0 });
@@ -157,11 +156,6 @@ function ChangePreview({ args }: { args: Record<string, unknown> }) {
                     {t('prompt.emptyFile')}
                 </Text>
             )}
-            {hidden ? (
-                <Text role="caption" tone="warning" testID="perm-change-unseen">
-                    {t('prompt.unseenChars')}
-                </Text>
-            ) : null}
         </Stack>
     );
 }
@@ -169,7 +163,7 @@ function ChangePreview({ args }: { args: Record<string, unknown> }) {
 /** Title, time, account and people of a calendar change, as the web card lists them. */
 function CalendarDetails({ tool, args }: { tool: string; args: Record<string, unknown> }) {
     const t = useT();
-    const { rows, peopleLabel, people, unseenNote } = calendarFacts(tool, args, t);
+    const { rows, peopleLabel, people } = calendarFacts(tool, args, t);
     const when = (v: (typeof rows)[number]['value']) =>
         v.kind === 'text' ? v.text : v.when.raw ?? (v.when.allDay ? `${v.when.text} (${t.bare('permission.calendar.allDay')})` : v.when.text);
     return (
@@ -192,11 +186,6 @@ function CalendarDetails({ tool, args }: { tool: string; args: Record<string, un
                     {person}
                 </Text>
             ))}
-            {unseenNote ? (
-                <Text role="caption" tone="warning" testID="perm-calendar-unseen">
-                    {unseenNote}
-                </Text>
-            ) : null}
         </Stack>
     );
 }
@@ -226,9 +215,10 @@ function MailFacts({ header }: { header: MailHeader }) {
     );
 }
 
-/** What the call does, in the order the web card shows it. */
-function CallDetails({ prompt }: { prompt: GaiaNotification }) {
-    const t = useT();
+type CallWarning = { key: string; testID?: string; text: string };
+
+/** What a call is, worked out once: the body shows it and the card pins its warnings above the buttons. */
+function describeCall(prompt: GaiaNotification, t: ReturnType<typeof useT>) {
     const tool = prompt.tool ?? '';
     const args = prompt.toolArgs ?? {};
     const field = summarizeField(prompt);
@@ -251,13 +241,10 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
               : '';
     const hasArgs = Object.keys(args).length > 0;
     const calendar = CALENDAR_WRITE_TOOLS.has(tool);
-    const [showArgs, setShowArgs] = useState(false);
     const relayed = !hasArgs && COMMAND_SUMMARY_TOOLS.has(tool) ? splitCommandSummary(prompt.summary ?? '') : null;
-    // The question already names the path of a folder or trust prompt.
-    const own = tool === PATH_ACCESS_TOOL || tool === PROJECT_TRUST_TOOL;
     // Characters that don't show are shown as [U+XXXX]: the card is approved as it reads.
     const { shown, coded: detailCoded } = shownField(field.key, detail);
-    const shownDetail = own ? '' : shown;
+    const shownDetail = shown;
     const command = typeof args.command === 'string' ? args.command : relayed?.command ?? '';
     // What the command runs when its own text hides it: base64 PowerShell, cmd's ^ escapes.
     const decoded = command ? decodedPowerShell(command) : '';
@@ -268,6 +255,61 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
         [command, decoded].some(unseenCommand) ||
         [args.path, folder, relayed?.folder].some(unseenStrict);
     const mail = exactText ? splitMailHeader(exactText) : null;
+    const change = fileChange(args);
+    const changeUnseen = change
+        ? change.kind === 'edit'
+            ? fileUnseen(args.old_content) || fileUnseen(args.new_content)
+            : fileUnseen(change.text)
+        : false;
+    const calendarUnseen = calendar && hasArgs ? calendarFacts(tool, args, t).unseenNote : '';
+    // Notes the person must read before approving, in the order the body showed them.
+    const warnings: CallWarning[] = [];
+    if (riskNote) {
+        warnings.push({ key: 'risk', text: outsidePath ? t('prompt.outsideFolders', { path: markName(outsidePath) }) : riskNote });
+    }
+    if (script?.hiddenLines) {
+        warnings.push({
+            key: 'script-more',
+            testID: 'perm-script-more',
+            text: t.plural('prompt.scriptMoreLines', script.hiddenLines, { n: script.hiddenLines }),
+        });
+    }
+    if (script?.unreadable) {
+        warnings.push({ key: 'script-unreadable', testID: 'perm-script-unreadable', text: t(SCRIPT_UNREADABLE[script.unreadable]) });
+    }
+    if (codeNote) warnings.push({ key: 'code-risk', testID: 'perm-code-risk', text: codeNote });
+    if (hidden) warnings.push({ key: 'hidden', testID: 'perm-hidden-note', text: t('prompt.hiddenChars') });
+    if (relayed?.note) warnings.push({ key: 'relayed', text: relayed.note });
+    if (calendarUnseen) warnings.push({ key: 'calendar-unseen', testID: 'perm-calendar-unseen', text: calendarUnseen });
+    if (changeUnseen) warnings.push({ key: 'change-unseen', testID: 'perm-change-unseen', text: t('prompt.unseenChars') });
+
+    return {
+        tool, args, detail, riskNote, folder, script, code, detailArgs, exactText, hasArgs, calendar, relayed,
+        shownDetail, command, decoded, reading, mail, warnings, summary: prompt.summary,
+    };
+}
+
+type CallFacts = ReturnType<typeof describeCall>;
+
+/** The warnings, pinned just above the buttons so a long card can't scroll them out of view. */
+function CallWarnings({ warnings }: { warnings: CallWarning[] }) {
+    if (!warnings.length) return null;
+    return (
+        <Stack gap="xs" testID="perm-warnings">
+            {warnings.map(({ key, testID, text }) => (
+                <Text key={key} role="caption" tone="warning" testID={testID} accessibilityRole={key === 'risk' ? 'text' : undefined}>
+                    {text}
+                </Text>
+            ))}
+        </Stack>
+    );
+}
+
+/** What the call does, in the order the web card shows it. */
+function CallDetails({ facts, question }: { facts: CallFacts; question: string }) {
+    const t = useT();
+    const { tool, args, detail, riskNote, folder, script, code, detailArgs, exactText, hasArgs, calendar, relayed, shownDetail, command, decoded, reading, mail, summary } = facts;
+    const [showArgs, setShowArgs] = useState(false);
     const inFolder = (path: string) => (
         <Text role="caption" tone="secondary">
             {t.bare('prompt.in')} <Text mono>{markName(path)}</Text>
@@ -276,7 +318,7 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
 
     return (
         <Stack gap="sm">
-            {shownDetail && riskNote ? <Collapsible text={shownDetail} /> : null}
+            {shownDetail && riskNote ? <Collapsible text={shownDetail} whole /> : null}
             {shownDetail && !riskNote ? (
                 <View style={{ direction: 'ltr' }} {...dirProp('ltr')}>
                     <Text role="label" tone="secondary" mono dir="ltr" align="ltr">
@@ -285,69 +327,44 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
                 </View>
             ) : null}
             {folder ? inFolder(folder) : null}
-            {riskNote ? (
-                <Text role="caption" tone="warning" accessibilityRole="text">
-                    {outsidePath ? t('prompt.outsideFolders', { path: markName(outsidePath) }) : riskNote}
-                </Text>
-            ) : null}
             {code ? <Collapsible text={visibleText(code, true)} /> : null}
             {script?.text != null && !script.text.trim() ? (
                 <Text role="caption" tone="secondary" testID="perm-script-empty">
                     {t('prompt.scriptEmpty')}
                 </Text>
             ) : null}
-            {script?.hiddenLines ? (
-                <Text role="caption" tone="warning" testID="perm-script-more">
-                    {t.plural('prompt.scriptMoreLines', script.hiddenLines, { n: script.hiddenLines })}
-                </Text>
-            ) : null}
-            {script?.unreadable ? (
-                <Text role="caption" tone="warning" testID="perm-script-unreadable">
-                    {t(SCRIPT_UNREADABLE[script.unreadable])}
-                </Text>
-            ) : null}
-            {codeNote ? (
-                <Text role="caption" tone="warning" testID="perm-code-risk">
-                    {codeNote}
-                </Text>
-            ) : null}
-            {mail?.before ? <Collapsible text={mail.before} /> : null}
+            {mail?.before ? <Collapsible text={mail.before} whole /> : null}
             {mail ? <MailFacts header={mail} /> : null}
-            {exactText ? <Collapsible text={mail ? mail.body : exactText} testID="perm-exact-text" /> : null}
-            {relayed ? <Collapsible text={visibleCommand(relayed.command)} /> : null}
+            {exactText ? <Collapsible text={mail ? mail.body : exactText} whole testID="perm-exact-text" /> : null}
+            {relayed ? <Collapsible text={visibleCommand(relayed.command)} whole /> : null}
             {decoded ? (
                 <Text role="caption" tone="secondary">
                     {t('prompt.decodedCommand')}
                 </Text>
             ) : null}
-            {decoded ? <Collapsible text={visibleCommand(decoded)} testID="perm-decoded" /> : null}
+            {decoded ? <Collapsible text={visibleCommand(decoded)} whole testID="perm-decoded" /> : null}
             {reading && reading !== command ? (
                 <Text role="caption" tone="secondary">
                     {t('prompt.cmdReading')}
                 </Text>
             ) : null}
-            {reading && reading !== command ? <Collapsible text={visibleCommand(reading)} testID="perm-cmd-reading" /> : null}
-            {hidden ? (
-                <Text role="caption" tone="warning" testID="perm-hidden-note">
-                    {t('prompt.hiddenChars')}
-                </Text>
-            ) : null}
+            {reading && reading !== command ? <Collapsible text={visibleCommand(reading)} whole testID="perm-cmd-reading" /> : null}
             {relayed?.folder ? inFolder(relayed.folder) : null}
             {relayed?.extras ? (
                 <Text role="caption" tone="secondary">
                     {visibleText(relayed.extras, false)}
                 </Text>
             ) : null}
-            {relayed?.note ? (
-                <Text role="caption" tone="warning">
-                    {relayed.note}
+            {calendar && hasArgs ? <CalendarDetails tool={tool} args={args} /> : null}
+            {calendar && !hasArgs && summary ? <Collapsible text={summary} whole /> : null}
+            {!detail && !code && !exactText && !relayed && !calendar && summary ? (
+                <Text role="caption" tone="secondary">
+                    {visibleText(summary, true)}
                 </Text>
             ) : null}
-            {calendar && hasArgs ? <CalendarDetails tool={tool} args={args} /> : null}
-            {calendar && !hasArgs && prompt.summary ? <Collapsible text={prompt.summary} /> : null}
-            {!detail && !code && !exactText && !relayed && !calendar && prompt.summary ? (
-                <Text role="caption" tone="secondary">
-                    {visibleText(prompt.summary, true)}
+            {requiresFreshConsent(tool) ? (
+                <Text role="label" tone="secondary">
+                    {question}
                 </Text>
             ) : null}
             <ChangePreview args={args} />
@@ -382,7 +399,7 @@ export function PermissionPrompt({
 }: PermissionPromptProps) {
     const t = useT();
     const { width, height } = useWindowDimensions();
-    // While the person types a queued message, only the question and its answers fit above the keyboard.
+    // While the person types a queued message, only the heading and its answers fit above the keyboard.
     const typing = useKeyboardState((k) => k.isVisible);
     const reduced = useReducedMotion();
     const left = useCountdown(prompt.expiresAt, prompt.timeoutSeconds);
@@ -400,6 +417,7 @@ export function PermissionPrompt({
     }, [prompt.id]);
 
     const { heading, question } = permissionPromptText(prompt, t, markName);
+    const facts = describeCall(prompt, t);
     useEffect(() => {
         AccessibilityInfo.announceForAccessibility(heading);
     }, [heading]);
@@ -455,16 +473,13 @@ export function PermissionPrompt({
                             <Text role="ui" weight="semibold" accessibilityRole="header">
                                 {heading}
                             </Text>
-                            <Text role="label" tone="secondary">
-                                {question}
-                            </Text>
                         </Stack>
                     </Row>
                     {typing ? null : (
                         <ScrollBox maxHeight={bodyMax} hint testID="perm-details-scroll">
                             <View testID="perm-details-body">
                                 <Stack gap="md">
-                                    <CallDetails prompt={prompt} />
+                                    <CallDetails facts={facts} question={question} />
                                     {fullAccessPending ? <Notice tone="info" message={t('perm.fullPendingNote')} testID="perm-full-pending" /> : null}
                                     {suggestAlways && !expired ? (
                                         <Text role="caption" tone="secondary">
@@ -484,6 +499,7 @@ export function PermissionPrompt({
                         </Text>
                     ) : (
                         <Stack gap="sm">
+                            <CallWarnings warnings={facts.warnings} />
                             {wide ? (
                                 <Row gap="sm" wrap>
                                     {buttons}

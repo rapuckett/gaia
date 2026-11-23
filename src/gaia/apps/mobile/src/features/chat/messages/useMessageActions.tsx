@@ -198,7 +198,7 @@ export function useMessageActions(
                 ) : null}
                 {confirmDelete
                     ? confirm(
-                          t('msg.confirmDeleteAria'),
+                          t('mobileApp.msg.deleteTitle'),
                           null,
                           t('msg.delete'),
                           () => void removeFrom(),

@@ -185,6 +185,16 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                                             {stats.unreadable}
                                         </Text>
                                     ) : null}
+                                    {stats.serverWaiting ? (
+                                        <Text role="caption" tone="warning">
+                                            {stats.serverWaiting}
+                                        </Text>
+                                    ) : null}
+                                    {stats.needsRetry ? (
+                                        <Text role="caption" tone="danger">
+                                            {stats.needsRetry}
+                                        </Text>
+                                    ) : null}
                                 </Row>
                             ) : null}
                         </Stack>

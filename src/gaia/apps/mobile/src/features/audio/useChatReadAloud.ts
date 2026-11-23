@@ -22,7 +22,8 @@ export function readAloudId(message: Message): string {
  */
 export function useChatReadAloud(sessionId: string, stream: Pick<ChatStream, 'status' | 'error' | 'stopState' | 'failed' | 'failure'>, saved: Message[]): void {
     const client = useGaiaClient();
-    const auto = useSpeechSettings().data?.auto === true;
+    const speech = useSpeechSettings().data;
+    const auto = speech?.auto === true && speech.available !== false;
     const busy = stream.status !== 'idle';
     const wasBusy = useRef(busy);
 

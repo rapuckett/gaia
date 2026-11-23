@@ -25,7 +25,7 @@ jest.mock('react-native-reanimated', () => {
     };
 });
 jest.mock('@/ui', () => {
-    const { Text: RNText } = jest.requireActual('react-native');
+    const { Text: RNText, View: RNView } = jest.requireActual('react-native');
     const Pass = ({ children }: { children?: unknown }) => children ?? null;
     return {
         Button: (p: { label: string; onPress: () => void }) => {
@@ -38,7 +38,7 @@ jest.mock('@/ui', () => {
         Notice: ({ message, testID }: { message: string; testID?: string }) => <RNText testID={testID}>{message}</RNText>,
         Pressable: Pass,
         Row: Pass,
-        ScrollBox: Pass,
+        ScrollBox: ({ children, testID }: { children?: unknown; testID?: string }) => <RNView testID={testID}>{children}</RNView>,
         Stack: Pass,
         Surface: Pass,
         Text: RNText,
@@ -73,7 +73,21 @@ async function mount(p: GaiaNotification, onAnswer = jest.fn(), onExpired = jest
     await act(async () => {
         r.render(<PermissionPrompt prompt={p} onAnswer={onAnswer} onExpired={onExpired} />);
     });
-    return { onAnswer, onExpired, shown: () => JSON.stringify(r.container.toJSON()) };
+    const scrolled = () => {
+        const find = (node: unknown): unknown => {
+            if (!node || typeof node !== 'object') return null;
+            const n = node as { props?: { testID?: string }; children?: unknown[] };
+            if (n.props?.testID === 'perm-details-scroll') return n;
+            for (const c of Array.isArray(n.children) ? n.children : []) {
+                const hit = find(c);
+                if (hit) return hit;
+            }
+            return null;
+        };
+        const root = r.container.toJSON();
+        return JSON.stringify(find(Array.isArray(root) ? { children: root } : root));
+    };
+    return { onAnswer, onExpired, shown: () => JSON.stringify(r.container.toJSON()), scrolled };
 }
 
 beforeEach(() => jest.useFakeTimers());
@@ -165,6 +179,12 @@ describe('PermissionPrompt shows what will really run', () => {
         expect(shown()).toContain('perm-hidden-note');
     });
 
+    it('pins the hidden-characters note outside the scrolling body', async () => {
+        const { shown, scrolled } = await mount(prompt({ toolArgs: { file_path: '/home/u/inv\u200doice.txt', content: 'x' } }));
+        expect(shown()).toContain('perm-hidden-note');
+        expect(scrolled()).not.toContain('perm-hidden-note');
+    });
+
     it('keeps an emoji and its variation selector in a search query, which reads as prose', async () => {
         const { shown } = await mount(prompt({ tool: 'web_search', toolLabel: undefined, alwaysScope: undefined, toolArgs: { query: 'I ❤\ufe0f cats' } }));
         expect(shown()).toContain('I ❤\ufe0f cats');
@@ -213,6 +233,13 @@ describe('PermissionPrompt shows what code and commands really do', () => {
         expect(escaped.shown()).toContain('del x');
     });
 
+    it('shows a long decoded command whole, with no Show all', async () => {
+        const lines = Array.from({ length: 20 }, (_, i) => `Write-Output line${i + 1}`).join('\n');
+        const { shown } = await mount(shell(`powershell -EncodedCommand ${utf16Base64(lines)}`));
+        expect(shown()).toContain('line20');
+        expect(shown()).not.toContain('Show all');
+    });
+
     it("says why a script can't be shown, keeps it out of the raw arguments, and notes the code risk", async () => {
         const { shown } = await mount(
             prompt({ tool: 'execute_python_file', toolLabel: undefined, alwaysScope: undefined, toolArgs: { file_path: '/home/u/run.py', _script: { unreadable: 'not_text' } } }),
@@ -230,6 +257,14 @@ describe('PermissionPrompt shows what code and commands really do', () => {
         expect(shown()).not.toContain('perm-hidden-note');
     });
 
+    it('pins the code-risk note outside the scrolling body of a long code card', async () => {
+        const code = Array.from({ length: 30 }, (_, i) => `print(${i})`).join('\n');
+        const { shown, scrolled } = await mount(prompt({ tool: 'run_python', toolLabel: undefined, alwaysScope: undefined, toolArgs: { code } }));
+        expect(scrolled()).toContain('perm-details-body');
+        expect(shown()).toContain('perm-code-risk');
+        expect(scrolled()).not.toContain('perm-code-risk');
+    });
+
     it("shows a mail's header fields apart from its body", async () => {
         const { shown } = await mount(
             prompt({ tool: 'send_now', toolLabel: undefined, alwaysScope: undefined, toolArgs: { _exact_text: 'To: ada@example.com\nSubject: Lunch\n\nSee you at noon.' } }),
@@ -237,5 +272,32 @@ describe('PermissionPrompt shows what code and commands really do', () => {
         expect(shown()).toContain('ada@example.com');
         expect(shown()).toContain('See you at noon.');
         expect(shown()).not.toContain('Subject: Lunch');
+    });
+    const lines20 = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join('\n');
+
+    it('shows the question only for fresh-consent tools, after the details', async () => {
+        const path = await mount(prompt({ tool: 'allow_path_access', toolArgs: { path: '/x/notes', kind: 'folder' } }));
+        const write = await mount(prompt({ toolArgs: { file_path: 'a.txt', content: 'hello' } }));
+        const order = path.shown();
+        expect(order).toContain('Allow it for this chat?');
+        expect(order.indexOf('/x/notes')).toBeLessThan(order.indexOf('Allow it for this chat?'));
+        expect(write.shown()).not.toContain('GAIA needs your OK');
+        const share = await mount(prompt({ tool: 'share_engineering_context', alwaysScope: undefined, toolArgs: {} }));
+        expect(share.shown()).toContain('GAIA needs your OK');
+    });
+
+    it('shows a long mail body and a relayed command whole, with no show-more link', async () => {
+        const mail = await mount(prompt({ tool: 'send_now', toolLabel: undefined, alwaysScope: undefined, toolArgs: { _exact_text: `To: ada@example.com\nSubject: Lunch\n\n${lines20}` } }));
+        const cmd = await mount(prompt({ tool: 'run_shell_command', toolLabel: undefined, alwaysScope: undefined, summary: lines20 }));
+        for (const { shown } of [mail, cmd]) {
+            expect(shown()).toContain('line 1"');
+            expect(shown()).toContain('line 20');
+            expect(shown()).not.toMatch(/Show (all|more|less)/i);
+        }
+    });
+
+    it('shows the path of a path-access prompt as a line of its own', async () => {
+        const { shown } = await mount(prompt({ tool: 'allow_path_access', toolArgs: { path: '/x/notes', kind: 'folder' } }));
+        expect(shown().split('/x/notes').length - 1).toBeGreaterThanOrEqual(2);
     });
 });
