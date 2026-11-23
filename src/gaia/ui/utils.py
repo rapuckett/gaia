@@ -752,7 +752,7 @@ def ensure_within_home(resolved: Path) -> None:
         )
 
 
-def ensure_document_path_allowed(raw: Path) -> str:
+def ensure_document_path_allowed(raw: Path, *, away: bool = False) -> str:
     """Raise HTTP 403 unless *raw* lies inside a document root; return its realpath.
 
     The one containment check for paths a user types into the Document library,
@@ -764,11 +764,17 @@ def ensure_document_path_allowed(raw: Path) -> str:
        probe which files exist outside them.
     2. Physical: the realpath must be under a root too, which stops an
        intermediate symlinked directory inside a root from pointing outside.
+
+    *away* is a caller away from the PC, whose refusal names no PC folder.
     """
     roots = document_roots()
     # Worded so it holds whether or not the path exists: see step 1.
     denied = (
-        f"GAIA can only read documents under "
+        "GAIA can only read documents from the PC's document folders, and this "
+        "path is outside them. Check the path is right, or add the document on "
+        "the PC."
+        if away
+        else f"GAIA can only read documents under "
         f"{_describe_roots(roots)}, and {raw} is outside them. Check the path "
         f"is right. If it is, move or copy it under one of those folders."
     )
@@ -824,7 +830,7 @@ def compute_file_hash_from_fd(fd: int) -> str:
 
 @contextmanager
 def safe_open_document(
-    path: str,
+    path: str, *, away: bool = False
 ) -> Generator[Tuple[int, os.stat_result, Path], None, None]:
     """TOCTOU-safe context manager for opening document files.
 
@@ -848,7 +854,7 @@ def safe_open_document(
 
     raw = Path(os.path.expanduser(path))
     # 1-2. Containment before lstat, so nothing outside the roots is probed.
-    real = ensure_document_path_allowed(raw)
+    real = ensure_document_path_allowed(raw, away=away)
 
     # 3. Reject symlinks before resolving — lstat doesn't follow symlinks
     try:

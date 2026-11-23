@@ -307,7 +307,10 @@ def test_an_open_chat_stops_showing_what_the_memory_page_erased(
     page_store = MemoryStore(db_path=tmp_path / "memory.db")
     monkeypatch.setattr(memory_router, "_get_store", lambda: page_store)
 
-    memory_router.clear_all_memory()
+    from starlette.requests import Request
+
+    pc = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 50000)})
+    memory_router.clear_all_memory(pc)
     page_store.close()
 
     assert "Lisbon" not in chat.process_query("what do you know about me?")
