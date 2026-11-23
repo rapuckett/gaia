@@ -26,7 +26,7 @@ function pressed(overrides: Partial<PressedAction> = {}): PressedAction {
 /** A native store holding one record under TOKEN, claimable once, as claimApproval is. */
 function deps(record: NativeApprovalRecord | null = RECORD, overrides: Partial<Omit<ActionDeps, 'claim' | 'confirm' | 'notify' | 'reviewing'>> = {}) {
     const store = new Map(record ? [[TOKEN, record]] : []);
-    const claim = jest.fn(async (token: string) => {
+    const claim = jest.fn(async (token: string): Promise<NativeApprovalRecord | { locked: true } | null> => {
         const found = store.get(token) ?? null;
         store.delete(token);
         return found;
@@ -99,6 +99,15 @@ describe('refusing a button', () => {
         expect(d.claim).not.toHaveBeenCalled();
         expect(d.confirm).not.toHaveBeenCalled();
         expect(d.notify).toHaveBeenCalledWith(reason, null);
+    });
+
+    it('while iOS says the phone is locked, leaving the record for a press after unlocking', async () => {
+        const d = deps();
+        d.claim.mockResolvedValueOnce({ locked: true });
+        await expect(answerFromNotification(pressed({ kind: 'review' }), d)).resolves.toEqual({ result: 'refused', reason: 'locked' });
+        expect(d.notify).toHaveBeenCalledWith('locked', null);
+        expect(d.reviewing).not.toHaveBeenCalled();
+        await expect(answerFromNotification(pressed(), d)).resolves.toEqual({ result: 'denied', sessionId: 's_42' });
     });
 
     it('whose token the store has never seen', async () => {

@@ -55,14 +55,21 @@ public class GaiaPushModule: Module {
       center.setNotificationCategories(others.union([PushActions.approvalCategory(reviewTitle: reviewTitle, denyTitle: denyTitle)]))
     }
 
-    // What a pressed action answers, once: the record is deleted as it is read, and its notification removed.
+    // What a pressed action answers, once: the record is deleted as it is read, and its notification removed. While the
+    // phone is locked nothing is claimed and it answers `locked`; isProtectedDataAvailable is read on the main queue.
     AsyncFunction("claimApproval") { (token: String) throws -> [String: Any]? in
       try guarded("read") {
-        guard let record = try PushActionRecords.claim(token, in: PushKeychain.ActionStorage()) else { return nil }
-        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [record.notificationId])
-        return record.dictionary
+        switch try PushActionRecords.claim(token, in: PushKeychain.ActionStorage(), unlocked: UIApplication.shared.isProtectedDataAvailable) {
+        case .locked:
+          return ["locked": true]
+        case .none:
+          return nil
+        case .record(let record):
+          UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [record.notificationId])
+          return record.dictionary
+        }
       }
-    }
+    }.runOnQueue(.main)
   }
 }
 

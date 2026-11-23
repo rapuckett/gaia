@@ -77,8 +77,8 @@ export function failureOf(error: unknown): ActionFailure {
 }
 
 export interface ActionDeps {
-    /** The record a token stands for, deleted as it is read (native claimApproval). */
-    claim(token: string): Promise<NativeApprovalRecord | null>;
+    /** The record a token stands for, deleted as it is read (native claimApproval); `locked` takes nothing. */
+    claim(token: string): Promise<NativeApprovalRecord | { locked: true } | null>;
     /** The PC the app is talking to now, or null. */
     currentPcId(): string | null;
     /** Posts confirm-tool through the app's paired, pinned client, as the chat's own Deny does. */
@@ -104,14 +104,16 @@ export async function answerFromNotification(pressed: PressedAction, deps: Actio
     };
     if (pressed.locked) return fail('locked');
     if (!pressed.token || !TOKEN.test(pressed.token)) return fail('refused');
-    let record: NativeApprovalRecord | null;
+    let claimed: NativeApprovalRecord | { locked: true } | null;
     try {
-        record = await deps.claim(pressed.token);
+        claimed = await deps.claim(pressed.token);
     } catch (error) {
         console.warn(`An approval's notification couldn't be read (${error instanceof Error ? error.name : 'unknown'})`);
         return fail('failed');
     }
-    if (!record) return fail('stale');
+    if (!claimed) return fail('stale');
+    if ('locked' in claimed) return fail('locked');
+    const record = claimed;
     if (!record.pcId || !ID.test(record.sessionId) || !ID.test(record.approvalId)) return fail('refused');
     const { sessionId } = record;
     if (deps.now() > record.expiresAt) return fail('stale', sessionId);

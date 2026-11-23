@@ -202,8 +202,9 @@ the native fingerprint needs a new build.
     the chat's approval card, where the person allows it; Deny is sent through the paired PC like
     the chat's own Deny. Nothing is ever "always". Each notification's buttons answer through a
     single-use token whose record the extension (iOS) or messaging service (Android) stored; the
-    ids never travel in the notification. Tools listed in `modules/gaia-push/openOnlyTools.json`
-    get only Open; the list is copied into both native builds at prebuild.
+    approval id never travels in the notification (the chat id does, for tap-to-open). Tools
+    listed in `modules/gaia-push/openOnlyTools.json` get only Open; the list is copied into both
+    native builds at prebuild.
 - **Android C++ compiles** run at most `GAIA_BUILD_JOBS` (default 4) at a time in each module.
 - **iOS builds with fastlane:** `bundle exec fastlane ios check` (an unsigned simulator build),
   `ios device` and `ios sideload` (a signed build on your own iPhone). Every account value comes

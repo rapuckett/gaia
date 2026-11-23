@@ -103,6 +103,13 @@ protocol PushActionStorage {
   func remove(_ token: String) throws
 }
 
+/// What a claim found: the phone locked (nothing taken), no record, or the record, now deleted.
+enum PushActionClaim: Equatable {
+  case locked
+  case none
+  case record(PushActionRecord)
+}
+
 /// The records' rules, over any storage: each token is claimed at most once, and stale ones are swept.
 enum PushActionRecords {
   /// Kept a day past their expiry, so a late press still gets "no longer waiting" rather than "not from GAIA".
@@ -118,6 +125,12 @@ enum PushActionRecords {
   static func claim(_ token: String, in store: PushActionStorage) throws -> PushActionRecord? {
     guard PushActions.isToken(token), let data = try store.take(token) else { return nil }
     return try? JSONDecoder().decode(PushActionRecord.self, from: data)
+  }
+
+  /// A claim made while the phone is locked takes nothing, so the record is still there for a press after unlocking.
+  static func claim(_ token: String, in store: PushActionStorage, unlocked: Bool) throws -> PushActionClaim {
+    guard unlocked else { return .locked }
+    return try claim(token, in: store).map(PushActionClaim.record) ?? .none
   }
 
   /// Deletes the records of approvals answered or expired elsewhere; their notifications' identifiers, to remove.
