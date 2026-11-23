@@ -223,7 +223,7 @@ export function TextField({
             {error ? (
                 <Row gap="xs" align="start">
                     <Icon icon={CircleAlert} size="sm" tone="danger" />
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1 }} accessibilityLiveRegion="polite">
                         <Text role="label" tone="danger">
                             {error}
                         </Text>
