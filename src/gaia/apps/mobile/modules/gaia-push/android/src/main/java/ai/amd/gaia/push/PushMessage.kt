@@ -15,6 +15,8 @@ internal data class PushPayload(
   /** The tool id an approval is for, when the PC sends it; only `[a-z0-9_]` ids are kept, to look up its label. */
   val tool: String?,
   val ask: String?,
+  /** How a `finished` run ended when it wasn't done: `stopped` or `ended`; any other value counts as absent. */
+  val outcome: String?,
   val route: String,
   val sessionId: String?,
   val badge: Int?,
@@ -53,6 +55,7 @@ internal data class PushPayload(
         clean(params, "label", 300),
         text(params, "tool")?.takeIf { TOOL.matches(it) },
         text(params, "ask"),
+        text(params, "outcome")?.takeIf { it == "stopped" || it == "ended" },
         safeRoute(root.optString("route").ifEmpty { null }, sessionId),
         sessionId,
         badge,
@@ -129,7 +132,7 @@ internal object PushText {
         title = say("chatAlert.needsApproval"); tap = "approve"
         detail = p.tool?.let { find("tool.$it.active") } ?: p.label?.let(::isolate)
       }
-      p.kind == "finished" -> { title = say("chatAlert.finished"); tap = "read"; detail = p.summary?.let(::isolate) }
+      p.kind == "finished" -> { title = say(p.outcome?.let { "chatAlert.$it" } ?: "chatAlert.finished"); tap = "read"; detail = p.summary?.let(::isolate) }
       p.kind == "failed" -> { title = say("chatAlert.failed"); tap = "problem"; detail = p.summary?.let(::isolate) }
       p.kind == "needs_you" -> { title = say("mobileApp.push.title.needsYou"); tap = "needsYou"; detail = p.label?.let(::isolate) }
       else -> return null
