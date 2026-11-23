@@ -1231,8 +1231,34 @@ def _flagship_agent_setting() -> tuple[str, bool]:
     return fetch.saved_flagship(), fetch.native_flagship() is not None
 
 
-def _set_flagship_agent(choice: str) -> None:
-    """Save the agent choice and stop the running agent so the next message starts the new one."""
+class _SavedButNotStopped(HTTPException):
+    """The choice was saved but the running agent could not be stopped."""
+
+
+def _refuse_missing_gaiacpp(choice: str, http_request: Request) -> None:
+    """422 when *choice* is gaiacpp, changes the saved one, and gaiacpp isn't here."""
+    from gaia.config import GaiaConfig
+    from gaia.daemon.sidecars import fetch
+
+    if choice != fetch.NATIVE_FLAGSHIP or choice == GaiaConfig.load().flagship_agent:
+        return
+    if fetch.native_flagship() is None:
+        looked = ", ".join(str(p) for p in fetch.native_flagship_candidates())
+        raise HTTPException(
+            status_code=422,
+            detail=security.detail_for(
+                http_request,
+                "gaiacpp is not installed on this PC, so it cannot be the agent "
+                f"yet (looked in: {looked}). Download it first.",
+            ),
+        )
+
+
+def _set_flagship_agent(choice: str, http_request: Request) -> bool:
+    """Save the agent choice and stop the running agent so the next message starts the new one.
+
+    Returns True when the saved choice changed.
+    """
     from gaia.config import GaiaConfig
     from gaia.daemon.sidecars import fetch
     from gaia.daemon.sidecars.errors import SidecarError
@@ -1242,20 +1268,12 @@ def _set_flagship_agent(choice: str) -> None:
 
     saved = GaiaConfig.load().flagship_agent
     if choice == saved:
-        return
-    if choice == fetch.NATIVE_FLAGSHIP and fetch.native_flagship() is None:
-        looked = ", ".join(str(p) for p in fetch.native_flagship_candidates())
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "gaiacpp is not installed on this PC, so it cannot be the agent "
-                f"yet (looked in: {looked}). Download it first."
-            ),
-        )
+        return False
+    _refuse_missing_gaiacpp(choice, http_request)
     if saved is None and choice == fetch.PYTHON_FLAGSHIP:
         # Already what runs here; saving it makes the terminal UI use it too.
         GaiaConfig.save_key("flagship_agent", choice)
-        return
+        return True
     from gaia.ui.setup_runner import runner as setup_runner
 
     setup = setup_runner.status() or {}
@@ -1281,13 +1299,15 @@ def _set_flagship_agent(choice: str) -> None:
     try:
         daemon_client.stop_sidecar(FLAGSHIP_AGENT_ID)
     except SidecarError as e:
-        raise HTTPException(
+        raise _SavedButNotStopped(
             status_code=500,
-            detail=(
+            detail=security.detail_for(
+                http_request,
                 f"The agent choice was saved as {choice}, but the agent that is "
-                f"running could not be stopped: {e} Restart GAIA to switch."
+                f"running could not be stopped: {e} Restart GAIA to switch.",
             ),
         ) from e
+    return True
 
 
 def _resolve_dynamic_tools_setting() -> tuple[bool, bool]:
@@ -1365,7 +1385,9 @@ def _load_newly_selected_model(db: ChatDatabase) -> None:
 
 
 #: Settings a paired device may change: the ones PC Settings shows.
-DEVICE_SETTINGS = frozenset({"custom_model", "dynamic_tools", "network_policy"})
+DEVICE_SETTINGS = frozenset(
+    {"custom_model", "dynamic_tools", "flagship_agent", "network_policy"}
+)
 
 
 def _refuse_device_only_fields(request: SettingsUpdateRequest) -> None:
@@ -1413,6 +1435,13 @@ async def update_settings(
         security.require_pc_or_allowed_device(http_request)
     if security.allowed_device(http_request) is not None:
         _refuse_device_only_fields(request)
+    flagship_requested = (
+        "flagship_agent" in request.model_fields_set
+        and request.flagship_agent is not None
+    )
+    if flagship_requested:
+        security.require_pc_or_allowed_device(http_request)
+        _refuse_missing_gaiacpp(request.flagship_agent, http_request)
 
     if request.custom_model is not None:
         value = request.custom_model.strip() if request.custom_model else None
@@ -1505,13 +1534,20 @@ async def update_settings(
         GaiaConfig.save_key("dynamic_tools", request.dynamic_tools)
         logger.info("Dynamic tools setting persisted: %s", request.dynamic_tools)
 
-    if (
-        "flagship_agent" in request.model_fields_set
-        and request.flagship_agent is not None
-    ):
-        # Changes the program this PC runs, so only someone at this PC may ask.
-        security.require_local_pc(http_request)
-        await run_in_threadpool(_set_flagship_agent, request.flagship_agent)
+    if flagship_requested:
+        try:
+            changed = await run_in_threadpool(
+                _set_flagship_agent, request.flagship_agent, http_request
+            )
+        except _SavedButNotStopped:
+            record_device_change(
+                http_request, "agentProgramSwitched", program=request.flagship_agent
+            )
+            raise
+        if changed:
+            record_device_change(
+                http_request, "agentProgramSwitched", program=request.flagship_agent
+            )
 
     policy_warnings: List[str] = []
     policy_notices: List[Dict[str, Any]] = []

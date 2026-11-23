@@ -35,6 +35,8 @@ const KEYS = {
     connectorRemoved: `${P}connectorRemoved`,
     gitCommitted: `${P}gitCommitted`,
     gitPullRequest: `${P}gitPullRequest`,
+    agentProgramDownloaded: `${P}agentProgramDownloaded`,
+    agentProgramSwitched: `${P}agentProgramSwitched`,
     goalApproved: `${P}goalApproved`,
     goalRejected: `${P}goalRejected`,
     scheduleCreated: `${P}scheduleCreated`,
