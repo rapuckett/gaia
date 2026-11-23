@@ -2515,7 +2515,7 @@ test('settings in the dark theme', async ({ page }) => {
     expect(await audit(page)).toEqual([]);
 });
 
-for (const [locale, theme] of [['ar', 'light'], ['ar', 'dark'], ['en', 'light']] as const) {
+for (const [locale, theme] of [['ar', 'light'], ['ar', 'dark'], ['en', 'light'], ['en', 'dark']] as const) {
     test(`image creation settings (${locale}, ${theme})`, async ({ page }) => {
         await open(page, '', locale, undefined, theme);
         await page.getByRole('button', { name: /Settings/ }).first().click();
@@ -2523,6 +2523,8 @@ for (const [locale, theme] of [['ar', 'light'], ['ar', 'dark'], ['en', 'light']]
         await expect(page.locator('#image-size')).toHaveValue('1280x720');
         const notice = page.locator('.settings-notice');
         await expect(notice).toBeVisible();
+        if (locale === 'en') await expect(notice).toContainText('Gemma 4 E4B, the chat model');
+        await shot(page, `image-settings-${locale}-${theme}`);
         // The notice hugs its two lines and button, never a stretched empty box.
         const { height } = (await notice.boundingBox())!;
         expect(height).toBeLessThan(160);
