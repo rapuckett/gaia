@@ -114,7 +114,7 @@ export function AgentRecovery({ problem, answeredAt, onRetry, kept = false }: Ag
     const code = program && !program.can_download ? program.unavailable_code : null;
     const cantDownload: AgentLine | null = !program || program.can_download ? null
         : code ? { text: t.compose((say) => say('newChat.agent.cantDownload', { name, reason: say(AGENT_WHY[code]) })) }
-            : program.unavailable_reason ? { text: '', detail: program.unavailable_reason } : null;
+            : program.unavailable_reason ? { text: t('mobileApp.newChat.agent.cantDownload', { name }), detail: program.unavailable_reason } : null;
     const checkFailed = programs.error && !isPcRefusal(programs.error) ? failureLine('newChat.agent.checkFailed', programs.error, t, { name }) : null;
     const switchFailed: AgentLine | null = pythonMissing
         ? { text: t.compose((say) => say('newChat.agent.switchFailed', { error: say('newChat.agent.pythonMissing', { name }) })) }

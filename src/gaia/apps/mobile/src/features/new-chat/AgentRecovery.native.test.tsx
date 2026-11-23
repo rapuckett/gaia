@@ -108,6 +108,12 @@ describeNative('AgentRecovery', () => {
         expect(screen.getByTestId('agent-recovery-use-python')).toBeTruthy();
     });
 
+    it('a reason the PC sends without a code gets our sentence, with its text underneath', async () => {
+        await mount({ agentPrograms: listing({}, { can_download: false, unavailable_code: null, unavailable_reason: 'Not built for this platform.' }) });
+        expect(await screen.findByText(/can't be downloaded here\.$/)).toBeTruthy();
+        expect(screen.getByText('Not built for this platform.')).toBeTruthy();
+    });
+
     it('on a paired phone the PC refuses, says it is done on the PC and offers only Check again', async () => {
         useConnectionStore.setState({ connection: { baseUrl: 'https://pc.local:4443', pcId: 'pc-1', pinned: true } });
         const onRetry = jest.fn();
