@@ -4,7 +4,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
-import type { StartScreen } from '@webui/types';
+import type { AgentProblem, StartScreen } from '@webui/types';
 
 import { useStartScreen } from '@/data';
 import { folderRefusalNotice } from '@/features/files/folderRefusal';
@@ -42,9 +42,16 @@ export function useFirstSend(deps: NewChatDeps, initialText: string) {
 }
 
 // Why the assistant is unavailable, or null: a failed read, else the reason the agent reported.
+// The chosen agent failing to start has its own card, which a failed re-read leaves up, so it is not said here too.
 export function assistantProblem(error: unknown, data: StartScreen | undefined, t: Translate): string | null {
+    if (data?.agent_problem) return null;
     if (error) return describeError(error, t);
     return data?.skills_error ?? null;
+}
+
+// The agent the person chose is why GAIA didn't start, as last answered, or null.
+export function agentProblem(data: StartScreen | undefined): AgentProblem | null {
+    return data?.agent_problem ?? null;
 }
 
 // While a reason is on screen, asks again every 15 s, only while the app is in the foreground.
@@ -52,13 +59,15 @@ export function useAssistantNotice() {
     const t = useT();
     const query = useStartScreen();
     const problem = assistantProblem(query.error, query.data, t);
+    const agent = agentProblem(query.data);
+    const showing = problem !== null || agent !== null;
     const { refetch } = query;
     useEffect(() => {
-        if (problem === null) return undefined;
+        if (!showing) return undefined;
         const timer = setInterval(() => {
             if (AppState.currentState === 'active') void refetch();
         }, START_RETRY_MS);
         return () => clearInterval(timer);
-    }, [problem, refetch]);
-    return { problem, retry: () => void refetch() };
+    }, [showing, refetch]);
+    return { problem, agentProblem: agent, answeredAt: query.dataUpdatedAt, retry: () => void refetch() };
 }

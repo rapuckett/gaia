@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { DocumentListResponse } from '@/api/client.types';
 import { AX_FONT_SCALE, atFontScale } from '@/test-support/fontScale';
+import { translator } from '@/i18n/useT';
 import { Text, ThemeProvider } from '@/ui';
 
 import { DocumentRow } from './DocumentRow';
@@ -108,5 +109,23 @@ describeNative('DocumentRow reason alignment', () => {
         const reason = screen.getByText('the file is damaged') as unknown as { props: { style: { writingDirection?: string; textAlign?: string } } };
         expect(reason.props.style.writingDirection).toBe('ltr');
         expect(reason.props.style.textAlign).toBe('left');
+    });
+});
+
+describeNative('DocumentRow model-server failures', () => {
+    const t = translator('en');
+    const row = (error_kind: string) => (
+        <DocumentRow document={{ ...failed('connect ECONNREFUSED'), error_kind } as unknown as Doc} now={Date.now()} retrying={false} onCancel={jest.fn()} onRetry={jest.fn()} onRemove={jest.fn()} />
+    );
+
+    it('shows a busy document as failed with its retry reason, and a down one as waiting', async () => {
+        const busy = await render(row('model_server_busy'), { wrapper: wrap });
+        expect(screen.getByText(t('docs.failed'))).toBeTruthy();
+        expect(screen.getByText(t('docs.serverBusy'))).toBeTruthy();
+        expect(screen.getByText(t('docs.retry'))).toBeTruthy();
+        busy.unmount();
+        await render(row('model_server_down'), { wrapper: wrap });
+        expect(screen.getByText(t('docs.waiting'))).toBeTruthy();
+        expect(screen.getByText(t('docs.serverDown'))).toBeTruthy();
     });
 });

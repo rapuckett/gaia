@@ -11,6 +11,7 @@ describe('kindOf', () => {
     it('reads a 404 from the speech routes as a PC too old to speak', () => {
         expect(kindOf(new GaiaApiError(404, 'Not Found'))).toBe('unsupported');
         expect(kindOf(new GaiaApiError(503, 'down'))).toBe('unreachable');
+        expect(kindOf(new GaiaApiError(409, 'not offered'))).toBe('unavailable');
     });
 });
 

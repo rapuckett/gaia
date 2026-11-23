@@ -17,7 +17,7 @@ import { ChatHeader } from '../header/ChatHeader';
 import { DocsBar } from '../header/DocsBar';
 
 /**
- * Developer scenes (`/dev/messages?state=`) for what a turn changed (PRM-13 to 16, CV-60; `turn-changes-untracked` is PRM-18, the untracked-work warning), the export-chat error (CV-05) and the documents bar limit notices (CV-63).
+ * Developer scenes (`/dev/messages?state=`) for what a turn changed (PRM-13 to 16, CV-60; `turn-changes-untracked` is PRM-18, the untracked-work warning), the export-chat error (CV-05) and the documents bar limit notices (CV-63); `docs-waiting` is DOC-41 (a document waiting on the model server).
  * CMP-27: `#tap=docs-manage` on `docs-past-cap` opens the document library for the chat.
  * Taps: `turn-changes` and `turn-changes-undone` open the review with `#tap=turn-changes-review`; `turn-changes` shows the undo confirm after `#tap=turn-changes-undo`;
  * `turn-undo-conflict` shows the conflict (Undo anyway, Keep) after the same two taps; `turn-undo-hang` shows "Undoing…" after `#tap=turn-changes-undo` then `#tap=turn-changes-confirm`; the export errors show after `#tap=export-chat`.
@@ -36,6 +36,7 @@ export const TURN_SCENES = [
     'export-error-unreachable',
     'docs-past-cap',
     'docs-past-size',
+    'docs-waiting',
 ] as const;
 export type TurnScene = (typeof TURN_SCENES)[number];
 
@@ -100,6 +101,11 @@ function libraryOf(count: number, chunks: number) {
 const never = () => new Promise<never>(() => undefined);
 
 function clientFor(state: TurnScene) {
+    if (state === 'docs-waiting') {
+        const waiting = { ...DOC(2, 0), filename: 'supplier-contracts.pdf', filepath: '/Users/Shared/Documents/supplier-contracts.pdf', indexing_status: 'failed', error_kind: 'model_server_down', last_error: 'RAG indexing failed for supplier-contracts.pdf: connection refused by the model server' };
+        const documents = [DOC(1, 5), waiting];
+        return createFakeClient({ sessions: [SESSION(documents.map((d) => d.id))], documents: { documents, total: 2, total_chunks: 5, total_size_bytes: 40_000 } });
+    }
     if (state === 'docs-past-cap' || state === 'docs-past-size') {
         const { session, documents } = libraryOf(state === 'docs-past-cap' ? 101 : 3, state === 'docs-past-cap' ? 5 : 4000);
         return createFakeClient({ sessions: [session], documents });
@@ -120,7 +126,7 @@ function clientFor(state: TurnScene) {
 
 function Body({ state }: { state: TurnScene }) {
     const router = useRouter();
-    if (state === 'docs-past-cap' || state === 'docs-past-size') {
+    if (state === 'docs-past-cap' || state === 'docs-past-size' || state === 'docs-waiting') {
         return <DocsBar sessionId="s1" onFailed={() => undefined} onManage={() => router.push({ pathname: '/documents', params: { chat: 's1' } })} />;
     }
     if (state === 'export-error-http' || state === 'export-error-unreachable') return <ChatHeader sessionId="s1" />;
