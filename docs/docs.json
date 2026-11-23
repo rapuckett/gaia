@@ -67,7 +67,7 @@
               {
                 "group": "User Guides",
                 "pages": [
-                  "cpp/bash-agent",
+                  "cpp/gaia-agent",
                   "cpp/health-agent",
                   "cpp/wifi-agent",
                   "cpp/process-agent",
@@ -106,6 +106,7 @@
                       "guides/browser-use",
                       "guides/harness-engineering",
                       "guides/talk",
+                      "guides/dictation",
                       "guides/transcription",
                       "guides/audio-generation"
                     ]
@@ -362,6 +363,7 @@
               "reference/api",
               "reference/api-spec",
               "reference/dev",
+              "reference/harnesses",
               {
                 "group": "Evaluation Framework",
                 "pages": [
@@ -453,6 +455,7 @@
             "group": "Infrastructure",
             "pages": [
               "plans/browser-use",
+              "plans/deep-research",
               "plans/cua",
               "plans/docker-containers",
               "plans/mcp-docs",
@@ -583,6 +586,10 @@
     "copyright": "Copyright \u00a9 2024-2026 Advanced Micro Devices, Inc."
   },
   "redirects": [
+    {
+      "source": "/cpp/bash-agent",
+      "destination": "/cpp/gaia-agent"
+    },
     {
       "source": "/spec/electron-integration",
       "destination": "/sdk/sdks/agent-ui"

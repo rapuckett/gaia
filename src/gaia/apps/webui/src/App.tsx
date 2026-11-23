@@ -25,6 +25,7 @@ import { FlagshipAgentNotice } from './components/FlagshipAgentNotice';
 import { BrowserPane } from './components/browser-pane/BrowserPane';
 import { browserPaneApi, useBrowserPaneStore } from './stores/browserPaneStore';
 import { useChatStore } from './stores/chatStore';
+import { useUiAuthStore } from './stores/uiAuthStore';
 import { useModelStore } from './stores/modelStore';
 import { useNotificationStore } from './stores/notificationStore';
 import { handleDeviceEvent, useDeviceStore } from './stores/deviceStore';
@@ -79,7 +80,8 @@ type SetupGate =
 const LEMONADE_FAIL_THRESHOLD = 3;
 /** A backend that has answered no status request for this long is treated as gone. */
 const BACKEND_SILENT_LOST_MS = 5 * 60_000;
-const RESTORE_NOTICE_MS = 6000;
+/** Outlasts the restore toast's own fade-out (`.app-restore-toast` hold + exit). */
+const RESTORE_NOTICE_MS = 4000;
 /** How long a refused setup check counts as "still starting"; about twice the desktop app's own startup limit. */
 const BACKEND_START_WAIT_MS = 60_000;
 
@@ -128,6 +130,7 @@ function noteSetupWorked() {
 
 function App() {
     const t = useT();
+    const signInRequired = useUiAuthStore((s) => s.signInRequired);
     useWindowTitle();
     const currentSessionId = useChatStore((s) => s.currentSessionId);
     const setSessions = useChatStore((s) => s.setSessions);
@@ -340,6 +343,15 @@ function App() {
     }, [checkSetup]);
     const onBackendBackRef = useRef(onBackendBack);
     onBackendBackRef.current = onBackendBack;
+    // Signed in again: what was refused meanwhile is read now, like after an outage.
+    const wasSignedOut = useRef(false);
+    useEffect(() => {
+        if (signInRequired) wasSignedOut.current = true;
+        else if (wasSignedOut.current) {
+            wasSignedOut.current = false;
+            onBackendBack();
+        }
+    }, [signInRequired, onBackendBack]);
 
     // ── Backend and model-server health ─────────────────────────────────
     const failCount = useRef(0);
@@ -605,6 +617,8 @@ function App() {
         }
         store.clearDraftDocuments();
         store.setDraftPrivate(false);
+        // Not a chat opened from elsewhere (the file browser, a connector).
+        store.adoptDraftResearch(session.id, text);
         store.setDraftFolder(null);
         // Always sent, so the chat runs in exactly the mode its chip showed.
         // Set before the chat opens, so a refused message can wait in its box.
@@ -838,6 +852,18 @@ function App() {
     );
     if (!showStartup && setup.state !== 'needed') mainUiShownRef.current = true;
 
+    // Nothing works without the API token; the status poll clears this once the browser signs in.
+    if (signInRequired) {
+        return (
+            <div className="app">
+                <main className="startup" role="alert">
+                    <p className="startup-text" dir="auto">{t('auth.signIn.title')}</p>
+                    <p className="startup-text" dir="auto">{t('auth.signIn.hint', { command: 'gaia chat --ui' })}</p>
+                </main>
+            </div>
+        );
+    }
+
     // A PC set up before can chat while the check runs; a new one waits, so
     // the chat screen never appears and is then replaced by setup.
     if (showStartup) {
@@ -942,14 +968,16 @@ function App() {
                 {/* Model downloads, here when the sidebar that usually shows them is closed or collapsed. */}
                 {(!sidebarOpen || sidebarCollapsed) && <DownloadChip placement="main" />}
                 {flagshipMissing && <FlagshipAgentNotice onInstalled={loadAgents} noBuild={noAgentBuild} />}
-                {restoreNotice && (
-                    <div className={`app-notice${restoreNotice.ok ? '' : ' is-warning'}`} role="status">
+                {/* A restore that worked is passing news: a toast, so the page doesn't shift twice. */}
+                {restoreNotice?.ok && (
+                    <div className="toast app-restore-toast" role="status">{t('model.restore.done')}</div>
+                )}
+                {restoreNotice && !restoreNotice.ok && (
+                    <div className="app-notice is-warning" role="status">
                         <span>{restoreNotice.message}</span>
-                        {!restoreNotice.ok && (
-                            <button type="button" className="link-btn" onClick={() => { dismissRestoreNotice(); openSettings('model'); }}>
-                                {t('startup.pickModel')}
-                            </button>
-                        )}
+                        <button type="button" className="link-btn" onClick={() => { dismissRestoreNotice(); openSettings('model'); }}>
+                            {t('model.restore.pick')}
+                        </button>
                         <button type="button" className="app-notice-close" onClick={dismissRestoreNotice} aria-label={t('banner.dismiss')}>
                             <X size={14} />
                         </button>

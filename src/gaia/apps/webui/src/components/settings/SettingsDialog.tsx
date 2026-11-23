@@ -9,6 +9,7 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { GeneralSettings } from './GeneralSettings';
 import { ModelSettings } from './ModelSettings';
+import { ImageSettings } from './ImageSettings';
 import { PermissionsSettings } from './PermissionsSettings';
 import { SkillsSettings } from './SkillsSettings';
 import { MemorySettings } from './MemorySettings';
@@ -31,7 +32,7 @@ const AdvancedPane = lazy(() => import('./AdvancedSettings').then((m) => ({ defa
 const DevicesPane = lazy(() => import('./DevicesSettings').then((m) => ({ default: m.DevicesSettings })));
 
 const SECTIONS: SettingsSection[] = [
-    'general', 'setup', 'model', 'permissions', 'skills', 'connectors', 'messaging', 'devices', 'automations', 'memory', 'notifications', 'voice', 'privacy', 'advanced', 'about',
+    'general', 'setup', 'model', 'images', 'permissions', 'skills', 'connectors', 'messaging', 'devices', 'automations', 'memory', 'notifications', 'voice', 'privacy', 'advanced', 'about',
 ];
 
 /** One settings window with a section list on the left. */
@@ -126,6 +127,7 @@ export function SettingsDialog({ onUseSkill }: { onUseSkill: (name: string) => v
             case 'general': return <GeneralSettings />;
             case 'setup': return <SetupSettings />;
             case 'model': return <ModelSettings />;
+            case 'images': return <ImageSettings />;
             case 'permissions': return <PermissionsSettings />;
             case 'skills': return <SkillsSettings onUseSkill={(name) => { close(); onUseSkill(name); }} />;
             case 'connectors': return <ConnectorsPane />;

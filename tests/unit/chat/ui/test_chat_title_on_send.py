@@ -46,7 +46,7 @@ def test_first_message_names_the_chat_before_any_reply(client):
     sid = client.post("/api/sessions", json={"title": "New Task"}).json()["id"]
     seen = {}
 
-    async def _client_leaves(db, session, request):
+    async def _client_leaves(db, session, request, away=False):
         # Runs once the server has taken the message, before any agent work.
         seen["title"] = db.get_session(session["id"])["title"]
         return
@@ -113,6 +113,14 @@ def test_attachments_are_left_out_of_a_question_title():
         "[notes.txt](/api/files/uploads/cd34_notes.txt)"
     )
     assert ch._title_from_question(sent) == "hi"
+
+
+def test_a_research_message_is_named_by_its_topic():
+    assert ch._title_from_question("/research the EU AI Act") == "the EU AI Act"
+    assert ch._title_from_question("  /RESEARCH\njwst") == "jwst"
+    assert ch._title_from_question("/researcher notes") == "/researcher notes"
+    assert ch._title_from_question("/research-report jwst") == "jwst"
+    assert ch._title_from_question("/research") is None
 
 
 def test_an_image_sent_alone_is_named_by_its_file():

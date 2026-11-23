@@ -28,6 +28,7 @@ const KEYS = {
     pairingClosed: `${P}pairingClosed`,
     npuMemlockFixed: `${P}npuMemlockFixed`,
     folderAdded: `${P}folderAdded`,
+    imageSettingsChanged: `${P}imageSettingsChanged`,
     folderRemoved: `${P}folderRemoved`,
     chatPermissionsAsk: `${P}chatPermissionsAsk`,
     chatPermissionsFull: `${P}chatPermissionsFull`,

@@ -64,6 +64,8 @@ PC_ONLY = {
     "DELETE /api/devices/routes/{kind}",
     "GET /api/connectors/_debug",
     "GET /api/connectors/eval-mailbox",
+    "POST /api/agent-programs/{program_id}/download",
+    "POST /api/auth/launch-code",
     "POST /api/connectors/eval-mailbox",
     "POST /api/devices/listener",
     "POST /api/devices/pairing",
@@ -151,11 +153,14 @@ PC_OR_DEVICE = {
     "PUT /api/goals/{goal_id}/reject",
     "PUT /api/goals/{goal_id}/status",
     "PUT /api/goals/{goal_id}/tasks/{task_id}",
+    "PUT /api/images/settings",
     "PUT /api/schedules/{name:path}",
     "PUT /api/system/model-server/backend",
 }
 
 NOT_ON_LISTENER = {
+    "GET /api/agent-programs",
+    "GET /api/agent-programs/{program_id}/download",
     "GET /api/providers",
 }
 
@@ -226,6 +231,7 @@ REMOTE = {
     "GET /api/goals/{goal_id}",
     "GET /api/gpu-memory",
     "GET /api/health",
+    "GET /api/images/settings",
     "GET /api/lemonade/detect",
     "GET /api/lemonade/target",
     "GET /api/mcp/servers",

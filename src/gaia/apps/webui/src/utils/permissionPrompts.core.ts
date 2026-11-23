@@ -6,6 +6,7 @@
 import type { GaiaNotification } from '../types/agent';
 import { isMessageKey, ref, type MessageKey, type Say } from '../i18n/registry';
 import { tEn, type Translate } from '../i18n/translator';
+import { unseen, unseenCommand, unseenStrict, visibleCommand, visibleStrict, visibleText } from './calendarApproval.core';
 
 /** These decisions apply to one displayed snapshot or code scope, never a tool name. */
 /** The prompt raised when a tool reaches outside the chat's files (security.py). */
@@ -190,12 +191,97 @@ export function repeatedAllowCount(notifications: GaiaNotification[], prompt: Ga
 
 /** One-line description of a tool call, e.g. `run_shell_command · git status`. */
 export function summarize(n: GaiaNotification): string {
+  return summarizeField(n).text;
+}
+
+/** `summarize` with the argument it came from, so the card can pick that field's marking rule. */
+export function summarizeField(n: GaiaNotification): { key: string; text: string } {
   const args = n.toolArgs ?? {};
   // _site: the site a browser-pane read would show the model (SITE_ARG in tool_grants.py).
-  const primary = ['command', 'file_path', 'path', 'url', '_site', 'query', 'name']
-    .map((k) => args[k])
-    .find((v) => typeof v === 'string' && v.trim());
-  return typeof primary === 'string' ? primary : '';
+  const key = ['command', 'file_path', 'path', 'url', '_site', 'query', 'name']
+    .find((k) => typeof args[k] === 'string' && (args[k] as string).trim());
+  return key ? { key, text: args[key] as string } : { key: '', text: '' };
+}
+
+/** A command keeps its layout, a search query reads as prose, and anything else is a name. */
+export function shownField(key: string, text: string): { shown: string; coded: boolean } {
+  if (COMMAND_ARG.test(key)) return { shown: visibleCommand(text), coded: unseenCommand(text) };
+  if (key === 'query') return { shown: visibleText(text, true), coded: unseen(text) };
+  return { shown: visibleStrict(text), coded: unseenStrict(text) };
+}
+
+/** Keys that hold a command, read with the command rule wherever they show. */
+const COMMAND_ARG = /^(command|cmd|argv)$/;
+
+/**
+ * Keys read as a name or a command: `summarize`'s list less `query` (prose), plus any key
+ * shaped like a path, folder, file, URL, name, id or move end, so a tool's `output_path`
+ * or an MCP server's `destination` gets the name rule without being listed by hand.
+ */
+const NAME_LIKE_ARG = new RegExp(
+  '^(command|cmd|argv|_site|to|from|href)$'
+  + '|(^|_)(files?|urls?|uris?|ids?|guids?|uuids?|cwds?|src|dest|source|destination|target|location|branch|repo)$'
+  + '|(paths?|dirs?|director(y|ies)|folders?|names?)(_hint)?$',
+);
+
+/** Whether a key, snake_case or camelCase (`baseURI`, `HTTPUrl`, `path2`), names a thing rather than holding prose. */
+function nameLikeArg(key: string): boolean {
+  const snake = key
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/\d+$/, '');
+  return NAME_LIKE_ARG.test(snake);
+}
+
+/**
+ * Argument values as the main field shows them: each name-like string, alone or in a
+ * list, marked with that field's rule, so the expanded view reads like the card above it.
+ * The rest — code, prose, the approved-exact text — stay as written for the prose pass.
+ */
+export function shownArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const shown = (key: string, value: unknown): unknown => {
+    if (typeof value === 'string') return nameLikeArg(key) ? shownField(key, value).shown : value;
+    if (Array.isArray(value)) return value.map((item) => shown(key, item));
+    if (value && typeof value === 'object') return shownArgs(value as Record<string, unknown>);
+    return value;
+  };
+  return Object.fromEntries(Object.entries(args).map(([key, value]) => [key, shown(key, value)]));
+}
+
+/** Tools that run code GAIA hands over whole (`CODE_SUMMARY_TOOLS` in sse_translation.py). */
+export const CODE_TOOLS = new Set(['run_python', 'execute_python_file']);
+
+/** The tool whose prompt carries the file it runs (`SCRIPT_TOOL` in script_preview.py). */
+const SCRIPT_TOOL = 'execute_python_file';
+
+/** Why a script is not on its card (`unreadable` in script_preview.py), as message keys. */
+export const SCRIPT_UNREADABLE = {
+  missing: 'prompt.scriptUnreadable.missing',
+  not_text: 'prompt.scriptUnreadable.not_text',
+  too_large: 'prompt.scriptUnreadable.too_large',
+  unreadable: 'prompt.scriptUnreadable.unreadable',
+} as const;
+
+/**
+ * The script a file-running call runs, as GAIA read it when it built the prompt
+ * (`SCRIPT_ARG` in call_risk.py): its text and the lines past the cap, or why there is none.
+ */
+export function shownScript(tool: string | undefined, args: Record<string, unknown>): {
+  text: string | null;
+  hiddenLines: number;
+  unreadable: keyof typeof SCRIPT_UNREADABLE | null;
+} | null {
+  const script = args._script;
+  if (tool !== SCRIPT_TOOL || typeof script !== 'object' || script === null) return null;
+  const { text, hidden_lines: hidden, unreadable } = script as Record<string, unknown>;
+  if (typeof text === 'string') {
+    return { text, hiddenLines: typeof hidden === 'number' && hidden > 0 ? hidden : 0, unreadable: null };
+  }
+  const reason = typeof unreadable === 'string' && unreadable in SCRIPT_UNREADABLE
+    ? unreadable as keyof typeof SCRIPT_UNREADABLE
+    : 'unreadable';
+  return { text: null, hiddenLines: 0, unreadable: reason };
 }
 
 /** Tools whose relayed summary is a command and its risk note (`COMMAND_SUMMARY_TOOLS` in sse_translation.py). */

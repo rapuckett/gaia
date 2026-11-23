@@ -186,6 +186,10 @@ export interface AudioPayload {
     caption?: string;
     path?: string;
     duration_seconds?: number;
+    /** Where the user's own copy went; shown as text, never opened from here. */
+    saved_to?: string;
+    /** The listening script a dictation was read from. */
+    script_path?: string;
 }
 
 export function isAudioPayload(value: unknown): value is AudioPayload {
@@ -196,6 +200,8 @@ export function isAudioPayload(value: unknown): value is AudioPayload {
         parseMediaSrc('audio', v.src) !== null &&
         isOptionalString(v.caption) &&
         isOptionalString(v.path) &&
+        isOptionalString(v.saved_to) &&
+        isOptionalString(v.script_path) &&
         (v.duration_seconds === undefined ||
             (typeof v.duration_seconds === 'number' && Number.isFinite(v.duration_seconds) && v.duration_seconds >= 0))
     );

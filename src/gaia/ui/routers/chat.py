@@ -250,7 +250,7 @@ async def send_message(
                     # The detached lifecycle owns producer + persistence;
                     # this subscriber only relays buffered and live events.
                     async for chunk in srv._stream_chat_response(
-                        db, session, agent_request
+                        db, session, agent_request, away=not is_local_pc(http_request)
                     ):
                         yield chunk
                 finally:
@@ -941,7 +941,7 @@ async def list_active_runs():
     "/api/chat/attach",
     responses=_sse_response("The running turn's events so far, then the rest live."),
 )
-async def attach_stream(session_id: str):
+async def attach_stream(session_id: str, http_request: Request):
     """Re-attach to an in-flight background run and stream its events (SSE).
 
     Used when the user revisits a session whose turn is still running. The
@@ -957,7 +957,7 @@ async def attach_stream(session_id: str):
 
     srv = _server_mod()
     return StreamingResponse(
-        srv._attach_chat_stream(session_id),
+        srv._attach_chat_stream(session_id, away=not is_local_pc(http_request)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -1164,12 +1164,16 @@ async def get_context_usage(session_id: str, db: ChatDatabase = Depends(get_db))
                 else "Measured once GAIA has answered in this chat."
             ),
         }
+    from gaia.agents.base.skill_budget import skill_budget_report
+
     from ..turn_insights import panel_context
 
     def _measure():
-        return panel_context(
+        usage = panel_context(
             agent, model_turns(agent, db, session_id), getattr(agent, "model_id", None)
         )
+        usage["skill_budget"] = skill_budget_report(agent)
+        return usage
 
     return {"available": True, **(await asyncio.to_thread(_measure))}
 
