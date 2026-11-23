@@ -381,7 +381,6 @@ export function PermissionPrompt({
     onExpired,
 }: PermissionPromptProps) {
     const t = useT();
-    const { space } = useTheme();
     const { width, height } = useWindowDimensions();
     // While the person types a queued message, only the question and its answers fit above the keyboard.
     const typing = useKeyboardState((k) => k.isVisible);
@@ -463,7 +462,7 @@ export function PermissionPrompt({
                     </Row>
                     {typing ? null : (
                         <ScrollBox maxHeight={bodyMax} hint testID="perm-details-scroll">
-                            <View style={{ paddingBottom: space.xl }} testID="perm-details-body">
+                            <View testID="perm-details-body">
                                 <Stack gap="md">
                                     <CallDetails prompt={prompt} />
                                     {fullAccessPending ? <Notice tone="info" message={t('perm.fullPendingNote')} testID="perm-full-pending" /> : null}

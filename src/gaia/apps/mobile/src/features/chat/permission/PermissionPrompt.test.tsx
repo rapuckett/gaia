@@ -130,12 +130,13 @@ describe('PermissionPrompt', () => {
         expect(event.shown()).not.toContain('What will be saved');
     });
 
-    it('pads the scrolling body past the chevron and sets no cutting height on the boxes', async () => {
+    it('adds no pad under the body (the scroll box keeps the chevron off the text) and sets no cutting height', async () => {
         const { shown } = await mount(
             prompt({ toolArgs: { file_path: 'a.txt', old_content: 'one\n', new_content: 'two\nan added line\n' } }),
         );
         const tree = shown();
-        expect(tree).toContain('"style":{"paddingBottom":24},"testID":"perm-details-body"');
+        expect(tree).toContain('"testID":"perm-details-body"');
+        expect(tree).not.toContain('paddingBottom');
         expect(tree).not.toContain('maxHeight');
         expect(tree).not.toContain('"height"');
     });
