@@ -126,17 +126,21 @@ enum PushKeychain {
     return String(data: data, encoding: .utf8)
   }
 
-  /// The notification actions' records, in the shared group: the extension adds them, the app claims them.
+  /// The notification actions' records, in the shared group: the extension adds them, the app reads and consumes them.
   struct ActionStorage: PushActionStorage {
     func add(_ token: String, _ data: Data) throws {
       let status = SecItemAdd(PushKeychain.item(try PushKeychain.shared(PushKeychain.actionService, token), data) as CFDictionary, nil)
       guard status == errSecSuccess else { throw PushKeychainError.status("save", status) }
     }
 
+    func read(_ token: String) throws -> Data? {
+      try PushKeychain.get(try PushKeychain.shared(PushKeychain.actionService, token))
+    }
+
     func take(_ token: String) throws -> Data? {
       let query = try PushKeychain.shared(PushKeychain.actionService, token)
       guard let data = try PushKeychain.get(query) else { return nil }
-      // Whoever deletes it claims it: a second claim, in this process or another, finds nothing to delete.
+      // Whoever deletes it consumes it: a second consume, in this process or another, finds nothing to delete.
       let status = SecItemDelete(query as CFDictionary)
       if status == errSecItemNotFound { return nil }
       guard status == errSecSuccess else { throw PushKeychainError.status("delete", status) }

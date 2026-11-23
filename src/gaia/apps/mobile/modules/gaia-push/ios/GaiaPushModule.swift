@@ -55,21 +55,29 @@ public class GaiaPushModule: Module {
       center.setNotificationCategories(others.union([PushActions.approvalCategory(reviewTitle: reviewTitle, denyTitle: denyTitle)]))
     }
 
-    // What a pressed action answers, once: the record is deleted as it is read, and its notification removed. While the
-    // phone is locked nothing is claimed and it answers `locked`; isProtectedDataAvailable is read on the main queue.
-    AsyncFunction("claimApproval") { (token: String) throws -> [String: Any]? in
+    // What a pressed button answers, left stored so a refused press can be tried again. While the phone is locked it
+    // answers `locked`; isProtectedDataAvailable is read on the main queue.
+    AsyncFunction("peekApproval") { (token: String) throws -> [String: Any]? in
       try guarded("read") {
-        switch try PushActionRecords.claim(token, in: PushKeychain.ActionStorage(), unlocked: UIApplication.shared.isProtectedDataAvailable) {
+        switch try PushActionRecords.peek(token, in: PushKeychain.ActionStorage(), unlocked: UIApplication.shared.isProtectedDataAvailable) {
         case .locked:
           return ["locked": true]
         case .none:
           return nil
         case .record(let record):
-          UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [record.notificationId])
           return record.dictionary
         }
       }
     }.runOnQueue(.main)
+
+    // Uses the button up: deletes its record and removes its notification. True only for the call whose delete took it.
+    AsyncFunction("consumeApproval") { (token: String) throws -> Bool in
+      try guarded("delete") {
+        guard let record = try PushActionRecords.consume(token, in: PushKeychain.ActionStorage()) else { return false }
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [record.notificationId])
+        return true
+      }
+    }
   }
 }
 

@@ -73,7 +73,7 @@ class GaiaMessagingService : FirebaseMessagingService() {
             .build(),
         )
       }
-      // The token lets a claim or a resolved approval remove this notification and no newer one for the chat.
+      // The token lets a consumed press or a resolved approval remove this notification and no newer one for the chat.
       builder.addExtras(Bundle().apply { putString(PushActions.EXTRA_TOKEN, token) })
     }
     val flags = PushActions.postFlags(hasActions = token != null)

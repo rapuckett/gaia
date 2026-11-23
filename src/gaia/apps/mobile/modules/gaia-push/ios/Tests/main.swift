@@ -97,6 +97,7 @@ check(PushActions.openOnlyTools(Bundle(for: NSObject.self)) == nil, "a bundle wi
 final class MemoryStorage: PushActionStorage {
   var items: [String: Data] = [:]
   func add(_ token: String, _ data: Data) throws { items[token] = data }
+  func read(_ token: String) throws -> Data? { items[token] }
   func take(_ token: String) throws -> Data? { items.removeValue(forKey: token) }
   func all() throws -> [(token: String, data: Data)] { items.map { ($0.key, $0.value) } }
   func remove(_ token: String) throws { items[token] = nil }
@@ -109,11 +110,14 @@ let token = try PushActionRecords.save(record, in: store)
 let tokens = Set(try (0..<200).map { _ in try PushActions.newToken() })
 check(PushActions.isToken(token) && tokens.count == 200 && tokens.allSatisfy(PushActions.isToken), "tokens are 128 random bits, base64url")
 check(String(data: store.items[token]!, encoding: .utf8)!.contains("s_42") && !token.contains("s_42"), "the ids are in the store, not the token")
-check(try PushActionRecords.claim(token, in: store, unlocked: false) == .locked && store.items[token] != nil, "a claim while locked takes nothing")
-check(try PushActionRecords.claim(token, in: store) == record, "a token claims its record")
-check(try PushActionRecords.claim(token, in: store) == nil, "a token claims at most once")
-check(try PushActionRecords.claim(token, in: store, unlocked: true) == PushActionClaim.none, "unlocked, a used token finds nothing")
-check(try PushActionRecords.claim("not-a-token", in: store) == nil && (try PushActionRecords.claim("AAAAAAAAAAAAAAAAAAAAAA", in: store)) == nil, "a malformed or unknown token claims nothing")
+check(try PushActionRecords.peek(token, in: store, unlocked: false) == .locked && store.items[token] != nil, "a look while locked finds nothing and keeps the record")
+check(try PushActionRecords.peek(token, in: store, unlocked: true) == .record(record), "a token's record can be looked at")
+check(try PushActionRecords.peek(token, in: store, unlocked: true) == .record(record) && store.items[token] != nil, "looking, as a refused press does, keeps it for another try")
+check(try PushActionRecords.consume(token, in: store) == record, "consuming deletes it and returns it")
+check(try PushActionRecords.consume(token, in: store) == nil, "of two consumes, only one wins")
+check(try PushActionRecords.peek(token, in: store, unlocked: true) == PushActionClaim.none, "a consumed token finds nothing")
+check(try PushActionRecords.peek("not-a-token", in: store, unlocked: true) == PushActionClaim.none
+  && (try PushActionRecords.consume("AAAAAAAAAAAAAAAAAAAAAA", in: store)) == nil, "a malformed or unknown token finds and consumes nothing")
 check(record.dictionary["approvalId"] as? String == ids["approval_id"] as? String && record.dictionary["notificationId"] == nil, "JavaScript gets the ids, not the notification's identifier")
 
 let other = PushActionRecord(try payload("approval", ask, ids: ["session_id": "s_7", "approval_id": "ap_7"]), pcId: "pc1", receivedAt: arrived, notificationId: "n-7")

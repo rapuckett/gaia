@@ -107,7 +107,34 @@ class PushActionsTest {
   }
 
   @Test
-  fun aTokenClaimsItsRecordOnceAcrossRestarts() {
+  fun aRefusedPressKeepsTheRecordAndAnAcceptedOneUsesItUpOnce() {
+    val s = store()
+    val record = PushActionRecord("pc", "s_42", approvalId, null, 1L, 2L, "chat:s_42")
+    val token = s.save(record)
+    // Looking, as a refused press does (another PC, an unreachable PC), keeps it for another try.
+    assertEquals(record, s.peek(token))
+    assertEquals(record, s.peek(token))
+    assertEquals(record, s.consume(token))
+    assertNull(s.consume(token))
+    assertNull(s.peek(token))
+  }
+
+  @Test
+  fun ofTwoConcurrentConsumesOnlyOneWins() {
+    val dir = folder.newFolder()
+    val sealer = MemorySealer()
+    repeat(20) {
+      val token = PushActionStore(dir, sealer).save(PushActionRecord("pc", "s_42", approvalId, null, 1L, 2L, "chat:s_42"))
+      val results = java.util.concurrent.ConcurrentLinkedQueue<Boolean>()
+      val threads = (1..4).map { Thread { results.add(PushActionStore(dir, sealer).consume(token) != null) } }
+      threads.forEach(Thread::start)
+      threads.forEach(Thread::join)
+      assertEquals(1, results.count { it })
+    }
+  }
+
+  @Test
+  fun aTokenIsConsumedOnceAcrossRestarts() {
     val dir = folder.newFolder()
     val sealer = MemorySealer()
     val record = PushActionRecord(PushActions.offered(approval, "pc", emptySet(), 34)!!, 1795000000000L, "chat:s_42")
@@ -115,22 +142,24 @@ class PushActionsTest {
     val token = PushActionStore(dir, sealer).save(record)
     // The ids are sealed in the store; the token names none of them.
     assertFalse(token.contains("s_42") || dir.listFiles()!!.any { String(it.readBytes(), Charsets.ISO_8859_1).contains("s_42") })
-    // A new instance, as after a restart, still claims it once.
-    assertEquals(record, PushActionStore(dir, sealer).claim(token))
-    assertNull(PushActionStore(dir, sealer).claim(token))
+    // A new instance, as after a restart, still consumes it once.
+    assertEquals(record, PushActionStore(dir, sealer).consume(token))
+    assertNull(PushActionStore(dir, sealer).consume(token))
     assertTrue(dir.listFiles()!!.isEmpty())
   }
 
   @Test
-  fun claimsNothingForAMalformedUnknownOrForeignToken() {
+  fun findsNothingForAMalformedUnknownOrForeignToken() {
     val s = store()
-    assertNull(s.claim("not-a-token"))
-    assertNull(s.claim("../../shared_prefs/x"))
-    assertNull(s.claim(PushActions.newToken()))
+    for (bad in listOf("not-a-token", "../../shared_prefs/x", PushActions.newToken())) {
+      assertNull(s.peek(bad))
+      assertNull(s.consume(bad))
+    }
     // A record sealed by another install (another key) doesn't open.
     val dir = folder.newFolder()
     val token = PushActionStore(dir, MemorySealer()).save(PushActionRecord("pc", "s_42", approvalId, null, 1L, 2L, "chat:s_42"))
-    assertNull(PushActionStore(dir, MemorySealer()).claim(token))
+    assertNull(PushActionStore(dir, MemorySealer()).peek(token))
+    assertNull(PushActionStore(dir, MemorySealer()).consume(token))
   }
 
   @Test
@@ -141,8 +170,8 @@ class PushActionsTest {
     val removed = s.resolve(listOf(approvalId, "ap_unknown"))
     assertEquals(listOf(a), removed.map { it.first })
     assertEquals("chat:s_42", removed.single().second.tag)
-    assertNull(s.claim(a))
-    assertNotNull(s.claim(b))
+    assertNull(s.peek(a))
+    assertNotNull(s.consume(b))
   }
 
   @Test
@@ -150,10 +179,10 @@ class PushActionsTest {
     val s = store()
     val token = s.save(PushActionRecord("pc", "s_42", approvalId, null, 0L, 1000L, "chat:s_42"))
     s.sweep(1000L + PushActionStore.KEEP_AFTER_EXPIRY_MS)
-    assertNotNull(s.claim(token))
+    assertNotNull(s.consume(token))
     val late = s.save(PushActionRecord("pc", "s_42", approvalId, null, 0L, 1000L, "chat:s_42"))
     s.sweep(1001L + PushActionStore.KEEP_AFTER_EXPIRY_MS)
-    assertNull(s.claim(late))
+    assertNull(s.peek(late))
   }
 
   @Test
@@ -166,7 +195,7 @@ class PushActionsTest {
     // An intent another app sends the exported activity carries no token, or one the store has never seen.
     assertNull(PushActionInbox.parse(PushActions.DENY, null, locked = false, fromHistory = false))
     assertNull(PushActionInbox.parse(PushActions.DENY, "s_42", locked = false, fromHistory = false))
-    assertNull(store().claim(PushActionInbox.parse(PushActions.DENY, PushActions.newToken(), locked = false, fromHistory = false)!!.token))
+    assertNull(store().peek(PushActionInbox.parse(PushActions.DENY, PushActions.newToken(), locked = false, fromHistory = false)!!.token))
   }
 
   @Test

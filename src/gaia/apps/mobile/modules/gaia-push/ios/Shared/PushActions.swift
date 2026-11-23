@@ -97,20 +97,23 @@ struct PushActionRecord: Codable, Equatable {
 /// Where the records live: the Keychain group the app shares with its extension, or memory in the tests.
 protocol PushActionStorage {
   func add(_ token: String, _ data: Data) throws
+  /// Reads without deleting; nil when there is none.
+  func read(_ token: String) throws -> Data?
   /// Reads and deletes in one step; nil when there is none (or another process took it first).
   func take(_ token: String) throws -> Data?
   func all() throws -> [(token: String, data: Data)]
   func remove(_ token: String) throws
 }
 
-/// What a claim found: the phone locked (nothing taken), no record, or the record, now deleted.
+/// What a look at a token found: the phone locked, no record, or the record (still stored until it is consumed).
 enum PushActionClaim: Equatable {
   case locked
   case none
   case record(PushActionRecord)
 }
 
-/// The records' rules, over any storage: each token is claimed at most once, and stale ones are swept.
+/// The records' rules, over any storage: a press looks at its record first, and each token is consumed at most once,
+/// only once the press is accepted or can never succeed, so a refused press can be tried again. Stale ones are swept.
 enum PushActionRecords {
   /// Kept a day past their expiry, so a late press still gets "no longer waiting" rather than "not from GAIA".
   static let keepAfterExpiryMs: Int64 = 86_400_000
@@ -121,16 +124,20 @@ enum PushActionRecords {
     return token
   }
 
-  /// The record a token stands for, deleted as it is read; nil for a malformed, unknown or already claimed token.
-  static func claim(_ token: String, in store: PushActionStorage) throws -> PushActionRecord? {
-    guard PushActions.isToken(token), let data = try store.take(token) else { return nil }
-    return try? JSONDecoder().decode(PushActionRecord.self, from: data)
+  /// The record a token stands for, left stored; `.locked` while the phone is locked, `.none` for a malformed, unknown
+  /// or consumed token.
+  static func peek(_ token: String, in store: PushActionStorage, unlocked: Bool) throws -> PushActionClaim {
+    guard unlocked else { return .locked }
+    guard PushActions.isToken(token), let data = try store.read(token),
+      let record = try? JSONDecoder().decode(PushActionRecord.self, from: data)
+    else { return .none }
+    return .record(record)
   }
 
-  /// A claim made while the phone is locked takes nothing, so the record is still there for a press after unlocking.
-  static func claim(_ token: String, in store: PushActionStorage, unlocked: Bool) throws -> PushActionClaim {
-    guard unlocked else { return .locked }
-    return try claim(token, in: store).map(PushActionClaim.record) ?? .none
+  /// Deletes a token's record; it is returned only to the one caller whose delete took it, so of two consumes one wins.
+  static func consume(_ token: String, in store: PushActionStorage) throws -> PushActionRecord? {
+    guard PushActions.isToken(token), let data = try store.take(token) else { return nil }
+    return try? JSONDecoder().decode(PushActionRecord.self, from: data)
   }
 
   /// Deletes the records of approvals answered or expired elsewhere; their notifications' identifiers, to remove.

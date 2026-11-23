@@ -61,7 +61,8 @@ function useAnswerFromNotification(): (pressed: PressedAction) => Promise<Action
         (pressed: PressedAction) => {
             const native = gaiaPush();
             return answerFromNotification(pressed, {
-                claim: (token) => (native ? native.claimApproval(token) : Promise.resolve(null)),
+                peek: (token) => (native ? native.peekApproval(token) : Promise.resolve(null)),
+                consume: (token) => (native ? native.consumeApproval(token) : Promise.resolve(false)),
                 currentPcId: () => useConnectionStore.getState().connection?.pcId ?? null,
                 confirm: (request) => (client ? confirmPermission(client, request) : Promise.reject(new GaiaTransportMissingError())),
                 reviewing: markReviewedFromNotification,

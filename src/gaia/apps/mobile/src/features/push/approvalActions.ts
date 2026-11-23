@@ -34,7 +34,11 @@ export interface PressedAction {
 /** Why a notification's button did nothing; each has a notice the person sees. */
 export type ActionFailure = 'stale' | 'unreachable' | 'refused' | 'otherPc' | 'failed' | 'locked';
 
-export type ActionOutcome = { result: 'reviewing' | 'denied'; sessionId: string } | { result: 'refused'; reason: ActionFailure };
+export type ActionOutcome =
+    | { result: 'reviewing' | 'denied'; sessionId: string }
+    | { result: 'refused'; reason: ActionFailure }
+    // Another press of the same button is still being handled; it shows its own result.
+    | { result: 'busy' };
 
 export const NOTICE_TEXT: Record<ActionFailure, MessageKey> = {
     stale: 'mobileApp.push.action.stale',
@@ -77,8 +81,10 @@ export function failureOf(error: unknown): ActionFailure {
 }
 
 export interface ActionDeps {
-    /** The record a token stands for, deleted as it is read (native claimApproval); `locked` takes nothing. */
-    claim(token: string): Promise<NativeApprovalRecord | { locked: true } | null>;
+    /** The record a token stands for, left stored (native peekApproval); `locked` while the phone is locked. */
+    peek(token: string): Promise<NativeApprovalRecord | { locked: true } | null>;
+    /** Uses the button up: deletes the record and removes the notification (native consumeApproval); true only for the call that took it. */
+    consume(token: string): Promise<boolean>;
     /** The PC the app is talking to now, or null. */
     currentPcId(): string | null;
     /** Posts confirm-tool through the app's paired, pinned client, as the chat's own Deny does. */
@@ -91,11 +97,20 @@ export interface ActionDeps {
     openOnlyTools?: ReadonlySet<string>;
 }
 
+// Tokens whose press is being handled now: two presses of one button never both reach the PC.
+const inFlight = new Set<string>();
+
+function kindOf(error: unknown): string {
+    return error instanceof GaiaApiError ? `HTTP ${error.status}` : error instanceof Error ? error.name : 'unknown';
+}
+
 /**
- * What a notification's button does, once its token is claimed: Review opens the chat's approval card and sends
- * nothing, so the person allows it there with the full details; Deny sends the denial (denying can't run anything).
- * Refused, with a notice: a locked phone, no token or one already used, an incomplete record, one past the PC's wait,
- * one from another PC, an open-only tool. The PC still checks the device, the approval's expiry and single use.
+ * What a notification's button does. Review opens the chat's approval card and sends nothing, so the person allows it
+ * there with the full details; Deny sends the denial (denying can't run anything). The button is used up only once its
+ * press is accepted (the card opened, the denial sent) or can never succeed (past the PC's wait, answered elsewhere, an
+ * incomplete record, an open-only tool). Any other refusal (a locked phone, another PC, an unreachable PC) keeps the
+ * notification, so it can be pressed again. Every refusal posts a notice. The PC still checks the device, the
+ * approval's expiry and single use.
  */
 export async function answerFromNotification(pressed: PressedAction, deps: ActionDeps): Promise<ActionOutcome> {
     const fail = async (reason: ActionFailure, sessionId: string | null = null): Promise<ActionOutcome> => {
@@ -103,32 +118,52 @@ export async function answerFromNotification(pressed: PressedAction, deps: Actio
         return { result: 'refused', reason };
     };
     if (pressed.locked) return fail('locked');
-    if (!pressed.token || !TOKEN.test(pressed.token)) return fail('refused');
-    let claimed: NativeApprovalRecord | { locked: true } | null;
+    const { token } = pressed;
+    if (!token || !TOKEN.test(token)) return fail('refused');
+    if (inFlight.has(token)) return { result: 'busy' };
+    inFlight.add(token);
+    // A refusal that can never succeed uses the button up too, so it isn't offered again.
+    const finalFail = async (reason: ActionFailure, sessionId: string | null = null): Promise<ActionOutcome> => {
+        try {
+            await deps.consume(token);
+        } catch (error) {
+            console.warn(`An approval's notification couldn't be removed (${kindOf(error)})`);
+        }
+        return fail(reason, sessionId);
+    };
     try {
-        claimed = await deps.claim(pressed.token);
-    } catch (error) {
-        console.warn(`An approval's notification couldn't be read (${error instanceof Error ? error.name : 'unknown'})`);
-        return fail('failed');
-    }
-    if (!claimed) return fail('stale');
-    if ('locked' in claimed) return fail('locked');
-    const record = claimed;
-    if (!record.pcId || !ID.test(record.sessionId) || !ID.test(record.approvalId)) return fail('refused');
-    const { sessionId } = record;
-    if (deps.now() > record.expiresAt) return fail('stale', sessionId);
-    if (deps.currentPcId() !== record.pcId) return fail('otherPc', sessionId);
-    if (!answerableTool(record.tool, deps.openOnlyTools)) return fail('refused', sessionId);
-    if (pressed.kind === 'review') {
-        deps.reviewing(sessionId, record.approvalId);
-        return { result: 'reviewing', sessionId };
-    }
-    try {
-        await deps.confirm({ session_id: sessionId, approved: false, always: false, confirm_id: record.approvalId, source: 'notification' });
+        let peeked: NativeApprovalRecord | { locked: true } | null;
+        try {
+            peeked = await deps.peek(token);
+        } catch (error) {
+            console.warn(`An approval's notification couldn't be read (${kindOf(error)})`);
+            return await fail('failed');
+        }
+        if (!peeked) return await fail('stale');
+        if ('locked' in peeked) return await fail('locked');
+        const record = peeked;
+        if (!record.pcId || !ID.test(record.sessionId) || !ID.test(record.approvalId)) return await finalFail('refused');
+        const { sessionId } = record;
+        if (deps.now() > record.expiresAt) return await finalFail('stale', sessionId);
+        if (!answerableTool(record.tool, deps.openOnlyTools)) return await finalFail('refused', sessionId);
+        if (deps.currentPcId() !== record.pcId) return await fail('otherPc', sessionId);
+        if (pressed.kind === 'review') {
+            if (!(await deps.consume(token))) return await fail('stale', sessionId);
+            deps.reviewing(sessionId, record.approvalId);
+            return { result: 'reviewing', sessionId };
+        }
+        try {
+            await deps.confirm({ session_id: sessionId, approved: false, always: false, confirm_id: record.approvalId, source: 'notification' });
+        } catch (error) {
+            // Only the kind of failure: the request and the PC's reply could name the approval.
+            console.warn(`A denial from a notification wasn't sent (${kindOf(error)})`);
+            const reason = failureOf(error);
+            // Answered or ended on the PC (409, 404) is final; unreachable or another error can be tried again.
+            return await (reason === 'stale' ? finalFail(reason, sessionId) : fail(reason, sessionId));
+        }
+        await deps.consume(token);
         return { result: 'denied', sessionId };
-    } catch (error) {
-        // Only the kind of failure: the request and the PC's reply could name the approval.
-        console.warn(`A denial from a notification wasn't sent (${error instanceof GaiaApiError ? `HTTP ${error.status}` : error instanceof Error ? error.name : 'unknown'})`);
-        return fail(failureOf(error), sessionId);
+    } finally {
+        inFlight.delete(token);
     }
 }

@@ -127,8 +127,9 @@ internal interface PushSealer {
 }
 
 /**
- * The records, one sealed file per token in noBackupFilesDir. A token is claimed at most once, across restarts: the
- * file is renamed away before it is read, so of two claims only one wins. Every instance shares one lock.
+ * The records, one sealed file per token in noBackupFilesDir. A press looks at its record first; a token is consumed
+ * at most once, across restarts, only when the press is accepted or can never succeed, so a refused press can be tried
+ * again. Consuming renames the file away before reading it, so of two consumes only one wins. Every instance shares one lock.
  */
 internal class PushActionStore(private val dir: File, private val sealer: PushSealer) {
   fun save(record: PushActionRecord): String = synchronized(LOCK) {
@@ -144,16 +145,23 @@ internal class PushActionStore(private val dir: File, private val sealer: PushSe
     token
   }
 
-  /** The record a token stands for, deleted as it is read; null for a malformed, unknown, claimed or unreadable token. */
-  fun claim(token: String): PushActionRecord? = synchronized(LOCK) {
+  /** The record a token stands for, left stored; null for a malformed, unknown, consumed or unreadable token. */
+  fun peek(token: String): PushActionRecord? = synchronized(LOCK) {
     if (!PushActions.isToken(token)) return null
     val file = fileFor(token)
-    val claimed = File(dir, "${file.name}.claimed")
-    if (!file.renameTo(claimed)) return null
+    if (file.isFile) read(file, token) else null
+  }
+
+  /** Deletes a token's record, returning it only to the one caller whose rename took it. */
+  fun consume(token: String): PushActionRecord? = synchronized(LOCK) {
+    if (!PushActions.isToken(token)) return null
+    val file = fileFor(token)
+    val taken = File(dir, "${file.name}.taken")
+    if (!file.renameTo(taken)) return null
     try {
-      read(claimed, token)
+      read(taken, token)
     } finally {
-      claimed.delete()
+      taken.delete()
     }
   }
 
@@ -210,7 +218,7 @@ internal object PushActionInbox {
 
   /**
    * The request in an action's intent, or null for any other intent, one without a well-formed token, or one relaunched
-   * from Recents (which would replay it). Any app can start the activity, so the token is checked again when claimed.
+   * from Recents (which would replay it). Any app can start the activity, so the token is checked again against the store.
    */
   fun parse(intentAction: String?, token: String?, locked: Boolean, fromHistory: Boolean): PushActionRequest? {
     val spec = PushActions.SPECS.firstOrNull { it.intentAction == intentAction } ?: return null

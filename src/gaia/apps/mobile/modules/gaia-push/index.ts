@@ -51,10 +51,12 @@ export interface GaiaPushNative {
     /** Titles the approval notification's Review and Deny on iOS; Android labels them from its own strings. */
     setApprovalActions(reviewTitle: string, denyTitle: string): Promise<void>;
     /**
-     * The record a pressed button's token stands for, deleted as it is read (once, across restarts); null for any other
-     * token. iOS answers `{locked: true}` while the phone is locked, and claims nothing.
+     * The record a pressed button's token stands for, left stored so a refused press can be tried again; null for any
+     * other token. `{locked: true}` while the phone is locked.
      */
-    claimApproval(token: string): Promise<NativeApprovalRecord | { locked: true } | null>;
+    peekApproval(token: string): Promise<NativeApprovalRecord | { locked: true } | null>;
+    /** Uses the button up: deletes its record and removes its notification. True only for the call that took it (once, across restarts). */
+    consumeApproval(token: string): Promise<boolean>;
     /** Android only: the Review or Deny that opened or resumed the app before anything listened, once; null after that. */
     takeApprovalAction?(): NativeApprovalAction | null;
     /** Android only: a Review or Deny pressed while something listens. */

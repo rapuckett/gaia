@@ -55,11 +55,17 @@ class GaiaPushModule : Module() {
 
     Function("takeApprovalAction") { take() }
 
-    // What a pressed button answers, once: the record is deleted as it is read, and its notification removed.
-    AsyncFunction("claimApproval") { token: String ->
-      val record = pushActionStore(context).claim(token) ?: return@AsyncFunction null
+    // What a pressed button answers, left stored so a refused press can be tried again; `locked` while the phone is.
+    AsyncFunction("peekApproval") { token: String ->
+      if (deviceLocked(context)) return@AsyncFunction mapOf("locked" to true)
+      pushActionStore(context).peek(token)?.toMap()
+    }
+
+    // Uses the button up: deletes its record and removes its notification. True only for the call that took it.
+    AsyncFunction("consumeApproval") { token: String ->
+      val record = pushActionStore(context).consume(token) ?: return@AsyncFunction false
       cancelApprovalNotification(context, record.tag, token)
-      record.toMap()
+      true
     }
 
     OnStartObserving("onApprovalAction") {
@@ -73,7 +79,7 @@ class GaiaPushModule : Module() {
 
   /**
    * The pressed Review or Deny, once. One pressed or delivered while the phone is locked comes back `locked`, and its
-   * token is never handed over, so it stays unclaimed for a press after unlocking.
+   * token is never handed over, so it stays unused for a press after unlocking.
    */
   private fun take(): Map<String, Any?>? {
     val request = PushActionInbox.take() ?: return null

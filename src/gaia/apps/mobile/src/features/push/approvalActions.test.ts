@@ -23,18 +23,15 @@ function pressed(overrides: Partial<PressedAction> = {}): PressedAction {
     return { kind: 'deny', token: TOKEN, locked: false, ...overrides };
 }
 
-/** A native store holding one record under TOKEN, claimable once, as claimApproval is. */
-function deps(record: NativeApprovalRecord | null = RECORD, overrides: Partial<Omit<ActionDeps, 'claim' | 'confirm' | 'notify' | 'reviewing'>> = {}) {
+/** A native store holding one record under TOKEN: peekApproval reads it, consumeApproval deletes it once. */
+function deps(record: NativeApprovalRecord | null = RECORD, overrides: Partial<Omit<ActionDeps, 'peek' | 'consume' | 'confirm' | 'notify' | 'reviewing'>> = {}) {
     const store = new Map(record ? [[TOKEN, record]] : []);
-    const claim = jest.fn(async (token: string): Promise<NativeApprovalRecord | { locked: true } | null> => {
-        const found = store.get(token) ?? null;
-        store.delete(token);
-        return found;
-    });
+    const peek = jest.fn(async (token: string): Promise<NativeApprovalRecord | { locked: true } | null> => store.get(token) ?? null);
+    const consume = jest.fn(async (token: string) => store.delete(token));
     const confirm = jest.fn<Promise<unknown>, Parameters<ActionDeps['confirm']>>().mockResolvedValue({ status: 'ok', approved: false, granted: null });
     const notify = jest.fn<Promise<void>, Parameters<ActionDeps['notify']>>().mockResolvedValue(undefined);
     const reviewing = jest.fn<void, [string, string]>();
-    return { claim, confirm, notify, reviewing, currentPcId: () => 'pc1', now: () => NOW, ...overrides };
+    return { store, peek, consume, confirm, notify, reviewing, currentPcId: () => 'pc1', now: () => NOW, ...overrides };
 }
 
 beforeEach(() => forgetReviewedForTests());
@@ -60,6 +57,8 @@ describe("a notification's Review", () => {
         expect(d.confirm).not.toHaveBeenCalled();
         expect(d.notify).not.toHaveBeenCalled();
         expect(d.reviewing).toHaveBeenCalledWith('s_42', APPROVAL_ID);
+        // Opening the card uses the button up.
+        expect(d.store.size).toBe(0);
     });
 
     it("marks the card's own answer as one from a notification", () => {
@@ -79,12 +78,24 @@ describe("a notification's Deny", () => {
         expect(d.notify).not.toHaveBeenCalled();
     });
 
-    it('claims its token once, so a second press sends nothing', async () => {
+    it('uses the button up once sent, so a second press sends nothing', async () => {
         const d = deps();
         await answerFromNotification(pressed(), d);
+        expect(d.store.size).toBe(0);
         await expect(answerFromNotification(pressed(), d)).resolves.toEqual({ result: 'refused', reason: 'stale' });
         expect(d.confirm).toHaveBeenCalledTimes(1);
-        expect(d.claim).toHaveBeenCalledTimes(2);
+    });
+
+    it('sends once when the same button is pressed twice at once', async () => {
+        const d = deps();
+        let release: (value: unknown) => void = () => undefined;
+        d.confirm.mockImplementationOnce(() => new Promise((resolve) => (release = resolve)));
+        const first = answerFromNotification(pressed(), d);
+        await expect(answerFromNotification(pressed(), d)).resolves.toEqual({ result: 'busy' });
+        release({ status: 'ok' });
+        await expect(first).resolves.toEqual({ result: 'denied', sessionId: 's_42' });
+        expect(d.confirm).toHaveBeenCalledTimes(1);
+        expect(d.notify).not.toHaveBeenCalled();
     });
 });
 
@@ -93,20 +104,22 @@ describe('refusing a button', () => {
         ['without a token (a push that skipped the extension, or a made-up intent)', { token: null }, 'refused'],
         ['with a malformed token', { token: '../s_42' }, 'refused'],
         ['pressed on a locked phone', { locked: true, token: null }, 'locked'],
-    ])('%s, with a notice and without claiming anything', async (_, overrides, reason) => {
+    ])('%s, with a notice and without reading or using up anything', async (_, overrides, reason) => {
         const d = deps();
         await expect(answerFromNotification(pressed(overrides), d)).resolves.toEqual({ result: 'refused', reason });
-        expect(d.claim).not.toHaveBeenCalled();
+        expect(d.peek).not.toHaveBeenCalled();
+        expect(d.consume).not.toHaveBeenCalled();
         expect(d.confirm).not.toHaveBeenCalled();
         expect(d.notify).toHaveBeenCalledWith(reason, null);
     });
 
     it('while iOS says the phone is locked, leaving the record for a press after unlocking', async () => {
         const d = deps();
-        d.claim.mockResolvedValueOnce({ locked: true });
+        d.peek.mockResolvedValueOnce({ locked: true });
         await expect(answerFromNotification(pressed({ kind: 'review' }), d)).resolves.toEqual({ result: 'refused', reason: 'locked' });
         expect(d.notify).toHaveBeenCalledWith('locked', null);
         expect(d.reviewing).not.toHaveBeenCalled();
+        expect(d.consume).not.toHaveBeenCalled();
         await expect(answerFromNotification(pressed(), d)).resolves.toEqual({ result: 'denied', sessionId: 's_42' });
     });
 
@@ -120,10 +133,11 @@ describe('refusing a button', () => {
         ['no approval id', { approvalId: '' }],
         ['a malformed chat id', { sessionId: '../s_42' }],
         ['no PC', { pcId: '' }],
-    ])('whose record has %s', async (_, overrides) => {
+    ])('whose record has %s, using the button up since it can never work', async (_, overrides) => {
         const d = deps({ ...RECORD, ...overrides });
         await expect(answerFromNotification(pressed(), d)).resolves.toEqual({ result: 'refused', reason: 'refused' });
         expect(d.confirm).not.toHaveBeenCalled();
+        expect(d.store.size).toBe(0);
     });
 
     it("once the PC's wait (ttl_s) is over, by this phone's clock", async () => {
@@ -131,12 +145,17 @@ describe('refusing a button', () => {
         await expect(answerFromNotification(pressed(), d)).resolves.toEqual({ result: 'refused', reason: 'stale' });
         expect(d.confirm).not.toHaveBeenCalled();
         expect(d.notify).toHaveBeenCalledWith('stale', 's_42');
+        expect(d.store.size).toBe(0);
     });
 
-    it("from a PC the app isn't talking to", async () => {
-        const d = deps(RECORD, { currentPcId: () => 'pc2' });
+    it("from a PC the app isn't talking to, keeping the button for after switching", async () => {
+        let current = 'pc2';
+        const d = deps(RECORD, { currentPcId: () => current });
         await expect(answerFromNotification(pressed(), d)).resolves.toEqual({ result: 'refused', reason: 'otherPc' });
         expect(d.confirm).not.toHaveBeenCalled();
+        expect(d.consume).not.toHaveBeenCalled();
+        current = 'pc1';
+        await expect(answerFromNotification(pressed(), d)).resolves.toEqual({ result: 'denied', sessionId: 's_42' });
     });
 
     it('for an open-only tool, or, with a list, an approval naming no tool', async () => {
@@ -148,16 +167,18 @@ describe('refusing a button', () => {
     });
 
     it.each([
-        ['already answered or expired on the PC', new GaiaApiError(409, 'That permission prompt is no longer waiting for an answer.'), 'stale'],
-        ['the turn ended', new GaiaApiError(404, 'gone'), 'stale'],
-        ['the PC unreachable', new GaiaNetworkError('https://pc.example:4243/api/chat/confirm-tool', new Error('timeout')), 'unreachable'],
-        ['a PC error', new GaiaApiError(500, 'boom'), 'failed'],
-    ])('a denial when %s, with a notice, logging no ids or token', async (_, error, reason) => {
+        ['already answered or expired on the PC', new GaiaApiError(409, 'That permission prompt is no longer waiting for an answer.'), 'stale', 0],
+        ['the turn ended', new GaiaApiError(404, 'gone'), 'stale', 0],
+        ['the PC unreachable', new GaiaNetworkError('https://pc.example:4243/api/chat/confirm-tool', new Error('timeout')), 'unreachable', 1],
+        ['a PC error', new GaiaApiError(500, 'boom'), 'failed', 1],
+    ])('a denial when %s, with a notice, logging no ids or token', async (_, error, reason, kept) => {
         const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
         const d = deps();
         d.confirm.mockRejectedValue(error);
         await expect(answerFromNotification(pressed(), d)).resolves.toEqual({ result: 'refused', reason });
         expect(d.notify).toHaveBeenCalledWith(reason, 's_42');
+        // Final on the PC uses the button up; a failure that may pass keeps it to press again.
+        expect(d.store.size).toBe(kept);
         const logged = JSON.stringify(warn.mock.calls);
         for (const secret of [APPROVAL_ID, 's_42', TOKEN]) expect(logged).not.toContain(secret);
         warn.mockRestore();
