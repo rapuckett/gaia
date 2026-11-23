@@ -80,11 +80,12 @@ const PLAN: SetupPlan = {
     },
 };
 
-const QWEN_TIGHT = entry({ ...QWEN, fits: true, tight: true, recommended: true, planned: true, selected: true, need_gb: 27.1, capacity_gb: 32 });
+// A tight model reaches the plan only when the person picked it in Customize; the ladder recommends Gemma.
+const QWEN_TIGHT = entry({ ...QWEN, fits: true, tight: true, planned: true, selected: true, need_gb: 27.1, capacity_gb: 32 });
 const PLAN_TIGHT: SetupPlan = {
-    ...PLAN, chat_model: { id: QWEN_ID, user_set: false, size_gb: 23.3, downloaded: false }, recommended_model: QWEN_ID,
-    memory_gb: 32, capacity_gb: 32, left_for_apps_gb: 4.9, download_gb: 23.6,
-    catalog: [{ ...GEMMA, recommended: false, planned: false, selected: false }, EMBED, QWEN_TIGHT, NPU, MINE, FLM, SPEECH, VOICE, IMAGES],
+    ...PLAN, chat_model: { id: QWEN_ID, user_set: true, size_gb: 23.3, downloaded: false }, recommended_model: GEMMA_ID,
+    memory_gb: 32, capacity_gb: 32, download_gb: 23.6,
+    catalog: [{ ...GEMMA, planned: false, selected: false }, EMBED, QWEN_TIGHT, NPU, MINE, FLM, SPEECH, VOICE, IMAGES],
 };
 const PLAN_COLD: SetupPlan = { ...PLAN, lemonade: { mode: 'gaia', url: null, reachable: false }, decided_after_server: true, catalog: [] };
 const PLAN_PRESENT: SetupPlan = { ...PLAN, download_gb: 0, catalog: CATALOG.map((e) => (e.planned ? { ...e, downloaded: true, size_gb: 0 } : e)) };

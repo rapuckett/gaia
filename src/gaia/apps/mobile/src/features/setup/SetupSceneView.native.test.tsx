@@ -37,7 +37,7 @@ const NEW_SCENES: Record<string, string> = {
     'download/lost': 'Lost contact with GAIA',
     'download/verify-failed': 'Retry deletes it and downloads it again.',
     'models/tight': 'Leaves your other apps little memory',
-    'plan/tight': 'Leaves 4.9 GB of memory for your other apps',
+    'plan/tight': 'Leaves your other apps little memory',
     'gate/again': 'Back to GAIA',
     'gate/check': 'Step 1 of 5',
     'gate/download': 'Step 3 of 5',
