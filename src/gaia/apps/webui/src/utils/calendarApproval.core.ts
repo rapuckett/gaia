@@ -147,6 +147,14 @@ export function visibleText(value: string, multiline: boolean): string {
     return visibleWith(KEPT_AS_WRITTEN, value, multiline);
 }
 
+/** Bidi isolates the translator wraps around each half and param; they cannot reverse a name. */
+const TRANSLATION_ISOLATE = /([⁦-⁩])/;
+
+/** A notification line marked like the approval card, its translation isolates kept. */
+export function noticeText(text: string): string {
+    return text.split(TRANSLATION_ISOLATE).map((part, i) => (i % 2 ? part : visibleText(part, true))).join('');
+}
+
 const KEPT_IN_NAMES: ReadonlySet<string> = new Set();
 const KEPT_IN_COMMANDS: ReadonlySet<string> = new Set(['\u0009', '\u000A']);
 const codeOf = (char: string) => `[U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}]`;

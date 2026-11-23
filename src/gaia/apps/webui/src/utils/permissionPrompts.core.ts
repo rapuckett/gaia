@@ -291,8 +291,55 @@ export const COMMAND_SUMMARY_TOOLS = new Set(['run_shell_command', 'wait_for_con
 const EXACT_MAIL_TOOLS = ['send_now', 'send_draft', 'reply_to_message', 'forward_message', 'discard_draft', 'update_draft'];
 export const EXACT_SUMMARY_TOOLS = new Set([...EXACT_MAIL_TOOLS, ...EXACT_MAIL_TOOLS.map((tool) => `send-email/${tool}`)]);
 
+// The header lines `render_preview` in outgoing.py writes, longest label first so the regex picks it.
+export const MAIL_FIELDS: ReadonlyArray<[string, MessageKey]> = [
+  ['Attachments left out, not sent', 'permission.mail.leftOut'], // english: matched against the backend's header line
+  ['Attachments', 'permission.mail.attachments'],
+  ['Subject', 'permission.mail.subject'],
+  ['Format', 'permission.mail.format'],
+  ['From', 'permission.mail.from'],
+  ['Bcc', 'permission.mail.bcc'],
+  ['Cc', 'permission.mail.cc'],
+  ['To', 'permission.mail.to'],
+];
+const MAIL_FIELD = new RegExp(`^(${MAIL_FIELDS.map(([label]) => label).join('|')}): (.*)$`);
+export const MAIL_ADDRESS_FIELDS: ReadonlySet<string> = new Set(['From', 'To', 'Cc', 'Bcc']);
+
+export interface MailHeader {
+  /** Text above the header, such as a note about hidden characters. */
+  before: string;
+  fields: Array<[label: string, value: string]>;
+  body: string;
+}
+
 /**
- * A relayed command prompt with no args: `command[\n…]\nin <folder>[\n(extras)]\n<risk note>`
+ * An email being approved, split into its header lines and its body so the
+ * labels can be translated. Every value stays exactly as it will be sent.
+ * `null` when the text is not a header GAIA wrote, which then shows whole.
+ */
+export function splitMailHeader(text: string): MailHeader | null {
+  const lines = text.split('\n');
+  const opens = (line: string | undefined) => !!line && /^(From|To): /.test(line);
+  // Notes come first, each its own paragraph; the header is the first paragraph that opens like one.
+  let start = 0;
+  while (!opens(lines[start])) {
+    const gap = lines.indexOf('', start);
+    if (gap < 0) return null;
+    start = gap + 1;
+  }
+  const fields: MailHeader['fields'] = [];
+  let at = start;
+  for (; at < lines.length && lines[at] !== ''; at++) {
+    const match = MAIL_FIELD.exec(lines[at]);
+    if (!match) return null;
+    fields.push([match[1], match[2]]);
+  }
+  if (!fields.some(([label]) => label === 'To')) return null;
+  return { before: lines.slice(0, Math.max(0, start - 1)).join('\n'), fields, body: lines.slice(at + 1).join('\n') };
+}
+
+/**
+ * A relayed command prompt with no args:`command[\n…]\nin <folder>[\n(extras)]\n<risk note>`
  * (`render_command_summary` in sse_translation.py). The command keeps its own lines.
  */
 export function splitCommandSummary(summary: string): { command: string; folder: string; extras: string; note: string } | null {
