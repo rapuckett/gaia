@@ -24,7 +24,7 @@ function utf16le(bytes: Uint8Array): string {
             out += String.fromCharCode(unit);
         }
     }
-    return out.startsWith('﻿') ? out.slice(1) : out;
+    return out.startsWith('\ufeff') ? out.slice(1) : out;
 }
 
 /** The script a `powershell -EncodedCommand <base64>` line runs, decoded; '' when it carries none. */

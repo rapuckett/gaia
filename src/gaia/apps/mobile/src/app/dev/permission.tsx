@@ -138,8 +138,8 @@ function useFixtures(): Fixture[] {
                     prompt: prompt('names', {
                         tool: 'write_file',
                         toolLabel: 'writing file',
-                        toolArgs: { file_path: '/Users/alex/Documents/inv‍oice.txt', content: 'Total: 120' },
-                        alwaysScope: 'write_file on inv‍oice.txt',
+                        toolArgs: { file_path: '/Users/alex/Documents/inv\u200doice.txt', content: 'Total: 120' },
+                        alwaysScope: 'write_file on inv\u200doice.txt',
                         risk: 'write',
                     }),
                 },

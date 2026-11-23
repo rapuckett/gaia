@@ -148,7 +148,7 @@ export function visibleText(value: string, multiline: boolean): string {
 }
 
 /** Bidi isolates the translator wraps around each half and param; they cannot reverse a name. */
-const TRANSLATION_ISOLATE = /([⁦-⁩])/;
+const TRANSLATION_ISOLATE = /([\u2066-\u2069])/;
 
 /** A notification line marked like the approval card, its translation isolates kept. */
 export function noticeText(text: string): string {

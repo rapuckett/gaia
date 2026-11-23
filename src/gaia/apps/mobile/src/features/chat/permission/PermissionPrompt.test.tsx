@@ -152,11 +152,11 @@ describe('PermissionPrompt', () => {
 });
 
 describe('PermissionPrompt shows what will really run', () => {
-    const ISOLATES = /[⁦-⁩]/g;
+    const ISOLATES = /[\u2066-\u2069]/g;
 
     it.each([
-        ['a zero-width joiner', 'inv‍oice.txt', 'inv[U+200D]oice.txt', '‍'],
-        ['an emoji and its variation selector', '❤️.txt', '❤[U+FE0F].txt', '️'],
+        ['a zero-width joiner', 'inv\u200doice.txt', 'inv[U+200D]oice.txt', '\u200d'],
+        ['an emoji and its variation selector', '❤\ufe0f.txt', '❤[U+FE0F].txt', '\ufe0f'],
     ])('codes %s in a file name, with the hidden-characters note', async (_, name, coded, raw) => {
         const { shown } = await mount(prompt({ toolArgs: { file_path: `/home/u/${name}`, content: 'x' } }));
         expect(shown()).toContain(`/home/u/${coded}`);
@@ -165,8 +165,8 @@ describe('PermissionPrompt shows what will really run', () => {
     });
 
     it('keeps an emoji and its variation selector in a search query, which reads as prose', async () => {
-        const { shown } = await mount(prompt({ tool: 'web_search', toolLabel: undefined, alwaysScope: undefined, toolArgs: { query: 'I ❤️ cats' } }));
-        expect(shown()).toContain('I ❤️ cats');
+        const { shown } = await mount(prompt({ tool: 'web_search', toolLabel: undefined, alwaysScope: undefined, toolArgs: { query: 'I ❤\ufe0f cats' } }));
+        expect(shown()).toContain('I ❤\ufe0f cats');
         expect(shown()).not.toContain('perm-hidden-note');
     });
 
@@ -179,19 +179,19 @@ describe('PermissionPrompt shows what will really run', () => {
     });
 
     it('codes a joiner in a command and in its Always allow label, keeping the raw scope for the answer', async () => {
-        const p = prompt({ tool: 'run_shell_command', toolLabel: undefined, alwaysScope: 'gi‍t status', toolArgs: { command: 'gi‍t status' } });
+        const p = prompt({ tool: 'run_shell_command', toolLabel: undefined, alwaysScope: 'gi\u200dt status', toolArgs: { command: 'gi\u200dt status' } });
         const { shown, onAnswer } = await mount(p);
         expect(shown()).toContain('gi[U+200D]t status');
-        expect(shown()).not.toContain('‍');
+        expect(shown()).not.toContain('\u200d');
         const always = Object.keys(buttons).find((label) => label.replace(ISOLATES, '').startsWith('Always allow'))!;
         expect(always.replace(ISOLATES, '')).toBe('Always allow gi[U+200D]t status in this chat');
         act(() => buttons[always].onPress());
         expect(onAnswer).toHaveBeenLastCalledWith('always');
-        expect(p.alwaysScope).toBe('gi‍t status');
+        expect(p.alwaysScope).toBe('gi\u200dt status');
     });
 
     it('codes the path in the question before isolating it', async () => {
-        const { shown } = await mount(prompt({ tool: 'allow_path_access', toolArgs: { path: '/x/inv‍oice.txt', kind: 'file' } }));
+        const { shown } = await mount(prompt({ tool: 'allow_path_access', toolArgs: { path: '/x/inv\u200doice.txt', kind: 'file' } }));
         expect(shown()).toContain('/x/inv[U+200D]oice.txt');
         expect(shown()).not.toMatch(/\[U\+206[6-9]\]/);
         expect(shown()).toContain('perm-hidden-note');
@@ -222,9 +222,9 @@ describe('PermissionPrompt shows what code and commands really do', () => {
     });
 
     it('notes the code risk on a code tool and shows its emoji as written', async () => {
-        const code = 'print("\u{1F468}‍\u{1F469}‍\u{1F467} ❤️")';
+        const code = 'print("\u{1F468}\u200d\u{1F469}\u200d\u{1F467} ❤\ufe0f")';
         const { shown } = await mount(prompt({ tool: 'run_python', toolLabel: undefined, alwaysScope: undefined, toolArgs: { code } }));
-        expect(shown()).toContain('\u{1F468}‍\u{1F469}‍\u{1F467} ❤️');
+        expect(shown()).toContain('\u{1F468}\u200d\u{1F469}\u200d\u{1F467} ❤\ufe0f');
         expect(shown()).toContain('perm-code-risk');
         expect(shown()).not.toContain('perm-hidden-note');
     });
