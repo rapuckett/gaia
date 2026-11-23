@@ -45,7 +45,7 @@ export function RadioCard({ where, picked, disabled, label, onPick, children, na
                     disabled={disabled}
                     accessibilityRole="radio"
                     accessibilityLabel={name}
-                    aria-selected={picked}
+                    aria-checked={picked}
                 >
                     <Row gap="sm">
                         <Text tone={picked ? 'accent' : 'muted'}>{picked ? '●' : '○'}</Text>

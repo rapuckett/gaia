@@ -90,3 +90,76 @@ def test_invalid_flag_names_the_flag(monkeypatch, tmp_path, capsys):
 
     assert code == dev_backend.EX_USAGE
     assert "--gpu-memory-gb" in capsys.readouterr().err
+
+
+def test_downloaded_extra_makes_qwen_downloaded_and_still_tight():
+    ids = dev_backend.parse_downloaded(LARGE_DEFAULT_MODEL_NAME, "x")
+    app = dev_backend.build_fake_llm([], DEFAULT_MODEL_NAME, ids, TIGHT_GPU_GB)
+    client = TestClient(app)
+
+    every = {
+        m["id"]: m for m in client.get("/api/v1/models?show_all=true").json()["data"]
+    }
+    info = client.get("/api/v1/system-info").json()
+    size = find_model_requirement(LARGE_DEFAULT_MODEL_NAME).size_gb
+    fit = memory_fit(LARGE_DEFAULT_MODEL_NAME, size, capacity_from_system_info(info))
+
+    assert every[LARGE_DEFAULT_MODEL_NAME]["downloaded"] is True
+    assert fit["fits"] and fit["tight"]
+
+
+def test_downloaded_parses_a_list_and_drops_duplicates():
+    ids = dev_backend.parse_downloaded(
+        f" {LARGE_DEFAULT_MODEL_NAME}, {DEFAULT_MODEL_NAME},{LARGE_DEFAULT_MODEL_NAME}",
+        "x",
+    )
+
+    assert ids == [LARGE_DEFAULT_MODEL_NAME, DEFAULT_MODEL_NAME]
+
+
+@pytest.mark.parametrize("raw", ["Nope-GGUF", f"{DEFAULT_MODEL_NAME},Nope", ""])
+def test_unknown_downloaded_env_is_a_startup_error(raw, monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("GAIA_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv(dev_backend.DOWNLOADED_ENV, raw)
+
+    code = dev_backend.main(["--port", "4299", "--home", str(tmp_path / "home")])
+
+    assert code == dev_backend.EX_USAGE
+    err = capsys.readouterr().err
+    assert dev_backend.DOWNLOADED_ENV in err and "lemonade_client.py" in err
+
+
+def test_flag_beats_env_and_unknown_flag_id_names_the_flag(
+    monkeypatch, tmp_path, capsys
+):
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("GAIA_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv(dev_backend.DOWNLOADED_ENV, "Nope")
+    seen = {}
+
+    def fake_run(*args):
+        seen["extra"] = args[-1]
+        return 0
+
+    monkeypatch.setattr(dev_backend, "run", fake_run)
+
+    code = dev_backend.main(
+        [
+            "--port",
+            "4299",
+            "--home",
+            str(tmp_path / "home"),
+            "--downloaded",
+            LARGE_DEFAULT_MODEL_NAME,
+        ]
+    )
+    assert code == 0 and seen["extra"] == [LARGE_DEFAULT_MODEL_NAME]
+
+    code = dev_backend.main(
+        ["--port", "4299", "--home", str(tmp_path / "home"), "--downloaded", "Bad"]
+    )
+    assert code == dev_backend.EX_USAGE
+    assert "--downloaded" in capsys.readouterr().err

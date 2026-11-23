@@ -51,6 +51,7 @@ function ChecklistRow({ entry: e, ticked, disabled, progress, imagesCovered, can
                 checked={ticked}
                 disabled={disabled}
                 label={e.name}
+                description={[status, note, warning].filter(Boolean).join('. ')}
                 onPress={() => onToggle(!ticked)}
                 name={<Text role="ui" weight="medium" dir="ltr">{e.name}</Text>}
                 chips={

@@ -88,6 +88,7 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
                             <Row gap="xs">
                                 <Icon icon={failed ? CircleAlert : FileText} size="sm" tone={failed ? (waitsForServerReturn(doc.error_kind) ? 'warning' : 'danger') : 'secondary'} />
                                 <Pressable
+                                    accessibilityRole="text"
                                     accessibilityLabel={failed ? t(waitsForServerReturn(doc.error_kind) ? 'docsBar.serverTitle' : needsRetry(doc.error_kind) ? 'docsBar.busyTitle' : 'docsBar.failedTitle', { name: doc.filename }) : doc.filename}
                                     minSize={32}
                                 >

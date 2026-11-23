@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import { useWindowDimensions, View, type ScrollView } from 'react-native';
+import { useWindowDimensions, View, type AccessibilityActionEvent, type ScrollView } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { GaiaNotification, NotificationType } from '@webui/types/agent';
@@ -90,9 +90,9 @@ export function NotificationCenterScreen({ onBack, onOpenChat, receiptId }: { on
         >
             <Stack paddingX="gutter" paddingY="sm">
                 <Row gap="sm" wrap accessibilityRole="tablist">
-                    <Chip label={t('notifications.filter.all')} selected={filter === null} onPress={() => setNotificationFilter(null)} />
+                    <Chip role="tab" label={t('notifications.filter.all')} selected={filter === null} onPress={() => setNotificationFilter(null)} />
                     {FILTER_ORDER.map((kind) => (
-                        <Chip key={kind} label={t(FILTER_LABELS[kind])} selected={filter === kind} onPress={() => setNotificationFilter(kind)} />
+                        <Chip key={kind} role="tab" label={t(FILTER_LABELS[kind])} selected={filter === kind} onPress={() => setNotificationFilter(kind)} />
                     ))}
                 </Row>
             </Stack>
@@ -164,10 +164,28 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat, onLai
         if (n.sessionId && !approval) onOpenChat(n.sessionId);
     };
 
+    // iOS reads the row as one element and hides the buttons inside it, so each is also an action on the row.
+    const canAnswer = approval && !answered && waiting;
+    const actions = [
+        { name: 'dismiss', label: t('notifications.dismiss') },
+        ...(canAnswer ? [{ name: 'approve', label: t('notifications.approve') }, { name: 'deny', label: t('notifications.deny') }] : []),
+    ];
+    const onAction = (e: AccessibilityActionEvent) => {
+        const name = e.nativeEvent.actionName;
+        if (name === 'dismiss') dismissNotification(n.id);
+        else if (name === 'approve') answer(true);
+        else if (name === 'deny') answer(false);
+    };
+
     return (
         <View testID={`ntf-${n.id}`} onLayout={onLaidOut ? (e) => onLaidOut(e.nativeEvent.layout.y, e.nativeEvent.layout.height) : undefined}>
             <Divider />
-            <Pressable onPress={open} accessibilityLabel={`${title}. ${message}`}>
+            <Pressable
+                onPress={open}
+                accessibilityLabel={[n.read ? null : t('row.unread'), title, message].filter(Boolean).join('. ')}
+                accessibilityActions={actions}
+                onAccessibilityAction={onAction}
+            >
                 <Stack gap="xs" paddingX="lg" paddingY="md">
                     <Row gap="sm" align={largeText ? 'start' : 'center'}>
                         {!n.read ? (
@@ -188,7 +206,7 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat, onLai
                     <Text role="ui" weight="semibold">{title}</Text>
                     <Text role="ui" tone="secondary">{message}</Text>
                     {n.type === 'policy_alert' ? <PolicyDetails n={n} /> : null}
-                    {approval && !answered && waiting ? (
+                    {canAnswer ? (
                         <Row gap="sm" stack>
                             <Stack flex={1}>
                                 <Button label={t('notifications.approve')} icon={Check} full disabled={confirm.isPending} onPress={() => answer(true)} testID="ntf-approve" />

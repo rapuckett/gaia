@@ -50,7 +50,7 @@ export function AgentDownloadRow({ job, name, onRetry, failedNote, interrupted =
                 <Text role="caption" tone={failed ? 'danger' : 'secondary'}>{state}</Text>
                 {job.state === 'downloading' ? <Ltr>{`${Math.floor(pct)}%`}</Ltr> : null}
             </Row>
-            <ProgressLine value={pct / 100} />
+            <ProgressLine value={pct / 100} accessibilityLabel={t('setup.progress.rowLabel', { name, state })} />
             {job.state === 'downloading' ? <Text role="caption" tone="secondary">{total > 0 ? sizes : isolate(sizes, 'ltr')}</Text> : null}
             {failed ? (
                 <Stack gap="xs">
