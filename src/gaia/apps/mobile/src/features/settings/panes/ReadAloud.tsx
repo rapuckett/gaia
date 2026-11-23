@@ -80,6 +80,14 @@ export default function ReadAloud() {
         );
     }
 
+    if (data.available === false) {
+        return (
+            <Stack gap="lg" padding="lg">
+                <Notice tone="info" role="status" message={t('readAloud.settings.unavailable')} testID="read-aloud-unavailable" />
+            </Stack>
+        );
+    }
+
     return (
         <Stack gap="lg" padding="lg">
             <Text role="body" tone="secondary">
