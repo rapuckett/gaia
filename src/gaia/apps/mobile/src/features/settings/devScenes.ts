@@ -266,7 +266,7 @@ const YOURS_INFO: Partial<ModelServerInfo> = { owner: 'user', base_url: 'http://
 const YOURS: Partial<LemonadeTarget> = { mode: 'external', base_url: 'http://192.168.1.20:13305', saved_base_url: 'http://192.168.1.20:13305' };
 const SETTINGS: Settings = {
     custom_model: null, model_status: null, context_size: null, dynamic_tools: false, dynamic_tools_locked: false,
-    agent_mode: 'manual', network_policy: 'cloud_allowed',
+    agent_mode: 'manual', network_policy: 'cloud_allowed', flagship_agent: 'gaiapy', gaiacpp_available: false,
 };
 const advanced = (settings: Partial<Settings>, mcp?: MCPServerStatus[]): SettingsScene => ({
     section: 'advanced', gpuMemory: GPU, data: { settings: { ...SETTINGS, ...settings }, ...(mcp ? { mcpServers: mcp } : {}) },

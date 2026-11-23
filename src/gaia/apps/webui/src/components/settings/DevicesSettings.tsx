@@ -61,6 +61,7 @@ const CHANGE_KINDS = {
     npuMemlockFixed: ['settings.devices.change.npuMemlockFixed', []],
     folderAdded: ['settings.devices.change.folderAdded', ['folder']],
     imageSettingsChanged: ['settings.devices.change.imageSettingsChanged', ['model']],
+    folderRemoved: ['settings.devices.change.folderRemoved', ['folder']],
     skillAdded: ['settings.devices.change.skillAdded', ['name']],
     skillAddedCode: ['settings.devices.change.skillAddedCode', ['name']],
     connectorSetup: ['settings.devices.change.connectorSetup', ['connector']],
@@ -69,6 +70,20 @@ const CHANGE_KINDS = {
     profileScanOn: ['settings.devices.change.profileScanOn', []],
     profileScanOff: ['settings.devices.change.profileScanOff', []],
     pairingClosed: ['settings.devices.change.pairingClosed', []],
+    chatPermissionsAsk: ['settings.devices.change.chatPermissionsAsk', []],
+    chatPermissionsFull: ['settings.devices.change.chatPermissionsFull', []],
+    connectorRemoved: ['settings.devices.change.connectorRemoved', ['connector']],
+    gitCommitted: ['settings.devices.change.gitCommitted', ['folder']],
+    gitPullRequest: ['settings.devices.change.gitPullRequest', ['folder']],
+    goalApproved: ['settings.devices.change.goalApproved', []],
+    goalRejected: ['settings.devices.change.goalRejected', []],
+    scheduleCreated: ['settings.devices.change.scheduleCreated', ['name']],
+    scheduleResumed: ['settings.devices.change.scheduleResumed', ['name']],
+    scheduleRun: ['settings.devices.change.scheduleRun', ['name']],
+    spendingAllowedMonth: ['settings.devices.change.spendingAllowedMonth', []],
+    spendingLimitCleared: ['settings.devices.change.spendingLimitCleared', []],
+    spendingLimitSet: ['settings.devices.change.spendingLimitSet', ['limit']],
+    undoLimitsChanged: ['settings.devices.change.undoLimitsChanged', ['days', 'mb']],
 } as const satisfies Record<string, readonly [MessageKey, readonly string[]]>;
 
 const CHANGES_PAGE = 20;

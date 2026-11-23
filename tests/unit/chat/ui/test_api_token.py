@@ -295,7 +295,7 @@ class TestNoBypass:
 
 
 def test_standalone_runner_prints_a_token_file_error_without_a_traceback(
-    tmp_path, monkeypatch, capsys
+    tmp_path, monkeypatch, capsys, restore_gaia_logging
 ):
     from gaia.ui.server import main as server_main
 

@@ -1,0 +1,65 @@
+# Cloudflare Worker config for the GAIA push relay.
+#
+# Nothing account-specific lives here: no account id, D1 database id, route or
+# domain. A deploy supplies them (see README.md, "Self-hosting"):
+#   1. A D1 database, its id added to a copy of this file at deploy time:
+#        wrangler d1 create <name>
+#        wrangler d1 migrations apply DB --remote
+#   2. The secrets, each set with `wrangler secret put <NAME>` from stdin:
+#        APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID   (iOS, direct APNs)
+#        FCM_SERVICE_ACCOUNT_JSON                 (Android, FCM HTTP v1)
+#        IP_HASH_SALT                             (hashes client IPs for the register limit)
+#   3. ALLOWED_APP_IDS set to the app ids this relay serves.
+#
+# Local development: `npm run migrate:local`, then `npm run dev` with the
+# secrets in .dev.vars. Local workerd has no HTTP/2 client, so APNs sends only
+# work from a deployed Worker.
+
+name = "push-relay"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "push-relay"
+migrations_dir = "migrations"
+
+# A ceiling on every /v1/handles call, counted per Cloudflare location. It caps
+# how fast anyone can fill D1, whatever the per-IP and per-handle limits allow.
+# namespace_id is any positive integer unique within the account (not an
+# account id); a deploy may change it.
+[[ratelimits]]
+name = "HANDLES_LIMITER"
+namespace_id = "7301"
+
+  [ratelimits.simple]
+  limit = 1000
+  period = 60
+
+# Workers Logs off: the relay's own logs carry only status codes and handle-id
+# prefixes, and nothing here needs request logs kept.
+[observability]
+enabled = false
+
+[observability.logs]
+enabled = false
+invocation_logs = false
+
+# Daily stale-handle and rate-counter cleanup, 04:23 UTC (off the hour on purpose).
+[triggers]
+crons = ["23 4 * * *"]
+
+[vars]
+# Comma-separated app ids (iOS bundle id, which is also the APNs topic, or the
+# Android package name). Required: empty fails registration and every send
+# with a 500 naming it, so an unconfigured deploy is never an open relay.
+ALLOWED_APP_IDS = ""
+MAX_HANDLES_PER_TOKEN = "8"
+SEND_PER_MINUTE = "10"
+SEND_PER_DAY = "500"
+SILENT_PER_MINUTE = "2"
+SILENT_PER_DAY = "300"
+REGISTER_PER_HOUR = "20"
+STALE_DAYS = "180"
+PENDING_HOURS = "48"
+MAX_BODY_BYTES = "8192"

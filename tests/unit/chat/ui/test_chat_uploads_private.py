@@ -445,7 +445,7 @@ def app(homes):
 
     with patch("gaia.ui.server._index_document", new=AsyncMock(return_value=1)):
         application = create_app(db_path=":memory:")
-        yield TestClient(application), application.state.db
+        yield TestClient(application, client=("127.0.0.1", 50000)), application.state.db
 
 
 def _upload(client, name, body):

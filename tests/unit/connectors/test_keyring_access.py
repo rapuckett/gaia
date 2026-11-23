@@ -493,7 +493,7 @@ def test_gateway_forget_on_a_strong_backend(strong):
     from gaia.llm import gateway
 
     assert gateway.forget_token() is False
-    gateway.remember_token("tok-abc")
+    gateway.remember_token("tok-abc", "https://gw/v1")
     assert gateway.forget_token() is True
     assert strong.items == {}
 
