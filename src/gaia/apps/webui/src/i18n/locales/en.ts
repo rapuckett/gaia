@@ -2739,6 +2739,7 @@ export const enMessages = {
     'setup.confirm.noFitOne': '{name} may not fit this PC. Download it anyway?',
     'setup.confirm.noFitMany': 'Some models may not fit this PC. Download them anyway?',
     'setup.confirm.tightOne': '{name} leaves your other apps little memory. Use it anyway?',
+    'setup.confirm.tightBody': 'Your PC may slow down while it runs. A smaller model keeps it quick.',
     'setup.confirm.noFitServerTitle': 'This model may not run on this PC',
     'setup.confirm.lowDiskTitle': 'Not enough free disk space',
     'setup.confirm.downloadAnyway': 'Download anyway',

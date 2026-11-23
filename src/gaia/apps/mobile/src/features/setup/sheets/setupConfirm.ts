@@ -58,7 +58,7 @@ export function noFitRequest(models: { name: string; why: string; tight?: boolea
         title: tight
             ? t('setup.confirm.tightOne', { name: isolateUnit(models[0].name) })
             : models.length === 1 ? t('setup.confirm.noFitOne', { name: isolateUnit(models[0].name) }) : t('setup.confirm.noFitMany'),
-        body: models.map((m) => `${m.name}: ${m.why}`),
+        body: tight ? [t('setup.confirm.tightBody')] : models.map((m) => `${m.name}: ${m.why}`),
         confirmLabel: t(tight ? 'setup.confirm.useAnyway' : 'setup.confirm.downloadAnyway'),
         cancelLabel: t('setup.confirm.pickSmaller'),
     };

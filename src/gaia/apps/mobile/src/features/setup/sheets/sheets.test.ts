@@ -86,7 +86,7 @@ describe('confirm wording', () => {
         const tightOnly = noFitAsk([model({})], t, 'en')!;
         expect(tightOnly.title).toContain('setup.confirm.tightOne');
         expect(tightOnly.confirmLabel).toBe('setup.confirm.useAnyway');
-        expect(tightOnly.body).toEqual(['A: setup.models.warn.tight']);
+        expect(tightOnly.body).toEqual(['setup.confirm.tightBody']);
         const mixed = noFitAsk([model({}), model({ id: 'b', name: 'B', fits: false, tight: false })], t, 'en')!;
         expect(mixed.title).toBe('setup.confirm.noFitMany');
         expect(mixed.confirmLabel).toBe('setup.confirm.downloadAnyway');

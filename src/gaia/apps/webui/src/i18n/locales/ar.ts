@@ -2739,6 +2739,7 @@ const messages: Messages = {
     'setup.confirm.noFitOne': 'قد لا يناسب {name} هذا الجهاز. هل تريد تنزيله على أي حال؟',
     'setup.confirm.noFitMany': 'قد لا تناسب بعض النماذج هذا الجهاز. هل تريد تنزيلها على أي حال؟',
     'setup.confirm.tightOne': 'يترك {name} لتطبيقاتك الأخرى ذاكرة قليلة. هل تريد استخدامه على أي حال؟',
+    'setup.confirm.tightBody': 'قد يبطؤ جهازك أثناء عمله. يبقيه نموذج أصغر سريعًا.',
     'setup.confirm.noFitServerTitle': 'قد لا يعمل هذا النموذج على هذا الجهاز',
     'setup.confirm.lowDiskTitle': 'لا توجد مساحة حرة كافية على القرص',
     'setup.confirm.downloadAnyway': 'التنزيل على أي حال',
