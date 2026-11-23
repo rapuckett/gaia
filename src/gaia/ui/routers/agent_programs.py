@@ -29,6 +29,7 @@ from gaia.logger import get_logger
 from gaia.ui.devices.changes import record_device_change
 from gaia.ui.security import (
     FLAGSHIP_AGENT_ID,
+    detail_for,
     require_pc_or_allowed_device,
     require_ui_header,
 )
@@ -169,6 +170,19 @@ def _job_view() -> Dict[str, Any]:
         return dict(_job)
 
 
+def _for_caller(request: Request, body: Dict[str, Any]) -> Dict[str, Any]:
+    """*body* with PC folders hidden from the error texts, unless the PC is asking."""
+    job = body.get("download", body)
+    if job.get("error"):
+        job["error"] = detail_for(request, job["error"])
+    for program in body.get("programs", []):
+        if program.get("unavailable_reason"):
+            program["unavailable_reason"] = detail_for(
+                request, program["unavailable_reason"]
+            )
+    return body
+
+
 def _fresh() -> bool:
     with _lock:
         at = _sizes["at"]
@@ -223,9 +237,9 @@ def _listing() -> Dict[str, Any]:
 
 
 @router.get("/api/agent-programs")
-async def list_agent_programs():
+async def list_agent_programs(http_request: Request):
     """Both agent programs, with install state, size and any running download."""
-    return await run_in_threadpool(_listing)
+    return _for_caller(http_request, await run_in_threadpool(_listing))
 
 
 def _on_progress(done: int, total: Optional[int]) -> None:
@@ -318,11 +332,11 @@ async def start_agent_program_download(program_id: str, http_request: Request):
     job, started = await run_in_threadpool(_start_download)
     if started:
         record_device_change(http_request, "agentProgramDownloaded", program=program_id)
-    return job
+    return _for_caller(http_request, job)
 
 
 @router.get("/api/agent-programs/{program_id}/download")
-async def agent_program_download_status(program_id: str):
+async def agent_program_download_status(program_id: str, http_request: Request):
     """Bytes downloaded so far, the total when known, and how it ended."""
     _require_gaiacpp(program_id)
-    return _job_view()
+    return _for_caller(http_request, _job_view())

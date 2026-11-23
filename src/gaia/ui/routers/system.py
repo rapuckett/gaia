@@ -1231,7 +1231,30 @@ def _flagship_agent_setting() -> tuple[str, bool]:
     return fetch.saved_flagship(), fetch.native_flagship() is not None
 
 
-def _set_flagship_agent(choice: str) -> bool:
+class _SavedButNotStopped(HTTPException):
+    """The choice was saved but the running agent could not be stopped."""
+
+
+def _refuse_missing_gaiacpp(choice: str, http_request: Request) -> None:
+    """422 when *choice* is gaiacpp, changes the saved one, and gaiacpp isn't here."""
+    from gaia.config import GaiaConfig
+    from gaia.daemon.sidecars import fetch
+
+    if choice != fetch.NATIVE_FLAGSHIP or choice == GaiaConfig.load().flagship_agent:
+        return
+    if fetch.native_flagship() is None:
+        looked = ", ".join(str(p) for p in fetch.native_flagship_candidates())
+        raise HTTPException(
+            status_code=422,
+            detail=security.detail_for(
+                http_request,
+                "gaiacpp is not installed on this PC, so it cannot be the agent "
+                f"yet (looked in: {looked}). Download it first.",
+            ),
+        )
+
+
+def _set_flagship_agent(choice: str, http_request: Request) -> bool:
     """Save the agent choice and stop the running agent so the next message starts the new one.
 
     Returns True when the saved choice changed.
@@ -1246,15 +1269,7 @@ def _set_flagship_agent(choice: str) -> bool:
     saved = GaiaConfig.load().flagship_agent
     if choice == saved:
         return False
-    if choice == fetch.NATIVE_FLAGSHIP and fetch.native_flagship() is None:
-        looked = ", ".join(str(p) for p in fetch.native_flagship_candidates())
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "gaiacpp is not installed on this PC, so it cannot be the agent "
-                f"yet (looked in: {looked}). Download it first."
-            ),
-        )
+    _refuse_missing_gaiacpp(choice, http_request)
     if saved is None and choice == fetch.PYTHON_FLAGSHIP:
         # Already what runs here; saving it makes the terminal UI use it too.
         GaiaConfig.save_key("flagship_agent", choice)
@@ -1284,11 +1299,12 @@ def _set_flagship_agent(choice: str) -> bool:
     try:
         daemon_client.stop_sidecar(FLAGSHIP_AGENT_ID)
     except SidecarError as e:
-        raise HTTPException(
+        raise _SavedButNotStopped(
             status_code=500,
-            detail=(
+            detail=security.detail_for(
+                http_request,
                 f"The agent choice was saved as {choice}, but the agent that is "
-                f"running could not be stopped: {e} Restart GAIA to switch."
+                f"running could not be stopped: {e} Restart GAIA to switch.",
             ),
         ) from e
     return True
@@ -1419,6 +1435,13 @@ async def update_settings(
         security.require_pc_or_allowed_device(http_request)
     if security.allowed_device(http_request) is not None:
         _refuse_device_only_fields(request)
+    flagship_requested = (
+        "flagship_agent" in request.model_fields_set
+        and request.flagship_agent is not None
+    )
+    if flagship_requested:
+        security.require_pc_or_allowed_device(http_request)
+        _refuse_missing_gaiacpp(request.flagship_agent, http_request)
 
     if request.custom_model is not None:
         value = request.custom_model.strip() if request.custom_model else None
@@ -1511,13 +1534,17 @@ async def update_settings(
         GaiaConfig.save_key("dynamic_tools", request.dynamic_tools)
         logger.info("Dynamic tools setting persisted: %s", request.dynamic_tools)
 
-    if (
-        "flagship_agent" in request.model_fields_set
-        and request.flagship_agent is not None
-    ):
-        # Changes the program this PC runs: the PC, or an allowed device, may ask.
-        security.require_pc_or_allowed_device(http_request)
-        if await run_in_threadpool(_set_flagship_agent, request.flagship_agent):
+    if flagship_requested:
+        try:
+            changed = await run_in_threadpool(
+                _set_flagship_agent, request.flagship_agent, http_request
+            )
+        except _SavedButNotStopped:
+            record_device_change(
+                http_request, "agentProgramSwitched", program=request.flagship_agent
+            )
+            raise
+        if changed:
             record_device_change(
                 http_request, "agentProgramSwitched", program=request.flagship_agent
             )
