@@ -101,6 +101,10 @@ const PLAN_TOO_BIG = {
     chat_model: { id: QWEN_ID, user_set: true, size_gb: 23.3, downloaded: false },
     catalog: CATALOG.map((e) => (e.id === QWEN_ID ? { ...e, planned: true, selected: true } : e)),
 };
+const PLAN_TIGHT = {
+    ...PLAN,
+    catalog: CATALOG.map((e) => (e.id === GEMMA_ID ? { ...e, tight: true } : e)),
+};
 // Lemonade sees the NPU, but FastFlowLM can't run on this PC (#6632).
 const NPU_UNUSABLE = { fits: false, fit_code: 'npu', fit_reason: 'needs an AMD Ryzen AI NPU and its driver' };
 const PLAN_NPU_UNUSABLE = { ...PLAN, catalog: CATALOG.map((e) => (e.recipe === 'flm' ? { ...e, ...NPU_UNUSABLE } : e)) };
@@ -475,6 +479,15 @@ export const SETUP_SCENES: SetupScene[] = [
     {
         name: 'plan-no-fit-confirm',
         answers: { plan: PLAN_TOO_BIG },
+        reach: async (page) => {
+            await toPlan(page);
+            await page.locator('.setup-footer .btn-primary').click();
+            await expect(page.getByRole('alertdialog')).toBeVisible();
+        },
+    },
+    {
+        name: 'plan-tight-confirm',
+        answers: { plan: PLAN_TIGHT },
         reach: async (page) => {
             await toPlan(page);
             await page.locator('.setup-footer .btn-primary').click();
