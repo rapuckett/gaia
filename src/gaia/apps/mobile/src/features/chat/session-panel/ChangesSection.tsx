@@ -119,7 +119,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                 ))}
             </Stack>
             {changes.incomplete ? (
-                <Notice tone="warning" role="note" {...untrackedNotice(untrackedWarning(changes.untracked, t, { inChat: true, undo: 'chg.undoAll' }), groups)} />
+                <Notice tone="warning" role="note" {...untrackedNotice(untrackedWarning(changes.untracked, { inChat: true }, t), groups)} />
             ) : null}
             <Row gap="sm" wrap stack>
                 <Button size="sm" variant="secondary" label={t('chg.review')} onPress={() => setReviewing(true)} testID="changes-review" />

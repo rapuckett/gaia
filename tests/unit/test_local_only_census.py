@@ -42,6 +42,7 @@ EXEMPT = {
     "src/gaia/testing/dev_backend.py": "loopback-only test harness: its fake LLM serves /api/v1/chat/completions and its readiness poll stays on 127.0.0.1",
     "src/gaia/api/__init__.py": "the OpenAI client appears only in a docstring example",
     "src/gaia/eval/claude_credential.py": "`claude auth status` reads local state only; no model call",
+    "src/gaia/llm/lazy_openai.py": "defers the SDK import; a caller that builds a client through it is scanned itself",
 }
 
 GUARD = re.compile(r"\blocal_only\b|_refuse_unless_local\(")

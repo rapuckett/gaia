@@ -293,12 +293,18 @@ def test_connector_removal_is_gated_audited_and_listed(paired, monkeypatch):
     )
     monkeypatch.setattr(store, "clear_provider_credentials", lambda provider: None)
     monkeypatch.setattr(grants, "revoke_all_grants_for", lambda provider: None)
+    from gaia.connectors.providers import _registry as provider_registry
+
+    # The forwarded route 404s a provider it doesn't know.
+    monkeypatch.setitem(provider_registry, "acme", object())
     routes = ("/api/connectors/google", "/v1/connections/acme")
     for route in routes:
         assert clients["tunnel"].delete(route, headers=UI).status_code == 403
     with _audited() as lines:
         for route in routes:
             assert clients["pc"].delete(route, headers=UI).status_code == 204
+            # A revoke drops the provider, so the phone's delete needs it back.
+            provider_registry["acme"] = object()
             assert clients["phone"].delete(route, headers=UI).status_code == 204
     assert lines == [
         f"APPROVAL | connector google removed | by device:{phone}",

@@ -183,8 +183,8 @@ def test_the_phone_finishes_with_the_pcs_verifier_and_sees_no_secret(client, cap
                 "refresh_token": SECRET_REFRESH,
                 "expires_in": 3600,
                 "scope": "openid",
-                # Payload {"email": "alice@example.com"}; the signature is unchecked.
-                "id_token": "h.eyJlbWFpbCI6ICJhbGljZUBleGFtcGxlLmNvbSJ9.s",
+                # Payload {"email": "alice@example.com", "sub": "alice-sub"}; unsigned.
+                "id_token": "h.eyJlbWFpbCI6ICJhbGljZUBleGFtcGxlLmNvbSIsICJzdWIiOiAiYWxpY2Utc3ViIn0.s",
             },
         )
     )

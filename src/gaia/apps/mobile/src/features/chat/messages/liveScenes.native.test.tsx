@@ -143,7 +143,7 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
 
     it('turn-changes-untracked shows the untracked-work warning', async () => {
         await open('messages', { state: 'turn-changes-untracked' });
-        expect(await screen.findByText(/it can't track/, opts)).toBeTruthy();
+        expect(await screen.findByText(/Undo only restores files GAIA edited itself/, opts)).toBeTruthy();
     });
 
     it('new-chat-setup-failed shows the setup banner', async () => {
