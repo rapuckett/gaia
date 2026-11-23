@@ -51,6 +51,32 @@ describeNative('drawer gallery route', () => {
         expect(screen.getByText('Skills')).toBeTruthy();
     });
 
+    it('lets a tap open a result and a drag put the search keyboard away', async () => {
+        const scroller = (from: { parent: any }) => {
+            let node = from.parent;
+            while (node && node.props.keyboardDismissMode === undefined) node = node.parent;
+            return node;
+        };
+        mockState = 'groups';
+        await render(<DrawerGalleryRoute />);
+        const list = scroller(await screen.findByText('Weekly planning notes'));
+        expect(list.props.keyboardShouldPersistTaps).toBe('handled');
+        expect(list.props.keyboardDismissMode).toBe('on-drag');
+    });
+
+    it('puts the keyboard away on a drag in the short drawer too', async () => {
+        const scroller = (from: { parent: any }) => {
+            let node = from.parent;
+            while (node && node.props.keyboardDismissMode === undefined) node = node.parent;
+            return node;
+        };
+        mockState = 'empty';
+        await render(<DrawerGalleryRoute />);
+        const scroll = scroller(await screen.findByText('New chat'));
+        expect(scroll.props.keyboardShouldPersistTaps).toBe('handled');
+        expect(scroll.props.keyboardDismissMode).toBe('on-drag');
+    });
+
     it('hides the background runs behind a counted toggle', async () => {
         mockState = 'background-hidden';
         await render(<DrawerGalleryRoute />);

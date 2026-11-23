@@ -229,6 +229,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 sections={sections}
                 automaticallyAdjustKeyboardInsets
                 keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
                 keyExtractor={(row) => row.id}
                 accessibilityLabel={t('sidebar.recent')}
                 ListHeaderComponent={<>{navRows}{notices}</>}
@@ -261,7 +262,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 <SearchField value={text} onChangeText={setText} placeholder={t.bare('sidebar.search')} accessibilityLabel={t('sidebar.search')} />
             </Stack>
             {list ?? (
-                <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+                <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets>
                     {navRows}
                     {notices}
                     {automated}
