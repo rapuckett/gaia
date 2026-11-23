@@ -4394,6 +4394,7 @@ export interface ToolConfirmRequest {
   approved: boolean;
   confirm_id?: string | null;
   session_id: string;
+  source?: "notification" | null;
 }
 /**
  * The device behind the latest authenticated remote request.
