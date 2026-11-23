@@ -49,6 +49,7 @@ jest.mock('@/ui', () => {
     };
 });
 jest.mock('./model/ModelList', () => ({ ModelList: () => null }));
+jest.mock('./model/AgentChoice', () => ({ AgentChoice: () => null }));
 jest.mock('./model/ProviderKey', () => ({ ProviderKey: () => null }));
 jest.mock('./model/CloudSpending', () => ({ CloudSpending: () => null }));
 jest.mock('./model/CloudPrices', () => ({ CloudPrices: () => null }));

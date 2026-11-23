@@ -1,6 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { readFileSync } from 'fs';
+
 import type { ExpoConfig } from 'expo/config';
 
 export type AppEnv = 'development' | 'production';
@@ -50,11 +52,98 @@ export function readIosBundleId(env: AppEnv, source: Record<string, string | und
     );
 }
 
+/** The Android application id, from GAIA_ANDROID_APP_ID (production) or GAIA_ANDROID_APP_ID_DEV (development); unset or empty keeps the default. */
+export function readAndroidAppId(env: AppEnv, source: Record<string, string | undefined> = process.env): string {
+    const name = env === 'development' ? 'GAIA_ANDROID_APP_ID_DEV' : 'GAIA_ANDROID_APP_ID';
+    const value = source[name];
+    if (value === undefined || value === '') return APP_IDS[env];
+    if (/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(value)) return value;
+    throw new Error(
+        `${name} must be an Android application id such as "com.example.gaia", but it is "${value}". ` +
+            'Unset it to keep the default; see src/gaia/apps/mobile/README.md.',
+    );
+}
+
+export type ApsEnvironment = 'development' | 'production' | 'none';
+
+/** The push entitlement, from GAIA_APS_ENVIRONMENT: unset follows APP_ENV, and `none` leaves iOS push out (a sideload profile without push). */
+export function readApsEnvironment(value: string | undefined, env: AppEnv): ApsEnvironment {
+    if (value === undefined || value === '') return env;
+    if (value === 'development' || value === 'production' || value === 'none') return value;
+    throw new Error(
+        `GAIA_APS_ENVIRONMENT must be "development", "production" or "none", but it is "${value}". ` +
+            'Leave it unset to follow APP_ENV; see src/gaia/apps/mobile/README.md.',
+    );
+}
+
+/** What the app registers with the push relay; the JavaScript reads it from `extra.push`. Secrets never go here. */
+export interface PushConfig {
+    relayUrl: string;
+    /** Null when iOS push is off (GAIA_APS_ENVIRONMENT=none). */
+    ios: { appId: string; environment: 'sandbox' | 'production' } | null;
+    /** Null when the build has no Firebase project (GAIA_FCM_SENDER_ID and GAIA_GOOGLE_SERVICES_FILE unset). */
+    android: { appId: string; googleServicesFile: string } | null;
+}
+
+/**
+ * Push, from GAIA_PUSH_RELAY_URL and the platform settings; null (push off on both) when the relay URL is unset.
+ * Android needs a Firebase project: GAIA_FCM_SENDER_ID and GAIA_GOOGLE_SERVICES_FILE together, the sender id matching the file's.
+ */
+export function readPushConfig(
+    env: AppEnv,
+    ids: { ios: string; android: string },
+    source: Record<string, string | undefined> = process.env,
+    readFile: (file: string) => string = (file) => readFileSync(file, 'utf8'),
+): PushConfig | null {
+    const raw = source.GAIA_PUSH_RELAY_URL;
+    if (raw === undefined || raw === '') return null;
+    let url: URL;
+    try {
+        url = new URL(raw);
+    } catch {
+        url = new URL('invalid:');
+    }
+    if (url.protocol !== 'https:' || !url.hostname || url.search || url.hash || url.username || url.password) {
+        throw new Error(
+            `GAIA_PUSH_RELAY_URL must be an https URL such as "https://push.example.net", with no query or credentials, but it is "${raw}". ` +
+                'Unset it for a build without push; see src/gaia/apps/mobile/README.md.',
+        );
+    }
+    const aps = readApsEnvironment(source.GAIA_APS_ENVIRONMENT, env);
+    const ios = aps === 'none' ? null : { appId: ids.ios, environment: aps === 'development' ? ('sandbox' as const) : ('production' as const) };
+
+    const sender = source.GAIA_FCM_SENDER_ID || undefined;
+    const file = source.GAIA_GOOGLE_SERVICES_FILE || undefined;
+    let android: PushConfig['android'] = null;
+    if (sender || file) {
+        if (!sender || !file) {
+            throw new Error(
+                `Android push needs both GAIA_FCM_SENDER_ID and GAIA_GOOGLE_SERVICES_FILE, but only ${sender ? 'GAIA_FCM_SENDER_ID' : 'GAIA_GOOGLE_SERVICES_FILE'} is set. ` +
+                    'Set both from the Firebase project, or neither for a build without Android push.',
+            );
+        }
+        if (!/^[0-9]+$/.test(sender)) throw new Error(`GAIA_FCM_SENDER_ID must be the Firebase project number (digits only), but it is "${sender}".`);
+        let projectNumber: unknown;
+        try {
+            projectNumber = (JSON.parse(readFile(file)) as { project_info?: { project_number?: unknown } }).project_info?.project_number;
+        } catch (error) {
+            throw new Error(`GAIA_GOOGLE_SERVICES_FILE could not be read as a google-services.json at ${file}: ${String(error)}`);
+        }
+        if (projectNumber !== sender) {
+            throw new Error(`GAIA_FCM_SENDER_ID is ${sender}, but ${file} belongs to Firebase project ${String(projectNumber)}. Use the file for that sender.`);
+        }
+        android = { appId: ids.android, googleServicesFile: file };
+    }
+    return { relayUrl: url.href.replace(/\/+$/, ''), ios, android };
+}
+
 export default function appConfig(): ExpoConfig {
     const env = readAppEnv(process.env.APP_ENV);
     const dev = env === 'development';
     const id = APP_IDS[env];
     const iosId = readIosBundleId(env);
+    const androidId = readAndroidAppId(env);
+    const push = readPushConfig(env, { ios: iosId, android: androidId });
     const relayDomain = process.env.EXPO_PUBLIC_GAIA_RELAY_DOMAIN;
     return {
         name: 'GAIA',
@@ -81,7 +170,8 @@ export default function appConfig(): ExpoConfig {
             },
         },
         android: {
-            package: id,
+            package: androidId,
+            ...(push?.android ? { googleServicesFile: push.android.googleServicesFile } : {}),
             adaptiveIcon: { foregroundImage: './assets/adaptive-icon-foreground.png', backgroundColor: BACKGROUND_DARK },
             // No cloud backup. plugins/withBackupExclusions also keeps every app file out of device-to-device
             // transfer, so a paired PC's records never reach another phone, where its Keystore key can't follow.
@@ -106,6 +196,13 @@ export default function appConfig(): ExpoConfig {
                 { microphonePermission: MICROPHONE_USE, enableBackgroundPlayback: true, enableBackgroundRecording: false },
             ],
             'expo-background-task',
+            // Listed even without push, so Expo's default doesn't add the push entitlement; plugins/withPush strips what's left.
+            [
+                'expo-notifications',
+                push?.ios
+                    ? { mode: push.ios.environment === 'sandbox' ? 'development' : 'production', enableBackgroundRemoteNotifications: true }
+                    : { enableRemoteNotifications: false },
+            ],
             [
                 'expo-splash-screen',
                 {
@@ -123,6 +220,11 @@ export default function appConfig(): ExpoConfig {
             ['./plugins/withRelayDomain', { domain: relayDomain || null }],
             './plugins/withNinjaJobs',
             './plugins/withWorkManagerKeep',
+            ['./plugins/withPush', { ios: push?.ios ? { bundleId: iosId } : null, android: push?.android ? { scheme: id } : null }],
         ],
+        // Expo's config turns a null in `extra` into {}, so a platform without push is left out instead.
+        extra: push
+            ? { push: { relayUrl: push.relayUrl, ...(push.ios ? { ios: push.ios } : {}), ...(push.android ? { android: { appId: push.android.appId } } : {}) } }
+            : {},
     };
 }

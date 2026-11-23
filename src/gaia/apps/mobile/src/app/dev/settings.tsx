@@ -17,6 +17,7 @@ import { SeedConfirmFullAccess } from '@/features/settings/panes/Permissions';
 import { SeedAutomationRemove } from '@/features/settings/panes/Automations';
 import { SeedOwnServer } from '@/features/settings/panes/advanced/LemonadeTarget';
 import { SeedDiscord, SeedJustPaired } from '@/features/settings/panes/Messaging';
+import { SeedAgentCompare } from '@/features/settings/panes/model/AgentChoice';
 import { SeedCheckPending, SeedCustomReport } from '@/features/settings/panes/model/AddCustomModel';
 import { SeedAddedModel, SeedModelSearch } from '@/features/settings/panes/model/ModelList';
 import { SeedOpenDetails } from '@/features/settings/panes/model/ModelRow';
@@ -69,6 +70,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                                     <SeedAutomationRemove.Provider value={found.confirmRemove ?? null}>
                                                         <SeedConfirmFullAccess.Provider value={!!found.confirmFullAccess}>
                                                         <SeedSkillsAdd.Provider value={found.skillsAdd ?? false}>
+                                                            <SeedAgentCompare.Provider value={!!found.agentCompareOpen}>
                                                             {found.crash ? (
                                                                 <SectionErrorBoundary area={`settings.${found.section}`} onReload={() => void queryClient.resetQueries()}>
                                                                     <Thrower />
@@ -76,6 +78,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                                             ) : (
                                                                 <Pane provider={found.provider ?? 'local'} />
                                                             )}
+                                                            </SeedAgentCompare.Provider>
                                                         </SeedSkillsAdd.Provider>
                                                         </SeedConfirmFullAccess.Provider>
                                                     </SeedAutomationRemove.Provider>

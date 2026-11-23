@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus, WarmUpStatus } from '@webui/types';
+import type { AgentDownload, AgentPrograms, Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus, WarmUpStatus } from '@webui/types';
 import { fromApiMessages } from '@webui/utils/chatStream';
 import { isMediaFile } from '@webui/utils/mediaFiles';
 
@@ -144,6 +144,7 @@ import type {
 } from './client.types';
 import {
     agentInstallStatusPath,
+    agentProgramDownloadPath,
     logReadPath,
     ATTACH_HEADER_TIMEOUT_MS,
     connectorActivationPath,
@@ -614,6 +615,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         updateSettings(patch, options) {
             return putJson<Settings>(ENDPOINTS.settings, patch, options?.signal);
+        },
+
+        getAgentPrograms(options) {
+            return getJson<AgentPrograms>(ENDPOINTS.agentPrograms, options?.signal);
+        },
+
+        startAgentDownload(options) {
+            return postJson<AgentDownload>(agentProgramDownloadPath('gaiacpp'), undefined, options?.signal);
+        },
+
+        getAgentDownload(options) {
+            return getJson<AgentDownload>(agentProgramDownloadPath('gaiacpp'), options?.signal);
         },
 
         setNetworkPolicy(policy, options) {
