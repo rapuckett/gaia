@@ -60,7 +60,7 @@ describe('waiting for the GPU', () => {
     const state = { waitingOnPerson: false, answering: false };
 
     it('says the place in line in English', () => {
-        expect(liveStatusLine([queued], state, t)).toBe('Waiting for the GPU, #⁦2⁩ in line');
+        expect(liveStatusLine([queued], state, t)).toBe('Waiting for the GPU, #\u20662\u2069 in line');
     });
 
     it('says it in Arabic with the number kept left to right', () => {
