@@ -45,6 +45,7 @@ function CheckJob({ label, note, size, checked, disabled, warning, chips, onChan
             checked={checked}
             disabled={disabled}
             label={label}
+            description={[size, note, warning].filter(Boolean).join('. ')}
             onPress={() => onChange(!checked)}
             name={<Text role="ui" weight="medium" dir="ltr">{label}</Text>}
             chips={chips}
@@ -134,6 +135,7 @@ export function JobModels({ plan, selection, onSelection, disabled }: {
                             checked={builtIn ? visionPick === chat?.id : visionPick === null}
                             disabled={disabled}
                             label={builtIn ? t('setup.job.useChatForVision') : t('setup.job.skipVision')}
+                            description={visionPick === null && !builtIn ? t('setup.job.skipVisionNote') : undefined}
                             onPress={() => chooseVision(builtIn ? null : VISION_NONE)}
                             name={<Text role="ui" weight="medium">{builtIn ? t('setup.job.useChatForVision') : t('setup.job.skipVision')}</Text>}
                         >
