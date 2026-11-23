@@ -4505,6 +4505,7 @@ export const enMessages = {
     'mobileApp.pairing.pinMismatch': "Your PC's security certificate has changed, so this phone stopped connecting to it. If you reset pairing on the PC, pair this phone again.",
     'mobileApp.composer.answerFailedShort': "Couldn't send your answer.",
     'mobileApp.chat.detachFailedShort': "Couldn't remove {name} from this chat.",
+    'mobileApp.msg.deleteTitle': 'Delete this message?',
     'mobileApp.chat.privateFailedShort': "Couldn't change private mode for this chat.",
     'mobileApp.chat.renameFailedShort': "Couldn't rename this chat.",
     'mobileApp.chg.errorShort': "Couldn't total this chat's changes.",
