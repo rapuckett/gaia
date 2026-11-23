@@ -3,10 +3,11 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { ApiError } from '../../services/api';
+import { ApiError, listProviderModels } from '../../services/api';
 import * as api from '../../services/imageApi';
 import { useChatStore } from '../../stores/chatStore';
-import { displayModelName, useModelNames } from '../../stores/modelStore';
+import { displayModelName, useModelNames, useModelStore } from '../../stores/modelStore';
+import { log } from '../../utils/logger';
 import { useT } from '../../i18n/useT';
 
 /** Step counts offered beside a model's own; capped by the server's maximum. */
@@ -24,6 +25,7 @@ export function ImageSettings() {
     const t = useT();
     const openSettings = useChatStore((s) => s.openSettings);
     useModelNames();
+    const rememberNames = useModelStore((s) => s.rememberNames);
     const [settings, setSettings] = useState<api.ImageSettings | null>(null);
     const [loadError, setLoadError] = useState<{ unreachable: boolean; detail: string } | null>(null);
     const [saveError, setSaveError] = useState<string | null>(null);
@@ -37,6 +39,12 @@ export function ImageSettings() {
         }));
     };
     useEffect(load, []);
+
+    useEffect(() => {
+        listProviderModels('local')
+            .then((r) => rememberNames(r.models))
+            .catch((err) => log.system.warn('Model names unavailable; the chat model shows by its id', err));
+    }, [rememberNames]);
 
     const save = (change: Parameters<typeof api.updateImageSettings>[0]) => {
         setSaving(true);
