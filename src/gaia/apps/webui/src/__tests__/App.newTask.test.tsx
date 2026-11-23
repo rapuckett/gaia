@@ -10,10 +10,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../services/api');
 vi.mock('../services/memoryApi');
+vi.mock('../services/scheduleApi');
 
 import App from '../App';
 import * as api from '../services/api';
 import * as memoryApi from '../services/memoryApi';
+import * as scheduleApi from '../services/scheduleApi';
 import { useChatStore } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 import { requestMobileAccess } from '../utils/mobileAccessEvents';
@@ -641,7 +643,7 @@ describe('opening the app on a chat link', () => {
 
 describe('sidebar destinations', () => {
     it('opens Scheduled tasks over the chat, and Documents in its place', async () => {
-        mocked.listSchedules.mockResolvedValue({ schedules: [], total: 0 });
+        vi.mocked(scheduleApi).listSchedules.mockResolvedValue({ schedules: [], total: 0 });
         render(<App />);
         await userEvent.click(await screen.findByRole('button', { name: 'Scheduled tasks' }));
 
@@ -716,5 +718,16 @@ describe('Mobile access', () => {
 
         await waitFor(() => expect(mocked.startTunnel).toHaveBeenCalledTimes(1));
         expect(await screen.findByText('stub stops here')).toBeInTheDocument();
+    });
+});
+
+describe('the keyboard shortcuts sheet', () => {
+    it('opens with Ctrl+/ and closes with it again', async () => {
+        render(<App />);
+        await screen.findByLabelText('Message');
+        fireEvent.keyDown(window, { key: '/', ctrlKey: true });
+        expect(await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument();
+        fireEvent.keyDown(window, { key: '/', ctrlKey: true });
+        await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Keyboard shortcuts' })).not.toBeInTheDocument());
     });
 });

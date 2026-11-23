@@ -39,6 +39,7 @@ from gaia.connectors.store import (
     _kr_raw_delete,
     _kr_raw_get,
     _kr_raw_set,
+    verify_keyring_backend,
 )
 
 logger = logging.getLogger(__name__)
@@ -193,6 +194,7 @@ def rederive_catalog_entries(servers: Dict[str, Any]) -> Dict[str, Any]:
 
 def _saved_secret(spec: ConnectorSpec, env_key: str) -> Optional[str]:
     """Return *env_key*'s secret; a renamed key reads the slot it was saved under."""
+    verify_keyring_backend()
     value = _kr_raw_get(f"{spec.id}:{env_key}")
     if value is not None:
         return value
@@ -207,6 +209,7 @@ def _saved_secret(spec: ConnectorSpec, env_key: str) -> Optional[str]:
 
 def _delete_keyring_slots(usernames: Iterable[str]) -> None:
     """Delete each ``gaia.connections`` keyring slot; absent slots are already gone."""
+    verify_keyring_backend()
     for username in sorted(usernames):
         _kr_raw_delete(username)
 
@@ -324,6 +327,7 @@ class McpServerHandler:
         values = {k: _checked_value(spec, k, config[k]) for k in spec.mcp_env_keys}
 
         # Store secret env values in keyring + build $keyring reference env block.
+        verify_keyring_backend()
         env_block: Dict[str, Any] = {}
         for env_key in spec.mcp_env_keys:
             value = values[env_key]
@@ -368,6 +372,8 @@ class McpServerHandler:
         account_id: Optional[str] = None,
     ) -> None:
         """Remove the MCP server entry, keyring slots, and per-agent grants."""
+        # Checked first so a refused backend leaves mcp_servers.json untouched.
+        verify_keyring_backend()
         # Remove from mcp_servers.json.
         servers = _read_mcp_servers_json()
         usernames = {f"{spec.id}:{env_key}" for env_key in spec.mcp_env_keys}

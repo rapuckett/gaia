@@ -1,4 +1,4 @@
-# Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 # SPDX-License-Identifier: MIT
 """The exporters refuse to write into a checkout other than the one imported."""
 
@@ -26,7 +26,8 @@ def test_other_checkout_is_refused(exporter, tmp_path, monkeypatch, capsys):
     err = capsys.readouterr().err
     assert str(_export_checkout.MODULE_CHECKOUT) in err
     assert str(other.resolve()) in err
-    assert "PYTHONPATH" in err
+    assert f"PYTHONPATH set to {other.resolve() / 'src'}" in err
+    assert "$PWD" not in err
 
 
 @pytest.mark.parametrize("exporter", EXPORTERS)

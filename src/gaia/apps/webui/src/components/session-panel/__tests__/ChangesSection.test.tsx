@@ -199,7 +199,7 @@ describe('ChangesSection', () => {
                 { kind: 'run_python', detail: 'save totals', paths: [] },
                 { kind: 'shell', detail: 'npm run build', paths: [] },
                 { kind: 'run_python', detail: 'write the chart', paths: [] },
-            ], tEn, { inChat: true, undo: 'chg.undoAll' }),
+            ], { inChat: true }, tEn),
         );
     });
 

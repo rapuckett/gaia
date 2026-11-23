@@ -19,6 +19,7 @@ const ORIGIN_LABEL: Record<SkillOrigin, MessageKey> = {
     model: 'skills.how.model',
     auto: 'skills.how.auto',
     always: 'skills.how.always',
+    user: 'skills.how.user',
 };
 
 export function SkillsSection({ sessionId, live }: SectionProps) {
