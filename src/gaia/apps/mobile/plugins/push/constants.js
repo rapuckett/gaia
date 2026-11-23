@@ -21,6 +21,8 @@ const STRING_KEYS = [
     'chatAlert.question',
     'chatAlert.finished',
     'chatAlert.failed',
+    'chatAlert.stopped',
+    'chatAlert.ended',
     'mobileApp.push.title.needsYou',
     'mobileApp.push.body.inChat',
     'mobileApp.push.body.approve',
