@@ -16,9 +16,11 @@ import { Button, Card, Disclosure, Ltr, Notice, Pressable, Row, Spinner, Stack, 
 
 import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
+import { AgentWait } from './AgentWait';
 import { cloudIsBlocked, planView, startOptions, type PlanView } from './plan';
 import { usePlanOpeners } from './planOpeners';
 import { usePlanSelection } from './planSelection';
+import { useAgentFirst } from './useAgentFirst';
 
 type Where = 'local' | 'cloud';
 type ContentState = 'active' | 'done' | 'failed' | undefined;
@@ -199,6 +201,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     const start = useStartSetup();
     const backend = useApplyTestedBackend();
     const { selection, setSelection, keepTrying } = usePlanSelection();
+    const agent = useAgentFirst();
     const [where, setWhere] = useState<Where>('local');
     const [listOpen, setListOpen] = useState(false);
     const [detailsOpen, setDetailsOpen] = useState(false);
@@ -240,12 +243,22 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     const picked: Where = cloudBlocked ? 'local' : where;
     const cloud = picked === 'cloud';
     const busy = start.isPending || backend.isPending;
-    const proceed = (acknowledgeLowDisk: boolean) => goLocal(startOptions(plan, selection, acknowledgeLowDisk, keepTrying));
+    // An agent picked on Customize is had and saved first, so setup's test chat talks to it.
+    const proceed = (acknowledgeLowDisk: boolean) => void agent.begin(() => goLocal(startOptions(plan, selection, acknowledgeLowDisk, keepTrying)));
     const onContinue = () => {
         if (cloud) openers.openKey?.();
         else if (short && openers.confirmLowDisk) openers.confirmLowDisk(short, proceed);
         else proceed(false);
     };
+
+    if (agent.held) {
+        return (
+            <Stack gap="md">
+                <Text role="title" weight="semibold" accessibilityRole="header">{t('setup.plan.title')}</Text>
+                <AgentWait agent={agent} />
+            </Stack>
+        );
+    }
 
     return (
         <Stack gap="md">
