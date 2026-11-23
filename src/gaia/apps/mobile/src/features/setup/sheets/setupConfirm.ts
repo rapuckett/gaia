@@ -4,8 +4,11 @@
 import { GaiaApiError } from '@/api/errors';
 import type { Translate } from '@/i18n/useT';
 import { formatBytes, formatSize } from '@webui/components/setup/format';
+import { onlyTight } from '@webui/components/setup/selection';
 import { getLocale, isolate, isolateUnit, keepTogether } from '@webui/i18n/registry';
-import type { SetupConfirm } from '@webui/types';
+import type { SetupCatalogEntry, SetupConfirm } from '@webui/types';
+
+import { tooBigText } from '../steps/modelsView';
 
 /** What a confirm sheet asks: the caller learns the answer from `useConfirmSheet().ask`. */
 export interface ConfirmRequest {
@@ -48,14 +51,24 @@ export function lowDiskRequest(short: { needGb: number; freeGb: number; freeUpGb
     };
 }
 
-/** Chosen models may not fit this PC's memory; `why` is each one's reason, as the model list words it. */
-export function noFitRequest(models: { name: string; why: string }[], t: Translate): ConfirmRequest {
+/** Chosen models may not fit this PC's memory, or one fits but leaves other apps little; `why` is each one's reason, as the model list words it. */
+export function noFitRequest(models: { name: string; why: string; tight?: boolean }[], t: Translate): ConfirmRequest {
+    const tight = models.length > 0 && models.every((m) => m.tight);
     return {
-        title: models.length === 1 ? t('setup.confirm.noFitOne', { name: isolateUnit(models[0].name) }) : t('setup.confirm.noFitMany'),
-        body: models.map((m) => `${m.name}: ${m.why}`),
-        confirmLabel: t('setup.confirm.downloadAnyway'),
+        title: tight
+            ? t('setup.confirm.tightOne', { name: isolateUnit(models[0].name) })
+            : models.length === 1 ? t('setup.confirm.noFitOne', { name: isolateUnit(models[0].name) }) : t('setup.confirm.noFitMany'),
+        body: tight ? [t('setup.confirm.tightBody')] : models.map((m) => `${m.name}: ${m.why}`),
+        confirmLabel: t(tight ? 'setup.confirm.useAnyway' : 'setup.confirm.downloadAnyway'),
         cancelLabel: t('setup.confirm.pickSmaller'),
     };
+}
+
+/** The client's own question for the models `tooBig` returned; null when none, or one lacks the numbers and the server's 409 asks instead. */
+export function noFitAsk(asks: SetupCatalogEntry[], t: Translate, locale: string): ConfirmRequest | null {
+    if (asks.length === 0 || !asks.every((e) => e.need_gb != null)) return null;
+    const tight = onlyTight(asks);
+    return noFitRequest(asks.map((e) => ({ name: e.name, why: tooBigText(e, t, locale), tight })), t);
 }
 
 /** The model downloaded but failed its check: delete the copy and fetch it again. */

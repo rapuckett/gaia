@@ -181,9 +181,19 @@ export function formatValue(value: number, format: ValueFormat, { locale, curren
     }
 }
 
+// The number inside a formatted zero: ASCII, Arabic-Indic and Extended Arabic-Indic digits with
+// the separators between them. Hermes' Intl has no formatToParts, so the symbol is what is left.
+const NUMBER_RUN =
+    /[0-9\u0660-\u0669\u06F0-\u06F9](?:[0-9\u0660-\u0669\u06F0-\u06F9.,\u066B\u066C\u2019'\s\u00A0\u202F\u2009]*[0-9\u0660-\u0669\u06F0-\u06F9])?/;
+const SPACE_SIGN_BIDI = /[\s\u00A0\u202F\u2009\u2212\-+\u200B-\u200F\u061C\u2066-\u2069\uFEFF]/g;
+
 export function currencySymbol({ locale, currency }: Money): string {
-    const parts = new Intl.NumberFormat(locale, { style: 'currency', currency }).formatToParts(0);
-    return parts.find((p) => p.type === 'currency')?.value ?? '';
+    const symbol = new Intl.NumberFormat(locale, { style: 'currency', currency })
+        .format(0)
+        .replace(NUMBER_RUN, '')
+        .replace(SPACE_SIGN_BIDI, '');
+    if (!symbol) throw new Error(`No currency symbol for currency ${currency} in locale ${locale}`);
+    return symbol;
 }
 
 /** The one plain-text form of a calculator, for copy. */

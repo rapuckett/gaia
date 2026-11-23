@@ -85,6 +85,7 @@ export function ModelRadio({ entry: e, checked, recommended, disabled, onPick }:
         >
             <Text role="caption" tone="secondary">{statusText(e, t, locale)}</Text>
             {e.fits === false ? <Warn message={tooBigText(e, t, locale)} /> : null}
+            {e.fits === true && e.tight ? <Warn message={t('setup.models.warn.tight')} /> : null}
         </MarkedRow>
     );
 }

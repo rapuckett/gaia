@@ -36,7 +36,9 @@ function Row1({ entry: e, ticked, onToggle, disabled, progress, imagesCovered }:
     const locale = useLocaleCode();
     const big = e.fits === false;
     const downloading = progress?.state === 'downloading' && progress.bytes_total > 0;
-    const warning = big ? tooBigText(e, t, locale) : !ticked ? skipCaveat(e, t, imagesCovered) : null;
+    const tight = e.fits === true && !!e.tight;
+    const caveat = !ticked ? skipCaveat(e, t, imagesCovered) : null;
+    const warning = big ? tooBigText(e, t, locale) : caveat ?? (tight ? t('setup.models.warn.tight') : null);
     const status = downloading
         ? t('setup.models.status.downloading', { done: ltrIn(locale, formatBytes(progress.bytes_done)), total: ltrIn(locale, formatBytes(progress.bytes_total)) })
         : statusText(e, t, locale);

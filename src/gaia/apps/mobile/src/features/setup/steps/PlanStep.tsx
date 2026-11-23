@@ -3,7 +3,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 
-import { formatFitGb, formatSize, ltrIn } from '@webui/components/setup/format';
+import { formatSize, ltrIn } from '@webui/components/setup/format';
 import { initialSelection } from '@webui/components/setup/selection';
 import type { SetupCatalogEntry, SetupComponent, SetupPlan, SetupRunStatus } from '@webui/types';
 
@@ -16,7 +16,7 @@ import { Button, Card, Disclosure, Ltr, Notice, Pressable, Row, Spinner, Stack, 
 
 import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
-import { cloudIsBlocked, planView, startOptions, type PlanView } from './plan';
+import { cloudIsBlocked, planReasons, planView, startOptions, type PlanView } from './plan';
 import { usePlanOpeners } from './planOpeners';
 import { usePlanSelection } from './planSelection';
 
@@ -136,19 +136,8 @@ function LocalCard({ view, chatChosen, picked, disabled, onPick }: {
 }) {
     const t = useT();
     const locale = useLocaleCode();
-    const { chat, bigger } = view;
-    const reasons: string[] = [];
-    if (!chatChosen) reasons.push(t('setup.plan.why.evaluated'));
-    if (chat?.need_gb != null && chat.capacity_gb != null && chat.fits) {
-        reasons.push(t('setup.plan.why.fits', { need: ltrIn(locale, formatFitGb(chat.need_gb)), have: ltrIn(locale, formatFitGb(chat.capacity_gb)) }));
-    }
-    reasons.push(t('setup.plan.why.private'));
-    if (view.onNpu) reasons.push(t('setup.plan.why.noImagesNpu'));
-    if (bigger?.need_gb != null && bigger.capacity_gb != null) {
-        reasons.push(t('setup.plan.why.bigger', {
-            name: bigger.name, need: ltrIn(locale, formatFitGb(bigger.need_gb)), have: ltrIn(locale, formatFitGb(bigger.capacity_gb)),
-        }));
-    }
+    const { chat } = view;
+    const reasons = planReasons(view, chatChosen, t, locale);
     const after = view.totals.afterGb;
     return (
         <RadioCard

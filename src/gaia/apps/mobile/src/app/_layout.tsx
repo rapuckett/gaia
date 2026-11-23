@@ -21,6 +21,8 @@ import { useQuickActionItems } from '@/features/nav/quickActions';
 import { INITIAL_ROUTE } from '@/features/nav/navigation';
 import { sweepTempFiles } from '@/features/files/shareTemp';
 import { installPinnedPairing, PairingGate } from '@/features/pairing';
+import { PushHost } from '@/features/push/PushHost';
+import { installPush } from '@/features/push/pushService';
 import { SetupGate } from '@/features/setup/SetupGate';
 import { LanguageSwitchHost } from '@/features/language/LanguageSwitchCover';
 import { useDirection, useLocaleCode } from '@/i18n/useT';
@@ -33,6 +35,7 @@ import { ScreenBannerProvider, UIProvider } from '@/ui';
 
 // Before the first render, so the pairing screens and the saved PC use the pinned transport.
 installPinnedPairing();
+installPush();
 
 // Files a crash or a kill left in the cache (shared images, opened PC files, played audio).
 if (Platform.OS !== 'web') {
@@ -100,6 +103,7 @@ export default function RootLayout() {
                             <NotificationFeed />
                             <AppPolls />
                             <ChatAlertFeed />
+                            <PushHost />
                             <AppNavigator />
                             <ModelNeededHost />
                         </RootSetupGate>

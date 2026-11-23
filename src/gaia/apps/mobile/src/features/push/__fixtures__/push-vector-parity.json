@@ -1,0 +1,9 @@
+{
+  "_comment": "Parity's vector for the PC's encryptor (parity/push-pc), unpadded plaintext. AES-256-GCM; aad = ascii(handle text) || 0x01; ciphertext = ct || 16-byte tag; base64url without padding.",
+  "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+  "handle": "AAECAwQFBgcICQoLDA0ODw",
+  "nonce": "AAECAwQFBgcICQoL",
+  "aad_hex": "41414543417751464267634943516f4c4441304f447701",
+  "plaintext": "{\"v\":1,\"kind\":\"badge\",\"badge\":3}",
+  "ciphertext": "PCCgOf_U7jnmKPnvk9NaD-Ky4FHSV30eWQOC4D9TM89HHC7356eSJUqWpl1JJjID"
+}

@@ -24,6 +24,8 @@ import {
     CODE_TOOLS,
     COMMAND_SUMMARY_TOOLS,
     EXACT_SUMMARY_TOOLS,
+    MAIL_ADDRESS_FIELDS,
+    MAIL_FIELDS,
     PROMPT_CODE_PREVIEW_LINES,
     SCRIPT_UNREADABLE,
     formatCountdown,
@@ -32,60 +34,15 @@ import {
     shownField,
     shownScript,
     splitCommandSummary,
+    splitMailHeader,
     summarizeField,
+    type MailHeader,
 } from '../utils/permissionPrompts.core';
-import { pluralKey, type MessageKey } from '../i18n/registry';
+import { pluralKey } from '../i18n/registry';
 import { useT } from '../i18n/useT';
 import { MarkedText, markLtr } from './MarkedText';
 import { ChangePreview, fileChange } from './PermissionChangePreview';
 import './PermissionPrompt.css';
-
-// The header lines `render_preview` in outgoing.py writes, longest label first so the regex picks it.
-const MAIL_FIELDS: ReadonlyArray<[string, MessageKey]> = [
-    ['Attachments left out, not sent', 'permission.mail.leftOut'], // english: matched against the backend's header line
-    ['Attachments', 'permission.mail.attachments'],
-    ['Subject', 'permission.mail.subject'],
-    ['Format', 'permission.mail.format'],
-    ['From', 'permission.mail.from'],
-    ['Bcc', 'permission.mail.bcc'],
-    ['Cc', 'permission.mail.cc'],
-    ['To', 'permission.mail.to'],
-];
-const MAIL_FIELD = new RegExp(`^(${MAIL_FIELDS.map(([label]) => label).join('|')}): (.*)$`);
-const MAIL_ADDRESS_FIELDS = new Set(['From', 'To', 'Cc', 'Bcc']);
-
-export interface MailHeader {
-    /** Text above the header, such as a note about hidden characters. */
-    before: string;
-    fields: Array<[label: string, value: string]>;
-    body: string;
-}
-
-/**
- * An email being approved, split into its header lines and its body so the
- * labels can be translated. Every value stays exactly as it will be sent.
- * `null` when the text is not a header GAIA wrote, which then shows whole.
- */
-export function splitMailHeader(text: string): MailHeader | null {
-    const lines = text.split('\n');
-    const opens = (line: string | undefined) => !!line && /^(From|To): /.test(line);
-    // Notes come first, each its own paragraph; the header is the first paragraph that opens like one.
-    let start = 0;
-    while (!opens(lines[start])) {
-        const gap = lines.indexOf('', start);
-        if (gap < 0) return null;
-        start = gap + 1;
-    }
-    const fields: MailHeader['fields'] = [];
-    let at = start;
-    for (; at < lines.length && lines[at] !== ''; at++) {
-        const match = MAIL_FIELD.exec(lines[at]);
-        if (!match) return null;
-        fields.push([match[1], match[2]]);
-    }
-    if (!fields.some(([label]) => label === 'To')) return null;
-    return { before: lines.slice(0, Math.max(0, start - 1)).join('\n'), fields, body: lines.slice(at + 1).join('\n') };
-}
 
 function MailFacts({ header }: { header: MailHeader }) {
     const t = useT();
@@ -107,7 +64,7 @@ function MailFacts({ header }: { header: MailHeader }) {
 /** Lines of code a prompt shows before "Show all". */
 export const CODE_PREVIEW_LINES = PROMPT_CODE_PREVIEW_LINES;
 
-export { formatCountdown, shortScope, shownScript, splitCommandSummary };
+export { formatCountdown, shortScope, shownScript, splitCommandSummary, splitMailHeader, type MailHeader };
 
 /** Long text, collapsed past `previewLines` lines (the code a gated call runs, a tool's output). */
 export function CodeBlock({ code, previewLines = CODE_PREVIEW_LINES, testId = 'perm-code', exact = false }: {
