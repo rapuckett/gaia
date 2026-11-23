@@ -72,9 +72,10 @@ function enqueue(job: () => Promise<void>, onError: (error: unknown) => void): P
 /**
  * Deletes handles of PCs no longer paired (including queued deletes the relay missed) whatever the permission, then
  * registers every paired PC once notifications are allowed (see syncAll). Never rejects: a failure is logged and shown
- * as unreachable, and the next start tries again.
+ * as unreachable (a failed sweep before Allow only warns), and the next start tries again.
  */
 export function syncPush(): Promise<void> {
+    let registering = false;
     return enqueue(
         async () => {
             const permission = await refreshPermission();
@@ -84,6 +85,7 @@ export function syncPush(): Promise<void> {
                 await sweepStale(built.pairedIds, built.deps);
                 return;
             }
+            registering = true;
             const { data: token } = await Notifications.getDevicePushTokenAsync();
             if (typeof token !== 'string' || !token) throw new Error('The phone gave GAIA no push token. Turn notifications off and on again in Settings.');
             const result = await syncAll(built.pairedIds, token, built.deps);
@@ -91,6 +93,11 @@ export function syncPush(): Promise<void> {
             usePushStore.getState().setRefusal(result.refused[0]?.detail ?? null);
         },
         (error) => {
+            if (!registering) {
+                // Nothing is registered before Allow, so this says nothing about the relay row.
+                console.warn('Deleting push handles of unpaired PCs failed; tried again when the app next opens', error);
+                return;
+            }
             console.error('Registering this phone for push notifications failed', error);
             usePushStore.getState().setRelay('unreachable');
         },
