@@ -37,44 +37,49 @@ interface RowProps {
     pickable: boolean;
     /** Why the row can't be picked, or what picking it does: read with the row. */
     hint?: string;
-    /** Setup only: a gaiacpp that can be had says it isn't downloaded yet. */
+    /** A gaiacpp that can be had says it isn't downloaded yet. */
     showNotDownloaded: boolean;
+    /** Sits under the row's text inside its frame, and pressing it does not select the row. */
+    action?: ReactNode;
     onPress: () => void;
 }
 
 /** One full-width radio row: the program's name, what it is, its size and tags. */
-function AgentRow({ option, program, selected, pickable, hint, showNotDownloaded, onPress }: RowProps) {
+function AgentRow({ option, program, selected, pickable, hint, showNotDownloaded, action, onPress }: RowProps) {
     const t = useT();
     const off = agentOff(program);
     const size = program?.size_bytes ?? null;
     return (
-        <Pressable
-            onPress={onPress}
-            disabled={!pickable}
-            accessibilityRole="radio"
-            accessibilityLabel={`${programName(option.id)} ${t(option.label)}`}
-            accessibilityHint={hint}
-            aria-checked={selected}
-            testID={`agent-choice-${option.id}`}
-        >
-            <Surface tone={selected ? 'accent' : 'card'} border={selected ? 'accent' : true} radius="md" padding="md">
-                <Row gap="sm" align="start">
-                    <Text tone={selected ? 'accent' : 'muted'}>{selected ? '\u25CF' : '\u25CB'}</Text>
-                    <Stack gap="xs" flex={1}>
-                        <Row gap="sm" wrap align="center">
-                            <Text role="ui" weight="semibold" tone={off ? 'muted' : undefined}>{programName(option.id)}</Text>
-                            <Text role="ui" tone={off ? 'muted' : 'secondary'}>{t(option.label)}</Text>
-                            {size != null ? <Ltr>{formatBytes(size)}</Ltr> : null}
-                        </Row>
-                        <Row gap="sm" wrap>
-                            <Badge tone="accent" label={t.bare(option.tag)} accessibilityLabel={t(option.tag)} />
-                            {off ? <Badge label={t.bare('setup.agent.notInstalled')} accessibilityLabel={t('setup.agent.notInstalled')} /> : null}
-                            {showNotDownloaded ? <Badge label={t.bare('settings.model.notDownloaded')} accessibilityLabel={t('settings.model.notDownloaded')} /> : null}
-                        </Row>
-                    </Stack>
-                </Row>
-            </Surface>
-        </Pressable>
+        <Surface tone={selected ? 'accent' : 'card'} border={selected ? 'accent' : true} radius="md" padding="md">
+            <Stack gap="sm">
+                <Pressable
+                    onPress={onPress}
+                    disabled={!pickable}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${programName(option.id)} ${t(option.label)}`}
+                    accessibilityHint={hint}
+                    aria-checked={selected}
+                    testID={`agent-choice-${option.id}`}
+                >
+                    <Row gap="sm" align="start">
+                        <Text tone={selected ? 'accent' : 'muted'}>{selected ? '\u25CF' : '\u25CB'}</Text>
+                        <Stack gap="xs" flex={1}>
+                            <Row gap="sm" wrap align="center">
+                                <Text role="ui" weight="semibold" tone={off ? 'muted' : undefined}>{programName(option.id)}</Text>
+                                <Text role="ui" tone={off ? 'muted' : 'secondary'}>{t(option.label)}</Text>
+                                {size != null ? <Ltr>{formatBytes(size)}</Ltr> : null}
+                            </Row>
+                            <Row gap="sm" wrap>
+                                <Badge tone="accent" label={t.bare(option.tag)} accessibilityLabel={t(option.tag)} />
+                                {off ? <Badge label={t.bare('setup.agent.notInstalled')} accessibilityLabel={t('setup.agent.notInstalled')} /> : null}
+                                {showNotDownloaded ? <Badge label={t.bare('settings.model.notDownloaded')} accessibilityLabel={t('settings.model.notDownloaded')} /> : null}
+                            </Row>
+                        </Stack>
+                    </Row>
+                </Pressable>
+                {action}
+            </Stack>
+        </Surface>
     );
 }
 
@@ -169,6 +174,8 @@ export function AgentChoice({ inSettings = false, disabled = false, pending = nu
                     const p = program(o.id);
                     const off = agentOff(p);
                     const getIt = agentNeedsDownload(p, inSettings);
+                    // While its download runs, or after it failed, the block below the rows has the bar or Retry instead.
+                    const showDownload = getIt && !off && !downloading && job?.state !== 'failed';
                     const row = (
                         <AgentRow
                             key={o.id}
@@ -177,7 +184,21 @@ export function AgentChoice({ inSettings = false, disabled = false, pending = nu
                             selected={selected === o.id}
                             pickable={!!p && !off && !getIt && !disabled && !busy}
                             hint={off ? blocked?.text : o.id === 'gaiacpp' ? (note ?? undefined) : undefined}
-                            showNotDownloaded={!!p && !inSettings && !agentInstalled(p) && !off}
+                            showNotDownloaded={!!p && !agentInstalled(p) && !off}
+                            action={showDownload ? (
+                                <Row gap="sm">
+                                    <Button
+                                        label={t('setup.agent.download')}
+                                        accessibilityLabel={t('setup.agent.downloadNamed', { name: programName(o.id) })}
+                                        icon={Download}
+                                        variant="secondary"
+                                        size="sm"
+                                        disabled={save.isPending || disabled}
+                                        onPress={() => void download.start()}
+                                        testID="agent-choice-download"
+                                    />
+                                </Row>
+                            ) : undefined}
                             onPress={() => choose(o.id)}
                         />
                     );
@@ -190,25 +211,7 @@ export function AgentChoice({ inSettings = false, disabled = false, pending = nu
                             </Stack>
                         );
                     }
-                    // While its download runs, or after it failed, the row below has the bar or Retry instead.
-                    if (!getIt || downloading || job?.state === 'failed') return row;
-                    return (
-                        <Stack key={o.id} gap="xs">
-                            {row}
-                            <Row gap="sm">
-                                <Button
-                                    label={t('setup.agent.download')}
-                                    accessibilityLabel={t('setup.agent.downloadNamed', { name: programName(o.id) })}
-                                    icon={Download}
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={save.isPending || disabled}
-                                    onPress={() => void download.start()}
-                                    testID="agent-choice-download"
-                                />
-                            </Row>
-                        </Stack>
-                    );
+                    return row;
                 })}
             </Stack>
             {downloadPcOnly ? <PcOnlyNotice testID="agent-choice-download-pc-only" /> : null}

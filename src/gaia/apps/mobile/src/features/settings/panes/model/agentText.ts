@@ -12,6 +12,8 @@ import { serverText, type Translate } from '@/i18n/useT';
 export interface AgentLine {
     text: string;
     detail?: string;
+    /** Secondary text for a line that explains rather than reports a failure; red when unset. */
+    tone?: 'secondary';
 }
 
 /** Our own words for a failure, for an `{error}` slot; the PC's text never goes inside the sentence. */
