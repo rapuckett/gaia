@@ -268,7 +268,13 @@ def _pc(served, method, path, **kwargs):
             transport=transport, base_url="http://127.0.0.1:4200"
         ) as client:
             return await client.request(
-                method, path, headers={"X-Gaia-UI": "1"}, **kwargs
+                method,
+                path,
+                headers={
+                    "X-Gaia-UI": "1",
+                    "Authorization": f"Bearer {served.app.state.ui_api_token}",
+                },
+                **kwargs,
             )
 
     return served.run(go())

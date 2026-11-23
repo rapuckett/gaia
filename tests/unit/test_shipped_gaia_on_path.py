@@ -204,9 +204,9 @@ def test_the_spawned_agent_gets_the_core_on_path(frozen_app, tmp_path, monkeypat
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
     monkeypatch.setenv("PATH", _user_path(tmp_path))
     # Dev mode delivers the secret by file, so no installed binary is needed.
-    monkeypatch.setenv("GAIA_EMAIL_AGENT_MODE", "dev")
+    monkeypatch.setenv("GAIA_GAIA_AGENT_MODE", "dev")
     m = mgr.AgentSidecarManager(
-        builtin_specs()["email"], cache_dir=tmp_path, log_dir=tmp_path / "logs"
+        builtin_specs()["gaia"], cache_dir=tmp_path, log_dir=tmp_path / "logs"
     )
     with pytest.raises(SidecarSpawnError):
         m._spawn_process(["sidecar"], {}, 9127)
@@ -266,6 +266,8 @@ def test_backend_and_daemon_startup_expose_gaia_after_the_login_path(monkeypatch
     monkeypatch.setattr(cli, "expose_shipped_gaia", exposed)
 
     class Parser:
+        _actions = []
+
         def parse_args(self):
             return types.SimpleNamespace(action="chat")
 

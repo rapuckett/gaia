@@ -7,6 +7,8 @@ import type { ReactNode } from 'react';
 
 import type { Session } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
+import { createHttpClient } from '@/api/http';
+import { createRecordingFetch, jsonResponse } from '@/test-support/fakeFetch';
 
 import { GaiaClientProvider } from './GaiaClientProvider';
 import { useDeleteSession, useRenameSession, useSetPinned } from './mutations';
@@ -66,5 +68,57 @@ describe('session mutations', () => {
 
         await act(async () => open.result.current.mutate('a'));
         await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+    });
+
+    it('a confirmed delete leaves the list at once, while the re-sync is still pending; a failed delete keeps the chat', async () => {
+        const { client, queryClient, wrapper } = setup();
+        const list = await renderHook(() => useSessions(), { wrapper });
+        await waitFor(() => expect(list.result.current.data?.sessions).toHaveLength(2));
+        const stale = await client.listSessions();
+        const ids = () => queryClient.getQueryData<{ sessions: Session[] }>(queryKeys.sessions)?.sessions.map((s) => s.id);
+        client.listSessions = () => new Promise(() => undefined);
+        const del = await renderHook(() => useDeleteSession(), { wrapper });
+
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+        await act(async () => del.result.current.mutate('b'));
+        await waitFor(() => expect(del.result.current.isSuccess).toBe(true));
+        expect(stale.sessions.map((s) => s.id)).toEqual(['a', 'b']);
+        expect(ids()).toEqual(['a']);
+
+        client.deleteSession = async () => {
+            throw new Error('nope');
+        };
+        await act(async () => del.result.current.mutate('a'));
+        await waitFor(() => expect(del.result.current.isError).toBe(true));
+        expect(queryClient.getQueryData<{ sessions: Session[] }>(queryKeys.sessions)?.sessions.map((s) => s.id)).toEqual(['a']);
+    });
+
+    it('deleting the only chat, over the HTTP client and the PC\'s own replies, empties the list', async () => {
+        let onPc = [session('a', { title: 'Renamed chat' })];
+        const { fetch } = createRecordingFetch(({ url, method }) => {
+            const path = new URL(url).pathname;
+            if (method === 'DELETE' && path === '/api/sessions/a') {
+                onPc = [];
+                return jsonResponse({ deleted: true });
+            }
+            if (method === 'GET' && path === '/api/sessions') return jsonResponse({ sessions: onPc, total: onPc.length });
+            return jsonResponse({ detail: 'Not Found' }, 404);
+        });
+        const client = createHttpClient({ baseUrl: 'https://192.168.1.20:4289', token: null, fetch });
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const wrapper = ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={queryClient}>
+                <GaiaClientProvider client={client}>{children}</GaiaClientProvider>
+            </QueryClientProvider>
+        );
+        const list = await renderHook(() => useSessions(), { wrapper });
+        await waitFor(() => expect(list.result.current.data?.sessions).toHaveLength(1));
+        const del = await renderHook(() => useDeleteSession(), { wrapper });
+
+        await act(async () => del.result.current.mutate('a'));
+        await waitFor(() => expect(del.result.current.isSuccess).toBe(true));
+        await waitFor(() => expect(list.result.current.data?.sessions).toEqual([]));
+        await act(async () => list.result.current.refetch());
+        expect(list.result.current.data?.sessions).toEqual([]);
     });
 });

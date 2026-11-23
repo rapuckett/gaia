@@ -20,6 +20,7 @@ import string
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator, List, Optional, Sequence, Tuple
+from urllib.parse import unquote
 
 from fastapi import HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -31,7 +32,8 @@ from gaia.config import (
     UnsafeGaiaHomeError,
     unsafe_gaia_home_reason,
 )
-from gaia.llm.lemonade_embedded import gaia_home
+from gaia.home import DOCUMENT_COPIES_SUBDIR
+from gaia.llm import lemonade_embedded
 from gaia.utils.image_formats import IMAGE_EXTENSIONS
 from gaia.utils.user_folders import documents_dir
 
@@ -43,6 +45,7 @@ from .models import (
     SessionResponse,
     SourceInfo,
 )
+from .security import device_display_path
 
 logger = logging.getLogger(__name__)
 
@@ -268,6 +271,21 @@ def message_to_response(msg: dict) -> MessageResponse:
                 exc,
             )
 
+    page_elements = None
+    if msg.get("page_elements"):
+        from pydantic import ValidationError
+
+        from gaia.browser.picked import PageElement
+
+        try:
+            page_elements = [PageElement(**e) for e in msg["page_elements"]]
+        except (ValidationError, TypeError) as exc:
+            logger.warning(
+                "Message %s picked elements do not match the schema: %s",
+                msg.get("id"),
+                exc,
+            )
+
     return MessageResponse(
         id=msg["id"],
         session_id=msg["session_id"],
@@ -278,25 +296,37 @@ def message_to_response(msg: dict) -> MessageResponse:
         agent_steps=agent_steps,
         stats=stats,
         turn_summary=turn_summary,
+        page_elements=page_elements,
         library_notices=msg.get("library_notices"),
         stopped=bool(msg.get("stopped")),
         failed=bool(msg.get("failed")),
     )
 
 
-def doc_to_response(doc: dict) -> DocumentResponse:
-    """Convert database document dict to response model."""
+INDEX_FAILURE_AWAY = "could not be indexed; see the PC's server logs"
+
+
+def doc_to_response(doc: dict, *, away: bool = False) -> DocumentResponse:
+    """Convert database document dict to response model.
+
+    *away* is a caller away from the PC: the stored failure text can hold PC
+    paths and raw exception text, so it gets a fixed sentence instead, and the
+    path is shown home-relative.
+    """
+    last_error = doc.get("last_error")
+    if away and last_error:
+        last_error = INDEX_FAILURE_AWAY
     return DocumentResponse(
         id=doc["id"],
         filename=doc["filename"],
-        filepath=doc["filepath"],
+        filepath=device_display_path(doc["filepath"]) if away else doc["filepath"],
         file_size=doc.get("file_size", 0),
         chunk_count=doc.get("chunk_count", 0),
         indexed_at=doc["indexed_at"],
         last_accessed_at=doc.get("last_accessed_at"),
         sessions_using=doc.get("sessions_using", 0),
         indexing_status=doc.get("indexing_status", "complete"),
-        last_error=doc.get("last_error"),
+        last_error=last_error,
         error_kind=doc.get("error_kind"),
     )
 
@@ -485,7 +515,8 @@ def _ui_gaia_home() -> Path:
             ``uploads_dir()`` is called from ``create_app()``, where one would
             surface as a raw traceback rather than something a user can act on.
     """
-    home = gaia_home()
+    # Looked up on the module each call, so a relocated home is always seen.
+    home = lemonade_embedded.gaia_home()
     resolved = home.resolve()
     user_home = Path.home().resolve()
 
@@ -509,6 +540,15 @@ def _ui_gaia_home() -> Path:
 def managed_documents_dir() -> Path:
     """Where the Agent UI stores documents it owns (``<GAIA_HOME>/documents``)."""
     return _ui_gaia_home() / "documents"
+
+
+def document_copies_dir() -> Path:
+    """Where the Agent UI keeps its copy of each document dragged into a chat.
+
+    Outside GAIA's documents folder, which every chat may use: a chat is
+    granted only the copies attached to it.
+    """
+    return _ui_gaia_home() / DOCUMENT_COPIES_SUBDIR
 
 
 def uploads_dir() -> Path:
@@ -543,33 +583,64 @@ class UploadStaticFiles(StaticFiles):
         return harden_served_file(await super().get_response(path, scope), path)
 
 
+# One upload name as the browser link carries it: the characters
+# ``quote(name, safe="")`` leaves alone, or a byte escape. Mirrors
+# UPLOAD_NAME in the web UI's markdown.ts.
+_UPLOAD_NAME_PATTERN = r"(?:[A-Za-z0-9._~-]|%[0-9A-Fa-f]{2})+"
+
 UPLOAD_LINK_RE = re.compile(
     r"(?P<bang>!?)\[(?P<label>[^\]\n]*)\]\("
     + re.escape(UPLOAD_URL_PREFIX)
-    + r"(?P<name>[^)\s]+)\)"
+    + rf"(?P<name>{_UPLOAD_NAME_PATTERN})\)"
 )
+
+
+def _upload_path(encoded_name: str, root: Path) -> Optional[str]:
+    """The file an encoded upload link names, or None if it names no plain file.
+
+    Decoding happens before validation, so an escape cannot smuggle a path
+    separator, a traversal step or a control character past the checks.
+    """
+    try:
+        name = unquote(encoded_name, errors="strict")
+    except UnicodeDecodeError:
+        return None
+    if (
+        not name
+        or name.startswith(".")
+        or name != name.strip(" .")
+        or any(c in "/\\:" or ord(c) < 32 or ord(c) == 127 for c in name)
+    ):
+        return None
+    path = root / name
+    if path.is_symlink() or not path.is_file():
+        return None
+    if path.resolve().parent != root:
+        return None
+    return str(path)
 
 
 def resolve_upload_links(message: str) -> str:
     """Point a message's attachment links at the files on disk, for the agent.
 
     The composer appends ``[name](/api/files/uploads/<file>)`` links, which only
-    the browser can follow. The agent reads files by path, so each link to a
-    file that exists directly inside ``uploads_dir()`` gets its absolute path
-    as the target. Anything else (traversal, a missing file) is left as is.
+    the browser can follow. The name is percent-encoded, so spaces and non-Latin
+    text survive the Markdown link. The agent reads files by path, so each link
+    to a file that exists directly inside ``uploads_dir()`` gets its absolute
+    path as the target. Anything else (traversal, a missing file) is left as is.
     """
     if UPLOAD_URL_PREFIX not in message:
         return message
     root = uploads_dir().resolve()
 
     def _sub(match: "re.Match[str]") -> str:
-        name = match.group("name")
-        if name in (".", "..") or "/" in name or "\\" in name:
-            logger.warning("Upload link %r is not a plain file name; left as is", name)
-            return match.group(0)
-        path = (root / name).resolve()
-        if path.parent != root or not path.is_file():
-            logger.warning("Upload link %r names no file in %s; left as is", name, root)
+        path = _upload_path(match.group("name"), root)
+        if path is None:
+            logger.warning(
+                "Upload link %r names no plain file in %s; left as is",
+                match.group("name"),
+                root,
+            )
             return match.group(0)
         return f"{match.group('bang')}[{match.group('label')}]({path})"
 
@@ -582,33 +653,37 @@ def attached_upload_paths(message: str) -> List[str]:
     These are GAIA's own copies of files the user just picked, so the turn may
     read them without asking. Only a regular file directly inside
     ``uploads_dir()``, linked the way ``resolve_upload_links`` writes it,
-    counts — never a symlink, a subfolder, or a path that escapes the folder.
+    counts, never a symlink, a subfolder, or a path that escapes the folder.
+    Stored names can contain spaces and parentheses, so the message is matched
+    against the folder's own entries instead of a path-shaped regex.
     """
     root = uploads_dir().resolve()
-    prefix = str(root) + os.sep
-    if prefix not in message:
+    if not root.is_dir() or "](" not in message:
+        return []
+    try:
+        children = list(root.iterdir())
+    except OSError:
         return []
     found = set()
-    for match in re.finditer(
-        r"\]\(" + re.escape(prefix) + r"(?P<name>[^)\s\\/]+)\)", message
-    ):
-        name = match.group("name")
-        if name in (".", ".."):
+    for child in children:
+        path = str(child)
+        if path not in message or f"]({path})" not in message:
             continue
-        path = root / name
-        if path.is_symlink() or not path.is_file():
+        try:
+            if child.is_symlink() or not child.is_file():
+                continue
+        except OSError:
             continue
-        if path.resolve().parent != root:
-            continue
-        found.add(str(path))
+        found.add(path)
     return sorted(found)
 
 
 def document_roots() -> List[Path]:
     """Return the directories documents may be read from.
 
-    Always includes the user's home directory, plus GAIA's own managed
-    documents folder when ``GAIA_HOME`` moves it outside every other root.
+    Always includes the user's home directory, plus GAIA's own documents
+    folder, its document copies and chat uploads when ``GAIA_HOME`` moves
+    them outside every other root.
     Each entry of ``GAIA_DOCUMENT_ROOTS`` adds another root; a relative or
     non-existent entry is a server misconfiguration and raises HTTP 500 rather than being
     skipped, so a typo can never silently narrow access back to home.
@@ -644,9 +719,10 @@ def document_roots() -> List[Path]:
             )
         declared.append(candidate)
 
-    managed = managed_documents_dir().resolve()
-    if not any(managed.is_relative_to(root.resolve()) for root in declared):
-        declared.append(managed)
+    for owned in (managed_documents_dir(), document_copies_dir(), uploads_dir()):
+        owned = owned.resolve()
+        if not any(owned.is_relative_to(root.resolve()) for root in declared):
+            declared.append(owned)
 
     roots: List[Path] = []
     for candidate in declared:
@@ -701,7 +777,7 @@ def ensure_within_home(resolved: Path) -> None:
         )
 
 
-def ensure_document_path_allowed(raw: Path) -> str:
+def ensure_document_path_allowed(raw: Path, *, away: bool = False) -> str:
     """Raise HTTP 403 unless *raw* lies inside a document root; return its realpath.
 
     The one containment check for paths a user types into the Document library,
@@ -713,11 +789,17 @@ def ensure_document_path_allowed(raw: Path) -> str:
        probe which files exist outside them.
     2. Physical: the realpath must be under a root too, which stops an
        intermediate symlinked directory inside a root from pointing outside.
+
+    *away* is a caller away from the PC, whose refusal names no PC folder.
     """
     roots = document_roots()
     # Worded so it holds whether or not the path exists: see step 1.
     denied = (
-        f"GAIA can only read documents under "
+        "GAIA can only read documents from the PC's document folders, and this "
+        "path is outside them. Check the path is right, or add the document on "
+        "the PC."
+        if away
+        else f"GAIA can only read documents under "
         f"{_describe_roots(roots)}, and {raw} is outside them. Check the path "
         f"is right. If it is, move or copy it under one of those folders."
     )
@@ -773,7 +855,7 @@ def compute_file_hash_from_fd(fd: int) -> str:
 
 @contextmanager
 def safe_open_document(
-    path: str,
+    path: str, *, away: bool = False
 ) -> Generator[Tuple[int, os.stat_result, Path], None, None]:
     """TOCTOU-safe context manager for opening document files.
 
@@ -797,7 +879,7 @@ def safe_open_document(
 
     raw = Path(os.path.expanduser(path))
     # 1-2. Containment before lstat, so nothing outside the roots is probed.
-    real = ensure_document_path_allowed(raw)
+    real = ensure_document_path_allowed(raw, away=away)
 
     # 3. Reject symlinks before resolving — lstat doesn't follow symlinks
     try:
@@ -810,11 +892,24 @@ def safe_open_document(
     except FileNotFoundError:
         raise HTTPException(
             status_code=404,
-            detail=f"File not found: there is no file at {raw}. Check the path "
-            "for typos.",
+            detail=(
+                "File not found: there is no file at that path. Check the path "
+                "for typos."
+                if away
+                else f"File not found: there is no file at {raw}. Check the path "
+                "for typos."
+            ),
         )
     except OSError as exc:
-        raise HTTPException(status_code=400, detail=f"Cannot stat file: {exc}")
+        logger.warning("safe_open_document: cannot stat %s: %s", raw, exc)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cannot read that file. Check it is still on the PC."
+                if away
+                else f"Cannot stat file: {exc}"
+            ),
+        )
 
     # 3b. A folder gets its own answer so the caller can offer folder indexing.
     if stat.S_ISDIR(lst.st_mode):
@@ -822,8 +917,13 @@ def safe_open_document(
             status_code=400,
             detail={
                 "status": "is_folder",
-                "message": f"{raw} is a folder, not a file. Index it as a folder "
-                "to add the documents inside it.",
+                "message": (
+                    "That path is a folder, not a file. Index it as a folder "
+                    "to add the documents inside it."
+                    if away
+                    else f"{raw} is a folder, not a file. Index it as a folder "
+                    "to add the documents inside it."
+                ),
             },
         )
 
@@ -846,7 +946,14 @@ def safe_open_document(
     try:
         fd = os.open(str(resolved), flags)
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"File not found: {resolved}")
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "File not found: there is no file at that path."
+                if away
+                else f"File not found: {resolved}"
+            ),
+        )
     except OSError as exc:
         import errno
 
@@ -855,7 +962,15 @@ def safe_open_document(
                 status_code=400,
                 detail="Symlink documents are not allowed for security reasons",
             )
-        raise HTTPException(status_code=400, detail=f"Cannot open file: {exc}")
+        logger.warning("safe_open_document: cannot open %s: %s", resolved, exc)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cannot open that file. Check it is still on the PC."
+                if away
+                else f"Cannot open file: {exc}"
+            ),
+        )
 
     try:
         st = os.fstat(fd)

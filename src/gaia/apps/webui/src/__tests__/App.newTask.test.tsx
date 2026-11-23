@@ -10,14 +10,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../services/api');
 vi.mock('../services/memoryApi');
+vi.mock('../services/scheduleApi');
 
 import App from '../App';
 import * as api from '../services/api';
 import * as memoryApi from '../services/memoryApi';
-import { useChatStore } from '../stores/chatStore';
+import * as scheduleApi from '../services/scheduleApi';
+import { NEW_CHAT_RESEARCH, researchOn, useChatStore } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 import { requestMobileAccess } from '../utils/mobileAccessEvents';
 import type { Session, SetupCheck, StartCard } from '../types';
+import { AGENT_PROGRAMS } from '../test/setupApiMocks';
 
 const mocked = vi.mocked(api);
 
@@ -65,6 +68,7 @@ beforeEach(() => {
         model_loaded: 'Gemma-4-E4B-it-GGUF',
     } as never);
     mocked.listAgents.mockResolvedValue({ agents: [], total: 0 });
+    mocked.listSkills.mockResolvedValue({ skills: [], invalid: {} });
     mocked.listSessions.mockResolvedValue({ sessions: [], total: 0 });
     mocked.getActiveRuns.mockResolvedValue({ session_ids: [], queued: [], awaiting_user: {} });
     mocked.getContextUsage.mockResolvedValue({ available: false, reason: 'No answer yet.' });
@@ -79,6 +83,7 @@ beforeEach(() => {
         compatible: true, blockers: [], warnings: [], ram_gb: 32, gpu_name: null, npu_detected: false, disk_free_gb: 100,
     } as never);
     mocked.getSetupStatus.mockResolvedValue({ state: 'idle' });
+    mocked.getAgentPrograms.mockResolvedValue(AGENT_PROGRAMS);
     mocked.getLemonadeTarget.mockResolvedValue({
         mode: 'gaia', saved_mode: null, source: 'gaia', base_url: null, saved_base_url: null,
         api_key_stored: false, gaia_installed: false, offer: false, what_gaia_does: '',
@@ -94,7 +99,7 @@ beforeEach(() => {
     useChatStore.setState({
         sessions: [], currentSessionId: null, messages: [], agents: [], pendingPrompt: null,
         draftPermissionMode: 'ask', defaultPermissionMode: 'ask', showMemoryDashboard: false, showSchedules: false, settingsSection: null,
-        draftDocumentIds: [], draftPrivate: false, locale: 'en',
+        draftDocumentIds: [], draftPrivate: false, research: {}, locale: 'en',
     });
 });
 
@@ -228,6 +233,18 @@ describe('a new chat', () => {
         await waitFor(() => expect(mocked.createSession).toHaveBeenCalledOnce());
         expect(mocked.createSession.mock.calls[0][0]).toMatchObject({ folders: ['/home/u/site'] });
         expect(useChatStore.getState().draftFolder).toBeNull();
+    });
+
+    it('researches the first message when Research was on, and keeps it on for that chat only', async () => {
+        useChatStore.setState({ research: { [NEW_CHAT_RESEARCH]: true } });
+        render(<App />);
+        await sendFirstMessage('the history of RISC-V');
+
+        await waitFor(() => expect(mocked.sendMessageStream).toHaveBeenCalled());
+        expect(mocked.sendMessageStream.mock.calls[0].slice(0, 2)).toEqual(['sess-new-0001', '/research the history of RISC-V']);
+        const state = useChatStore.getState();
+        expect(researchOn(state, 'sess-new-0001')).toBe(true);
+        expect(researchOn(state, null)).toBe(false);
     });
 
     it('sends "ask" too, so a full-access default in config cannot hide behind the chip', async () => {
@@ -641,7 +658,7 @@ describe('opening the app on a chat link', () => {
 
 describe('sidebar destinations', () => {
     it('opens Scheduled tasks over the chat, and Documents in its place', async () => {
-        mocked.listSchedules.mockResolvedValue({ schedules: [], total: 0 });
+        vi.mocked(scheduleApi).listSchedules.mockResolvedValue({ schedules: [], total: 0 });
         render(<App />);
         await userEvent.click(await screen.findByRole('button', { name: 'Scheduled tasks' }));
 
@@ -716,5 +733,16 @@ describe('Mobile access', () => {
 
         await waitFor(() => expect(mocked.startTunnel).toHaveBeenCalledTimes(1));
         expect(await screen.findByText('stub stops here')).toBeInTheDocument();
+    });
+});
+
+describe('the keyboard shortcuts sheet', () => {
+    it('opens with Ctrl+/ and closes with it again', async () => {
+        render(<App />);
+        await screen.findByLabelText('Message');
+        fireEvent.keyDown(window, { key: '/', ctrlKey: true });
+        expect(await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument();
+        fireEvent.keyDown(window, { key: '/', ctrlKey: true });
+        await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Keyboard shortcuts' })).not.toBeInTheDocument());
     });
 });

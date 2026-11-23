@@ -37,7 +37,8 @@ def store(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client(store):
-    return TestClient(create_app(db_path=":memory:"))
+    # The PC itself: wiping all memory is PC-or-allowed-device only.
+    return TestClient(create_app(db_path=":memory:"), client=("127.0.0.1", 50000))
 
 
 def _chat_turn(store, session_id, user, answer):

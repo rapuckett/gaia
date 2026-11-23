@@ -131,6 +131,50 @@ function useFixtures(): Fixture[] {
                     }),
                 },
             },
+            {
+                id: 'names',
+                label: 'A name hiding a zero-width joiner',
+                props: {
+                    prompt: prompt('names', {
+                        tool: 'write_file',
+                        toolLabel: 'writing file',
+                        toolArgs: { file_path: '/Users/alex/Documents/inv\u200doice.txt', content: 'Total: 120' },
+                        alwaysScope: 'write_file on inv\u200doice.txt',
+                        risk: 'write',
+                    }),
+                },
+            },
+            {
+                id: 'encoded',
+                label: 'Encoded PowerShell command',
+                props: {
+                    prompt: prompt('encoded', {
+                        tool: 'run_shell_command',
+                        // "Remove-Item notes.txt" as UTF-16LE base64.
+                        toolArgs: { command: 'powershell -EncodedCommand UgBlAG0AbwB2AGUALQBJAHQAZQBtACAAbgBvAHQAZQBzAC4AdAB4AHQA' },
+                    }),
+                },
+            },
+            {
+                id: 'script',
+                label: 'Python file that cannot be read',
+                props: {
+                    prompt: prompt('script', {
+                        tool: 'execute_python_file',
+                        toolArgs: { file_path: '/Users/alex/Projects/report.py', _script: { unreadable: 'too_large' } },
+                    }),
+                },
+            },
+            {
+                id: 'mail',
+                label: 'Email sent as written',
+                props: {
+                    prompt: prompt('mail', {
+                        tool: 'send_now',
+                        toolArgs: { _exact_text: 'From: alex@example.com\nTo: ada@example.com\nSubject: Q3 numbers\n\nHi Ada, the numbers are attached.' },
+                    }),
+                },
+            },
             { id: 'repeats', label: 'Repeats 2', props: { prompt: WRITE, repeats: 2 } },
             { id: 'busy', label: 'Busy', props: { prompt: WRITE, busy: true } },
             { id: 'error', label: 'Error', props: { prompt: WRITE, error: 'GAIA could not reach the server. Check the connection and try again.' } },

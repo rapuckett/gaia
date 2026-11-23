@@ -105,7 +105,7 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
                 </Stack>
             ) : null}
             {turn.incomplete ? (
-                <Notice tone="warning" role="note" {...untrackedNotice(untrackedWarning(turn.untracked, t, { also: count > 0 }), groups)} />
+                <Notice tone="warning" role="note" {...untrackedNotice(untrackedWarning(turn.untracked, { also: count > 0 }, t), groups)} />
             ) : null}
             {message ? (
                 <Notice

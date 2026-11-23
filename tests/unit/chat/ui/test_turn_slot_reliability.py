@@ -82,7 +82,12 @@ def runtime(monkeypatch):
     manager = RunManager()
     queue = TurnQueue()
     state = SimpleNamespace(session_locks={})
-    http_request = SimpleNamespace(app=SimpleNamespace(state=state), headers={})
+    http_request = SimpleNamespace(
+        app=SimpleNamespace(state=state),
+        headers={},
+        scope={},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
     server = SimpleNamespace(_stream_chat_response=helpers._stream_chat_response)
     helpers._agent_cache.clear()
     with (
@@ -638,8 +643,8 @@ class _ParkingSidecar:
 
 
 def _relay_through(sidecar):
-    from gaia.ui.email_sidecar import relay
-    from gaia.ui.email_sidecar.profiles import GAIA_PROFILE
+    from gaia.ui.sidecar import relay
+    from gaia.ui.sidecar.profiles import GAIA_PROFILE
 
     def dispatch(sse_handler, request, *_a, **_k):
         relay.relay_query(

@@ -111,7 +111,7 @@ describe('TurnChanges', () => {
         });
         render(<TurnChanges sessionId="s1" messageId={7} />);
         expect(await screen.findByRole('note')).toHaveTextContent(
-            "GAIA also ran 1 command it can't track. If it changed any files, Undo won't restore them.",
+            "GAIA also ran 1 command. Undo only restores files GAIA edited itself, so anything it changed or installed stays.",
         );
         expect(screen.getByText('npm run build')).toHaveAttribute('dir', 'ltr');
     });
@@ -123,7 +123,7 @@ describe('TurnChanges', () => {
         });
         render(<TurnChanges sessionId="s1" messageId={7} />);
         expect(await screen.findByRole('note')).toHaveTextContent(
-            "GAIA ran 7 Python snippets it can't track. If they changed any files, Undo won't restore them.",
+            "GAIA ran 7 Python snippets. Undo only restores files GAIA edited itself, so anything they changed or installed stays.",
         );
         expect(screen.getAllByRole('listitem')).toHaveLength(1);
         expect(screen.getByText('reads incident logs, counts errors by hour')).toHaveAttribute('dir', 'ltr');
@@ -178,6 +178,32 @@ describe('TurnChanges', () => {
         }
     });
 
+    it('words the row, its confirm and its result in the chosen language (#8828)', async () => {
+        vi.spyOn(api, 'listTurnChanges')
+            .mockResolvedValueOnce({ turns: [turn()] })
+            .mockResolvedValueOnce({ turns: [turn({ restored_at: '2026-10-16T01:00:00+00:00' })] });
+        vi.spyOn(api, 'undoTurn').mockResolvedValue({
+            turn_id: 't1', restored: ['C:\\work\\a.txt'], removed: ['C:\\work\\b.txt'],
+            kept_folders: [], untracked: [], incomplete: false,
+        });
+        useChatStore.setState({ locale: 'ar' });
+        try {
+            const { container } = render(<TurnChanges sessionId="s1" messageId={7} />);
+            expect(await screen.findByText(/الملفات التي تغيّرت: 2/)).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /مراجعة التغييرات/ })).toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: /التراجع عن هذا الدور/ }));
+            expect(stripIsolates(screen.getByRole('group').textContent ?? '')).toContain('إعادة الملفات (2) إلى ما كانت عليه قبل هذا الدور؟');
+            fireEvent.click(screen.getByRole('button', { name: /\(Undo\)/ }));
+            const status = await screen.findByRole('status');
+            expect(stripIsolates(status.textContent ?? '')).toBe(
+                'تم التراجع: أُعيد ملف واحد، حُذف ملف جديد واحد. (Undone: restored 1 file, removed 1 new file.)',
+            );
+            await waitFor(() => expect(stripIsolates(container.querySelector('.turn-changes-summary')?.textContent ?? '')).toContain('· تم التراجع'));
+        } finally {
+            useChatStore.setState({ locale: 'en' });
+        }
+    });
+
     it('a 409 that is not a conflict offers no undo-anyway', async () => {
         vi.spyOn(api, 'listTurnChanges').mockResolvedValue({ turns: [turn()] });
         vi.spyOn(api, 'undoTurn').mockRejectedValue(
@@ -220,6 +246,16 @@ describe('DiffCard', () => {
         const { container } = render(<DiffCard data={{ unified: '-a\r\n+b\r\n' }} />);
         const lines = Array.from(container.querySelectorAll('.render-diff__line')).map((el) => el.textContent);
         expect(lines).toEqual(['-a', '+b']);
+    });
+
+    it('marks a right-to-left override in the body, the title and the path', () => {
+        const unified = '--- /dev/null\n+++ b/report\u202Etxt.md\n@@ -0,0 +1 @@\n+hi \u202Eolleh\n';
+        const { container } = render(<DiffCard data={{ title: 'report\u202Etxt.md', path: '/d/report\u202Etxt.md', unified }} />);
+        const lines = Array.from(container.querySelectorAll('.render-diff__line')).map((el) => el.textContent);
+        expect(lines).toEqual(['+hi [U+202E]olleh']);
+        expect(container.querySelector('.render-diff__title')).toHaveTextContent('report[U+202E]txt.md');
+        expect(container.querySelector('.render-diff__path')).toHaveTextContent('/d/report[U+202E]txt.md');
+        expect(container.textContent).not.toContain('\u202E');
     });
 
     it('shows only the changed lines of a new file, without the diff headers', () => {
