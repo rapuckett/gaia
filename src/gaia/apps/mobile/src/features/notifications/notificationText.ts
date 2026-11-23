@@ -4,6 +4,7 @@
 import { isolate, type MessageKey } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
 import type { GaiaNotification, NotificationType } from '@webui/types/agent';
+import { noticeText, visibleStrict, visibleText } from '@webui/utils/calendarApproval.core';
 import { permissionPromptText } from '@webui/utils/permissionPrompts.core';
 
 export const FILTER_LABELS: Record<NotificationType, MessageKey> = {
@@ -28,16 +29,17 @@ export function relativeTime(timestamp: number, now: number, t: Translate, local
     return new Date(timestamp).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
-/** An approval reads as the chat's card does, not as its stored English text. */
+/** An approval reads as the chat's card does, not as its stored English text; hidden characters show as [U+XXXX] like the PC. */
 export function notificationText(n: GaiaNotification, t: Translate): { title: string; message: string } {
     if (n.type === 'permission_request' && n.tool) {
-        const { heading, question } = permissionPromptText(n, t, (s) => isolate(s, 'ltr'));
+        const { heading, question } = permissionPromptText(n, t, (s) => isolate(visibleStrict(s), 'ltr'));
         return { title: heading, message: question };
     }
     if (n.type === 'policy_alert') {
-        return { title: t('activity.policy.blocked', { tool: n.tool ?? t('activity.policy.unknownTool') }), message: n.message };
+        const tool = n.tool ? visibleText(n.tool, true) : t('activity.policy.unknownTool');
+        return { title: t('activity.policy.blocked', { tool }), message: noticeText(n.message) };
     }
     // An error's message is the PC's English reason.
-    if (n.type === 'error') return { title: n.title, message: isolate(n.message, 'ltr') };
-    return { title: n.title, message: n.message };
+    if (n.type === 'error') return { title: noticeText(n.title), message: isolate(noticeText(n.message), 'ltr') };
+    return { title: noticeText(n.title), message: noticeText(n.message) };
 }

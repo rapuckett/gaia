@@ -84,11 +84,23 @@ const settled = (target: Locator): Promise<void> =>
         requestAnimationFrame(frame);
     }));
 
-/** Every rule break on the page, as readable lines. */
-// A cut text's fade follows a scroll timeline, which picks up new text on the next frame.
+// A cut text's fade follows a scroll timeline, which picks up new text on a later frame; wait up to 1 s for it.
 const nextFrames = (page: Page) =>
-    page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+    page.evaluate(() => new Promise<void>((done) => {
+        const unfaded = () => [...document.querySelectorAll('body *')].some((el) => {
+            const style = getComputedStyle(el);
+            return style.animationName.includes('fade-cut') && style.whiteSpace === 'nowrap' && style.overflowX === 'hidden'
+                && el.scrollWidth > el.clientWidth + 1 && (style.maskImage || style.getPropertyValue('-webkit-mask-image')) === 'none';
+        });
+        const start = performance.now();
+        const tick = (frames: number) => requestAnimationFrame(() => {
+            if (frames >= 2 && (!unfaded() || performance.now() - start > 1000)) done();
+            else tick(frames + 1);
+        });
+        tick(1);
+    }));
 
+/** Every rule break on the page, as readable lines. */
 const audit = async (page: Page): Promise<string[]> => {
     await nextFrames(page);
     return page.evaluate(() => {
