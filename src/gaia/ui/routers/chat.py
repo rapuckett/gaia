@@ -56,6 +56,7 @@ from ..sse_handler import (
     _TOOL_CALL_JSON_SUB_RE,
     _clean_answer_json,
     _fix_double_escaped,
+    short_id,
 )
 from ..turn_queue import TurnCancelled, turn_queue
 from ..utils import resolve_upload_links
@@ -381,6 +382,7 @@ class ToolConfirmRequest(BaseModel):
     approved: bool
     always: bool = False
     confirm_id: Optional[str] = None
+    source: Optional[Literal["notification"]] = None
 
 
 class ConfirmToolResponse(WireModel):
@@ -406,7 +408,16 @@ async def confirm_tool(request: ToolConfirmRequest, http_request: Request):
     verdict = "allowed" if request.approved else "denied"
     if request.approved and request.always:
         verdict = "always allowed"
-    audit_approval(http_request, f"tool call {verdict} in chat {request.session_id}")
+    via = " via notification" if request.source == "notification" else ""
+    audit_approval(
+        http_request, f"tool call {verdict}{via} in chat {request.session_id}"
+    )
+    logger.info(
+        "Tool decision %s%s for prompt %s",
+        verdict,
+        via,
+        short_id(request.confirm_id),
+    )
     return answer
 
 
