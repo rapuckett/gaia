@@ -72,6 +72,7 @@ def short_id(value: Optional[str]) -> str:
         return "none"
     return value[:6] + "..." if len(value) > 6 else value
 
+
 _SUMMARY_CHAR_CAP = 300
 #: How much of an MCP tool's text output a tool row carries.
 _MCP_OUTPUT_CHAR_CAP = 16_000
@@ -2654,8 +2655,7 @@ class SSEOutputHandler(OutputHandler):
         with self._confirm_lock:
             if confirm_id is not None and confirm_id != self._confirm_id:
                 logger.warning(
-                    "Dropped a tool decision for prompt %s: the live prompt "
-                    "is %s",
+                    "Dropped a tool decision for prompt %s: the live prompt " "is %s",
                     short_id(confirm_id),
                     short_id(self._confirm_id),
                 )
