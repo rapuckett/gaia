@@ -97,12 +97,12 @@ function CodeBox({ lines, testID }: { lines: { text: string; tone?: CodeTone }[]
     );
 }
 
-/** Code or JSON, collapsed past the web's line count. */
-function Collapsible({ text, limit = PROMPT_CODE_PREVIEW_LINES, testID }: { text: string; limit?: number; testID?: string }) {
+/** Code or JSON, collapsed past the web's line count; `whole` shows every line, for text the person approves as it reads. */
+function Collapsible({ text, limit = PROMPT_CODE_PREVIEW_LINES, whole, testID }: { text: string; limit?: number; whole?: boolean; testID?: string }) {
     const t = useT();
     const [expanded, setExpanded] = useState(false);
     const lines = text.replace(/^\n+|\n+$/g, '').split('\n');
-    const long = lines.length > limit;
+    const long = !whole && lines.length > limit;
     const shown = long && !expanded ? lines.slice(0, limit) : lines;
     return (
         <Stack gap="xs">
@@ -227,7 +227,7 @@ function MailFacts({ header }: { header: MailHeader }) {
 }
 
 /** What the call does, in the order the web card shows it. */
-function CallDetails({ prompt }: { prompt: GaiaNotification }) {
+function CallDetails({ prompt, question }: { prompt: GaiaNotification; question: string }) {
     const t = useT();
     const tool = prompt.tool ?? '';
     const args = prompt.toolArgs ?? {};
@@ -253,11 +253,9 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
     const calendar = CALENDAR_WRITE_TOOLS.has(tool);
     const [showArgs, setShowArgs] = useState(false);
     const relayed = !hasArgs && COMMAND_SUMMARY_TOOLS.has(tool) ? splitCommandSummary(prompt.summary ?? '') : null;
-    // The question already names the path of a folder or trust prompt.
-    const own = tool === PATH_ACCESS_TOOL || tool === PROJECT_TRUST_TOOL;
     // Characters that don't show are shown as [U+XXXX]: the card is approved as it reads.
     const { shown, coded: detailCoded } = shownField(field.key, detail);
-    const shownDetail = own ? '' : shown;
+    const shownDetail = shown;
     const command = typeof args.command === 'string' ? args.command : relayed?.command ?? '';
     // What the command runs when its own text hides it: base64 PowerShell, cmd's ^ escapes.
     const decoded = command ? decodedPowerShell(command) : '';
@@ -311,10 +309,10 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
                     {codeNote}
                 </Text>
             ) : null}
-            {mail?.before ? <Collapsible text={mail.before} /> : null}
+            {mail?.before ? <Collapsible text={mail.before} whole /> : null}
             {mail ? <MailFacts header={mail} /> : null}
-            {exactText ? <Collapsible text={mail ? mail.body : exactText} testID="perm-exact-text" /> : null}
-            {relayed ? <Collapsible text={visibleCommand(relayed.command)} /> : null}
+            {exactText ? <Collapsible text={mail ? mail.body : exactText} whole testID="perm-exact-text" /> : null}
+            {relayed ? <Collapsible text={visibleCommand(relayed.command)} whole /> : null}
             {decoded ? (
                 <Text role="caption" tone="secondary">
                     {t('prompt.decodedCommand')}
@@ -350,6 +348,11 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
                     {visibleText(prompt.summary, true)}
                 </Text>
             ) : null}
+            {requiresFreshConsent(tool) ? (
+                <Text role="label" tone="secondary">
+                    {question}
+                </Text>
+            ) : null}
             <ChangePreview args={args} />
             {hasArgs && !exactText ? (
                 <Disclosure
@@ -382,7 +385,7 @@ export function PermissionPrompt({
 }: PermissionPromptProps) {
     const t = useT();
     const { width, height } = useWindowDimensions();
-    // While the person types a queued message, only the question and its answers fit above the keyboard.
+    // While the person types a queued message, only the heading and its answers fit above the keyboard.
     const typing = useKeyboardState((k) => k.isVisible);
     const reduced = useReducedMotion();
     const left = useCountdown(prompt.expiresAt, prompt.timeoutSeconds);
@@ -455,16 +458,13 @@ export function PermissionPrompt({
                             <Text role="ui" weight="semibold" accessibilityRole="header">
                                 {heading}
                             </Text>
-                            <Text role="label" tone="secondary">
-                                {question}
-                            </Text>
                         </Stack>
                     </Row>
                     {typing ? null : (
                         <ScrollBox maxHeight={bodyMax} hint testID="perm-details-scroll">
                             <View testID="perm-details-body">
                                 <Stack gap="md">
-                                    <CallDetails prompt={prompt} />
+                                    <CallDetails prompt={prompt} question={question} />
                                     {fullAccessPending ? <Notice tone="info" message={t('perm.fullPendingNote')} testID="perm-full-pending" /> : null}
                                     {suggestAlways && !expired ? (
                                         <Text role="caption" tone="secondary">

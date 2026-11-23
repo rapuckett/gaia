@@ -84,5 +84,5 @@ export function ReadAloudErrorNotice({ messageId }: { messageId: string }) {
     const clear = useReadAloudStore((s) => s.clearError);
     if (!error) return null;
     if (error.kind === 'unsupported') return <Notice tone="danger" title={t('mobileApp.readAloud.unsupported')} onDismiss={clear} />;
-    return <Notice tone="danger" title={t(`readAloud.error.${error.kind}`)} message={detailOf(error.cause, t)} onDismiss={clear} />;
+    return <Notice tone="danger" title={t(`readAloud.error.${error.kind}`)} message={error.kind === 'unavailable' ? undefined : detailOf(error.cause, t)} onDismiss={clear} />;
 }

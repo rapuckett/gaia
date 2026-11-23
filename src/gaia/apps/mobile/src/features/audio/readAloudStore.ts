@@ -13,8 +13,8 @@ import { PcAudioPlaybackError, playPcAudio } from './playPcAudio';
 /** `downloading`: the PC is fetching the voice model for this first read. */
 export type ReadAloudStatus = 'loading' | 'downloading' | 'playing';
 
-/** The web's kinds: the model server unreachable (503), it failed to speak (502), the phone couldn't play it, only code, or other. `unsupported`: the PC's GAIA predates the speech routes (404). */
-export type ReadAloudErrorKind = 'unsupported' | 'unreachable' | 'speech' | 'playback' | 'nothing' | 'other';
+/** The web's kinds: the model server unreachable (503), it failed to speak (502), the phone couldn't play it, only code, or other. `unsupported`: the PC's GAIA predates the speech routes (404). `unavailable`: the PC hasn't verified its voice (409). */
+export type ReadAloudErrorKind = 'unsupported' | 'unavailable' | 'unreachable' | 'speech' | 'playback' | 'nothing' | 'other';
 
 export interface ReadAloudError {
     messageId: string;
@@ -40,6 +40,7 @@ interface ReadAloudState {
 export function kindOf(err: unknown): ReadAloudErrorKind {
     if (err instanceof GaiaApiError) {
         if (err.status === 404) return 'unsupported';
+        if (err.status === 409) return 'unavailable';
         return err.status === 503 ? 'unreachable' : err.status === 502 ? 'speech' : 'other';
     }
     return err instanceof PcAudioPlaybackError ? 'playback' : 'other';

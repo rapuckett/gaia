@@ -9,6 +9,7 @@ import { SERVER_CANCELLED_TEXT, splitCutOff } from '@webui/utils/turnEnding.core
 import type { Message } from '@/api/client.types';
 import { useMemo } from 'react';
 
+import { useSpeechSettings } from '@/data';
 import { useT } from '@/i18n/useT';
 import { IconButton, Pressable, Row, Stack } from '@/ui';
 import { Check, Copy, Ellipsis, RotateCcw, Square, Volume2 } from '@/ui/icons';
@@ -58,13 +59,14 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
     const spoken = useMemo(() => cleanToolCallContent(text, false), [text]);
     const speakId = readAloudId(message);
     const readAloud = useReadAloud(speakId, spoken);
+    const speechAvailable = useSpeechSettings().data?.available !== false;
     const readable = !streaming && !cancelled && !activity.isError && spoken.trim() !== '';
     const actions = useMessageActions(
         message,
         text,
         context,
         undefined,
-        readable ? [{ label: readAloud.label, icon: readAloud.active ? Square : Volume2, onPress: readAloud.toggle }] : undefined,
+        readable && speechAvailable ? [{ label: readAloud.label, icon: readAloud.active ? Square : Volume2, onPress: readAloud.toggle }] : undefined,
     );
     const compare = useAnswerComparison(message.session_id);
     return (
@@ -92,7 +94,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             {!streaming && !cancelled && !isAgentNotGranted(spoken) && isAuthRequiredMessage(spoken) ? <EmailConnect content={spoken} /> : null}
             {!streaming && !cancelled ? (
                 <Row>
-                    {readable ? <ReadAloudButton control={readAloud} /> : null}
+                    {readable && speechAvailable ? <ReadAloudButton control={readAloud} /> : null}
                     <IconButton
                         icon={actions.copied ? Check : Copy}
                         label={actions.copied ? t('msg.copiedAria') : t('msg.copy')}
