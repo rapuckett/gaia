@@ -66,7 +66,12 @@ def runtime():
     db = ChatDatabase(":memory:")
     manager = RunManager()
     state = SimpleNamespace(session_locks={})
-    request = SimpleNamespace(app=SimpleNamespace(state=state), headers={})
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=state),
+        headers={},
+        scope={},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
     server = SimpleNamespace(_stream_chat_response=helpers._stream_chat_response)
     helpers._agent_cache.clear()
     with (

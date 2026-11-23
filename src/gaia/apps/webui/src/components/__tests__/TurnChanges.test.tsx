@@ -188,17 +188,17 @@ describe('TurnChanges', () => {
         });
         useChatStore.setState({ locale: 'ar' });
         try {
-            render(<TurnChanges sessionId="s1" messageId={7} />);
-            expect(await screen.findByText(/الملفات المُغيَّرة: 2/)).toBeInTheDocument();
+            const { container } = render(<TurnChanges sessionId="s1" messageId={7} />);
+            expect(await screen.findByText(/الملفات التي تغيّرت: 2/)).toBeInTheDocument();
             expect(screen.getByRole('button', { name: /مراجعة التغييرات/ })).toBeInTheDocument();
             fireEvent.click(screen.getByRole('button', { name: /التراجع عن هذا الدور/ }));
-            expect(screen.getByRole('group')).toHaveTextContent('إعادة الملفات إلى ما كانت عليه قبل هذا الدور؟');
+            expect(stripIsolates(screen.getByRole('group').textContent ?? '')).toContain('إعادة الملفات (2) إلى ما كانت عليه قبل هذا الدور؟');
             fireEvent.click(screen.getByRole('button', { name: /\(Undo\)/ }));
             const status = await screen.findByRole('status');
             expect(stripIsolates(status.textContent ?? '')).toBe(
-                'تم التراجع: استُعيد ملف واحد، حُذف ملف جديد واحد. (Undone: restored 1 file, removed 1 new file.)',
+                'تم التراجع: أُعيد ملف واحد، حُذف ملف جديد واحد. (Undone: restored 1 file, removed 1 new file.)',
             );
-            expect(await screen.findByText(/· تم التراجع/)).toBeInTheDocument();
+            await waitFor(() => expect(stripIsolates(container.querySelector('.turn-changes-summary')?.textContent ?? '')).toContain('· تم التراجع'));
         } finally {
             useChatStore.setState({ locale: 'en' });
         }

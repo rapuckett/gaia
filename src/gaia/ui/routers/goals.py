@@ -24,6 +24,7 @@ from gaia.agents.base.goal_store import (
 )
 from gaia.ui.models import WireModel
 
+from ..devices.changes import record_device_change
 from ..security import audit_approval, require_pc_or_allowed_device
 
 logger = logging.getLogger(__name__)
@@ -424,6 +425,7 @@ def approve_goal(goal_id: str, http_request: Request):
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")
     audit_approval(http_request, f"goal {goal_id} approved")
+    record_device_change(http_request, "goalApproved")
     return _goal_to_dict(goal)
 
 
@@ -442,6 +444,7 @@ def reject_goal(goal_id: str, http_request: Request):
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")
     audit_approval(http_request, f"goal {goal_id} rejected")
+    record_device_change(http_request, "goalRejected")
     return _goal_to_dict(goal)
 
 

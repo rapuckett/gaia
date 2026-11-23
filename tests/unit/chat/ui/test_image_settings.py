@@ -166,7 +166,7 @@ def client(db):
     app = FastAPI()
     app.include_router(images.router)
     app.state.db = db
-    return TestClient(app, headers={"X-Gaia-UI": "1"})
+    return TestClient(app, headers={"X-Gaia-UI": "1"}, client=("127.0.0.1", 50000))
 
 
 def test_a_fresh_install_creates_images_with_sdxl_turbo_at_its_defaults(

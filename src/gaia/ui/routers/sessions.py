@@ -56,7 +56,13 @@ from ..models import (
     WireModel,
 )
 from ..run_manager import run_manager
-from ..security import allowed_device, audit_approval, flagship_only, is_local_pc
+from ..security import (
+    allowed_device,
+    audit_approval,
+    detail_for,
+    flagship_only,
+    is_local_pc,
+)
 from ..shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_opened
 from ..utils import UPLOAD_LINK_RE, message_to_response, session_to_response
 from .files import device_pick_refusal
@@ -359,7 +365,9 @@ async def create_session(
             request.folders,
         )
     except session_environment.EnvironmentChangeError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(
+            status_code=400, detail=detail_for(http_request, str(e))
+        ) from e
     session = None
     try:
         # Read before the chat exists, so a bad config leaves no chat behind.
@@ -399,7 +407,9 @@ async def create_session(
             finally:
                 session_permissions.forget_session(session["id"])
         if isinstance(e, session_environment.EnvironmentChangeError):
-            raise HTTPException(status_code=400, detail=str(e)) from e
+            raise HTTPException(
+                status_code=400, detail=detail_for(http_request, str(e))
+            ) from e
         logger.error("Failed to create session: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500,

@@ -9,7 +9,7 @@ import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { openPcFile } from '@/features/files/openPcFile';
 import { dateLocale, describeFailureWith, useT } from '@/i18n/useT';
 import { Button, Icon, Notice, Pressable, Row, Stack, Text } from '@/ui';
-import { Brain, CalendarClock, CornerDownRight, FileOutput, FileText, Image, Library } from '@/ui/icons';
+import { Brain, CalendarClock, CornerDownRight, FileOutput, FileText, Image, Library, Volume2 } from '@/ui/icons';
 import { isolate, ref, type MessageKey } from '@webui/i18n/registry';
 import type { LucideIcon } from 'lucide-react-native';
 
@@ -26,6 +26,7 @@ const KIND: Record<OutputKind, { label: MessageKey; icon: LucideIcon }> = {
     file: { label: 'out.kind.file', icon: FileText },
     export: { label: 'out.kind.export', icon: FileOutput },
     image: { label: 'out.kind.image', icon: Image },
+    audio: { label: 'out.kind.audio', icon: Volume2 },
     document: { label: 'out.kind.document', icon: Library },
     memory: { label: 'out.kind.memory', icon: Brain },
     schedule: { label: 'out.kind.schedule', icon: CalendarClock },
