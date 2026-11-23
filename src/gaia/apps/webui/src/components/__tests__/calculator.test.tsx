@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { RenderCard } from '../render/RenderCard';
 import { useChatStore } from '../../stores/chatStore';
@@ -10,6 +10,7 @@ import {
     formatValue,
     isCalculatorWire,
     loanResults,
+    currencySymbol,
     specFor,
     tipResults,
 } from '../render/calculator/calculatorDoc';
@@ -167,5 +168,27 @@ describe('CalculatorCard in Arabic', () => {
         useChatStore.setState({ locale: 'ar' });
         render(<RenderCard render="calculator" data={loan} />);
         expect(screen.getByRole('heading', { name: /حاسبة القرض/ })).toBeInTheDocument();
+    });
+});
+
+describe('currencySymbol without Intl formatToParts (Hermes)', () => {
+    const original = Intl.NumberFormat.prototype.formatToParts;
+    beforeEach(() => {
+        // @ts-expect-error simulate an engine that lacks it
+        delete Intl.NumberFormat.prototype.formatToParts;
+    });
+    afterEach(() => {
+        Intl.NumberFormat.prototype.formatToParts = original;
+    });
+
+    it.each([
+        ['en', 'USD', '$'],
+        ['en', 'EUR', '\u20ac'],
+        ['ar', 'USD', 'US$'],
+        ['ar', 'EUR', '\u20ac'],
+        ['ar-EG', 'EGP', '\u062c.\u0645.'],
+    ])('gives the %s symbol for %s', (locale, currency, symbol) => {
+        expect(new Intl.NumberFormat('en').formatToParts).toBeUndefined();
+        expect(currencySymbol({ locale, currency })).toBe(symbol);
     });
 });

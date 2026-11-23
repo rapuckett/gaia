@@ -1,0 +1,90 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+import { createCipheriv, webcrypto } from 'node:crypto';
+import { TextDecoder, TextEncoder } from 'node:util';
+
+import parity from './__fixtures__/push-vector-parity.json';
+import vector from './__fixtures__/push-vector.json';
+import { fromBase64Url, newPushKey, openPush, padPlaintext, pushAad, sealPush, toBase64Url } from './pushCrypto';
+
+// Hermes has both; the web project's jsdom doesn't.
+Object.assign(globalThis, { TextEncoder: globalThis.TextEncoder ?? TextEncoder, TextDecoder: globalThis.TextDecoder ?? TextDecoder });
+
+const subtle = webcrypto.subtle as unknown as SubtleCrypto;
+const nonce = fromBase64Url(vector.nonce);
+const payload = JSON.parse(vector.plaintext) as unknown;
+
+describe('push payload crypto', () => {
+    it('round-trips base64url for every length mod 3', () => {
+        for (let n = 0; n < 40; n++) {
+            const bytes = Uint8Array.from({ length: n }, (_, i) => (i * 37 + n) & 0xff);
+            expect(Array.from(fromBase64Url(toBase64Url(bytes)))).toEqual(Array.from(bytes));
+            expect(toBase64Url(bytes)).toBe(Buffer.from(bytes).toString('base64url'));
+        }
+        expect(() => fromBase64Url('abc=')).toThrow(/base64url/);
+    });
+
+    it('binds the handle and version 1 as the AAD', () => {
+        expect(Buffer.from(pushAad(vector.handle)).toString('hex')).toBe(vector.aad_hex);
+        expect(pushAad('h').at(-1)).toBe(1);
+    });
+
+    it('matches the committed vector, which an independent AES-GCM produces too', async () => {
+        const sealed = await sealPush(subtle, { key: vector.key, handle: vector.handle, payload, nonce });
+        expect(sealed).toEqual({ ciphertext: vector.ciphertext, nonce: vector.nonce });
+
+        const cipher = createCipheriv('aes-256-gcm', fromBase64Url(vector.key), nonce);
+        cipher.setAAD(pushAad(vector.handle));
+        const padded = Buffer.alloc(vector.padded_length, ' ');
+        padded.write(vector.plaintext, 'utf8');
+        const node = Buffer.concat([cipher.update(padded), cipher.final(), cipher.getAuthTag()]);
+        expect(node.toString('base64url')).toBe(vector.ciphertext);
+
+        await expect(openPush(subtle, { key: vector.key, handle: vector.handle, sealed })).resolves.toEqual(payload);
+    });
+
+    it("matches Parity's vector from the PC's encryptor", async () => {
+        expect(Buffer.from(pushAad(parity.handle)).toString('hex')).toBe(parity.aad_hex);
+        const sealed = { ciphertext: parity.ciphertext, nonce: parity.nonce };
+        await expect(openPush(subtle, { key: parity.key, handle: parity.handle, sealed })).resolves.toEqual(JSON.parse(parity.plaintext));
+        const cipher = createCipheriv('aes-256-gcm', fromBase64Url(parity.key), fromBase64Url(parity.nonce));
+        cipher.setAAD(pushAad(parity.handle));
+        const node = Buffer.concat([cipher.update(parity.plaintext, 'utf8'), cipher.final(), cipher.getAuthTag()]);
+        expect(node.toString('base64url')).toBe(parity.ciphertext);
+        // The PC takes exactly 22-character handles and 43-character keys, unpadded.
+        expect(parity.handle).toHaveLength(22);
+        expect(newPushKey((n) => new Uint8Array(n).fill(9))).toHaveLength(43);
+    });
+
+    it('refuses another handle, another key or a changed byte', async () => {
+        const sealed = { ciphertext: vector.ciphertext, nonce: vector.nonce };
+        await expect(openPush(subtle, { key: vector.key, handle: `${vector.handle}x`, sealed })).rejects.toThrow();
+        const otherKey = toBase64Url(new Uint8Array(32).fill(7));
+        await expect(openPush(subtle, { key: otherKey, handle: vector.handle, sealed })).rejects.toThrow();
+        const bytes = fromBase64Url(vector.ciphertext);
+        bytes[3] ^= 1;
+        await expect(openPush(subtle, { key: vector.key, handle: vector.handle, sealed: { ...sealed, ciphertext: toBase64Url(bytes) } })).rejects.toThrow();
+    });
+
+    it('pads with spaces to the smallest bucket, and a padded payload still parses', async () => {
+        expect(padPlaintext('{}')).toHaveLength(256);
+        expect(padPlaintext('x'.repeat(256))).toHaveLength(256);
+        expect(padPlaintext('x'.repeat(257))).toHaveLength(512);
+        expect(padPlaintext('é'.repeat(600))).toHaveLength(2048);
+        expect(() => padPlaintext('x'.repeat(2049))).toThrow(/drop its summary/);
+        const tail = padPlaintext('{"v":1}');
+        expect(Array.from(tail.slice(7)).every((b) => b === 0x20)).toBe(true);
+
+        // The vector's 198-byte JSON travels as 256 bytes, and seq survives as a 64-bit value.
+        expect(fromBase64Url(vector.ciphertext)).toHaveLength(256 + 16);
+        const opened = (await openPush(subtle, { key: vector.key, handle: vector.handle, sealed: { ciphertext: vector.ciphertext, nonce: vector.nonce } })) as { seq: number; ts: number };
+        expect(opened.seq).toBe(1795000000001);
+        expect(Number.isSafeInteger(opened.seq)).toBe(true);
+    });
+
+    it('makes a 32-byte key and refuses a short random source', () => {
+        expect(fromBase64Url(newPushKey((n) => new Uint8Array(n).fill(1)))).toHaveLength(32);
+        expect(() => newPushKey(() => new Uint8Array(16))).toThrow(/16 bytes/);
+    });
+});
