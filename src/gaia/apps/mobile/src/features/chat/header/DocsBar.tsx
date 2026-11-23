@@ -84,7 +84,7 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
             <Row gap="xs" wrap>
                 {onManage ? (
                     <View style={{ minHeight: 48, justifyContent: 'center' }}>
-                        <Button variant="secondary" size="sm" label={t('docsBar.manage')} onPress={onManage} testID="docs-manage" />
+                        <Button variant="secondary" label={t('docsBar.manage')} onPress={onManage} testID="docs-manage" />
                     </View>
                 ) : null}
                 {visible.map((doc) => {
