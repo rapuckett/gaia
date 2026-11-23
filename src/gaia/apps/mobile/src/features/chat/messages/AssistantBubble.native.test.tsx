@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 
 import { createFakeClient } from '@/api/fake';
@@ -66,5 +66,19 @@ describeNative('AssistantBubble read aloud button', () => {
     it('is shown when the PC offers its voice', async () => {
         await show('A spoken answer.', true);
         expect(await screen.findByLabelText(label)).toBeTruthy();
+    });
+
+    it('offers read aloud in the long-press sheet only when the PC offers its voice', async () => {
+        await show('A spoken answer.', false);
+        await waitFor(() => expect(screen.queryByLabelText(label)).toBeNull());
+        fireEvent(screen.getByText(/A spoken answer/), 'longPress');
+        expect(await screen.findByText(translator('en')('msg.copy'))).toBeTruthy();
+        expect(screen.queryByText(label)).toBeNull();
+    });
+
+    it('lists read aloud in the long-press sheet when the PC offers its voice', async () => {
+        await show('A spoken answer.', true);
+        fireEvent(screen.getByText(/A spoken answer/), 'longPress');
+        expect(await screen.findByText(label)).toBeTruthy();
     });
 });
