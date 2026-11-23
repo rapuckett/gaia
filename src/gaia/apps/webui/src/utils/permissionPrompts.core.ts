@@ -339,7 +339,7 @@ export function splitMailHeader(text: string): MailHeader | null {
 }
 
 /**
- * A relayed command prompt with no args:`command[\n…]\nin <folder>[\n(extras)]\n<risk note>`
+ * A relayed command prompt with no args: `command[\n…]\nin <folder>[\n(extras)]\n<risk note>`
  * (`render_command_summary` in sse_translation.py). The command keeps its own lines.
  */
 export function splitCommandSummary(summary: string): { command: string; folder: string; extras: string; note: string } | null {
