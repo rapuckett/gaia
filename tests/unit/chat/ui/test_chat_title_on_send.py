@@ -46,7 +46,7 @@ def test_first_message_names_the_chat_before_any_reply(client):
     sid = client.post("/api/sessions", json={"title": "New Task"}).json()["id"]
     seen = {}
 
-    async def _client_leaves(db, session, request):
+    async def _client_leaves(db, session, request, away=False):
         # Runs once the server has taken the message, before any agent work.
         seen["title"] = db.get_session(session["id"])["title"]
         return
