@@ -60,6 +60,7 @@ const CHANGE_KINDS = {
     agentInstalled: ['settings.devices.change.agentInstalled', []],
     npuMemlockFixed: ['settings.devices.change.npuMemlockFixed', []],
     folderAdded: ['settings.devices.change.folderAdded', ['folder']],
+    imageSettingsChanged: ['settings.devices.change.imageSettingsChanged', ['model']],
     skillAdded: ['settings.devices.change.skillAdded', ['name']],
     skillAddedCode: ['settings.devices.change.skillAddedCode', ['name']],
     connectorSetup: ['settings.devices.change.connectorSetup', ['connector']],

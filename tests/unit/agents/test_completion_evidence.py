@@ -519,6 +519,37 @@ def test_generated_audio_counts_as_binary_save_evidence(tool, tmp_path):
     assert not gaps(ledger, "Saved to `sound.wav`.")
 
 
+@pytest.mark.parametrize("tool", ["generate_music", "generate_sound_effect"])
+def test_the_users_copy_of_generated_audio_backs_a_saved_claim(tool, tmp_path):
+    saved = tmp_path / "game" / "theme.wav"
+    claim = f"Saved to `{saved}`."
+    ledger = CompletionEvidence("Make a menu theme", str(tmp_path))
+    cache_copy = str(tmp_path / "cache" / "music_1.wav")
+    ledger.record(tool, {}, {"audio_path": cache_copy}, True)
+    assert gaps(ledger, claim)
+
+    ledger.record(
+        tool,
+        {"save_to": str(saved)},
+        {"audio_path": cache_copy, "saved_to": str(saved)},
+        True,
+    )
+    assert not gaps(ledger, claim)
+
+
+@pytest.mark.parametrize("tool", ["generate_music", "generate_sound_effect"])
+def test_a_refused_audio_copy_does_not_back_a_saved_claim(tool, tmp_path):
+    saved = tmp_path / "game" / "theme.wav"
+    ledger = CompletionEvidence("Make a menu theme", str(tmp_path))
+    ledger.record(
+        tool,
+        {"save_to": str(saved)},
+        {"status": "error", "error": "save_to is outside the allowed folders"},
+        False,
+    )
+    assert gaps(ledger, f"Saved to `{saved}`.")
+
+
 def test_refused_mutation_does_not_invalidate_a_completed_save(ledger):
     write(ledger)
     read(ledger)
@@ -861,6 +892,40 @@ def test_create_a_project_is_not_a_file(tmp_path):
         ["notes.md"],
         True,
     )
+
+
+@pytest.mark.parametrize("ext", ["txt", "md", "csv"])
+@pytest.mark.parametrize("in_folder", [True, False])
+def test_a_file_type_is_not_a_file_name(tmp_path, ext, in_folder):
+    folder = tmp_path / "notes"
+    folder.mkdir()
+    where = f" in `{folder}`" if in_folder else ""
+    ledger = CompletionEvidence(
+        f"Write a haiku and save it as a .{ext} file{where}", str(tmp_path)
+    )
+    saved = str(folder / f"rain.{ext}")
+    write(ledger, saved)
+    read(ledger, saved)
+    assert gaps(ledger, f"Saved to `{saved}`.") == []
+
+
+def test_a_dotfile_on_its_own_is_still_a_file_name():
+    assert save_obligations("Save it to .env") == ([".env"], True)
+    assert save_obligations("Save them as .txt files")[0] == []
+
+
+@pytest.mark.parametrize(
+    "query, path",
+    [
+        ("Save it to the .env file", ".env"),
+        ("Write it to the .gitignore file", ".gitignore"),
+        ("Save it to my .bashrc file", ".bashrc"),
+        ("Save notes.txt file", "notes.txt"),
+        ("Save it as file.txt", "file.txt"),
+    ],
+)
+def test_a_named_file_is_still_required(query, path):
+    assert save_obligations(query) == ([path], True)
 
 
 @pytest.mark.parametrize(

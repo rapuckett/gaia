@@ -4,6 +4,7 @@
 /** API client for the GAIA memory dashboard endpoints. */
 
 import { getApiBase } from '../utils/apiBase';
+import { noteBackendAnswer } from '../stores/uiAuthStore';
 
 /** A memory request the server refused; `status` 403 on the profile routes means "not at the PC". */
 export class MemoryApiError extends Error {
@@ -26,6 +27,7 @@ async function memFetch<T>(method: string, path: string, body?: unknown): Promis
     const res = await fetch(url, init);
     if (!res.ok) {
         const text = await res.text().catch(() => '');
+        noteBackendAnswer(res.status, text);
         let detail = text;
         try { detail = JSON.parse(text).detail || text; } catch { /* noop */ }
         throw new MemoryApiError(detail || `Memory API error (HTTP ${res.status})`, res.status);

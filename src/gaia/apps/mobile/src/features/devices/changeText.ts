@@ -28,6 +28,7 @@ const KEYS = {
     pairingClosed: `${P}pairingClosed`,
     npuMemlockFixed: `${P}npuMemlockFixed`,
     folderAdded: `${P}folderAdded`,
+    imageSettingsChanged: `${P}imageSettingsChanged`,
 } as const satisfies Record<string, MessageKey>;
 
 const DISCORD_ACTIONS = {

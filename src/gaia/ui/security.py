@@ -1,11 +1,13 @@
 # Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 # SPDX-License-Identifier: MIT
 
-"""Cross-origin request defenses for the Agent UI backend.
+"""Request defenses for the Agent UI backend.
 
-The backend binds loopback and has no authentication while the tunnel is
-off, so any web page the user visits could drive it. Three layers close
-that off, all applied in middleware so a route added tomorrow is covered
+Every ``/api`` and ``/v1`` request must present the Agent UI API token
+(:class:`ApiTokenMiddleware`, :mod:`gaia.ui.api_token`), local callers
+included: binding loopback is not access control. Three more layers stop a
+web page the user visits from driving the backend through the user's own
+browser, all applied in middleware so a route added tomorrow is covered
 without its author remembering anything:
 
 1. **CSRF header** -- every mutating (non-GET/HEAD/OPTIONS) request to
@@ -40,7 +42,11 @@ from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request
 from starlette.datastructures import Headers
+from starlette.requests import cookie_parser
 from starlette.types import ASGIApp, Receive, Scope, Send
+
+from gaia.ui import api_token
+from gaia.ui.devices import DEVICE_TOKEN_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +78,12 @@ SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 #: ``gaia.connectors.flow``, not by this app. An entry here is a hole, so
 #: ``tests/unit/chat/ui/test_ui_request_guard.py`` asserts it stays empty.
 CSRF_EXEMPT_PATHS: frozenset = frozenset()
+
+#: Paths that need no token: a liveness probe that returns no user data.
+TOKEN_EXEMPT_PATHS: frozenset = frozenset({"/api/health"})
+
+#: Cookie a phone carries after opening the mobile-access QR link.
+TUNNEL_COOKIE_NAME = "gaia_tunnel_token"
 
 #: Hostnames that always denote this machine.
 _LOOPBACK_NAMES = frozenset({"localhost", "::1"})
@@ -521,3 +533,138 @@ class UIRequestGuardMiddleware:
                 return
 
         await self.app(scope, receive, send)
+
+
+class ApiTokenMiddleware:
+    """Require the Agent UI API token on every ``/api`` and ``/v1`` request.
+
+    Accepted from ``Authorization: Bearer`` or the ``gaia_ui_token`` cookie.
+    While mobile access is on, a request that came through the tunnel may
+    present the tunnel's own token instead, so a paired phone works without
+    the install's token; :func:`require_local_pc` still refuses such requests.
+    ``OPTIONS`` passes so CORS can answer preflights, which carry no
+    credentials.
+
+    The device listener's requests are left to its own device auth, and one
+    that skipped it is refused on any path. A paired device's token is refused
+    off that listener. A server bound beyond loopback serves other computers
+    only through mobile access: the install's token admits no network peer.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        method = scope.get("method", "")
+        request = Request(scope)
+        # Whatever the path: the web UI, the docs and the ?token= bootstrap too.
+        if on_device_listener(request):
+            if scope.get(DEVICE_AUTH_SCOPE_KEY) is not True:
+                logger.error(
+                    "Device listener served %s %s without device auth; refused",
+                    method,
+                    path,
+                )
+                await _send_rejection(send, 401, "This request skipped device auth.")
+                return
+            await self.app(scope, receive, send)
+            return
+        if not path.startswith(GUARDED_PREFIXES):
+            await self.app(scope, receive, send)
+            return
+        headers = Headers(scope=scope)
+        presented = api_token.bearer(headers.get("authorization", ""))
+        if presented and presented.startswith(DEVICE_TOKEN_PREFIX):
+            logger.warning(
+                "Refused %s %s: a paired device's token over plain http",
+                method,
+                path,
+            )
+            await _send_rejection(
+                send,
+                401,
+                "A paired device's token works only on GAIA's TLS listener for "
+                "devices, never over plain http.",
+            )
+            return
+        if path in TOKEN_EXEMPT_PATHS or method == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
+
+        app = scope.get("app")
+        expected = getattr(getattr(app, "state", None), "ui_api_token", None)
+        if not expected:
+            raise RuntimeError(
+                "ApiTokenMiddleware is installed but app.state.ui_api_token is "
+                "unset; build the app with gaia.ui.server.create_app()."
+            )
+        cookies = cookie_parser(headers.get("cookie", ""))
+        tunnel = getattr(app.state, "tunnel", None)
+        tunnel_active = tunnel is not None and tunnel.active
+        network_peer = reached_over_network(request)
+        if network_peer and not tunnel_active:
+            client = scope.get("client")
+            logger.warning(
+                "Network auth: rejecting %s %s from %s (mobile access is off)",
+                method,
+                path,
+                client[0] if client else "unknown",
+            )
+            await _send_rejection(
+                send,
+                401,
+                "This GAIA server answers other computers only through mobile "
+                "access. Start mobile access on the PC running GAIA and use its "
+                "link, or open GAIA on the PC.",
+            )
+            return
+        if not network_peer and (
+            api_token.token_matches(expected, presented)
+            or api_token.token_matches(expected, cookies.get(api_token.COOKIE_NAME))
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        forwarded = any(h in headers for h in _FORWARDED_HEADERS)
+        if tunnel_active and (forwarded or network_peer):
+            tunnel_token = presented or cookies.get(TUNNEL_COOKIE_NAME)
+            if tunnel_token and tunnel.validate_token(tunnel_token):
+                tunnel.note_device(headers.get("user-agent", ""))
+                await self.app(scope, receive, send)
+                return
+
+        client = scope.get("client")
+        logger.warning(
+            "Rejecting %s %s from %s: no valid Agent UI API token",
+            method,
+            path,
+            client[0] if client else "unknown",
+        )
+        body = json.dumps(
+            {
+                "detail": (
+                    "This request has no valid GAIA Agent UI token. Open the "
+                    "Agent UI from the GAIA desktop app, or from the sign-in "
+                    "link printed when it started. Scripts send 'Authorization: "
+                    f"Bearer <token>' with the token in the "
+                    f"{api_token.TOKEN_FILE_NAME} file in GAIA's home folder."
+                ),
+                "code": api_token.REJECTION_CODE,
+            }
+        ).encode()
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode()),
+                    (b"www-authenticate", b"Bearer"),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})

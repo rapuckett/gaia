@@ -147,10 +147,9 @@ router = APIRouter(prefix="/api/connectors", tags=["connectors"])
 # Issue #1292 — forwarded pre-authenticated connections. Separate prefix
 # (``/v1/connections``) per the issue's REST contract: a host app that already
 # authenticated a user POSTs the forwarded grant here; GAIA persists it and
-# acts on the mailbox as the host app's client — no second OAuth. The UI
-# server binds localhost by default and gates remote/tunnel access behind a
-# token (see ``TunnelAuthMiddleware``); mutating routes also require the
-# ``X-Gaia-UI`` CSRF header below.
+# acts on the mailbox as the host app's client — no second OAuth. Every caller
+# presents the Agent UI API token (see ``ApiTokenMiddleware``); mutating routes
+# also require the ``X-Gaia-UI`` CSRF header below.
 forwarded_router = APIRouter(prefix="/v1/connections", tags=["connections"])
 
 
@@ -1109,13 +1108,14 @@ def debug_state() -> Dict[str, Any]:
 
     from gaia.connectors.providers import _registry as provider_registry
 
+    # Resolved now, like every grant write; the import-time constant goes stale.
+    grants_file = _grants_path()
     grants_writable = False
     try:
-        grants_dir = _grants_path().parent
-        grants_dir.mkdir(parents=True, exist_ok=True)
-        grants_writable = os.access(str(grants_dir), os.W_OK)
-    except OSError:
-        pass
+        grants_file.parent.mkdir(parents=True, exist_ok=True)
+        grants_writable = os.access(str(grants_file.parent), os.W_OK)
+    except OSError as e:
+        logger.warning("Grants folder %s is not usable: %s", grants_file.parent, e)
 
     # Derive configured ids live by walking the catalog and asking the
     # source-of-truth store for each type.
@@ -1129,7 +1129,7 @@ def debug_state() -> Dict[str, Any]:
         "provider_registered": "google" in provider_registry,
         "env_var_present": bool(os.environ.get("GAIA_GOOGLE_CLIENT_ID")),
         "keyring_backend_class": type(keyring.get_keyring()).__name__,
-        "grants_path": str(_grants_path()),
+        "grants_path": str(grants_file),
         "grants_path_writable": grants_writable,
         "in_flight_flow_count": len(_flow_pending),
         "catalog_size": len(REGISTRY.all()),

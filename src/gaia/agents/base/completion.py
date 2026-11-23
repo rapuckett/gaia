@@ -41,9 +41,12 @@ SIDE_EFFECT_PATHS = {
     "export_transcript": ("export_path", "output_path"),
     "take_screenshot": ("file_path", "output_path", "path"),
     "text_to_speech": ("file_path", "output_path", "audio_path"),
+    # Not script_path: the tool wrote the script from the document, and
+    # checking its figures against what the agent read would find no source.
+    "dictate_document": ("audio_path", "file_path"),
     "generate_image": ("file_path", "output_path", "image_path"),
-    "generate_music": ("audio_path",),
-    "generate_sound_effect": ("audio_path",),
+    "generate_music": ("audio_path", "saved_to"),
+    "generate_sound_effect": ("audio_path", "saved_to"),
 }
 _EXEC_TOOLS = frozenset({"run_python", "execute_python_file", "run_shell_command"})
 #: Tools that replace a stretch of text the call itself gives, old and new.
@@ -206,6 +209,12 @@ _MODIFIER = re.compile(
     r"(?:the|a|an|all|every|each|on|of|in|to|with|from|my|your|our|this|these)\b)"
     r"[a-z][a-z-]*\b"
 )
+# A bare extension before "file(s)" names a format ("a .txt file"); alone it
+# can still be a dotfile to write ("save it to .env").
+_EXTENSION_ONLY = re.compile(r"\.[A-Za-z0-9]+")
+_FILE_NOUN = re.compile(r"\s+files?\b", re.I)
+# ...unless a definite word picks out one file ("the .env file").
+_DEFINITE = re.compile(r"\b(?:the|my|your|our|this|that)\s+$", re.I)
 _NEGATED_TARGET = re.compile(r"\b(?:not|instead of|rather than)\s*$", re.I)
 _NOT_REQUEST = re.compile(
     r"\b(?:do not|don't|never|without|how (?:do|can|would)|explain how|"
@@ -434,8 +443,10 @@ def _scan_paths(text: str, immediate: bool, modifiers: bool = False) -> list[str
     A bare name followed by a plain word modifies that word ("a Node.js app");
     that is checked unless a destination preposition already anchored *text*.
     """
+    lead = ""
     if immediate:
-        text = text[_LEAD.match(text).end() :]
+        end = _LEAD.match(text).end()
+        lead, text = text[:end], text[end:]
     paths = []
     for match in _TARGET.finditer(text):
         path = _path_token(match)
@@ -446,6 +457,13 @@ def _scan_paths(text: str, immediate: bool, modifiers: bool = False) -> list[str
             and _MODIFIER.match(text[match.end() :])
         ):
             path = None  # "a Three.js scene": the name describes another noun
+        if (
+            path is not None
+            and _EXTENSION_ONLY.fullmatch(path)
+            and _FILE_NOUN.match(text[match.end() :])
+            and not _DEFINITE.search(lead + text[: match.start()])
+        ):
+            path = None  # "as a .txt file": a file type, not a file name
         if path is not None:
             paths.append(path)
         elif immediate and not paths:

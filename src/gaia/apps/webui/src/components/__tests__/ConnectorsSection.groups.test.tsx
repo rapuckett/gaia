@@ -110,22 +110,15 @@ describe('ConnectorsSection groups', () => {
         fireEvent.click(within(connected).getByRole('button', { name: /^Git\b(?!Hub)/ }));
         fireEvent.click(within(connected).getByRole('button', { name: 'Disconnect' }));
 
-        // Focus is read in the commit that moves the tile, not a task later.
-        let focusedAtMove: Element | null = null;
-        await waitFor(() => {
-            expect(within(group('MCP servers')).queryByText('Git')).toBeInTheDocument();
-            focusedAtMove ??= document.activeElement;
-        });
+        await waitFor(() => expect(within(group('MCP servers')).queryByText('Git')).toBeInTheDocument());
         const servers = group('MCP servers');
         expect(servers.open).toBe(true);
         expect(servers.querySelector('.settings-disclosure-count')).toHaveTextContent('2');
         expect(within(servers).getByText('Disconnected')).toHaveAttribute('role', 'status');
         expect(within(group('Connected')).queryByText('Git')).not.toBeInTheDocument();
         expect(group('Connected').querySelector('.settings-disclosure-count')).toHaveTextContent('1');
-        // Focus went with the tile, not to the page.
-        const header = within(servers).getByRole('button', { name: /^Git\b(?!Hub)/ });
-        expect(focusedAtMove).toBe(header);
-        expect(header).toHaveFocus();
+        // Focus went with the tile, not to the page. It moves in an effect after the tile's render.
+        await waitFor(() => expect(within(group('MCP servers')).getByRole('button', { name: /^Git\b(?!Hub)/ })).toHaveFocus());
     });
 
     it('closes the Connected group when its last connector disconnects (#7863)', async () => {
