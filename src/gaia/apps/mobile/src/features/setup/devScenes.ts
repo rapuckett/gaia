@@ -61,7 +61,7 @@ const PLAN: SetupPlan = {
     lemonade: { mode: 'gaia', url: 'http://127.0.0.1:13305/api/v1', reachable: true },
     chat_model: { id: GEMMA_ID, user_set: false, size_gb: 5.97, downloaded: false },
     recommended_model: GEMMA_ID, decided_after_server: false, memory_gb: 16, memory_source: 'AMD iGPU',
-    capacity_gb: 16, disk: { path: 'C:\\Users\\you\\.cache\\huggingface\\hub', free_gb: 25.3, source: 'lemonade' },
+    capacity_gb: 16, left_for_apps_gb: 7.8, disk: { path: 'C:\\Users\\you\\.cache\\huggingface\\hub', free_gb: 25.3, source: 'lemonade' },
     download_gb: 6.3, disk_warning: null, skipped_models: [], options: [], models: [], catalog: CATALOG,
     components: COMPONENTS,
     backends: [
@@ -80,6 +80,12 @@ const PLAN: SetupPlan = {
     },
 };
 
+const QWEN_TIGHT = entry({ ...QWEN, fits: true, tight: true, recommended: true, planned: true, selected: true, need_gb: 27.1, capacity_gb: 32 });
+const PLAN_TIGHT: SetupPlan = {
+    ...PLAN, chat_model: { id: QWEN_ID, user_set: false, size_gb: 23.3, downloaded: false }, recommended_model: QWEN_ID,
+    memory_gb: 32, capacity_gb: 32, left_for_apps_gb: 4.9, download_gb: 23.6,
+    catalog: [{ ...GEMMA, recommended: false, planned: false, selected: false }, EMBED, QWEN_TIGHT, NPU, MINE, FLM, SPEECH, VOICE, IMAGES],
+};
 const PLAN_COLD: SetupPlan = { ...PLAN, lemonade: { mode: 'gaia', url: null, reachable: false }, decided_after_server: true, catalog: [] };
 const PLAN_PRESENT: SetupPlan = { ...PLAN, download_gb: 0, catalog: CATALOG.map((e) => (e.planned ? { ...e, downloaded: true, size_gb: 0 } : e)) };
 const PLAN_SHORT: SetupPlan = { ...PLAN, disk: { ...PLAN.disk, path: PLAN.disk?.path ?? null, source: 'lemonade', free_gb: 2.1 } };
@@ -358,10 +364,12 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'models/long': scene('models', { setupPlan: PLAN_LONG }),
     'models/npu-not-ready': scene('models', { setupPlan: PLAN_NPU_NOT_READY }),
     'models/npu-unusable': scene('models', { setupPlan: PLAN_NPU_UNUSABLE }),
+    'models/tight': scene('models', { setupPlan: PLAN_TIGHT }),
     'models/untested-no-vision': scene('models', { setupPlan: PLAN_NO_VISION }),
     'plan/default': scene('plan'),
     'plan/disk-short': scene('plan', { setupPlan: PLAN_SHORT }),
     'plan/local-only': scene('plan', { providers: providers(true) }),
+    'plan/tight': scene('plan', { setupPlan: PLAN_TIGHT }),
     'plan/long': scene('plan', { setupPlan: PLAN_LONG }),
     'ready/cards': scene('ready', { setupStatus: RUN_READY, setupPlan: PLAN_DONE, start: START_CARDS }),
     'ready/default': scene('ready', { setupStatus: RUN_READY, setupPlan: PLAN_DONE }),
