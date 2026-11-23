@@ -8,6 +8,7 @@ import { calendarFacts, calendarWhen } from '../utils/calendarApproval.core';
 export {
     CALENDAR_WRITE_TOOLS,
     markStrayDirection,
+    noticeText,
     unseen,
     unseenCommand,
     unseenStrict,

@@ -31,7 +31,7 @@ import { useDeviceStore } from '../stores/deviceStore';
 import { useChatStore } from '../stores/chatStore';
 import { log } from '../utils/logger';
 import './NotificationCenter.css';
-import { visibleStrict, visibleText } from './CalendarApproval';
+import { noticeText, visibleStrict } from './CalendarApproval';
 
 interface NotificationCenterProps {
   onClose: () => void;
@@ -70,14 +70,6 @@ const NOTIFICATION_META: Record<
     colorClass: 'notif-type-error',
   },
 };
-
-/** Bidi isolates the translator wraps around each half and param; they cannot reverse a name. */
-const TRANSLATION_ISOLATE = /([⁦-⁩])/;
-
-/** A notification line marked like the approval card, its translation isolates kept. */
-function noticeText(text: string): string {
-  return text.split(TRANSLATION_ISOLATE).map((part, i) => (i % 2 ? part : visibleText(part, true))).join('');
-}
 
 // ── Time formatting ──────────────────────────────────────────────────────
 
