@@ -10,7 +10,7 @@ struct PushPayload {
   let chatTitle: String?
   let summary: String?
   let label: String?
-  /// The tool id an approval is for, when the PC sends it; only `[a-z0-9_]` ids are kept, for the open-only list.
+  /// The tool id an approval is for; only `[a-z0-9_]` ids are kept, to look up the phone's own label and the open-only list.
   let tool: String?
   let ask: String?
   /// How a `finished` run ended when it wasn't done: `stopped` or `ended`; any other value counts as absent.
@@ -18,6 +18,10 @@ struct PushPayload {
   let route: String
   let sessionId: String?
   let approvalId: String?
+  /// Seconds until the PC stops waiting for this approval's answer; without it the notification offers no actions.
+  let ttlS: Int64?
+  /// A badge push's approvals answered or expired elsewhere, whose notifications go.
+  let resolved: [String]
   let badge: Int?
   /// The PC's counter for this phone, only ever increasing; about 1.8e12, so 64-bit.
   let seq: Int64
@@ -51,6 +55,8 @@ struct PushPayload {
     outcome = text(params["outcome"]).flatMap { $0 == "stopped" || $0 == "ended" ? $0 : nil }
     sessionId = text(root["session_id"])
     approvalId = text(root["approval_id"])
+    ttlS = PushPayload.whole(params["ttl_s"]).flatMap { (1...86_400).contains($0) ? $0 : nil }
+    resolved = ((params["resolved"] as? [Any]) ?? []).prefix(64).compactMap { $0 as? String }.filter(PushActions.isId)
     route = PushPayload.safeRoute(root["route"] as? String, sessionId: sessionId)
     if let n = root["badge"] as? Int, (0...9999).contains(n) { badge = n } else { badge = nil }
   }
@@ -103,35 +109,35 @@ struct PushPayload {
   var threadId: String { sessionId.map { "chat:\($0)" } ?? "gaia" }
 }
 
-/// The title and body a notification shows for a payload, in one language; nil for a badge-only payload.
-/// `say` gives a catalog key's text.
+/// The title and body a notification shows for a payload, in one language; nil for a badge-only payload. No alert shows
+/// the PC's own words for a tool, a question or a run (they can quote paths or mail): only the chat's title.
+/// `say` gives a catalog key's text; `find` gives it only when the strings have that key.
 enum PushText {
   /// First-strong isolate: server text keeps its own direction inside either language's sentence.
   static func isolate(_ text: String) -> String { "\u{2068}\(text)\u{2069}" }
 
-  static func compose(_ p: PushPayload, _ say: (String) -> String) -> (title: String, body: String)? {
+  static func compose(_ p: PushPayload, _ say: (String) -> String, _ find: (String) -> String?) -> (title: String, body: String)? {
     let title: String
     let tap: String
-    // The detail line: the PC's words as sent (isolated).
+    // The detail line, under "In <chat>.": only the phone's own label for an approval's tool.
     let detail: String?
     switch p.kind {
     case "approval" where p.ask == "question":
       title = say("chatAlert.question")
       tap = "answer"
-      detail = p.summary.map(isolate)
+      detail = nil
     case "approval":
-      // Only "GAIA needs your approval in <chat>": Approve can be pressed from the lock screen, which shows no tool detail.
       title = say("chatAlert.needsApproval")
       tap = "approve"
-      detail = nil
+      detail = p.tool.flatMap { find("tool.\($0).active") }
     case "finished":
       title = say(p.outcome.map { "chatAlert.\($0)" } ?? "chatAlert.finished")
       tap = "read"
-      detail = p.summary.map(isolate)
+      detail = nil
     case "failed":
       title = say("chatAlert.failed")
       tap = "problem"
-      detail = p.summary.map(isolate)
+      detail = nil
     case "needs_you":
       title = say("mobileApp.push.title.needsYou")
       tap = "needsYou"

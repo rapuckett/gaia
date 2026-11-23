@@ -29,6 +29,7 @@ enum PushKeychain {
   private static let seqService = "ai.amd.gaia.push.seq"
   private static let secretService = "ai.amd.gaia.push.secret"
   private static let settingsService = "ai.amd.gaia.push.settings"
+  private static let actionService = "ai.amd.gaia.push.action"
   private static let languageAccount = "language"
   private static let groupPlistKey = "GAIAPushKeychainGroup"
 
@@ -38,7 +39,7 @@ enum PushKeychain {
     return value
   }
 
-  // Only the app writes keys and credentials; the extension and the silent-push handler write only seq items.
+  // Only the app writes keys and credentials; the extension and the silent-push handler write only seq and action items.
 
   /// A new key starts with no seq item, so it accepts any first `seq`.
   static func saveKey(_ pcId: String, _ key: Key) throws {
@@ -106,7 +107,7 @@ enum PushKeychain {
   }
 
   static func deleteAll() throws {
-    for service in [keyService, seqService] {
+    for service in [keyService, seqService, actionService] {
       var query = try base(service)
       query.removeValue(forKey: kSecAttrAccount as String)
       try remove(query)
@@ -123,6 +124,32 @@ enum PushKeychain {
   static func language() -> String? {
     guard let query = try? shared(settingsService, languageAccount), let data = try? get(query) else { return nil }
     return String(data: data, encoding: .utf8)
+  }
+
+  /// The notification actions' records, in the shared group: the extension adds them, the app claims them.
+  struct ActionStorage: PushActionStorage {
+    func add(_ token: String, _ data: Data) throws {
+      let status = SecItemAdd(PushKeychain.item(try PushKeychain.shared(PushKeychain.actionService, token), data) as CFDictionary, nil)
+      guard status == errSecSuccess else { throw PushKeychainError.status("save", status) }
+    }
+
+    func take(_ token: String) throws -> Data? {
+      let query = try PushKeychain.shared(PushKeychain.actionService, token)
+      guard let data = try PushKeychain.get(query) else { return nil }
+      // Whoever deletes it claims it: a second claim, in this process or another, finds nothing to delete.
+      let status = SecItemDelete(query as CFDictionary)
+      if status == errSecItemNotFound { return nil }
+      guard status == errSecSuccess else { throw PushKeychainError.status("delete", status) }
+      return data
+    }
+
+    func all() throws -> [(token: String, data: Data)] {
+      try PushKeychain.all(try PushKeychain.base(PushKeychain.actionService)).map { ($0.account, $0.data) }
+    }
+
+    func remove(_ token: String) throws {
+      try PushKeychain.remove(try PushKeychain.shared(PushKeychain.actionService, token))
+    }
   }
 
   /// One seq item per PC and key: the PC id and the first 8 bytes of SHA-256 of the key, in hex.

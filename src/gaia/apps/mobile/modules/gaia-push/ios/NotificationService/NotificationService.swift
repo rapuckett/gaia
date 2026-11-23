@@ -16,7 +16,7 @@ final class NotificationService: UNNotificationServiceExtension {
   override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
     deliver = contentHandler
     let strings = Strings(language: PushKeychain.language())
-    contentHandler(rewrite(request.content.userInfo, strings) ?? Self.generic(strings))
+    contentHandler(rewrite(request, strings) ?? Self.generic(strings))
     deliver = nil
   }
 
@@ -34,7 +34,8 @@ final class NotificationService: UNNotificationServiceExtension {
     return content
   }
 
-  private func rewrite(_ info: [AnyHashable: Any], _ strings: Strings) -> UNNotificationContent? {
+  private func rewrite(_ request: UNNotificationRequest, _ strings: Strings) -> UNNotificationContent? {
+    let info = request.content.userInfo
     guard let sealed = info["c"] as? String, let nonce = info["n"] as? String else {
       Self.log.error("A push arrived without its sealed payload; showing the generic alert.")
       return nil
@@ -48,7 +49,7 @@ final class NotificationService: UNNotificationServiceExtension {
       Self.log.error("Couldn't open a push (\(String(describing: error), privacy: .public)); showing the generic alert.")
       return nil
     }
-    guard let text = PushText.compose(payload, strings.say) else { return nil }
+    guard let text = PushText.compose(payload, strings.say, strings.find) else { return nil }
     let content = UNMutableNotificationContent()
     content.title = text.title
     content.body = text.body
@@ -57,10 +58,18 @@ final class NotificationService: UNNotificationServiceExtension {
     content.threadIdentifier = payload.threadId
     var data: [String: Any] = ["route": payload.route]
     let openOnly = PushActions.openOnlyTools()
-    if openOnly == nil, payload.kind == "approval" { Self.log.error("This build has no open-only tool list, so approvals get no Approve or Deny.") }
+    if openOnly == nil, payload.kind == "approval" { Self.log.error("This build has no open-only tool list, so approvals get no Review or Deny.") }
     if PushActions.offered(payload, openOnly: openOnly) {
-      content.categoryIdentifier = PushActions.category
-      data["approval"] = PushActions.approvalData(payload, pcId: pcId, receivedAt: Date())
+      // The ids stay in the shared Keychain; the notification carries only the token, so its buttons answer this push alone.
+      let store = PushKeychain.ActionStorage()
+      do {
+        try PushActionRecords.sweep(now: Date(), in: store)
+        let record = PushActionRecord(payload, pcId: pcId, receivedAt: Date(), notificationId: request.identifier)
+        data[PushActions.tokenKey] = try PushActionRecords.save(record, in: store)
+        content.categoryIdentifier = PushActions.category
+      } catch {
+        Self.log.error("Couldn't store an approval's actions (\(String(describing: type(of: error)), privacy: .public)); it offers only Open.")
+      }
     }
     // expo-notifications reads a remote notification's data from "body".
     content.userInfo = ["body": data]
@@ -82,5 +91,12 @@ private struct Strings {
 
   func say(_ key: String) -> String {
     bundle.localizedString(forKey: key, value: nil, table: nil)
+  }
+
+  /// The key's text, or nil when the strings don't have it (a tool newer than this build).
+  func find(_ key: String) -> String? {
+    let missing = "\u{0}"
+    let text = bundle.localizedString(forKey: key, value: missing, table: nil)
+    return text == missing ? nil : text
   }
 }

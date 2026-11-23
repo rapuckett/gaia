@@ -49,10 +49,19 @@ public class GaiaPushModule: Module {
     }
 
     // The approval category, titled in the app's language; other categories (none today) are kept.
-    AsyncFunction("setApprovalActions") { (approveTitle: String, denyTitle: String) async in
+    AsyncFunction("setApprovalActions") { (reviewTitle: String, denyTitle: String) async in
       let center = UNUserNotificationCenter.current()
       let others = await center.notificationCategories().filter { $0.identifier != PushActions.category }
-      center.setNotificationCategories(others.union([PushActions.approvalCategory(approveTitle: approveTitle, denyTitle: denyTitle)]))
+      center.setNotificationCategories(others.union([PushActions.approvalCategory(reviewTitle: reviewTitle, denyTitle: denyTitle)]))
+    }
+
+    // What a pressed action answers, once: the record is deleted as it is read, and its notification removed.
+    AsyncFunction("claimApproval") { (token: String) throws -> [String: Any]? in
+      try guarded("read") {
+        guard let record = try PushActionRecords.claim(token, in: PushKeychain.ActionStorage()) else { return nil }
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [record.notificationId])
+        return record.dictionary
+      }
     }
   }
 }

@@ -5,7 +5,8 @@ import ExpoModulesCore
 import UserNotifications
 import os
 
-/// A silent push (a badge resync) wakes the app instead of the extension: open it here and set the badge.
+/// A silent push (a badge resync) wakes the app instead of the extension: open it here, set the badge, and remove the
+/// notifications of approvals answered or expired elsewhere, with their stored actions.
 public class GaiaPushAppDelegate: ExpoAppDelegateSubscriber {
   private static let log = Logger(subsystem: "ai.amd.gaia.push", category: "silent")
 
@@ -18,20 +19,27 @@ public class GaiaPushAppDelegate: ExpoAppDelegateSubscriber {
       completionHandler(.noData)
       return
     }
-    let badge: Int
+    let payload: PushPayload
     do {
-      let payload = try PushCrypto.openFresh(ciphertext: sealed, nonce: nonce).payload
-      guard let count = payload.badge else {
-        completionHandler(.noData)
-        return
-      }
-      badge = count
+      payload = try PushCrypto.openFresh(ciphertext: sealed, nonce: nonce).payload
     } catch {
       Self.log.error("Couldn't open a silent push (\(String(describing: type(of: error)), privacy: .public)).")
       completionHandler(.failed)
       return
     }
-    UNUserNotificationCenter.current().setBadgeCount(badge) { error in
+    let center = UNUserNotificationCenter.current()
+    if !payload.resolved.isEmpty {
+      do {
+        center.removeDeliveredNotifications(withIdentifiers: try PushActionRecords.resolve(payload.resolved, in: PushKeychain.ActionStorage()))
+      } catch {
+        Self.log.error("Couldn't remove answered approvals' actions (\(String(describing: type(of: error)), privacy: .public)).")
+      }
+    }
+    guard let badge = payload.badge else {
+      completionHandler(payload.resolved.isEmpty ? .noData : .newData)
+      return
+    }
+    center.setBadgeCount(badge) { error in
       if let error { Self.log.error("Couldn't set the badge: \(error.localizedDescription, privacy: .public)") }
       completionHandler(error == nil ? .newData : .failed)
     }
