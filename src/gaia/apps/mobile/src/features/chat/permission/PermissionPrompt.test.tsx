@@ -25,7 +25,7 @@ jest.mock('react-native-reanimated', () => {
     };
 });
 jest.mock('@/ui', () => {
-    const { Text: RNText } = jest.requireActual('react-native');
+    const { Text: RNText, View: RNView } = jest.requireActual('react-native');
     const Pass = ({ children }: { children?: unknown }) => children ?? null;
     return {
         Button: (p: { label: string; onPress: () => void }) => {
@@ -38,7 +38,7 @@ jest.mock('@/ui', () => {
         Notice: ({ message, testID }: { message: string; testID?: string }) => <RNText testID={testID}>{message}</RNText>,
         Pressable: Pass,
         Row: Pass,
-        ScrollBox: Pass,
+        ScrollBox: ({ children, testID }: { children?: unknown; testID?: string }) => <RNView testID={testID}>{children}</RNView>,
         Stack: Pass,
         Surface: Pass,
         Text: RNText,
@@ -73,7 +73,21 @@ async function mount(p: GaiaNotification, onAnswer = jest.fn(), onExpired = jest
     await act(async () => {
         r.render(<PermissionPrompt prompt={p} onAnswer={onAnswer} onExpired={onExpired} />);
     });
-    return { onAnswer, onExpired, shown: () => JSON.stringify(r.container.toJSON()) };
+    const scrolled = () => {
+        const find = (node: unknown): unknown => {
+            if (!node || typeof node !== 'object') return null;
+            const n = node as { props?: { testID?: string }; children?: unknown[] };
+            if (n.props?.testID === 'perm-details-scroll') return n;
+            for (const c of Array.isArray(n.children) ? n.children : []) {
+                const hit = find(c);
+                if (hit) return hit;
+            }
+            return null;
+        };
+        const root = r.container.toJSON();
+        return JSON.stringify(find(Array.isArray(root) ? { children: root } : root));
+    };
+    return { onAnswer, onExpired, shown: () => JSON.stringify(r.container.toJSON()), scrolled };
 }
 
 beforeEach(() => jest.useFakeTimers());
@@ -165,6 +179,12 @@ describe('PermissionPrompt shows what will really run', () => {
         expect(shown()).toContain('perm-hidden-note');
     });
 
+    it('pins the hidden-characters note outside the scrolling body', async () => {
+        const { shown, scrolled } = await mount(prompt({ toolArgs: { file_path: '/home/u/inv\u200doice.txt', content: 'x' } }));
+        expect(shown()).toContain('perm-hidden-note');
+        expect(scrolled()).not.toContain('perm-hidden-note');
+    });
+
     it('keeps an emoji and its variation selector in a search query, which reads as prose', async () => {
         const { shown } = await mount(prompt({ tool: 'web_search', toolLabel: undefined, alwaysScope: undefined, toolArgs: { query: 'I ❤\ufe0f cats' } }));
         expect(shown()).toContain('I ❤\ufe0f cats');
@@ -228,6 +248,14 @@ describe('PermissionPrompt shows what code and commands really do', () => {
         expect(shown()).toContain('\u{1F468}\u200d\u{1F469}\u200d\u{1F467} ❤\ufe0f');
         expect(shown()).toContain('perm-code-risk');
         expect(shown()).not.toContain('perm-hidden-note');
+    });
+
+    it('pins the code-risk note outside the scrolling body of a long code card', async () => {
+        const code = Array.from({ length: 30 }, (_, i) => `print(${i})`).join('\n');
+        const { shown, scrolled } = await mount(prompt({ tool: 'run_python', toolLabel: undefined, alwaysScope: undefined, toolArgs: { code } }));
+        expect(scrolled()).toContain('perm-details-body');
+        expect(shown()).toContain('perm-code-risk');
+        expect(scrolled()).not.toContain('perm-code-risk');
     });
 
     it("shows a mail's header fields apart from its body", async () => {
