@@ -57,6 +57,8 @@ export interface SettingsScene {
     confirmFullAccess?: boolean;
     /** Opens Automations already asking to remove the automation with this id. */
     confirmRemove?: string;
+    /** Opens the Agent choice with "Compare the two" already open. */
+    agentCompareOpen?: boolean;
     /** Opens Skills with the Add skills sheet already up. */
     skillsAdd?: boolean | SkillsAddSeed;
     /** Covers the screen as an English to Arabic pick would, with this platform's buttons, whatever the device is. */
@@ -620,6 +622,11 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
         section: 'model', gpuMemory: GPU,
         data: { agentPrograms: { ...AGENT_PROGRAMS, download: AGENT_DOWNLOADING }, agentDownloads: [{ ...AGENT_DOWNLOADING, state: 'failed', error: 'gaiacpp-0.4.1-macos-arm64.tar.gz: checksum does not match the release manifest' }] },
     },
+    'model-agent-interrupted': {
+        section: 'model', gpuMemory: GPU,
+        data: { agentPrograms: { ...AGENT_PROGRAMS, download: AGENT_DOWNLOADING }, agentDownloads: [{ state: 'idle', bytes_done: 0, bytes_total: null, error: null }] },
+    },
+    'model-agent-compare': { section: 'model', gpuMemory: GPU, agentCompareOpen: true },
     'model-agent-blocked': { section: 'model', gpuMemory: GPU, data: { agentPrograms: agentListing('gaiapy', { can_download: false, size_bytes: null, unavailable_reason: "GAIA couldn't reach the download server.", unavailable_code: 'unreachable' }) } },
     'model-agent-unknown': { section: 'model', gpuMemory: GPU, data: { agentPrograms: { ...AGENT_PROGRAMS, current: 'gaiacode' } } },
     'model-agent-pc-only': { section: 'model', gpuMemory: GPU, data: { agentPrograms: new GaiaApiError(403, PC_ONLY_REFUSAL) } },

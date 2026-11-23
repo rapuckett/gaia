@@ -21,6 +21,7 @@ import { SessionPanel } from './SessionPanel';
 /** Developer gallery: the session panel open over a chat, with Skills and Agent info in each state. */
 export type SessionPanelGalleryState =
     | 'loaded'
+    | 'runsOnCpp'
     | 'empty'
     | 'error'
     | 'notRunning'
@@ -374,11 +375,12 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
                 : undefined,
             chatPerformance: state === 'ctxNoTurn' ? { ...PERFORMANCE, latest_message_id: null, turns: [] } : ctx ? PERFORMANCE : undefined,
             capabilities:
-                state === 'loaded'
+                state === 'loaded' || state === 'runsOnCpp'
                     ? {
                           dev: {
                               session_id: 'dev',
                               agent_type: 'gaia',
+                              ...(state === 'runsOnCpp' ? { program: 'gaiacpp' as const } : {}),
                               tools: TOOLS,
                               skills: [
                                   { name: 'coding', how: 'model' },

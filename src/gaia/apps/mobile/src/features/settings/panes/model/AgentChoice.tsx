@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
     AGENT_OPTIONS, agentInstalled, agentNeedsDownload, agentOff, type AgentOption, type AgentPick,
@@ -17,6 +17,9 @@ import { Download } from '@/ui/icons';
 
 import { isPcRefusal, PcOnlyNotice } from '../../PcOnlyNotice';
 import { blockedLine, downloadNote, failureLine, programName, type AgentLine } from './agentText';
+
+/** Developer gallery only: opens "Compare the two" on arrival. */
+export const SeedAgentCompare = createContext(false);
 
 export interface AgentChoiceProps {
     /** In Settings: a gaiacpp not on the PC has a Download button, and the PC switches to it once that finishes. */
@@ -90,7 +93,7 @@ export function AgentChoice({ inSettings = false, disabled = false, pending = nu
     const refused = useAgentProgramsRefused();
     const programs = useAgentPrograms();
     const save = useSetFlagshipAgent();
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(useContext(SeedAgentCompare));
     const [saveFailure, setSaveFailure] = useState<unknown>(null);
     const [savePcOnly, setSavePcOnly] = useState(false);
     const listing = programs.data;

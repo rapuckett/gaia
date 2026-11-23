@@ -24,6 +24,10 @@ export interface SetupScene {
     queued?: string[];
     /** The existing-server offer with this picked and typed, and its confirm sheet up when `confirming` (FR-CHECK-03). */
     offer?: { pick: 'gaia' | 'external'; key?: string; confirming?: boolean };
+    /** Customize's "Compare the two" open on arrival. */
+    agentCompareOpen?: boolean;
+    /** The wait setup shows after Continue with gaiacpp picked and not on the PC: its download failed, or the PC restarted and dropped it. */
+    agentWait?: 'failed' | 'interrupted';
 }
 
 export type ConfirmScene = 'low-disk' | 'no-fit-many' | 'no-fit-one' | 'server-low-disk' | 'server-no-fit';
@@ -311,7 +315,7 @@ const START_CARDS: NonNullable<FakeClientData['start']> = {
     working_folder: { path: '/home/you', name: 'you', gaia_folder: false, choosable: true },
 };
 type Step = 'check' | 'plan' | 'gpu' | 'models' | 'key' | 'download' | 'test' | 'ready';
-const scene = (step: Step, data: FakeClientData = {}, extra: Pick<SetupScene, 'shell' | 'confirm' | 'chip' | 'queued' | 'offer'> = {}): SetupScene => {
+const scene = (step: Step, data: FakeClientData = {}, extra: Pick<SetupScene, 'shell' | 'confirm' | 'chip' | 'queued' | 'offer' | 'agentCompareOpen' | 'agentWait'> = {}): SetupScene => {
     const stage: SetupStage = step === 'gpu' || step === 'models' || step === 'key' ? 'plan' : step;
     return { stage, screen: step === 'gpu' || step === 'models' || step === 'key' ? step : undefined, data, ...extra };
 };
@@ -366,8 +370,13 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'models/agent-blocked': scene('models', {
         agentPrograms: { ...AGENT_PROGRAMS, programs: AGENT_PROGRAMS.programs.map((p) => (p.id === 'gaiacpp' ? { ...p, can_download: false, size_bytes: null, unavailable_reason: 'No gaiacpp build for this GAIA release.', unavailable_code: 'no_release' as const } : p)) },
     }),
+    // FR-AGENT-02: "Compare the two" open under the agent rows; gaiacpp is not downloaded yet, so its note says it downloads after Continue.
+    'models/agent-compare': scene('models', {}, { agentCompareOpen: true }),
     'models/all-present': scene('models', { setupPlan: PLAN_PRESENT }),
     'models/default': scene('models'),
+    // FR-AGENT-03: after Continue with gaiacpp picked, its download failed (Details, Retry, Carry on with gaiapy) or the PC restarted and dropped it.
+    'plan/agent-failed': scene('plan', {}, { agentWait: 'failed' }),
+    'plan/agent-interrupted': scene('plan', {}, { agentWait: 'interrupted' }),
     'models/disk-short': scene('models', { setupPlan: PLAN_SHORT }),
     'models/long': scene('models', { setupPlan: PLAN_LONG }),
     'models/npu-not-ready': scene('models', { setupPlan: PLAN_NPU_NOT_READY }),
