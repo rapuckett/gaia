@@ -22,6 +22,7 @@ import { Disclosure, IconButton, Notice, ProgressLine, Row, Screen, Stack, Surfa
 import { DotGrid, type DimRect, type DotGridHandle } from '@/ui/controls/DotGrid';
 import { X } from '@/ui/icons';
 
+import { AgentRecovery } from './AgentRecovery';
 import { DocumentBriefCard } from './DocumentBriefCard';
 import { LibraryDocuments } from './LibraryDocuments';
 import { greetingKey } from './greeting';
@@ -89,12 +90,20 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
     const [held, setHeld] = useState<{ text: string } | null>(initialHeld ? { text: initialHeld } : null);
     const sentHeld = useRef<{ text: string } | null>(null);
     const heldOpening = starting ? (held?.text ?? null) : null;
+    // While the chosen agent can't start a send would only fail: the text stays in the box, and nothing is held or queued.
+    const agentProblem = assistant.agentProblem;
+    const [keptForAgent, setKeptForAgent] = useState(false);
+    if (keptForAgent && agentProblem === null) setKeptForAgent(false);
     const send = useCallback(
         (message: string) => {
+            if (agentProblem) {
+                setKeptForAgent(true);
+                return false;
+            }
             if (starting) setHeld({ text: message });
             else void submit(message, queue.hold);
         },
-        [starting, submit, queue.hold],
+        [agentProblem, starting, submit, queue.hold],
     );
     useEffect(() => {
         if (starting || held === null || sentHeld.current === held) return;
@@ -153,8 +162,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
     const askAboutDocuments = () => {
         if (!briefCard) return;
         holdDocuments(indexed.map((d) => d.id));
-        if (briefCard.needs_input) setText(briefCard.prompt);
-        else send(briefCard.prompt);
+        if (briefCard.needs_input || send(briefCard.prompt) === false) setText(briefCard.prompt);
     };
     const failedSetup = setupError(status);
     const warming = warmUpProgress(status?.warm_up);
@@ -306,6 +314,9 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                 )}
                 {state.error !== null && <Notice tone="danger" message={state.error} detail={state.errorDetail} />}
                 {!state.sending && startingReason(status, t) === null && <TryChips onPick={fillExample} />}
+                {agentProblem !== null && (
+                    <AgentRecovery problem={agentProblem} answeredAt={assistant.answeredAt} onRetry={assistant.retry} kept={keptForAgent} />
+                )}
                 {assistant.problem !== null && (
                     <Stack gap="sm">
                         <Notice
