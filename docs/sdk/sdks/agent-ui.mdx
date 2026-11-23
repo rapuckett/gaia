@@ -1471,6 +1471,8 @@ Deleting a chat deletes its copies.
   <Accordion title="GET /api/documents">
     List all documents in the global library.
 
+    A paired device or tunnel caller gets `filepath` home-relative (`~/Documents/manual.pdf`, or just the file name outside the home folder); the PC gets the full path.
+
     **Response:**
     ```json
     {

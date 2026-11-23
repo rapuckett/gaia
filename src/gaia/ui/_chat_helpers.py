@@ -6257,8 +6257,48 @@ async def _run_chat_lifecycle(
         logger.warning("Could not notify agent loop: %s", exc)
 
 
-async def _stream_chat_response(db: ChatDatabase, session: dict, request: ChatRequest):
+def _hide_pc_paths(frame: str) -> str:
+    """*frame* with each ``documents_added`` path shown home-relative.
+
+    One run buffer feeds every subscriber, so the PC form is built once and a
+    caller away from the PC gets this rewrite at send time. A frame that can't
+    be rewritten is sent with the PC's folders named, never as it is.
+    """
+    if '"documents_added"' not in frame:
+        return frame
+    from .run_manager import _padded
+    from .security import device_display_path, hide_pc_folders
+
+    start = frame.find("data: ")
+    # Each buffered item is one event: the producer yields one, _record keeps
+    # one line, and padding is a trailing SSE comment.
+    body = frame[start + len("data: ") :].split("\n\n", 1)[0] if start >= 0 else ""
+    try:
+        event = json.loads(body)
+        documents = event.get("documents_added") if isinstance(event, dict) else None
+        if documents is not None:
+            for doc in documents:
+                doc["filepath"] = device_display_path(doc.get("filepath") or "")
+    except (ValueError, TypeError, AttributeError) as e:
+        kind = _re.search(r'"type": ?"(\w+)"', frame)
+        logger.error(
+            "Could not hide PC paths in a %s event for a device (%s); "
+            "sending it with PC folders redacted",
+            kind.group(1) if kind else "unknown",
+            type(e).__name__,
+        )
+        return hide_pc_folders(frame)
+    if documents is None:
+        return frame
+    return _padded(_sse(event))
+
+
+async def _stream_chat_response(
+    db: ChatDatabase, session: dict, request: ChatRequest, away: bool = False
+):
     """Stream a chat turn as SSE for the ``/api/chat/send`` client.
+
+    *away* is a caller away from the PC: documents' paths are shown home-relative.
 
     Starts the run's detached lifecycle (the chat router guarantees no run
     is already active for this session — it returns 409 otherwise) and
@@ -6284,13 +6324,13 @@ async def _stream_chat_response(db: ChatDatabase, session: dict, request: ChatRe
             item = await get_or_shutdown(q)
             if item is DONE or item is SHUTDOWN:
                 break
-            yield item
+            yield _hide_pc_paths(item) if away else item
     finally:
         stream_closed()
         run.unsubscribe(q)
 
 
-async def _attach_chat_stream(session_id: str):
+async def _attach_chat_stream(session_id: str, away: bool = False):
     """Re-attach an SSE client to an already-running background run (#1580).
 
     Used by ``GET /api/chat/attach`` when the user revisits a session whose
@@ -6311,7 +6351,7 @@ async def _attach_chat_stream(session_id: str):
             item = await get_or_shutdown(q)
             if item is DONE or item is SHUTDOWN:
                 break
-            yield item
+            yield _hide_pc_paths(item) if away else item
     finally:
         stream_closed()
         run.unsubscribe(q)
