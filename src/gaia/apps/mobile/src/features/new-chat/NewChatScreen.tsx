@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import { bracketParts } from '@webui/i18n/registry';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
+import { View, type ScrollView } from 'react-native';
 
 import type { PermissionMode } from '@/api/client.types';
 import { useCreateSession, useDocuments, useGaiaClient, useMemorySettings, useStartScreen, useSystemStatus } from '@/data';
@@ -196,12 +196,18 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
         });
     }, [sending]);
     useEffect(measureDim, [measureDim]);
+    // The card is the way out of a dead end: keep it, buttons and all, above the composer as it appears or grows.
+    const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+    const showCard = useCallback(() => {
+        requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
+    }, []);
     const dimBehind = [dim.greeting, dim.composer].filter((r): r is DimRect => r !== null);
 
     return (
         <Screen
             keyboard="avoid"
             scroll
+            scrollRef={scrollRef}
             footerBleed
             backdrop={<DotGrid ref={gridRef} dimBehind={dimBehind} onLayout={measureDim} />}
             header={<ScreenHeader />}
@@ -315,7 +321,9 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                 {state.error !== null && <Notice tone="danger" message={state.error} detail={state.errorDetail} />}
                 {!state.sending && startingReason(status, t) === null && <TryChips onPick={fillExample} />}
                 {agentProblem !== null && (
-                    <AgentRecovery problem={agentProblem} answeredAt={assistant.answeredAt} onRetry={assistant.retry} kept={keptForAgent} />
+                    <View onLayout={showCard} testID="agent-recovery-slot">
+                        <AgentRecovery problem={agentProblem} answeredAt={assistant.answeredAt} onRetry={assistant.retry} kept={keptForAgent} />
+                    </View>
                 )}
                 {assistant.problem !== null && (
                     <Stack gap="sm">

@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { Platform, ScrollView } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { AgentProblem, AgentProgram, AgentPrograms, StartScreen, SystemStatus } from '@/api/client.types';
@@ -62,6 +62,19 @@ describeNative('the new chat when the chosen agent cannot start', () => {
         await render(<NewChatScreen onOpen={() => undefined} onChooseDocuments={() => undefined} />, { wrapper: wrap });
         expect(await screen.findByText(title)).toBeTruthy();
         expect(screen.queryByText(t('newChat.assistantUnavailable'))).toBeNull();
+    });
+
+    it('scrolls the screen to the end when the card appears', async () => {
+        const { wrap } = wrapper({ status: READY, start: { ...START, skills_error: 'agent exited', agent_problem: MISSING }, agentPrograms: listing() });
+        const scrollToEnd = jest.spyOn(ScrollView.prototype, 'scrollToEnd').mockImplementation(() => undefined);
+        jest.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+            cb(0);
+            return 0;
+        });
+        await render(<NewChatScreen onOpen={() => undefined} onChooseDocuments={() => undefined} />, { wrapper: wrap });
+        fireEvent(await screen.findByTestId('agent-recovery-slot'), 'layout', { nativeEvent: { layout: { x: 0, y: 900, width: 390, height: 300 } } });
+        expect(scrollToEnd).toHaveBeenCalledWith({ animated: false });
+        jest.restoreAllMocks();
     });
 
     it('Send keeps the text in the box, sends nothing and says so', async () => {
