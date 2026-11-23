@@ -4,7 +4,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { formatSize, ltrIn } from '@webui/components/setup/format';
-import { initialSelection } from '@webui/components/setup/selection';
+import { cantRunHere, catalogOf, initialSelection, tooBig } from '@webui/components/setup/selection';
 import type { SetupCatalogEntry, SetupComponent, SetupPlan, SetupRunStatus } from '@webui/types';
 
 import type { SetupRunOptions } from '@/api/client.types';
@@ -16,8 +16,10 @@ import { Button, Card, Disclosure, Ltr, Notice, Pressable, Row, Spinner, Stack, 
 
 import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
+import { noFitAsk } from '../sheets/setupConfirm';
 import { cloudIsBlocked, planReasons, planView, startOptions, type PlanView } from './plan';
 import { usePlanOpeners } from './planOpeners';
+import { tooBigText } from './modelsView';
 import { usePlanSelection } from './planSelection';
 
 type Where = 'local' | 'cloud';
@@ -191,6 +193,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     const [where, setWhere] = useState<Where>('local');
     const [listOpen, setListOpen] = useState(false);
     const [detailsOpen, setDetailsOpen] = useState(false);
+    const [cantRunText, setCantRunText] = useState<string | null>(null);
 
     // The plan seeds the selection once, from what is planned and on disk.
     useEffect(() => {
@@ -230,10 +233,27 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     const cloud = picked === 'cloud';
     const busy = start.isPending || backend.isPending;
     const proceed = (acknowledgeLowDisk: boolean) => goLocal(startOptions(plan, selection, acknowledgeLowDisk, keepTrying));
-    const onContinue = () => {
-        if (cloud) openers.openKey?.();
-        else if (short && openers.confirmLowDisk) openers.confirmLowDisk(short, proceed);
+    const lowDiskThenGo = () => {
+        if (short && openers.confirmLowDisk) openers.confirmLowDisk(short, proceed);
         else proceed(false);
+    };
+    const onContinue = () => {
+        if (cloud) {
+            openers.openKey?.();
+            return;
+        }
+        setCantRunText(null);
+        const big = tooBig(catalogOf(plan), selection).filter((e) => !e.downloaded || e.id === selection.defaultChat);
+        // Nothing here can run it: no confirm can make it work, so it blocks the download.
+        const cantRun = big.find(cantRunHere);
+        if (cantRun) {
+            const key = cantRun.id === selection.defaultChat ? 'setup.models.cantRun.chat' : 'setup.models.cantRun.other';
+            setCantRunText(t(key, { name: cantRun.name, why: tooBigText(cantRun, t, locale) }));
+            return;
+        }
+        const request = noFitAsk(big, t, locale);
+        if (request && openers.confirmNoFit) openers.confirmNoFit(request, lowDiskThenGo);
+        else lowDiskThenGo();
     };
 
     return (
@@ -263,6 +283,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
                     })}
                 />
             ) : null}
+            {cantRunText && !cloud ? <Notice tone="danger" message={cantRunText} /> : null}
             {startError ? <StartError error={startError} /> : null}
 
             {cloud ? null : (

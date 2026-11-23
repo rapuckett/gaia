@@ -66,7 +66,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
         text,
         context,
         undefined,
-        readable ? [{ label: readAloud.label, icon: readAloud.active ? Square : Volume2, onPress: readAloud.toggle }] : undefined,
+        readable && speechAvailable ? [{ label: readAloud.label, icon: readAloud.active ? Square : Volume2, onPress: readAloud.toggle }] : undefined,
     );
     const compare = useAnswerComparison(message.session_id);
     return (
