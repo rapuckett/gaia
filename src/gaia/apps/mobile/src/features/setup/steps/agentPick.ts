@@ -28,7 +28,7 @@ interface AgentPickState {
     pcId: string | null;
     pick: AgentPick | null;
     load(pcId: string): Promise<void>;
-    set(pick: AgentPick | null): void;
+    remember(pick: AgentPick | null): void;
 }
 
 export const useAgentPickStore = create<AgentPickState>((set, get) => ({
@@ -43,7 +43,7 @@ export const useAgentPickStore = create<AgentPickState>((set, get) => ({
             set({ pcId, pick: null });
         }
     },
-    set(pick) {
+    remember(pick) {
         set({ pick });
         const pcId = get().pcId ?? useConnectionStore.getState().connection?.pcId;
         if (!pcId) return;
@@ -57,7 +57,7 @@ export function useAgentPick(): { pick: AgentPick | null; setPick: (pick: AgentP
     const pcId = useConnectionStore((s) => s.connection?.pcId ?? null);
     const loadedFor = useAgentPickStore((s) => s.pcId);
     const pick = useAgentPickStore((s) => s.pick);
-    const setPick = useAgentPickStore((s) => s.set);
+    const setPick = useAgentPickStore((s) => s.remember);
     useEffect(() => {
         if (pcId && pcId !== loadedFor) void useAgentPickStore.getState().load(pcId);
     }, [pcId, loadedFor]);

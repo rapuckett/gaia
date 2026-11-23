@@ -79,9 +79,10 @@ describeNative('the new chat when the chosen agent cannot start', () => {
 describeNative('AgentRecovery', () => {
     afterEach(() => useConnectionStore.setState({ connection: null }));
 
-    const mount = (data: FakeClientData, onRetry = jest.fn()) => {
+    const mount = async (data: FakeClientData, onRetry = jest.fn()) => {
         const { client, wrap } = wrapper(data);
-        return render(<AgentRecovery problem={MISSING} answeredAt={1} onRetry={onRetry} />, { wrapper: wrap }).then(() => client);
+        await render(<AgentRecovery problem={MISSING} answeredAt={1} onRetry={onRetry} />, { wrapper: wrap });
+        return client;
     };
 
     it('Use the Python agent with no Python agent on the PC saves nothing and says gaiacpp stays', async () => {
