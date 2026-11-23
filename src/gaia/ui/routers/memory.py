@@ -1371,24 +1371,28 @@ def prune_memory(days: int = Query(90, ge=7, le=365)) -> Dict:
 
 @router.delete(
     "/api/memory/all",
-    dependencies=[Depends(_require_ui_header)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=MemoryClearCounts,
     response_model_exclude_unset=True,
 )
-def clear_all_memory() -> Dict:
+def clear_all_memory(request: Request) -> Dict:
     """Permanently delete all knowledge, tool history, and conversation data.
 
     This is irreversible.  Returns counts of deleted rows per table:
     ``{knowledge: int, tool_history: int, conversations: int}``.
     """
     try:
-        return _get_store().clear_all()
+        cleared = _get_store().clear_all()
     except MemoryScrubError as exc:
         logger.error("[memory router] clear_all scrub failed: %s", exc)
         raise HTTPException(500, str(exc)) from exc
     except Exception as exc:
         logger.error("[memory router] clear_all failed: %s", exc)
         raise HTTPException(500, f"Clear failed: {type(exc).__name__}")
+    if not is_local_pc(request):
+        audit_approval(request, "memory wiped")
+        record_device_change(request, "memoryWiped")
+    return cleared
 
 
 def _failed_for(request: Request, what: str, exc: Exception) -> str:

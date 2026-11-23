@@ -29,8 +29,9 @@ from gaia.logger import get_logger
 from .. import session_git
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import folder_label, record_device_change
 from ..models import WireModel
-from ..security import audit_approval
+from ..security import audit_approval, detail_for, is_local_pc
 
 logger = get_logger(__name__)
 
@@ -460,6 +461,7 @@ async def git_commit(
         body.confirmed,
     )
     audit_approval(http_request, f"git commit in {body.root} from chat {session_id}")
+    record_device_change(http_request, "gitCommitted", folder=folder_label(body.root))
     return result
 
 
@@ -491,10 +493,11 @@ async def git_pull_request(
         http_request,
         f"branch pushed and pull request opened in {body.root} from chat {session_id}",
     )
+    record_device_change(http_request, "gitPullRequest", folder=folder_label(body.root))
     return result
 
 
-def _settings_payload() -> dict:
+def _settings_payload(request: Request) -> dict:
     config = GaiaConfig.load()
     used = file_snapshots.usage()
     return {
@@ -502,7 +505,7 @@ def _settings_payload() -> dict:
         "max_mb": config.undo_max_mb,
         "used_bytes": used["bytes"],
         "turns": used["turns"],
-        "path": used["path"],
+        "path": detail_for(request, used["path"]),
     }
 
 
@@ -511,12 +514,14 @@ def _settings_payload() -> dict:
     response_model=UndoSettingsResponse,
     response_model_exclude_unset=True,
 )
-async def get_undo_settings():
+async def get_undo_settings(http_request: Request):
     """How long and how much undo history is kept, and how much is used."""
     try:
-        return await asyncio.to_thread(_settings_payload)
+        return await asyncio.to_thread(_settings_payload, http_request)
     except GaiaConfigError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(
+            status_code=500, detail=detail_for(http_request, str(e))
+        ) from e
 
 
 @router.put(
@@ -524,16 +529,38 @@ async def get_undo_settings():
     response_model=UndoSettingsResponse,
     response_model_exclude_unset=True,
 )
-async def put_undo_settings(body: UndoSettings):
-    """Change the limits and trim history to fit them now."""
+async def put_undo_settings(body: UndoSettings, http_request: Request):
+    """Change the limits and trim history to fit them now.
+
+    Shrinking the limits erases undo history, so a change from away from the
+    PC is audited and listed in the device's changes.
+    """
 
     def _apply() -> dict:
         GaiaConfig.save_key("undo_retention_days", body.retention_days)
         GaiaConfig.save_key("undo_max_mb", body.max_mb)
         file_snapshots.prune(body.retention_days, body.max_mb * 1024 * 1024)
-        return _settings_payload()
+        return _settings_payload(http_request)
 
+    away = not is_local_pc(http_request)
+    if away:
+        # Before the trim: a failed trim may already have erased history.
+        audit_approval(
+            http_request,
+            f"undo history limits set to {body.retention_days} days and "
+            f"{body.max_mb} MB",
+        )
     try:
-        return await asyncio.to_thread(_apply)
+        payload = await asyncio.to_thread(_apply)
     except (GaiaConfigError, OSError, file_snapshots.SnapshotError) as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(
+            status_code=500, detail=detail_for(http_request, str(e))
+        ) from e
+    if away:
+        record_device_change(
+            http_request,
+            "undoLimitsChanged",
+            days=body.retention_days,
+            mb=body.max_mb,
+        )
+    return payload

@@ -400,6 +400,11 @@ def hide_pc_folders(text: str) -> str:
     return text
 
 
+def detail_for(request: Request, text: str) -> str:
+    """*text* as the PC sees it; anyone else gets it with PC folders hidden."""
+    return text if is_local_pc(request) else hide_pc_folders(text)
+
+
 def audit_approval(request: Request, what: str) -> None:
     """Record a decision that lets GAIA act, and who made it, in the audit log.
 

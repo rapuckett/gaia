@@ -1195,12 +1195,15 @@ Deleting a chat deletes its copies.
     The retention limits and current use:
     `{"retention_days": 7, "max_mb": 500, "used_bytes": 18233, "turns": 3, "path": "..."}`.
     Stored as `undo_retention_days` and `undo_max_mb` in `~/.gaia/config.json`.
+    Away from the PC, `path` names GAIA's folder instead of spelling it out.
   </Accordion>
 
   <Accordion title="PUT /api/settings/undo">
     Set `retention_days` (1–365) and `max_mb` (10–100000), then remove history
     past the new limits. Turns older than the time limit go first, then the
     oldest until the total fits. The size limit never removes the newest turn.
+    A change from a paired device is written to the audit log before the trim
+    and listed in the device's changes (`undoLimitsChanged`).
   </Accordion>
 
   <Accordion title="GET /api/speech/settings">
@@ -1677,7 +1680,7 @@ them, and anything outside the chat or a read that names no chat is refused
     }
     ```
 
-    `exists` is `false` for a missing path or a folder, and `null` for a path outside the home folder, which is not checked. Returns **422** for more than 50 paths and **400** for a path containing a null byte.
+    `exists` is `false` for a missing path or a folder, and `null` for a path outside the home folder, which is not checked. Away from the PC, a path a paired device is kept out of (credentials, shell history, GAIA's own state) is `null` too. Returns **422** for more than 50 paths and **400** for a path containing a null byte.
   </Accordion>
 
   <Accordion title="POST /api/files/upload">
@@ -2664,7 +2667,10 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
     memories from their next message. If
     another open GAIA window keeps the file from being scrubbed, the data is
     still deleted but the call returns 500 with a message saying so; close the
-    other windows and call it again.
+    other windows and call it again. The PC or a paired device the PC
+    allowed, whose wipe is written to the audit log and listed in its changes
+    (`memoryWiped`); **403** from mobile access, a pending device or another
+    computer.
   </Accordion>
 
   <Accordion title="POST /api/memory/reinitialize">
@@ -2894,6 +2900,11 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
   <Accordion title="DELETE /api/connectors/{connector_id}">
     Disconnect a connector — removes stored credentials and, for `mcp_server`,
+    its `mcp_servers.json` entry. The PC or a paired device the PC allowed,
+    whose removal is written to the audit log and listed in its changes
+    (`connectorRemoved`); **403** from mobile access, a pending device or
+    another computer. `DELETE /v1/connections/{provider}` is held to the same
+    rule.
     its `mcp_servers.json` entry. An OAuth connector with several accounts
     refuses with 409 `{"error": "account_choice_required", "connector_id",
     "choices": [...], "message"}` (inside `detail`): remove one with the route
@@ -4228,6 +4239,9 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 | PC-only | `pc` | `DELETE /api/agents/{agent_id}`, `DELETE /api/devices/listener`, `DELETE /api/devices/routes/{kind}`, `GET /api/connectors/_debug`, `GET /api/connectors/eval-mailbox`, `POST /api/agent-programs/{program_id}/download`, `POST /api/auth/launch-code`, `POST /api/connectors/eval-mailbox`, `POST /api/devices/listener`, `POST /api/devices/pairing`, `POST /api/devices/pairing/reset`, `POST /api/devices/routes/{kind}`, `POST /api/devices/{device_id}/allow`, `POST /api/eval/scripted-user`, `POST /api/files/open`, `POST /api/memory/admin/clear`, `POST /api/memory/admin/seed`, `POST /api/tunnel/start`, `POST /api/tunnel/stop`, `POST /v1/connections/{provider}` |
 | Setup | `pc`, or an allowed device | `DELETE /api/automations/{ref}`, `DELETE /api/connectors/_flows/{flow_id}`, `DELETE /api/connectors/{connector_id}/activations/{agent_id:path}`, `DELETE /api/devices/pairing`, `DELETE /api/devices/{device_id}`, `DELETE /api/goals/{goal_id}`, `DELETE /api/providers/{provider}/key`, `DELETE /api/schedules/{name:path}`, `GET /api/automations`, `GET /api/devices`, `GET /api/devices/status`, `GET /api/devices/{device_id}/changes`, `GET /api/logs`, `GET /api/logs/{source}`, `GET /api/memory/stream-discovery`, `GET /api/memory/stream-inference`, `GET /api/messaging/discord`, `GET /api/setup/report/{name}`, `PATCH /api/schedules/{name:path}`, `POST /api/agents/install`, `POST /api/automations/{ref}/{action}`, `POST /api/connectors/flows/{flow_id}/complete`, `POST /api/connectors/{connector_id}/authorize`, `POST /api/connectors/{connector_id}/authorize-device`, `POST /api/connectors/{connector_id}/configure`, `POST /api/connectors/{connector_id}/enable`, `POST /api/connectors/{connector_id}/test`, `POST /api/goals`, `POST /api/goals/store/reset`, `POST /api/goals/{goal_id}/tasks`, `POST /api/gpu-memory/apply`, `POST /api/gpu-memory/revert`, `POST /api/lemonade/target`, `POST /api/memory/commit-discovery`, `POST /api/memory/commit-inference`, `POST /api/memory/refresh-system-context`, `POST /api/memory/reinitialize`, `POST /api/messaging/discord/connect`, `POST /api/messaging/discord/disconnect`, `POST /api/messaging/discord/forget-always`, `POST /api/messaging/discord/pair`, `POST /api/messaging/discord/restart`, `POST /api/messaging/discord/start`, `POST /api/messaging/discord/stop`, `POST /api/providers/key-store/retry`, `POST /api/schedules`, `POST /api/schedules/{name:path}/run`, `POST /api/setup/cancel`, `POST /api/setup/chat-model`, `POST /api/setup/models/download`, `POST /api/setup/models/remove`, `POST /api/setup/models/skip`, `POST /api/setup/npu/memlock-fix`, `POST /api/setup/npu/recheck`, `POST /api/setup/report`, `POST /api/setup/run`, `POST /api/setup/vision-model`, `POST /api/skills/link/add`, `POST /api/system/download-model`, `PUT /api/chat/permissions`, `PUT /api/connectors/{connector_id}/activations/{agent_id:path}`, `PUT /api/connectors/{connector_id}/grants/{agent_id:path}`, `PUT /api/goals/{goal_id}/approve`, `PUT /api/goals/{goal_id}/cancel`, `PUT /api/goals/{goal_id}/reject`, `PUT /api/goals/{goal_id}/status`, `PUT /api/goals/{goal_id}/tasks/{task_id}`, `PUT /api/images/settings`, `PUT /api/schedules/{name:path}`, `PUT /api/system/model-server/backend` |
 | Not from a device | `pc`, `tunnel` | `GET /api/agent-programs`, `GET /api/agent-programs/{program_id}/download`, `GET /api/providers` |
+| PC-only | `pc` | `DELETE /api/agents/{agent_id}`, `DELETE /api/devices/listener`, `DELETE /api/devices/routes/{kind}`, `GET /api/connectors/_debug`, `GET /api/connectors/eval-mailbox`, `POST /api/connectors/eval-mailbox`, `POST /api/devices/listener`, `POST /api/devices/pairing`, `POST /api/devices/pairing/reset`, `POST /api/devices/routes/{kind}`, `POST /api/devices/{device_id}/allow`, `POST /api/eval/scripted-user`, `POST /api/files/open`, `POST /api/memory/admin/clear`, `POST /api/memory/admin/seed`, `POST /api/tunnel/start`, `POST /api/tunnel/stop`, `POST /v1/connections/{provider}` |
+| Setup | `pc`, or an allowed device | `DELETE /api/automations/{ref}`, `DELETE /api/connectors/_flows/{flow_id}`, `DELETE /api/connectors/{connector_id}`, `DELETE /api/connectors/{connector_id}/accounts/{account_id}`, `DELETE /api/connectors/{connector_id}/activations/{agent_id:path}`, `DELETE /api/devices/pairing`, `DELETE /api/devices/{device_id}`, `DELETE /api/goals/{goal_id}`, `DELETE /api/memory/all`, `DELETE /api/providers/{provider}/key`, `DELETE /api/schedules/{name:path}`, `DELETE /v1/connections/{provider}`, `GET /api/automations`, `GET /api/devices`, `GET /api/devices/status`, `GET /api/devices/{device_id}/changes`, `GET /api/logs`, `GET /api/logs/{source}`, `GET /api/memory/stream-discovery`, `GET /api/memory/stream-inference`, `GET /api/messaging/discord`, `GET /api/setup/report/{name}`, `PATCH /api/schedules/{name:path}`, `POST /api/agents/install`, `POST /api/automations/{ref}/{action}`, `POST /api/connectors/flows/{flow_id}/complete`, `POST /api/connectors/{connector_id}/authorize`, `POST /api/connectors/{connector_id}/authorize-device`, `POST /api/connectors/{connector_id}/configure`, `POST /api/connectors/{connector_id}/enable`, `POST /api/connectors/{connector_id}/test`, `POST /api/goals`, `POST /api/goals/store/reset`, `POST /api/goals/{goal_id}/tasks`, `POST /api/gpu-memory/apply`, `POST /api/gpu-memory/revert`, `POST /api/lemonade/target`, `POST /api/memory/commit-discovery`, `POST /api/memory/commit-inference`, `POST /api/memory/refresh-system-context`, `POST /api/memory/reinitialize`, `POST /api/messaging/discord/connect`, `POST /api/messaging/discord/disconnect`, `POST /api/messaging/discord/forget-always`, `POST /api/messaging/discord/pair`, `POST /api/messaging/discord/restart`, `POST /api/messaging/discord/start`, `POST /api/messaging/discord/stop`, `POST /api/providers/key-store/retry`, `POST /api/schedules`, `POST /api/schedules/{name:path}/run`, `POST /api/setup/cancel`, `POST /api/setup/chat-model`, `POST /api/setup/models/download`, `POST /api/setup/models/remove`, `POST /api/setup/models/skip`, `POST /api/setup/npu/memlock-fix`, `POST /api/setup/npu/recheck`, `POST /api/setup/report`, `POST /api/setup/run`, `POST /api/setup/vision-model`, `POST /api/skills/link/add`, `POST /api/system/download-model`, `PUT /api/chat/permissions`, `PUT /api/connectors/{connector_id}/activations/{agent_id:path}`, `PUT /api/connectors/{connector_id}/grants/{agent_id:path}`, `PUT /api/goals/{goal_id}/approve`, `PUT /api/goals/{goal_id}/cancel`, `PUT /api/goals/{goal_id}/reject`, `PUT /api/goals/{goal_id}/status`, `PUT /api/goals/{goal_id}/tasks/{task_id}`, `PUT /api/schedules/{name:path}`, `PUT /api/system/model-server/backend` |
+| Not from a device | `pc`, `tunnel` | `GET /api/providers` |
 | Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
 | Its own routes | an allowed device | `GET /api/devices/me/routes` |
 | Unpairing itself | a device, pending or allowed | `DELETE /api/devices/me` |
