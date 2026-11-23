@@ -157,7 +157,8 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     const largeText = useLargeText();
     const gateUnreachable = useGateUnreachable();
 
-    const navRows = (
+    // A typed query hides the nav rows so the match count and results sit under the field, above the keyboard.
+    const navRows = q !== '' ? null : (
         <>
             {onNewChat ? (
                 <View style={{ flexShrink: 0 }}>
@@ -226,6 +227,8 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
         state === 'list' ? (
             <SectionList<ChatRow, ChatSection>
                 sections={sections}
+                automaticallyAdjustKeyboardInsets
+                keyboardShouldPersistTaps="handled"
                 keyExtractor={(row) => row.id}
                 accessibilityLabel={t('sidebar.recent')}
                 ListHeaderComponent={<>{navRows}{notices}</>}
@@ -258,7 +261,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 <SearchField value={text} onChangeText={setText} placeholder={t.bare('sidebar.search')} accessibilityLabel={t('sidebar.search')} />
             </Stack>
             {list ?? (
-                <ScrollView keyboardShouldPersistTaps="handled">
+                <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
                     {navRows}
                     {notices}
                     {automated}

@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 
 import DrawerGalleryRoute from '@/app/dev/drawer';
@@ -38,6 +38,17 @@ describeNative('drawer gallery route', () => {
         mockState = name;
         await render(<DrawerGalleryRoute />);
         expect((await screen.findAllByLabelText(/search/i)).length).toBeGreaterThan(0);
+    });
+
+    it('hides the navigation rows while a query is typed, and brings them back when it is cleared', async () => {
+        mockState = 'search-title';
+        await render(<DrawerGalleryRoute />);
+        expect(await screen.findByText(/chats? match/i)).toBeTruthy();
+        expect(screen.queryByText('New chat')).toBeNull();
+        expect(screen.queryByText('Skills')).toBeNull();
+        fireEvent.changeText(screen.getByLabelText('Search chats'), '');
+        expect(await screen.findByText('New chat')).toBeTruthy();
+        expect(screen.getByText('Skills')).toBeTruthy();
     });
 
     it('hides the background runs behind a counted toggle', async () => {
