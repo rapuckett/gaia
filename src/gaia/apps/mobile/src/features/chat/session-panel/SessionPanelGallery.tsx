@@ -336,6 +336,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
         const ctx = CONTEXT_STATES.includes(state);
         const env = ENV_STATES.includes(state);
         const chg = CHANGES_STATES.includes(state);
+        const seeded = env || chg || state === 'runsOnCpp';
         const environment: SessionEnvironment =
             state === 'envOffline'
                 ? { ...ENVIRONMENT, folders: ENVIRONMENT.folders.slice(0, 2), internet: false, removed: ['/Users/avery/Downloads/old-drafts'] }
@@ -356,15 +357,15 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             messages: { dev: [FIXTURES.short.messages[0]!, withSummary(reply, summary)] },
             outputs: state === 'outItems' ? { dev: { session_id: 'dev', items: OUTPUTS } } : undefined,
             fileStatus: answerState ? { '/Users/avery/Documents/packing-list.md': { path: '/Users/avery/Documents/packing-list.md', exists: true, mtime: 200 }, '/Users/avery/Documents/old-plan.md': { path: '/Users/avery/Documents/old-plan.md', exists: false } } : undefined,
-            sessions: env || chg ? [SESSION] : undefined,
+            sessions: seeded ? [SESSION] : undefined,
             sessionChanges: chg && state !== 'chgError' ? { dev: { ...CHANGES, pending: state === 'chgPending' } } : undefined,
             sessionGit: state === 'chgGitPr' ? { dev: GIT_PR } : state === 'chgGit' || state === 'chgConfirm' ? { dev: GIT } : undefined,
             undoConflict: state === 'chgConflict' ? new GaiaApiError(409, UNDO_CONFLICT, undefined, undefined, { status: 'conflict' }) : undefined,
-            environments: env || chg ? { dev: environment } : undefined,
+            environments: seeded ? { dev: environment } : undefined,
             fileFolders: env ? (state === 'envPickRefused' ? { ...BROWSE_FOLDERS, '': BROWSE_FOLDERS['/Users/avery']! } : BROWSE_FOLDERS) : undefined,
             permissions: state === 'envOffline' ? { dev: 'full_access' } : undefined,
-            activeModel: env || chg ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
-            localModel: env || chg ? LOCAL_MODEL : undefined,
+            activeModel: seeded ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
+            localModel: seeded ? LOCAL_MODEL : undefined,
             contextUsage: ctx
                 ? {
                       available: true,
