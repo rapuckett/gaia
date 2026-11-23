@@ -604,6 +604,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'perm-chats': { section: 'permissions', gpuMemory: GPU, data: PERM_CHATS },
     // SET-VOICE-03: Preview; `#tap=read-aloud-preview` starts a preview that never finishes, so the button reads Stop reading beside a spinner (no audio plays).
     'voice-preview': { section: 'voice', gpuMemory: GPU, data: { speechSettings: SPEECH }, override: { speak: never } },
+    // SET-VOICE-08: the PC says read aloud is unavailable; the pane shows only the notice.
+    'read-aloud-unavailable': { section: 'voice', gpuMemory: GPU, data: { speechSettings: { ...SPEECH, voices: [], available: false, unavailable_reason: 'No verified voice on this PC' } } },
     // SET-MODEL-08: Fireworks blocked by Local only, shown on its own tab.
     'model-local-only-blocked': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { providers: blockedProviders } },
     // SET-MODEL-09: the providers call fails; the notice has Check again.
