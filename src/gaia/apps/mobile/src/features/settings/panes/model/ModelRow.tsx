@@ -40,6 +40,8 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
     const hasDetails = !!(m.display_name || facts || m.evidence || (m.custom && m.source_url));
     const anyBusy = busy !== null;
     const blocked = m.available === false;
+    const hasAction = current ? blocked : !blocked && !progress;
+    const hasRemove = !!m.custom && !current && !progress;
 
     return (
         <Surface tone={current ? 'accent' : 'primary'} radius="md" padding="sm">
@@ -121,6 +123,7 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                         </Row>
                     </Stack>
                 ) : null}
+                {hasAction || hasRemove ? (
                 <Row gap="sm" wrap stack>
                     {current && blocked ? (
                         <Text role="label" tone="danger">{t('settings.model.inUseBlocked')}</Text>
@@ -145,7 +148,7 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                             testID={`model-use-${m.id}`}
                         />
                     )}
-                    {m.custom && !current && !progress ? (
+                    {hasRemove ? (
                         <Button
                             variant="ghost"
                             label={t.bare('settings.models.remove')}
@@ -157,6 +160,7 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                         />
                     ) : null}
                 </Row>
+                ) : null}
             </Stack>
         </Surface>
     );
