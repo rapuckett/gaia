@@ -81,7 +81,10 @@ internal data class PushPayload(
     /** A non-negative whole JSON number as a Long; null for anything else. */
     private fun whole(obj: JSONObject, name: String): Long? {
       val value = obj.opt(name)
-      if (value !is Number || value is Double && value != Math.floor(value)) return null
+      if (value !is Number) return null
+      // org.json may hand back Integer, Long, Double or BigDecimal: reject any fraction, whatever the type.
+      val d = value.toDouble()
+      if (d.isNaN() || d.isInfinite() || d != Math.floor(d)) return null
       return value.toLong().takeIf { it >= 0 }
     }
 
