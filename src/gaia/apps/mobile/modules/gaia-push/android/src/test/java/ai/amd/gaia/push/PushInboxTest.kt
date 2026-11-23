@@ -23,7 +23,7 @@ class PushInboxTest {
 
   @Test
   fun postsNothingWhenNoKeyOpensIt() {
-    val wrongKey = PushRecord("pc", v.getString("handle"), "s", "t", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8")
+    val wrongKey = PushRecord("pc", v.getString("handle"), "s", "t", "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8")
     val wrongHandle = PushRecord("pc", "AAECAwQFBgcICQoLDA0ODw", "s", "t", v.getString("key"))
     assertTrue(decide(listOf(wrongKey, wrongHandle)) is PushAction.Dropped)
     assertTrue(decide(emptyList()) is PushAction.Dropped)
