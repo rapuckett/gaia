@@ -5377,6 +5377,18 @@ test.describe('first-run setup in the dark theme', () => {
     }
 });
 
+test('setup tight-model sheet says its warning once (en, dark)', async ({ page }) => {
+    const tight = SETUP_SCENES.find((s) => s.name === 'plan-tight-confirm')!;
+    await open(page, '', 'en', (p) => withSetup(p, tight.answers), 'dark');
+    await tight.reach(page);
+    const ask = page.getByRole('alertdialog');
+    await expect(ask).toContainText('Your PC may slow down while it runs.');
+    await expect(ask.locator('.btn-secondary')).toBeFocused();
+    await expect(ask).toHaveCSS('opacity', '1');
+    await shot(page, 'setup-en-dark-tight-confirm');
+    expect(await audit(page)).toEqual([]);
+});
+
 test.describe('first-run setup leaves no English in Arabic', () => {
     for (const s of SETUP_SCENES) {
         test(s.name, async ({ page }) => {

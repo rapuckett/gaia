@@ -311,7 +311,9 @@ export function LocalModelsSections({ downloadsSlot }: { downloadsSlot?: HTMLEle
                     onConfirm={() => { setSheet(null); setNoFitAcked(true); void apply(true, false); }}
                     onCancel={() => setSheet(null)}
                 >
-                    {sheet.models.map((e) => <p key={e.id}><bdi>{e.name}</bdi>: {tooBigText(e, t)}</p>)}
+                    {onlyTight(sheet.models)
+                        ? <p>{t('setup.confirm.tightBody')}</p>
+                        : sheet.models.map((e) => <p key={e.id}><bdi>{e.name}</bdi>: {tooBigText(e, t)}</p>)}
                 </ConfirmSheet>
             )}
             {sheet?.kind === 'low_disk' && (

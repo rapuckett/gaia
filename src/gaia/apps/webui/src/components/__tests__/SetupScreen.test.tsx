@@ -825,6 +825,18 @@ describe('SetupScreen: warnings and confirmations', () => {
         await waitFor(() => expect(mockedApi.startSetup).toHaveBeenCalled());
     });
 
+    it('says the tight-model warning once, in the sheet body, when every model fits but is tight', async () => {
+        const tight = { ...QWEN, fits: true as const, tight: true, need_gb: 14, capacity_gb: 16 };
+        mockedApi.getSetupPlan.mockResolvedValue(plan([tight, GEMMA, EMBED]));
+        await open();
+        clickStart();
+        const sheet = await screen.findByRole('alertdialog', { name: /Qwen3\.6-35B-A3B/ });
+        const lines = within(sheet).getAllByText(/slow down|Tight|tight/i);
+        expect(sheet).toHaveTextContent('Your PC may slow down while it runs. A smaller model keeps it quick.');
+        expect(lines).toHaveLength(1);
+        expect(sheet).not.toHaveTextContent('Qwen3.6-35B-A3B:');
+    });
+
     // `gaia init --profile npu` saved an NPU model this PC can't run (#6632): no confirm can make it work.
     it('refuses a saved chat model this PC can\'t run, naming it and why, without asking', async () => {
         const npu = {

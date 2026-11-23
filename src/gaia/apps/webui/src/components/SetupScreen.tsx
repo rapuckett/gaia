@@ -1811,7 +1811,9 @@ export function SetupScreen({ onReady, onClose }: SetupScreenProps) {
                     onConfirm={() => { setConfirm(null); setNoFitAcked(true); void commit(ackDisk, true); }}
                     onCancel={() => setConfirm(null)}
                 >
-                    {confirm.models.map((e) => <p key={e.id}><bdi>{e.name}</bdi>: {tooBigText(e, t)}</p>)}
+                    {onlyTight(confirm.models)
+                        ? <p>{t('setup.confirm.tightBody')}</p>
+                        : confirm.models.map((e) => <p key={e.id}><bdi>{e.name}</bdi>: {tooBigText(e, t)}</p>)}
                 </ConfirmSheet>
             )}
             {confirm?.kind === 'low_disk' && short && (
