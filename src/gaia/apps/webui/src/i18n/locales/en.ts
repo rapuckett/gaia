@@ -4455,6 +4455,7 @@ export const enMessages = {
     'mobileApp.push.action.refused': "This request can't be answered from a notification. Answer it in the chat.",
     'mobileApp.push.action.otherPc': 'This request is from another of your PCs. Switch to that PC in GAIA, then answer it in the chat.',
     'mobileApp.push.action.failed': "Your PC didn't accept the answer, so nothing changed. Answer it in the chat instead.",
+    'mobileApp.push.action.locked': 'Unlock your phone, then press the button again.',
     'mobileApp.pairing.welcome.title': 'Use GAIA from your phone',
     'mobileApp.pairing.welcome.body': 'GAIA runs on your PC, and your chats stay there. Pair this phone with your PC to use GAIA here.',
     'mobileApp.pairing.welcome.start': 'Pair with my PC',

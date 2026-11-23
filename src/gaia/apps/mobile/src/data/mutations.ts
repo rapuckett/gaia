@@ -4,6 +4,7 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import type {
+    ConfirmToolRequest,
     ConfirmToolResult,
     CreateSessionRequest,
     DocumentResponse,
@@ -12,7 +13,6 @@ import type {
     Session,
     SessionList,
     SessionSearchResponse,
-    ToolConfirmRequest,
     UserInputRequest,
     UserInputResult,
 } from '@/api/client.types';
@@ -22,7 +22,7 @@ import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys, requireClient } from './queries';
 
 /** Allows or denies the tool call a turn is blocked on; its prompt closes once GAIA has the answer. */
-export async function confirmPermission(client: GaiaClient, request: ToolConfirmRequest): Promise<ConfirmToolResult> {
+export async function confirmPermission(client: GaiaClient, request: ConfirmToolRequest): Promise<ConfirmToolResult> {
     const result = await client.confirmTool(request);
     if (request.confirm_id) markPromptResolved(request.session_id, request.confirm_id, { state: 'answered' });
     updateTurn(request.session_id, (turn) => permissionAnswered(turn, request.confirm_id));
@@ -58,7 +58,7 @@ export function useCreateSession() {
 /** `mutate({ session_id, approved, always?, confirm_id })` answers `pendingPermission`. */
 export function useConfirmTool() {
     const client = useGaiaClient();
-    return useMutation<ConfirmToolResult, Error, ToolConfirmRequest>({
+    return useMutation<ConfirmToolResult, Error, ConfirmToolRequest>({
         mutationFn: (request) => confirmPermission(requireClient(client), request),
     });
 }

@@ -197,10 +197,13 @@ the native fingerprint needs a new build.
     Android package.
   - The notification text is generated at prebuild from the webui catalogs (`plugins/push/`). The
     payload's encryption is documented in `src/features/push/pushCrypto.ts`.
-  - A tool approval's notification has Approve and Deny (iOS, and Android 12 or later). Both need
-    the phone unlocked, open GAIA, and send the answer through the paired PC like the chat's own
-    Allow; there is never an "always". Tools listed in `modules/gaia-push/openOnlyTools.json` get
-    only Open; the list is copied into both native builds at prebuild.
+  - A tool approval's notification has Review and Deny (iOS, and Android 12 or later) when the PC
+    says how long it waits (`ttl_s`). Both need the phone unlocked and open GAIA. Review only opens
+    the chat's approval card, where the person allows it; Deny is sent through the paired PC like
+    the chat's own Deny. Nothing is ever "always". Each notification's buttons answer through a
+    single-use token whose record the extension (iOS) or messaging service (Android) stored; the
+    ids never travel in the notification. Tools listed in `modules/gaia-push/openOnlyTools.json`
+    get only Open; the list is copied into both native builds at prebuild.
 - **Android C++ compiles** run at most `GAIA_BUILD_JOBS` (default 4) at a time in each module.
 - **iOS builds with fastlane:** `bundle exec fastlane ios check` (an unsigned simulator build),
   `ios device` and `ios sideload` (a signed build on your own iPhone). Every account value comes

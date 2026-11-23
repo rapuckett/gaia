@@ -20,11 +20,12 @@ import { useLocaleStore } from '@/state/locale';
 
 import { gaiaPush } from '../../../modules/gaia-push';
 import { postActionNotice } from './actionNotice';
-import { answerFromNotification, readApprovalAction, type ApprovalAction } from './approvalActions';
+import { answerFromNotification, readPressedAction, type ActionOutcome, type PressedAction } from './approvalActions';
 import { chatBadgeCount } from './badge';
 import { INITIAL_OFFER_STATE, offerStep, type OfferEvent } from './offerTrigger';
 import { PushExplainer } from './PushExplainer';
 import { notificationRoute, safePushRoute } from './pushRoutes';
+import { markReviewedFromNotification } from './reviewedFromNotification';
 import { pushAvailable } from './pushConfig';
 import { refreshPermission, requestPushPermission, resetPush, syncPush } from './pushService';
 import { usePushStore } from './pushStore';
@@ -52,28 +53,34 @@ function useOfferTrigger() {
     }, []);
 }
 
-/** Sends a notification's Approve or Deny through the paired PC's pinned client, as the chat's own Allow does. */
-function useAnswerFromNotification(): (action: ApprovalAction) => void {
+/** What a notification's Review or Deny does: Review opens the approval card, Deny goes through the paired PC's pinned client. */
+function useAnswerFromNotification(): (pressed: PressedAction) => Promise<ActionOutcome | null> {
     const client = useGaiaClient();
     const locale = useLocaleCode();
     return useCallback(
-        (action: ApprovalAction) => {
-            answerFromNotification(action, {
+        (pressed: PressedAction) => {
+            const native = gaiaPush();
+            return answerFromNotification(pressed, {
+                claim: (token) => (native ? native.claimApproval(token) : Promise.resolve(null)),
                 currentPcId: () => useConnectionStore.getState().connection?.pcId ?? null,
                 confirm: (request) => (client ? confirmPermission(client, request) : Promise.reject(new GaiaTransportMissingError())),
+                reviewing: markReviewedFromNotification,
                 notify: (reason, sessionId) => postActionNotice(reason, locale, sessionId),
                 now: Date.now,
-            }).catch((error: unknown) => console.error('Answering from a notification failed', error));
+            }).catch((error: unknown) => {
+                console.error('Answering from a notification failed', error);
+                return null;
+            });
         },
         [client, locale],
     );
 }
 
 /**
- * Opens a tapped notification's chat, and sends its Approve or Deny: iOS notifications and the app's own notices come
+ * Opens a tapped notification's chat, and runs its Review or Deny: iOS notifications and the app's own notices come
  * through expo-notifications; Android's pushes open through the push link in +native-intent.
  */
-function useTapRouting(answer: (action: ApprovalAction) => void) {
+function useTapRouting(answer: (pressed: PressedAction) => Promise<ActionOutcome | null>) {
     const router = useRouter();
     const response = Notifications.useLastNotificationResponse();
     const handled = useRef<string | null>(null);
@@ -82,43 +89,42 @@ function useTapRouting(answer: (action: ApprovalAction) => void) {
         const id = `${response.notification.request.identifier}:${response.actionIdentifier}`;
         if (handled.current === id) return;
         handled.current = id;
-        const data = response.notification.request.content.data as Record<string, unknown> | null | undefined;
-        const action = readApprovalAction(response.actionIdentifier, data?.approval);
-        if (action) answer(action);
+        const data = response.notification.request.content.data;
+        const pressed = readPressedAction(response.actionIdentifier, data);
+        if (pressed) void answer(pressed);
         router.push(notificationRoute(data) as never);
         Notifications.clearLastNotificationResponseAsync().catch((error: unknown) => console.error('Could not clear the opened notification', error));
     }, [response, router, answer]);
 }
 
-/** Android's Approve and Deny open the app with the answer in hand: the one that started it, then each one while it runs. */
-function useAndroidApprovalActions(answer: (action: ApprovalAction) => void) {
+/** Android's Review and Deny open the app with a token in hand: the one that started it, then each one while it runs. */
+function useAndroidApprovalActions(answer: (pressed: PressedAction) => Promise<ActionOutcome | null>) {
     const router = useRouter();
     useEffect(() => {
         const native = gaiaPush();
         if (Platform.OS !== 'android' || !native?.takeApprovalAction || !native.addListener) return;
-        const run = (event: ApprovalAction | null) => {
-            if (!event) return;
-            answer(event);
-            router.push(safePushRoute(`/chat/${event.sessionId}`) as never);
-        };
-        const read = (raw: unknown) => {
+        const run = (raw: unknown) => {
             const kind = raw && typeof raw === 'object' ? (raw as { action?: unknown }).action : undefined;
-            return typeof kind === 'string' ? readApprovalAction(kind, raw) : null;
+            const pressed = typeof kind === 'string' ? readPressedAction(kind, raw) : null;
+            if (!pressed) return;
+            void answer(pressed).then((outcome) => {
+                if (outcome && 'sessionId' in outcome) router.push(safePushRoute(`/chat/${outcome.sessionId}`) as never);
+            });
         };
         // Listen first, then take what came before, so an action between the two isn't lost.
-        const sub = native.addListener('onApprovalAction', (event) => run(read(event)));
-        run(read(native.takeApprovalAction()));
+        const sub = native.addListener('onApprovalAction', run);
+        run(native.takeApprovalAction());
         return () => sub.remove();
     }, [answer, router]);
 }
 
-/** Titles the iOS approval notification's Approve and Deny in the app's language; Android labels its own. */
+/** Titles the iOS approval notification's Review and Deny in the app's language; Android labels its own. */
 function useApprovalActionTitles(locale: string) {
     useEffect(() => {
         if (Platform.OS !== 'ios') return;
         const t = translator(locale);
         gaiaPush()
-            ?.setApprovalActions(t.bare('notifications.approve'), t.bare('notifications.deny'))
+            ?.setApprovalActions(t.bare('notifications.devices.review'), t.bare('notifications.deny'))
             .catch((error: unknown) => console.error("Could not set the approval notification's buttons", error));
     }, [locale]);
 }

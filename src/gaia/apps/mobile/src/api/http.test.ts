@@ -222,6 +222,14 @@ describe('createHttpClient requests', () => {
             { session_id: 's1', approved: true, always: true },
         ],
         [
+            'confirmTool, from a notification',
+            (c) => c.confirmTool({ session_id: 's1', approved: false, always: false, confirm_id: 'c1', source: 'notification' }),
+            'POST',
+            '/api/chat/confirm-tool',
+            JSON_HEADERS,
+            { session_id: 's1', approved: false, always: false, confirm_id: 'c1', source: 'notification' },
+        ],
+        [
             'sendUserInput',
             (c) => c.sendUserInput({ session_id: 's1', request_id: 'r1', value: 'Paris' }),
             'POST',

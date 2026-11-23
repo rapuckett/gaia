@@ -902,6 +902,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 approved: request.approved,
                 always: request.always ?? false,
                 ...(request.confirm_id ? { confirm_id: request.confirm_id } : {}),
+                ...(request.source ? { source: request.source } : {}),
             };
             return postJson<ConfirmToolResult>(ENDPOINTS.chatConfirmTool, body, options?.signal);
         },

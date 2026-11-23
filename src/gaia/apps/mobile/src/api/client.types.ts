@@ -396,6 +396,9 @@ export interface SessionUpdate {
 export type HealthResponse = AgentUiHealthResponse;
 export type CancelChatResult = CancelStreamResponse;
 export type ConfirmToolResult = ConfirmToolResponse;
+
+/** confirm-tool's body; `source: "notification"` marks an answer that came from a push, which the PC records as such. */
+export type ConfirmToolRequest = ToolConfirmRequest & { source?: 'notification' };
 export type DeleteMessagesResult = MessagesDeleteResponse;
 export type DeleteSessionResult = SessionDeleteResponse;
 export type UserInputResult = UserInputResponse;
@@ -616,7 +619,7 @@ export interface GaiaClient {
     /** Asks GAIA to stop the chat's turn; the turn's stream then ends with a cancelled `done`. */
     cancelChat(sessionId: string, options?: RequestOptions): Promise<CancelChatResult>;
     /** Answers a `permission_request`: allow once, always allow this call in this chat, or deny. */
-    confirmTool(request: ToolConfirmRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
+    confirmTool(request: ConfirmToolRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
     /**

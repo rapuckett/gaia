@@ -8,6 +8,7 @@ import { repeatedAllowCount } from '@webui/utils/permissionPrompts.core';
 import { permissionRequestNotification } from '@webui/utils/toolEvents.core';
 
 import { useConfirmTool } from '@/data';
+import { reviewedFromNotification } from '@/features/push/reviewedFromNotification';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { deadlineFor, recordAnsweredPrompt, useAnsweredPrompts } from '@/state/permissionPrompts';
 import { markPromptResolved, permissionAnswered, updateTurn, useChatStreamStore } from '@/state/chatStreams';
@@ -45,7 +46,14 @@ export function usePermissionPrompt(sessionId: string): PermissionPromptState | 
 
     const onAnswer = (choice: PermissionChoice) => {
         confirm.mutate(
-            { session_id: sessionId, approved: choice !== 'deny', always: choice === 'always', confirm_id: prompt.confirmId },
+            {
+                session_id: sessionId,
+                approved: choice !== 'deny',
+                always: choice === 'always',
+                confirm_id: prompt.confirmId,
+                // Reached through a notification's Review: the PC records the answer as one from a notification.
+                ...(reviewedFromNotification(sessionId, prompt.confirmId) ? { source: 'notification' as const } : {}),
+            },
             { onSuccess: () => recordAnsweredPrompt(sessionId, prompt, choice === 'deny' ? 'deny' : 'allow') },
         );
     };
