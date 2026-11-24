@@ -23,6 +23,9 @@ const DEFAULT_OPEN: Record<PanelSectionId, boolean> = {
 interface PanelState {
     sections: Record<PanelSectionId, boolean>;
     setSection(id: PanelSectionId, open: boolean): void;
+    /** Opens a section and asks the panel to scroll its header to the top; `seq` makes a repeat tap a new request. */
+    reveal(id: PanelSectionId): void;
+    scrollRequest: { id: PanelSectionId; seq: number } | null;
     /** Which numbers Context & performance shows under the hood. */
     contextScope: 'turn' | 'chat';
     setContextScope(scope: 'turn' | 'chat'): void;
@@ -40,6 +43,8 @@ interface PanelState {
 export const useSessionPanelStore = create<PanelState>((set) => ({
     sections: DEFAULT_OPEN,
     setSection: (id, open) => set((state) => ({ sections: { ...state.sections, [id]: open } })),
+    scrollRequest: null,
+    reveal: (id) => set((state) => ({ sections: { ...state.sections, [id]: true }, scrollRequest: { id, seq: (state.scrollRequest?.seq ?? 0) + 1 } })),
     contextScope: 'turn',
     setContextScope: (contextScope) => set({ contextScope }),
     changesSeed: null,

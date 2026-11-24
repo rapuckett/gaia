@@ -11,7 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { Message, Session, SessionEnvironment, SystemStatus } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
-import { ThemeProvider } from '@/ui';
+import { SheetScrollContext, ThemeProvider } from '@/ui';
 
 import { useSessionPanelStore } from './panelStore';
 import { PanelBody } from './SessionPanel';
@@ -41,6 +41,8 @@ const FILE_ENV: SessionEnvironment = {
     internet_enforced: true,
 };
 
+const scrollTo = jest.fn();
+
 function mount(data: Parameters<typeof createFakeClient>[0]) {
     const client = createFakeClient({ sessions: [SESSION], status: STATUS, ...data });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -49,7 +51,9 @@ function mount(data: Parameters<typeof createFakeClient>[0]) {
             <QueryClientProvider client={queryClient}>
                 <GaiaClientProvider client={client}>
                     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-                        <ThemeProvider>{children}</ThemeProvider>
+                        <ThemeProvider>
+                            <SheetScrollContext.Provider value={{ scrollTo }}>{children}</SheetScrollContext.Provider>
+                        </ThemeProvider>
                     </SafeAreaProvider>
                 </GaiaClientProvider>
             </QueryClientProvider>
@@ -94,6 +98,24 @@ describeNative('the session panel is shaped to the chat', () => {
     });
 });
 
+describeNative('a chip tap', () => {
+    beforeEach(() => scrollTo.mockClear());
+
+    it('opens its section and asks the sheet to scroll it into view', async () => {
+        useSessionPanelStore.getState().setSection('documents', false);
+        await mount({
+            messages: { [ID]: msgs() },
+            environments: { [ID]: FILE_ENV },
+        });
+        await screen.findByTestId('panel-section-documents');
+        expect(screen.queryByText('permit.pdf')).toBeNull();
+        fireEvent.press(await screen.findByLabelText('Documents 1'));
+        await waitFor(() => expect(scrollTo).toHaveBeenCalledTimes(1));
+        expect(scrollTo.mock.calls[0]![0]).not.toBeNull();
+        expect(await screen.findByText(/permit\.pdf/)).toBeTruthy();
+    });
+});
+
 describeNative('the Session section', () => {
     beforeEach(() => {
         useSessionPanelStore.getState().setSection('session', false);
@@ -109,6 +131,15 @@ describeNative('the Session section', () => {
         expect(await screen.findByText(/0\.26\.0/)).toBeTruthy();
         expect(screen.getByText(/10\.8\.1/)).toBeTruthy();
         expect(screen.getByText('gaia')).toBeTruthy();
+    });
+
+    it('middle-truncates a 36-character chat ID', async () => {
+        expect(ID).toHaveLength(36);
+        await mount({ messages: { [ID]: msgs() } });
+        fireEvent.press(await screen.findByTestId('panel-section-session-toggle'));
+        const id = await screen.findByTestId('session-id');
+        expect(id.props.ellipsizeMode).toBe('middle');
+        expect(id.props.numberOfLines).toBe(1);
     });
 
     it('copies the id', async () => {

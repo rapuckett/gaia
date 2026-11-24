@@ -36,7 +36,7 @@ const FACET: Record<FocusKind, { label: MessageKey; icon: LucideIcon }> = {
 /** What the chat is doing, as chips; one with a section opens it. */
 export function FocusBar({ facets }: { facets: FocusFacet[] }) {
     const t = useT();
-    const setSection = useSessionPanelStore((s) => s.setSection);
+    const reveal = useSessionPanelStore((s) => s.reveal);
     return (
         <Stack accessibilityRole="list" accessibilityLabel={t('focus.label')} testID="focus-bar">
         <Row gap="sm" wrap>
@@ -50,7 +50,7 @@ export function FocusBar({ facets }: { facets: FocusFacet[] }) {
                         label={text}
                         accessibilityLabel={facet.count != null ? `${t(label)} ${facet.count}` : t(label)}
                         icon={icon}
-                        onPress={section ? () => setSection(section, true) : undefined}
+                        onPress={section ? () => reveal(section) : undefined}
                         testID={`focus-chip-${facet.kind}`}
                     />
                 );
@@ -244,7 +244,7 @@ export function CommandsSection({ commands, close }: { commands: RanCommand[]; c
                         );
                         const label = `${t(COMMAND_LABEL[c.state])}: ${text}`;
                         return c.messageId != null ? (
-                            <Pressable key={c.key} accessibilityLabel={label} onPress={() => goTo(c.messageId as number)}>
+                            <Pressable key={c.key} inline hugHeight accessibilityLabel={label} onPress={() => goTo(c.messageId as number)}>
                                 {line}
                             </Pressable>
                         ) : (
