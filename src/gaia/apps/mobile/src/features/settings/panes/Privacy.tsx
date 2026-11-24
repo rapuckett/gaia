@@ -4,6 +4,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
 
+import { isolate } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
 
 import type { Settings } from '@/api/client.types';
@@ -24,13 +25,16 @@ import { PrivacyUndo } from './PrivacyUndo';
 type PolicyNotices = NonNullable<Settings['policy_notices']>;
 
 /** The sentence the PC's policy notices add up to, and the raw urls and reasons they carry, kept for Details. */
-function policyText(t: Translate, notices: PolicyNotices, on: boolean): { text: string; details: string[] } {
+export function policyText(t: Translate, notices: PolicyNotices, on: boolean): { text: string; details: string[] } {
     if (!notices.length) return { text: t(on ? 'settings.privacy.localOnlyOn' : 'settings.privacy.localOnlyOff'), details: [] };
     const details = notices.flatMap((n) => [n.url, n.reason].filter((x): x is string => !!x));
     const text = notices
         .map((notice) => {
             if (notice.code === 'users_server_keeps_keys') return t('mobileApp.settings.privacy.usersServerKeepsKeys');
             if (notice.code === 'runtime_keys_not_dropped') return t('mobileApp.settings.privacy.runtimeKeysNotDropped');
+            if (notice.code === 'saved_models_not_checked' && notice.cause === 'model_server_down' && notice.models?.length) {
+                return t.plural('settings.privacy.savedModelNotCheckedServerDown', notice.models.length, { models: notice.models.map((m) => isolate(m, 'ltr')).join(', ') });
+            }
             if (notice.code === 'saved_models_not_checked') return t('mobileApp.settings.privacy.savedModelsNotChecked');
             return t('settings.privacy.policyNoticeUnknown');
         })
