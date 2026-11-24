@@ -35,7 +35,7 @@ export function pickBanner(status: SystemStatus | undefined, fetchError: unknown
     if (progress?.state === 'downloading' || progress?.state === 'starting' || progress?.state === 'error') {
         const name = progress.model_name || status?.default_model_name || '';
         if (progress.state === 'error') {
-            return { id: 'download', tone: 'danger', title: t('banner.download.failed', { name }), message: progress.message ?? undefined, dismissible: true };
+            return { id: 'download', tone: 'danger', title: t('banner.download.failed', { model: name }), message: progress.message ?? undefined, dismissible: true };
         }
         const size = progress.total_bytes ? `${gb(progress.total_bytes, 1)} ${GB_UNIT}` : t('banner.download.sizeUnknown');
         const file = progress.file ? `${t('banner.download.file', { index: progress.file_index, total: progress.total_files })} ${progress.file}` : undefined;
@@ -43,7 +43,7 @@ export function pickBanner(status: SystemStatus | undefined, fetchError: unknown
             progress.state === 'downloading' && progress.total_bytes > 0
                 ? { value: progress.percent / 100, label: `${progress.percent}% · ${gb(progress.downloaded_bytes, 2)} / ${gb(progress.total_bytes, 2)} ${GB_UNIT}` }
                 : { label: progress.state === 'starting' ? (progress.message ?? t('update.picker.starting')) : t('banner.download.progress') };
-        return { id: 'download', tone: 'info', title: t('banner.download.running', { name, size }), message: file, progress: bar };
+        return { id: 'download', tone: 'info', title: t('banner.download.running', { model: name, size }), message: file, progress: bar };
     }
 
     if (fetchError) {
