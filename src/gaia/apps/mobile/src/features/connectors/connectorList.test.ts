@@ -8,7 +8,7 @@ import { translator } from '@webui/i18n/translator';
 
 import type { ConnectorListEntry, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
 
-import { groupConnectors, MCP_GUIDE_URL, setupPayload, setupProblem, tileStatus, unavailableHint } from './connectorList';
+import { disconnectNotice, groupConnectors, MCP_GUIDE_URL, setupPayload, setupProblem, tileStatus, unavailableHint } from './connectorList';
 
 const t = translator('en');
 
@@ -80,6 +80,19 @@ describe('tileStatus', () => {
         expect(tileStatus(row('a', { configured: true, type: 'mcp_server', enabled: false }))).toEqual({ kind: 'paused' });
         expect(tileStatus(row('a', { configurable: false }))).toEqual({ kind: 'setupRequired' });
         expect(tileStatus(row('a'))).toEqual({ kind: 'none' });
+    });
+});
+
+describe('disconnectNotice', () => {
+    const connector = row('google');
+    it('says nothing was stored instead of reporting a revoke', () => {
+        const stored = { revoke_supported: true, revoked_remotely: false, nothing_stored: true };
+        expect(disconnectNotice(stored, connector, t)).toBe(t('settings.connectors.nothingStored'));
+    });
+    it('keeps a failed revoke on its own wording', () => {
+        const failed = { revoke_supported: true, revoked_remotely: false, revoke_error: 'invalid_grant' };
+        expect(disconnectNotice(failed, connector, t)).toBe(t('settings.connectors.notRevoked', { reason: 'invalid_grant' }));
+        expect(disconnectNotice(failed, connector, t)).not.toBe(t('settings.connectors.nothingStored'));
     });
 });
 

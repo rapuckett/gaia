@@ -97,6 +97,19 @@ describeNative('ConnectorsScreen OAuth account', () => {
         expect(await screen.findByText(/did not confirm the revoke \(timeout\)/)).toBeTruthy();
         queryClient.clear();
     });
+
+    it('says nothing was stored when the PC held no sign-in to remove', async () => {
+        const connected = { ...microsoft, configured: true, account_id: 'me@example.com' } as ConnectorRow;
+        const { queryClient, wrap } = setup([connected], { revoke_supported: true, revoked_remotely: false, nothing_stored: true });
+        await render(<ConnectorsScreen />, { wrapper: wrap });
+        fireEvent.press(await screen.findByLabelText('Microsoft'));
+        fireEvent.press(await screen.findByLabelText('Disconnect'));
+        await screen.findByText(/^Disconnect Microsoft/);
+        fireEvent.press((await screen.findAllByLabelText('Disconnect')).at(-1)!);
+        expect(await screen.findByText(/Nothing was stored for this connector/)).toBeTruthy();
+        expect(screen.queryByText(/did not confirm the revoke/)).toBeNull();
+        queryClient.clear();
+    });
 });
 
 describeNative('ConnectorsScreen MCP server', () => {

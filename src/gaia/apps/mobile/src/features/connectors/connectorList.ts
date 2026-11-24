@@ -174,6 +174,7 @@ export function tileStatus(c: ConnectorRow): TileStatus {
 /** What a disconnect tells the person about the provider-side revoke, or null when nothing needs saying. */
 export function disconnectNotice(outcome: DisconnectOutcome | null, connector: ConnectorRow, t: Translate): string | null {
     if (outcome === null) return connector.type === 'oauth_pkce' ? t('mobileApp.connectors.revokeUnreported') : null;
+    if (outcome.nothing_stored) return t('settings.connectors.nothingStored');
     if (!('revoke_supported' in outcome)) return null;
     if (outcome.revoke_supported) {
         return outcome.revoked_remotely

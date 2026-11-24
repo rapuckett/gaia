@@ -186,6 +186,8 @@ export interface DisconnectOutcome {
     revoke_supported?: boolean;
     revoked_remotely?: boolean;
     revoke_error?: string | null;
+    /** The PC held no token for this connector, so there was nothing to disconnect or revoke (#8607). */
+    nothing_stored?: boolean;
 }
 
 /** How a sign-in the PC is finishing ended, from its `connector.oauth.*` events; `error` is the PC's own message, `reason` its code (such as `superseded`). */
