@@ -169,8 +169,12 @@ describeNative('Model list', () => {
             const onUse = jest.fn();
             await mountList(onUse);
             await fireEvent.press(await screen.findByTestId('model-use-Big-GGUF'));
-            await fireEvent.press(await screen.findByTestId('confirm-cancel', {}, SHEET_WAIT));
-            expect(screen.getByTestId('confirm-cancel')).toHaveTextContent('Cancel');
+            const cancel = await screen.findByTestId('confirm-cancel', {}, SHEET_WAIT);
+            expect(cancel).toHaveTextContent('Cancel');
+            await fireEvent.press(cancel);
+            // The sheet's exit timer can run before the next line; the assertions must hold either way.
+            await new Promise((r) => setTimeout(r, 5));
+            await waitFor(() => expect(screen.queryByTestId('confirm-cancel')).toBeNull(), SHEET_WAIT);
             expect(onUse).not.toHaveBeenCalled();
         });
 
