@@ -105,6 +105,7 @@ describe('ChatHeader resource strip', () => {
 
     it('says the note aloud: a polite live region, and an announcement on iOS', async () => {
         const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+        announce.mockClear();
         useAppearance.getState().setShowResources(true);
         await mount();
         await fireEvent.press(await screen.findByTestId('resources-close'));
