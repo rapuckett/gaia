@@ -72,6 +72,11 @@ export function offersAgentLog(message: Message): boolean {
     return (isError || endedBy !== null) && namesAgentLog(endedBy ?? message.content);
 }
 
+/** The turn's own text sits under the cause notice, above Details and the buttons: the agent's crash, or any failed reply with a notice. */
+export function showsTextBelowNotice(message: Message, fixShownBelow: boolean): boolean {
+    return offersAgentLog(message) || (!fixShownBelow && (message.failed === true || isErrorContent(message.content)));
+}
+
 /** What a saved reply that looks like an error needs beside it, decided as the web UI's message bubble does. */
 export function SavedReplyErrors({ message, fixShownBelow = false, latest = false, body }: { message: Message; fixShownBelow?: boolean; latest?: boolean; body?: ReactNode }) {
     const t = useT();
@@ -93,8 +98,8 @@ export function SavedReplyErrors({ message, fixShownBelow = false, latest = fals
     return (
         <Stack gap="sm">
             {isError && !fixShownBelow ? <ErrorBanner title={titleKey ? t(titleKey) : undefined} /> : null}
-            {turn?.raw ? <FailedLead turn={turn} content={message.content} /> : null}
             {body}
+            {turn?.raw ? <FailedLead turn={turn} content={message.content} /> : null}
             {retryFailure ? <Notice tone="danger" message={retryFailure.text} detail={retryFailure.detail} testID="failed-retry-error" /> : null}
             {ownsRetry ? (
                 <Row gap="sm" wrap stack>

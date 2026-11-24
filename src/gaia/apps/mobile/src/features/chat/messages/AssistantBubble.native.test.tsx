@@ -82,3 +82,27 @@ describeNative('AssistantBubble read aloud button', () => {
         expect(await screen.findByText(label)).toBeTruthy();
     });
 });
+
+describeNative('AssistantBubble failed turn', () => {
+    const order = (json: string, marks: string[]) => marks.map((m) => json.indexOf(m));
+
+    it('reads steps, cause, the turn text, then the buttons, for an unclassified failure', async () => {
+        const body = 'The model stopped while answering. Two sections were written first.';
+        const content = `${body} GAIA saved a problem report: GF-20261124-144003-f8bf`;
+        const { toJSON } = await render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <GaiaClientProvider client={createFakeClient({}) as never}>
+                    <ThemeProvider>
+                        <SheetHost>
+                            <AssistantBubble message={{ ...reply(content), failed: true }} latencyMs={800} />
+                        </SheetHost>
+                    </ThemeProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>,
+        );
+        const json = JSON.stringify(toJSON());
+        const at = order(json, ['answer-footer', 'error-banner', 'Two sections were written first', 'pc-only-report']);
+        expect(at.every((i) => i >= 0)).toBe(true);
+        expect(at).toEqual([...at].sort((a, b) => a - b));
+    });
+});
