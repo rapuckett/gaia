@@ -86,7 +86,7 @@ function CardAudio({ src, caption, path, duration_seconds, saved_to, script_path
     const length = position?.length || duration_seconds;
     const active = phase !== 'idle';
     return (
-        <Surface tone="card" radius="md" border padding="sm" testID="card-audio">
+        <Surface tone="card" radius="md" border padding="md" testID="card-audio">
             <Stack gap="sm">
                 <Row gap="sm" align="center">
                     <IconButton
