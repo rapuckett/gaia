@@ -2477,6 +2477,9 @@ class SSEOutputHandler(OutputHandler):
                     "type": "status",
                     "status": "warning",
                     "message": f"Confirmation for '{tool_name}' timed out ({timeout:g} s). Execution denied.",
+                    "phase": "confirm_timeout",
+                    "tool": tool_name,
+                    "timeout_s": timeout,
                 }
             )
             logger.warning("Tool confirmation timed out for '%s'", tool_name)
