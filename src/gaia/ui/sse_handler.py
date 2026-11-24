@@ -2252,7 +2252,9 @@ class SSEOutputHandler(OutputHandler):
                     answered = True
                     break
         if self.cancelled.is_set():
+            cancelled_id = self._confirm_id
             self._clear_pending_confirmation()
+            _push_resolved(cancelled_id)
             self._last_denial = Denial(
                 tool_name,
                 f"Confirmation for '{tool_name}' was abandoned: the run was "
@@ -2681,7 +2683,9 @@ class SSEOutputHandler(OutputHandler):
     def set_relay_question(self, request_id: Optional[str]) -> None:
         """Record (or clear, with ``None``) the relayed question now pending."""
         with self._user_input_lock:
-            self._relay_question_id = request_id
+            previous, self._relay_question_id = self._relay_question_id, request_id
+        if previous and previous != request_id:
+            _push_resolved(previous)
 
     def set_relay_confirmation(
         self,
@@ -2695,7 +2699,7 @@ class SSEOutputHandler(OutputHandler):
         *path_access* is the path a path-access prompt asks to open.
         """
         with self._confirm_lock:
-            self._relay_confirm_id = confirm_id
+            previous, self._relay_confirm_id = self._relay_confirm_id, confirm_id
             self._relay_always_scope = always_scope if confirm_id else None
             self._relay_path_access = path_access if confirm_id else None
             if self._relay_confirm_timer is not None:
@@ -2710,6 +2714,8 @@ class SSEOutputHandler(OutputHandler):
                 timer.daemon = True
                 timer.start()
                 self._relay_confirm_timer = timer
+        if previous and previous != confirm_id:
+            _push_resolved(previous)
 
     def _expire_relay_confirmation(self, confirm_id: str) -> None:
         """Tell the sidecar nobody answered *confirm_id* in time."""

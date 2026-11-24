@@ -1105,3 +1105,31 @@ def test_the_gateway_refuses_a_name_resolving_to_nat64_loopback(monkeypatch):
     )
     with pytest.raises(ValueError):
         public_addresses("gateway.example.com", 443)
+
+
+def test_a_run_cancelled_on_a_pending_prompt_clears_the_phone(sender):
+    from gaia.ui.sse_handler import SSEOutputHandler
+
+    handler = SSEOutputHandler()
+    handler._emit = lambda event: push.observe_run_frame(
+        sender.session_id, "data: " + json.dumps(event) + "\n\n"
+    )
+    handler.cancelled.set()
+    assert handler.confirm_tool_execution("write_file", {}, timeout=10) is False
+    alert, silent = sender.relay.calls
+    approval_id = _opened(sender, alert)["approval_id"]
+    payload = _opened(sender, silent)
+    assert silent.body[PUSH_DELIVERY_FIELD] == "silent"
+    assert payload["params"] == {"resolved": [approval_id]}
+
+
+def test_a_cancelled_relayed_prompt_clears_the_phone(sender):
+    from gaia.ui.sse_handler import SSEOutputHandler
+
+    handler = SSEOutputHandler()
+    sender.notifier.approval(sender.session_id, "c-11", "approval")
+    handler.set_relay_confirmation("c-11")
+    handler.set_relay_confirmation(None)
+    assert _opened(sender, sender.relay.calls[0])["approval_id"] == "c-11"
+    assert _opened(sender, sender.relay.calls[1])["params"] == {"resolved": ["c-11"]}
+    assert len(sender.relay.calls) == 2
