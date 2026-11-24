@@ -7,6 +7,8 @@ import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import * as Clipboard from 'expo-clipboard';
+
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { useLocaleStore } from '@/state/locale';
@@ -36,6 +38,8 @@ function wrapper(client: ReturnType<typeof createFakeClient>) {
     );
     return Wrap;
 }
+
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve(true)) }));
 
 describeNative('AboutPane', () => {
     it('Undo after Forget saves the same memory again, with the same text and category', async () => {
@@ -92,6 +96,31 @@ describeNative('AboutPane', () => {
         fireEvent.press(screen.getByTestId('memory-about-forget-k8'));
         await waitFor(() => expect(notices[0]?.action).toBeTruthy());
         expect(client.knowledgeCalls).toEqual([{ action: 'delete', id: 'k8' }]);
+    });
+
+    it('puts Copy first in the sheet and copies the memory text exactly', async () => {
+        const client = createFakeClient({ memoryKnowledge: SAMPLE_KNOWLEDGE });
+        await render(<AboutPane notify={() => undefined} memoryEnabled onOpenAdvanced={() => undefined} />, { wrapper: wrapper(client) });
+        await screen.findByText('Call me Sam.');
+        fireEvent.press(screen.getByTestId('memory-about-more-k8'));
+        const copy = await screen.findByTestId('memory-about-copy-k8');
+        const order = [copy, screen.getByTestId('memory-about-edit-open-k8'), screen.getByTestId('memory-about-forget-k8')].map((n) => n.props.accessibilityLabel);
+        expect(order).toEqual(['Copy', 'Edit', 'Forget']);
+        fireEvent.press(copy);
+        await waitFor(() => expect(Clipboard.setStringAsync).toHaveBeenCalledWith('Call me Sam.'));
+    });
+
+    it('disables Copy and Edit while a sensitive memory is hidden, and never copies it', async () => {
+        const client = createFakeClient({ memoryKnowledge: SAMPLE_KNOWLEDGE });
+        (Clipboard.setStringAsync as jest.Mock).mockClear();
+        await render(<AboutPane notify={() => undefined} memoryEnabled onOpenAdvanced={() => undefined} />, { wrapper: wrapper(client) });
+        await screen.findByTestId('memory-about-reveal-k5');
+        fireEvent.press(screen.getByTestId('memory-about-more-k5'));
+        const copy = await screen.findByTestId('memory-about-copy-k5');
+        expect(copy).toBeDisabled();
+        expect(screen.getByTestId('memory-about-edit-open-k5')).toBeDisabled();
+        fireEvent.press(copy);
+        expect(Clipboard.setStringAsync).not.toHaveBeenCalled();
     });
 
     describe('in the Arabic UI', () => {

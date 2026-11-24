@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { View } from 'react-native';
 
@@ -8,9 +9,9 @@ import { keepTogether, ref, type MessageKey, type Params, type Say } from '@webu
 import { dueInputValue, dueLabel, relativeDay, sourceKey, type AboutYouItem } from '@webui/utils/memoryFormat.core';
 
 import { useEditMemory } from '@/data';
-import { plainFailureText, translator, useT, type Translate } from '@/i18n/useT';
+import { describeError, plainFailureText, translator, useT, type Translate } from '@/i18n/useT';
 import { ActionSheet, Button, IconButton, Pressable, Row, Stack, Text, TextField, type SheetAction } from '@/ui';
-import { Ellipsis, Eye, Pencil, Trash2 } from '@/ui/icons';
+import { Copy, Ellipsis, Eye, Pencil, Trash2 } from '@/ui/icons';
 
 import type { MemoryPaneProps } from '../tabs';
 import { parseWhen, whenText } from './whenInput';
@@ -83,7 +84,11 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
         );
     };
 
+    const copy = () =>
+        Clipboard.setStringAsync(item.content).catch((error: unknown) => notify({ tone: 'danger', text: describeError(error, t) }));
+
     const actions: SheetAction[] = [
+        { label: t('msg.copy'), icon: Copy, disabled: hidden, onPress: copy, testID: `memory-about-copy-${item.id}` },
         { label: t('mem.about.edit'), icon: Pencil, disabled: hidden, onPress: open, testID: `memory-about-edit-open-${item.id}` },
         { label: t('mem.about.forget'), icon: Trash2, destructive: true, disabled: forgetting, onPress: () => onForget(item), testID: `memory-about-forget-${item.id}` },
     ];
