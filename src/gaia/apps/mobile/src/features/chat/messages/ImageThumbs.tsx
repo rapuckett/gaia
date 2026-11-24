@@ -6,7 +6,7 @@ import { Image, View } from 'react-native';
 
 import { useT } from '@/i18n/useT';
 import { Icon, Pressable, Row, Skeleton, useTheme } from '@/ui';
-import { Image as ImageIcon } from '@/ui/icons';
+import { ImageOff } from '@/ui/icons';
 
 import type { SentAttachment } from './attachedLinks';
 import { ImageViewer } from './ImageViewer';
@@ -26,7 +26,7 @@ function Thumb({ image, onOpen }: { image: SentAttachment; onOpen: () => void })
                 ) : state.status === 'loading' ? (
                     <Skeleton height={THUMB_SIZE} />
                 ) : (
-                    <Icon icon={ImageIcon} tone="secondary" />
+                    <View testID="user-image-failed"><Icon icon={ImageOff} tone="muted" /></View>
                 )}
             </View>
         </Pressable>

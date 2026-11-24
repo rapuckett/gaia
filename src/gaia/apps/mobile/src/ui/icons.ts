@@ -47,6 +47,7 @@ export {
   HardDrive,
   House,
   Image,
+  ImageOff,
   Inbox,
   Info,
   KeyRound,

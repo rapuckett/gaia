@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
+import { Platform } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
 import { middleTruncate } from '@webui/utils/format';
@@ -11,9 +12,12 @@ import { useDirection, useT } from '@/i18n/useT';
 import { contentDir, Icon, Pressable, Row, Stack, Surface, Text } from '@/ui';
 import { FileText } from '@/ui/icons';
 
-import { splitAttachmentLinks } from './attachedLinks';
+import { splitAttachmentLinks, type SentAttachment } from './attachedLinks';
 import { ImageThumbs } from './ImageThumbs';
 import { useMessageActions, type MessageContext, type StartOpen } from './useMessageActions';
+
+// The phone's Image cannot draw SVG, so a native SVG upload shows as a file.
+const drawable = (f: SentAttachment) => f.isImage && !(Platform.OS !== 'web' && /\.svg$/i.test(f.name));
 
 export interface UserBubbleProps {
     message: Message;
@@ -28,8 +32,8 @@ export function UserBubble({ message, onCollapse, context, startOpen }: UserBubb
     const uiDir = useDirection();
     const actions = useMessageActions(message, message.content, context, startOpen);
     const { text, files: attached } = splitAttachmentLinks(message.content);
-    const images = attached.filter((f) => f.isImage);
-    const files = attached.filter((f) => !f.isImage);
+    const images = attached.filter(drawable);
+    const files = attached.filter((f) => !drawable(f));
     const long = isLongUserMessage(text);
     const [expanded, setExpanded] = useState(false);
     const collapsed = long && !expanded;

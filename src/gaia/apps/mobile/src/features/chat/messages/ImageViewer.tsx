@@ -8,8 +8,8 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { isolate } from '@webui/i18n/registry';
 import { middleTruncate } from '@webui/utils/format';
 import { useDirection, useT } from '@/i18n/useT';
-import { IconButton, Notice, Spinner, Text, useTheme } from '@/ui';
-import { ChevronLeft, ChevronRight, X } from '@/ui/icons';
+import { Icon, IconButton, Spinner, Text, useTheme } from '@/ui';
+import { ChevronLeft, ChevronRight, ImageOff, X } from '@/ui/icons';
 
 import type { SentAttachment } from './attachedLinks';
 import { useUploadedImage } from './uploadedImage';
@@ -29,8 +29,9 @@ function Stage({ image, width, height }: { image: SentAttachment; width: number;
     if (state.status === 'loading') return <Spinner />;
     if (state.status === 'failed') {
         return (
-            <View style={{ padding: 24 }}>
-                <Notice tone="danger" title={t('mobileApp.render.imageFailed')} message={state.error} />
+            <View style={{ padding: 24, alignItems: 'center', gap: 12 }} testID="image-viewer-failed">
+                <Icon icon={ImageOff} size="lg" tone="muted" />
+                <Text role="body" tone="muted" align="center">{t('mobileApp.render.imageFailed')}</Text>
             </View>
         );
     }
