@@ -24,7 +24,7 @@ const t = translator('en');
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 const image = (name: string): SentAttachment => ({ name, url: `/api/files/uploads/${name}`, isImage: true });
 const IMAGES = ['a.png', 'b.jpg', 'c.png'].map(image);
-const loader = jest.fn((path: string) => Promise.resolve({ uri: `data:image/png;base64,${path.split('/').pop()}`, mime: 'image/png', base64: '' }));
+const loader = jest.fn((path: string) => path.endsWith('/bad.png') ? Promise.reject(new Error('gone')) : Promise.resolve({ uri: `data:image/png;base64,${path.split('/').pop()}`, mime: 'image/png', base64: '' }));
 
 const wrap = (node: React.ReactElement) =>
     render(
@@ -122,5 +122,50 @@ describeNative('image strip and viewer', () => {
         );
         expect(screen.getAllByTestId('user-image-thumb')).toHaveLength(2);
         expect(screen.getAllByTestId('user-attachment')).toHaveLength(1);
+    });
+
+    const bubble = (content: string) => {
+        const message: Message = { id: 2, session_id: 's', role: 'user', content, created_at: '2026-11-13T14:05:09Z', rag_sources: null };
+        return wrap(
+            <QueryClientProvider client={new QueryClient()}>
+                <UserBubble message={message} />
+            </QueryClientProvider>,
+        );
+    };
+
+    it('shows an SVG upload as a file chip, not a thumbnail', async () => {
+        await bubble('Look\n![logo.SVG](/api/files/uploads/logo.SVG)\n![a.png](/api/files/uploads/a.png)');
+        expect(screen.getAllByTestId('user-image-thumb')).toHaveLength(1);
+        expect(screen.getAllByTestId('user-attachment')).toHaveLength(1);
+    });
+
+    it('lifts an image line from the middle and closes the text up around it', async () => {
+        await bubble('Before\n\n![a.png](/api/files/uploads/a.png)\n\nAfter\n[n.txt](/api/files/uploads/n.txt)');
+        expect(screen.getAllByTestId('user-image-thumb')).toHaveLength(1);
+        expect(screen.getAllByTestId('user-attachment')).toHaveLength(1);
+        expect(screen.getByText('Before\n\nAfter')).toBeTruthy();
+    });
+
+    it('leaves an image line inside a code fence alone', async () => {
+        await bubble('```\n![a.png](/api/files/uploads/a.png)\n```');
+        expect(screen.queryByTestId('user-image-thumb')).toBeNull();
+    });
+
+    it('shows an image-off icon in the frame when a thumbnail fails to load', async () => {
+        jest.spyOn(console, 'error').mockImplementation(() => undefined);
+        await wrap(<ImageThumbs images={[image('bad.png'), image('a.png')]} />);
+        expect(await screen.findByTestId('user-image-failed')).toBeTruthy();
+        const [failed, loaded] = screen.getAllByTestId('user-image-thumb');
+        expect(failed.props.accessibilityLabel).toBe('bad.png');
+        expect(failed.props.accessibilityHint).toBe(t('mobileApp.render.imageFailed'));
+        expect(loaded.props.accessibilityLabel).toBe(t('msg.imageOpen', { name: 'a.png' }));
+    });
+
+    it('says the image could not load in the viewer', async () => {
+        jest.spyOn(console, 'error').mockImplementation(() => undefined);
+        await wrap(<ImageThumbs images={[image('bad.png')]} />);
+        await fireEvent.press(screen.getByTestId('user-image-thumb'));
+        expect(await screen.findByTestId('image-viewer-failed')).toBeTruthy();
+        expect(screen.getByText(t('mobileApp.render.imageFailed'))).toBeTruthy();
     });
 });
