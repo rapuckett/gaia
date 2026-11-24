@@ -145,6 +145,7 @@ describe('endpoints', () => {
         memoryConversation: ['GET'],
         memoryConversations: ['GET'],
         memoryConversationsSearch: ['GET'],
+        memoryEmbedder: ['GET', 'PUT'],
         memoryEmbeddingCoverage: ['GET'],
         memoryEntities: ['GET'],
         memoryKnowledge: ['GET', 'POST'],
