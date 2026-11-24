@@ -11,6 +11,7 @@ import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { useNextChatFolder } from '@/features/composer';
+import { useResearchStore } from '@/state/research';
 import { useNextChatDocs } from '@/features/documents';
 import { useT } from '@/i18n/useT';
 import { SheetScope, UIProvider } from '@/ui';
@@ -36,7 +37,7 @@ import { NewChatScreen } from './NewChatScreen';
  * `new-chat-agent-cant-download` (this release has none to download: the reason, no Download), `new-chat-agent-downloading`
  * (a download the PC started, followed), `new-chat-agent-pc-only` (the PC keeps both ways out to itself: Check again).
  */
-export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'new-chat-doc-brief', 'create-failed', 'skill-prompt', 'new-chat-folder-own-fixed', 'new-chat-folder-own-add', 'new-chat-folder-project-fixed', 'new-chat-folder-project-add', 'new-chat-folder-picker', 'new-chat-folder-picked', 'new-chat-folder-refused', 'new-chat-folder-outside-home', 'new-chat-agent-missing', 'new-chat-agent-invalid', 'new-chat-agent-cant-download', 'new-chat-agent-downloading', 'new-chat-agent-pc-only', 'new-chat-agent-fast', 'new-chat-starters', 'new-chat-starters-none'] as const;
+export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'new-chat-doc-brief', 'create-failed', 'skill-prompt', 'new-chat-folder-own-fixed', 'new-chat-folder-own-add', 'new-chat-folder-project-fixed', 'new-chat-folder-project-add', 'new-chat-folder-picker', 'new-chat-folder-picked', 'new-chat-folder-refused', 'new-chat-folder-outside-home', 'new-chat-agent-missing', 'new-chat-agent-invalid', 'new-chat-agent-cant-download', 'new-chat-agent-downloading', 'new-chat-agent-pc-only', 'new-chat-agent-fast', 'new-chat-starters', 'new-chat-starters-none', 'new-chat-research-off', 'new-chat-research-on'] as const;
 export type NewChatScene = (typeof NEW_CHAT_SCENES)[number];
 
 const READY = {
@@ -167,6 +168,10 @@ export function NewChatScenes({ state }: { state: NewChatScene }) {
         if (state !== 'new-chat-library') return undefined;
         useNextChatDocs.getState().add(['d1', 'd2']);
         return () => useNextChatDocs.getState().clear();
+    }, [state]);
+    useEffect(() => {
+        useResearchStore.getState().setResearch(null, state === 'new-chat-research-on');
+        return () => useResearchStore.getState().setResearch(null, false);
     }, [state]);
     useEffect(() => {
         if (state !== 'new-chat-folder-picked' && !REFUSALS[state]) return undefined;

@@ -18,6 +18,7 @@ import { GaiaClientProvider } from '@/data';
 import { useComposerQueueStore } from '@/features/composer/composerQueue';
 import { translator } from '@/i18n/useT';
 import { useChatStreamStore } from '@/state/chatStreams';
+import { useResearchStore } from '@/state/research';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
 
@@ -75,6 +76,7 @@ describe('ChatScreen', () => {
     beforeEach(() => {
         useChatStreamStore.setState({ turns: {}, resolved: {} });
         useComposerQueueStore.setState({ byChat: {}, drafts: {} });
+        useResearchStore.setState({ research: {} });
     });
 
     it('streams an answer, shows the stopped note after Stop, and Continue sends the web UI text', async () => {
@@ -102,6 +104,20 @@ describe('ChatScreen', () => {
         expect(await screen.findByText(t('msg.stopped'))).toBeTruthy();
         await fireEvent.press(screen.getByTestId('continue'));
         await waitFor(() => expect(client.sent.map((s) => s.message)).toEqual(['Tell a story', t('msg.continuePrompt')]));
+    });
+
+    it('sends the typed text as a /research turn while the Research chip is on', async () => {
+        const client = createFakeClient({
+            sessions: [SESSION],
+            messages: { [CHAT]: [message(1, 'user', 'Hi')] },
+            replies: async function* (): AsyncGenerator<StreamEvent> {
+                yield { type: 'done', message_id: 2, content: 'ok' };
+            },
+        });
+        await mount(client);
+        await fireEvent.press(await screen.findByTestId('research-chip'));
+        await sendText('EU AI Act');
+        await waitFor(() => expect(client.sent.map((s) => s.message)).toEqual(['/research EU AI Act']));
     });
 
     it('shows a failed turn as its classified text and Try again deletes the exchange and resends', async () => {

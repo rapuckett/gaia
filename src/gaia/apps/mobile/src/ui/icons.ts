@@ -91,6 +91,7 @@ export {
   SlidersHorizontal,
   Smartphone,
   Sparkles,
+  Telescope,
   Square,
   SquarePen,
   Table,

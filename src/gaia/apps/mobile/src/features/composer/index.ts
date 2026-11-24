@@ -10,5 +10,6 @@ export { AgentChip } from './AgentChip';
 export { ModelChip } from './ModelChip';
 export { PermissionChip } from './PermissionChip';
 export { PrivateChip } from './PrivateChip';
+export { ResearchChip, useResearch } from './ResearchChip';
 export { Composer, type ComposerProps } from './Composer';
 export { useComposerQueue, useFollowUpEvents, type ComposerQueue } from './composerQueue';
