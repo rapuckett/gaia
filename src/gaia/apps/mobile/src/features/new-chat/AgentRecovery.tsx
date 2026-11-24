@@ -15,7 +15,7 @@ import { failureLine, programName, type AgentLine } from '@/features/settings/pa
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { AgentDownloadRow } from '@/features/setup/steps/AgentDownloadRow';
 import { useT } from '@/i18n/useT';
-import { Button, Disclosure, Row, Spinner, Stack, Surface, Text } from '@/ui';
+import { Button, Disclosure, Row, Spinner, Stack, Text, useTheme } from '@/ui';
 import { Download } from '@/ui/icons';
 
 const NAME = 'gaiacpp';
@@ -42,6 +42,7 @@ function Line({ line }: { line: AgentLine }) {
 /** The chosen gaiacpp can't start: why, and the two ways out. Nothing changes until the person picks one. */
 export function AgentRecovery({ problem, answeredAt, onRetry, kept = false }: AgentRecoveryProps) {
     const t = useT();
+    const { colors, radius, space } = useTheme();
     const client = useGaiaClient();
     const queryClient = useQueryClient();
     const refused = useAgentProgramsRefused();
@@ -133,9 +134,12 @@ export function AgentRecovery({ problem, answeredAt, onRetry, kept = false }: Ag
         : switchError ? failureLine('newChat.agent.switchFailed', switchError, t) : null;
 
     return (
-        <Surface tone="card" border radius="md" padding="md" testID="agent-recovery">
+        <View
+            testID="agent-recovery"
+            style={{ backgroundColor: colors.dangerDim, borderRadius: radius.md, borderWidth: 1, borderColor: `${colors.danger}40`, padding: space.md }}
+        >
             <Stack gap="sm">
-                <Text role="ui" weight="semibold" accessibilityRole="alert">
+                <Text role="ui" weight="semibold" tone="danger" accessibilityRole="alert">
                     {t(problem.code === 'gaiacpp_invalid' ? 'newChat.agent.invalid' : 'newChat.agent.missing', { name })}
                 </Text>
                 {kept ? <View accessibilityLiveRegion="polite"><Text role="label" tone="secondary">{keptText}</Text></View> : null}
@@ -189,6 +193,6 @@ export function AgentRecovery({ problem, answeredAt, onRetry, kept = false }: Ag
                     <Text role="caption" tone="secondary" mono dir="ltr" align="ltr" selectable>{problem.detail}</Text>
                 </Disclosure>
             </Stack>
-        </Surface>
+        </View>
     );
 }
