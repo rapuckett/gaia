@@ -42,6 +42,10 @@ export const useDeviceStore = create<DeviceState>((set) => ({
     setStatus: (status) => set({ status }),
 }));
 
+/** Settings lists the section when pairing is on, and when the first read failed for another reason, so its error shows. */
+export const devicesSectionShown = (s: Pick<DeviceState, 'available' | 'loadError'>): boolean =>
+    s.available === true || (s.available === null && s.loadError !== null);
+
 /** What `/api/sessions/events` sends the PC about devices. */
 export type DeviceEvent =
     | { type: 'device_paired'; device: PairedDevice | null; actions?: string[] }

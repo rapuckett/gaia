@@ -6,7 +6,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DevicesSettings } from '../DevicesSettings';
-import { useDeviceStore } from '../../../stores/deviceStore';
+import { devicesSectionShown, useDeviceStore } from '../../../stores/deviceStore';
 import { useChatStore } from '../../../stores/chatStore';
 import { pairingLink } from '../../../utils/pairingLink';
 import type { DeviceAccessStatus, DevicePairingOffer } from '../../../services/devicesApi';
@@ -60,6 +60,20 @@ describe('DevicesSettings', () => {
         replies['GET /devices/status'] = { status: 403, body: { detail: 'Device pairing is off.' } };
         await useDeviceStore.getState().refresh();
         expect(useDeviceStore.getState()).toMatchObject({ available: false, status: null, loadError: null });
+        expect(devicesSectionShown(useDeviceStore.getState())).toBe(false);
+    });
+
+    it('keeps the section on any other first-read failure, says why, and reads again on Try again', async () => {
+        replies['GET /devices/status'] = { status: 500, body: { detail: 'The device store is locked.' } };
+        render(<DevicesSettings />);
+        expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't read the paired devices: The device store is locked.");
+        expect(useDeviceStore.getState().available).toBeNull();
+        expect(devicesSectionShown(useDeviceStore.getState())).toBe(true);
+
+        replies['GET /devices/status'] = { body: STATUS };
+        fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+        expect(await screen.findByRole('switch', { name: 'Allow paired devices to connect' })).toBeInTheDocument();
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
     it('copies the pairing link and says so, or shows why it could not', async () => {

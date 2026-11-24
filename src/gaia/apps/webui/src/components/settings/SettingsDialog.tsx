@@ -22,7 +22,7 @@ import { useT } from '../../i18n/useT';
 import { SetupSettings } from './SetupSettings';
 import { AboutSettings } from './AboutSettings';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { useDeviceStore } from '../../stores/deviceStore';
+import { devicesSectionShown, useDeviceStore } from '../../stores/deviceStore';
 
 // The heaviest panes, and ones most people never open, load on first open.
 const ConnectorsPane = lazy(() => import('./ConnectorsPane').then((m) => ({ default: m.ConnectorsPane })));
@@ -42,8 +42,8 @@ export function SettingsDialog({ onUseSkill }: { onUseSkill: (name: string) => v
     const open = useChatStore((s) => s.openSettings);
     const close = useChatStore((s) => s.closeSettings);
     const jump = useChatStore((s) => s.settingsJump);
-    // Paired devices stay out of sight unless device_pairing is on and this is the PC.
-    const devicesAvailable = useDeviceStore((s) => s.available === true);
+    // Paired devices stay out of sight unless device_pairing is on and this is the PC, or reading them failed.
+    const devicesAvailable = useDeviceStore(devicesSectionShown);
     const sections = devicesAvailable ? SECTIONS : SECTIONS.filter((id) => id !== 'devices');
     const panel = useRef<HTMLDivElement>(null);
     const scroller = useRef<HTMLDivElement>(null);

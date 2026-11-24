@@ -2113,6 +2113,8 @@ export const enMessages = {
     'settings.messaging.state.conflict': "GAIA's Discord connector already uses this bot. Create a second application for messaging and paste its token.",
     'settings.section.devices': 'Phones and tablets',
     'settings.devices.lede': 'Use the GAIA app on your phone or tablet with this PC. Only devices you pair and allow here can connect.',
+    'settings.devices.loadFailed': "Couldn't read the paired devices: {error}",
+    'settings.devices.retry': 'Try again',
     'settings.devices.connect': 'Allow paired devices to connect',
     'settings.devices.connectHint': "Over the local network this PC is on. While it's off, nothing can connect, paired or not.",
     'settings.devices.portInUse': "Port {port} is in use by another app, so devices can't connect. Close that app, then turn this on again.",

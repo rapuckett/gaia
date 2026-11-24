@@ -194,7 +194,12 @@ export function DevicesSettings() {
         return (
             <div className="settings-pane">
                 <h2 className="settings-pane-title">{t('settings.section.devices')}</h2>
-                {loadError ? <p className="settings-error" role="alert">{loadError}</p> : <p className="settings-hint">{t('settings.loading')}</p>}
+                {loadError ? (
+                    <div className="settings-card">
+                        <p className="settings-error" role="alert">{t('settings.devices.loadFailed', { error: loadError })}</p>
+                        <button type="button" className="btn-secondary" onClick={() => void refresh()}>{t('settings.devices.retry')}</button>
+                    </div>
+                ) : <p className="settings-hint">{t('settings.loading')}</p>}
             </div>
         );
     }

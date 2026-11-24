@@ -2113,6 +2113,8 @@ const messages: Messages = {
     'settings.messaging.state.conflict': 'يستخدم موصل ديسكورد في GAIA هذا البوت بالفعل. أنشئ تطبيقًا ثانيًا للمراسلة والصق رمزه.',
     'settings.section.devices': 'الهواتف والأجهزة اللوحية',
     'settings.devices.lede': 'استخدم تطبيق GAIA على هاتفك أو جهازك اللوحي مع هذا الحاسوب. لا تتصل إلا الأجهزة التي تقرنها وتسمح لها هنا.',
+    'settings.devices.loadFailed': 'تعذّرت قراءة الأجهزة المقترنة: {error}',
+    'settings.devices.retry': 'إعادة المحاولة',
     'settings.devices.connect': 'السماح للأجهزة المقترنة بالاتصال',
     'settings.devices.connectHint': 'عبر الشبكة المحلية التي يتصل بها هذا الحاسوب. ما دام متوقفًا لا يمكن لأي جهاز الاتصال، مقترنًا كان أو لا.',
     'settings.devices.portInUse': 'المنفذ {port} يستخدمه تطبيق آخر، لذا لا يمكن للأجهزة الاتصال. أغلق ذلك التطبيق، ثم شغّل هذا الخيار مرة أخرى.',
