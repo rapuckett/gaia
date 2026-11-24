@@ -3,7 +3,9 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
+import { Icon } from '../controls/Icon';
 import { Pressable } from '../controls/Pressable';
+import { Check } from '../icons';
 import { Row } from '../layout/layout';
 import { FirstLine } from '../text/FirstLine';
 import { useLargeText } from '../theme/a11y';
@@ -16,11 +18,16 @@ export interface ListRowProps {
     subtitle?: string;
     /** `danger` for a failed state such as "1 not sent". */
     subtitleTone?: Tone;
+    /** A third caption line under the subtitle. */
+    detail?: string;
+    detailTone?: Tone;
     leading?: ReactNode;
     trailing?: ReactNode;
     onPress?: () => void;
     onLongPress?: () => void;
     selected?: boolean;
+    /** A choice row: `false` keeps the check's column empty so labels line up, `true` draws the check. Leave unset for any other row. */
+    checked?: boolean;
     titleLines?: number;
     /** For long user content (a chat title): the lines it keeps at large sizes, where other titles show in full. */
     titleLargeLines?: number;
@@ -49,11 +56,14 @@ export function ListRow({
     title,
     subtitle,
     subtitleTone = 'muted',
+    detail,
+    detailTone = 'muted',
     leading,
     trailing,
     onPress,
     onLongPress,
     selected,
+    checked,
     titleLines = 1,
     titleLargeLines,
     titleEllipsize,
@@ -72,7 +82,19 @@ export function ListRow({
     const split = pressable && !!trailing;
     const content = (
         <Row gap="md" align={largeText ? 'start' : 'center'}>
-            {leading ? <FirstLine role="ui" maxScale={titleMaxScale}>{leading}</FirstLine> : null}
+            {checked !== undefined ? (
+                <FirstLine role="ui" maxScale={titleMaxScale}>
+                    <View testID="list-row-check" style={{ width: 16 }}>
+                        {checked ? (
+                            <View testID="list-row-check-mark">
+                                <Icon icon={Check} size="sm" tone="accent" />
+                            </View>
+                        ) : null}
+                    </View>
+                </FirstLine>
+            ) : leading ? (
+                <FirstLine role="ui" maxScale={titleMaxScale}>{leading}</FirstLine>
+            ) : null}
             {/* A row that isn't pressable keeps its label on the text block, so a trailing control stays a stop of its own. */}
             <View
                 style={{ flex: 1, minWidth: 0 }}
@@ -84,6 +106,11 @@ export function ListRow({
                 {subtitle ? (
                     <Text role="caption" tone={subtitleTone} numberOfLines={subtitleLines}>
                         {subtitle}
+                    </Text>
+                ) : null}
+                {detail ? (
+                    <Text role="caption" tone={detailTone}>
+                        {detail}
                     </Text>
                 ) : null}
             </View>

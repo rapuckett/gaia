@@ -4,7 +4,7 @@
 /** Which chat events should alert the user, and how (#5226). Pure, so it tests without a DOM and the phone app can import it. */
 
 import type { Translate } from '../i18n/translator';
-import type { MessageKey } from '../i18n/registry';
+import { DEFAULT_LOCALE, type MessageKey } from '../i18n/registry';
 import type { AlertEvent, AlertSettings } from '../stores/notificationStore';
 import type { AwaitingUser, Session } from '../types';
 
@@ -96,6 +96,11 @@ export interface BatteryState {
 export function batteryAllowsKeepAwake(battery: BatteryState | null, floorPercent: number): boolean {
     if (!battery || battery.charging || floorPercent <= 0) return true;
     return battery.level * 100 >= floorPercent;
+}
+
+/** A place in the GPU line: "3rd" in English, a plain 3 in a language without those suffixes. */
+export function placeInLine(t: Translate, key: 'row.queuePlace' | 'live.queued', n: number): string {
+    return t.compose((say, code) => say(key, { place: code === DEFAULT_LOCALE ? ordinal(n) : n }));
 }
 
 /** 1 → '1st', 2 → '2nd', 11 → '11th'. */

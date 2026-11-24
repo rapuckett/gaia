@@ -26,7 +26,7 @@ import { LibraryNotices, libraryNoticesOf } from '../LibraryNotices';
 import { GrantNote, isAgentNotGranted } from '../GrantNote';
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
-import { SavedReplyErrors } from '../ReplyErrors';
+import { offersAgentLog, SavedReplyErrors, showsFailedLead } from '../ReplyErrors';
 import { AnswerComparison } from '../compare/AnswerComparison';
 import { useAnswerComparison } from '../compare/useAnswerComparison';
 import { useMessageActions, type MessageContext } from './useMessageActions';
@@ -69,27 +69,32 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
         readable && speechAvailable ? [{ label: readAloud.label, icon: readAloud.active ? Square : Volume2, onPress: readAloud.toggle }] : undefined,
     );
     const compare = useAnswerComparison(message.session_id);
+    const answerText = (
+        <Pressable
+            onLongPress={cancelled ? undefined : actions.openSheet}
+            accessibilityRole="text"
+            accessible={!hasLinks(text)}
+            minSize={0}
+            {...(cancelled ? {} : actions.a11y)}
+        >
+            {text && !(!streaming && showsFailedLead(message, fixShownBelow)) ? <Markdown text={text} streaming={streaming} /> : null}
+        </Pressable>
+    );
+    // The agent's own message sits under the notice and above the buttons, as on the desktop.
+    const textBelowNotice = !streaming && !cancelled && offersAgentLog(message);
     return (
         <Stack paddingX="lg" paddingY="xs">
             {!streaming && !cancelled ? <LibraryNotices notices={libraryNoticesOf(message)} /> : null}
             {activity.steps.length > 0 ? <ActivityTimeline steps={activity.steps} answer={text} /> : null}
             <AnswerCards cards={cards} />
-            <Pressable
-                onLongPress={cancelled ? undefined : actions.openSheet}
-                accessibilityRole="text"
-                accessible={!hasLinks(text)}
-                minSize={0}
-                {...(cancelled ? {} : actions.a11y)}
-            >
-                {text ? <Markdown text={text} streaming={streaming} /> : null}
-            </Pressable>
+            {textBelowNotice ? null : answerText}
             {!streaming && !cancelled ? <AnswerFooter latencyMs={latencyMs} stats={message.stats} ended={activity.ended} /> : null}
             {sessionId && !streaming && !cancelled && message.id > 0 ? (
                 <TurnChanges sessionId={sessionId} messageId={message.id} reportError={newest} />
             ) : null}
             {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
             {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
-            {!streaming && !cancelled ? <SavedReplyErrors message={message} fixShownBelow={fixShownBelow} /> : null}
+            {!streaming && !cancelled ? <SavedReplyErrors message={message} fixShownBelow={fixShownBelow} latest={!!context?.latest} body={textBelowNotice ? answerText : undefined} /> : null}
             {!streaming && !cancelled && isAgentNotGranted(spoken) ? <GrantNote /> : null}
             {!streaming && !cancelled && !isAgentNotGranted(spoken) && isAuthRequiredMessage(spoken) ? <EmailConnect content={spoken} /> : null}
             {!streaming && !cancelled ? (

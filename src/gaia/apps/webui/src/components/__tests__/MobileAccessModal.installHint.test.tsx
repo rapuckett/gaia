@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
@@ -18,7 +18,6 @@ const ACTIVE: TunnelStatus = {
     token: 'tok',
     startedAt: null,
     error: null,
-    publicIp: null,
 };
 
 const STARTING: TunnelStatus = { ...ACTIVE, active: false, url: null, token: null };
@@ -66,7 +65,7 @@ describe('MobileAccessModal home-screen hint', () => {
     it('stays hidden while the tunnel is still starting, with no link to install yet', async () => {
         vi.mocked(api.getTunnelStatus).mockResolvedValue(STARTING);
         render(<MobileAccessModal isOpen onClose={vi.fn()} />);
-        expect(await screen.findByText(tEn('mobileAccess.starting'))).toBeInTheDocument();
+        expect(await screen.findByText(tEn('mobile.starting'))).toBeInTheDocument();
         expect(screen.queryByText('Keep GAIA on your phone')).toBeNull();
     });
 
@@ -80,7 +79,20 @@ describe('MobileAccessModal home-screen hint', () => {
         vi.mocked(api.getTunnelStatus).mockRejectedValue(new Error('offline'));
         render(<MobileAccessModal isOpen onClose={vi.fn()} />);
         await waitFor(() => expect(api.getTunnelStatus).toHaveBeenCalled());
-        expect(screen.getByText(tEn('mobileAccess.starting'))).toBeInTheDocument();
+        expect(screen.getByText(tEn('mobile.starting'))).toBeInTheDocument();
         expect(screen.queryByText('Keep GAIA on your phone')).toBeNull();
+    });
+
+    it('points people with the app to Settings, and the link opens Phones and tablets', async () => {
+        const openSettings = vi.fn();
+        const onClose = vi.fn();
+        useChatStore.setState({ openSettings });
+        vi.mocked(api.getTunnelStatus).mockResolvedValue(ACTIVE);
+        render(<MobileAccessModal isOpen onClose={onClose} />);
+        const link = await screen.findByRole('button', { name: 'Settings › Phones and tablets' });
+        expect(link.closest('p')?.textContent).toBe('Have the GAIA app? Pair it in Settings › Phones and tablets instead.');
+        fireEvent.click(link);
+        expect(openSettings).toHaveBeenCalledWith('devices');
+        expect(onClose).toHaveBeenCalled();
     });
 });

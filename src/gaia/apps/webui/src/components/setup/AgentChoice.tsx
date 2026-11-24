@@ -6,6 +6,7 @@ import { ChevronDown, Download, Loader2 } from 'lucide-react';
 import { RadioGroup } from '../RadioGroup';
 import { useT } from '../../i18n/useT';
 import * as api from '../../services/api';
+import { useActiveAgentStore } from '../../stores/activeAgentStore';
 import type { AgentProgram, AgentPrograms, FlagshipAgent } from '../../types';
 import { AgentDownloadRow, useAgentDownload } from './AgentDownload';
 import { AGENT_OPTIONS as OPTIONS, AGENT_WHY as WHY, agentInstalled, agentNeedsDownload, agentOff, type AgentPick } from './agentPrograms';
@@ -23,13 +24,15 @@ interface Props {
     /** Setup: the agent picked here, held until Continue; null keeps the one in use. */
     pending?: FlagshipAgent | null;
     onPending?: (pick: AgentPick | null) => void;
+    /** Gives the title this id and lets it take focus, so setup can open Customize at the agent. */
+    headingId?: string;
 }
 
 /** Which program runs the GAIA agent: the Python one or the native C++ one. */
-export function AgentChoice({ inSettings = false, disabled = false, pending = null, onPending }: Props) {
+export function AgentChoice({ inSettings = false, disabled = false, pending = null, onPending, headingId }: Props) {
     const t = useT();
     const ids = useId();
-    const titleId = `${ids}-title`;
+    const titleId = headingId ?? `${ids}-title`;
     const moreId = `${ids}-more`;
     const offId = `${ids}-off`;
     const [listing, setListing] = useState<AgentPrograms | null>(null);
@@ -45,6 +48,7 @@ export function AgentChoice({ inSettings = false, disabled = false, pending = nu
         setListing((l) => (l ? { ...l, current: id } : l));
         try {
             const updated = await api.updateSettings({ flagship_agent: id });
+            useActiveAgentStore.getState().setCurrent(updated.flagship_agent);
             if (mounted.current) setListing((l) => (l ? { ...l, current: updated.flagship_agent } : l));
         } catch (err) {
             if (!mounted.current) return;
@@ -108,7 +112,7 @@ export function AgentChoice({ inSettings = false, disabled = false, pending = nu
 
     return (
         <section className={`agent-choice${inSettings ? ' settings-card' : ''}`} aria-labelledby={titleId} aria-busy={saving || downloading || (!listing && !loadError)}>
-            <h3 className={`agent-choice-title ${inSettings ? 'settings-label' : 'mc-job-title'}`} id={titleId}>
+            <h3 className={`agent-choice-title ${inSettings ? 'settings-label' : 'mc-job-title'}`} id={titleId} tabIndex={headingId ? -1 : undefined}>
                 {t('setup.agent.title')}
                 {saving && <Loader2 size={13} className="spin" aria-hidden="true" />}
             </h3>
@@ -132,8 +136,8 @@ export function AgentChoice({ inSettings = false, disabled = false, pending = nu
                                     onClick={() => choose(o.id)}
                                 >
                                     <span className="agent-choice-what">
-                                        <bdi dir="ltr" className="agent-choice-name">{o.id}</bdi>
                                         <span className="agent-choice-label">{t(o.label)}</span>
+                                        <bdi dir="ltr" className="agent-choice-name">{o.id}</bdi>
                                         {p?.size_bytes != null && <bdi dir="ltr" className="agent-choice-size">{formatBytes(p.size_bytes)}</bdi>}
                                     </span>
                                     <span className="setup-choice-tag">{t(o.tag)}</span>

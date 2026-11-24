@@ -88,13 +88,26 @@ describeNative('ConnectorsScreen OAuth account', () => {
 
     it('says when the provider did not confirm the revoke after a disconnect', async () => {
         const connected = { ...microsoft, configured: true, account_id: 'me@example.com' } as ConnectorRow;
-        const { queryClient, wrap } = setup([connected], { revoke_supported: true, revoked_remotely: false, revoke_error: 'timeout' });
+        const { queryClient, wrap } = setup([connected], { revoke_supported: true, revoked_remotely: false, revoke_error: 'timeout', revoke_attempted: true });
         await render(<ConnectorsScreen />, { wrapper: wrap });
         fireEvent.press(await screen.findByLabelText('Microsoft'));
         fireEvent.press(await screen.findByLabelText('Disconnect'));
         await screen.findByText(/^Disconnect Microsoft/);
         fireEvent.press((await screen.findAllByLabelText('Disconnect')).at(-1)!);
         expect(await screen.findByText(/did not confirm the revoke \(timeout\)/)).toBeTruthy();
+        queryClient.clear();
+    });
+
+    it('says nothing was stored when the PC held no sign-in to remove', async () => {
+        const connected = { ...microsoft, configured: true, account_id: 'me@example.com' } as ConnectorRow;
+        const { queryClient, wrap } = setup([connected], { revoke_supported: true, revoked_remotely: false, nothing_stored: true });
+        await render(<ConnectorsScreen />, { wrapper: wrap });
+        fireEvent.press(await screen.findByLabelText('Microsoft'));
+        fireEvent.press(await screen.findByLabelText('Disconnect'));
+        await screen.findByText(/^Disconnect Microsoft/);
+        fireEvent.press((await screen.findAllByLabelText('Disconnect')).at(-1)!);
+        expect(await screen.findByText(/Nothing was stored for this connector/)).toBeTruthy();
+        expect(screen.queryByText(/did not confirm the revoke/)).toBeNull();
         queryClient.clear();
     });
 });
@@ -141,6 +154,8 @@ describeNative('ConnectorsGallery list states', () => {
         ['error', /connectors service is not running/],
         ['groups', 'Unavailable'],
         ['code', 'Sign in with a code'],
+        ['mcpConfigure', 'Create the Slack app'],
+        ['oauthSetup', 'Create a Google Cloud project'],
     ] as const)('%s shows its key text', async (state, text) => {
         await scene(state);
         expect(await screen.findByText(text)).toBeTruthy();

@@ -18,6 +18,7 @@ import { useComposerQueueStore } from '@/features/composer/composerQueue';
 import { translator } from '@/i18n/useT';
 import { useChatStreamStore } from '@/state/chatStreams';
 import { ThemeProvider } from '@/ui';
+import { SheetHost } from '@/ui/overlays/SheetHost';
 
 import { ChatScreen } from './ChatScreen';
 
@@ -54,7 +55,9 @@ async function mount(client: ReturnType<typeof createFakeClient>) {
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-                    <ThemeProvider>{children}</ThemeProvider>
+                    <ThemeProvider>
+                        <SheetHost>{children}</SheetHost>
+                    </ThemeProvider>
                 </SafeAreaProvider>
             </GaiaClientProvider>
         </QueryClientProvider>
@@ -205,7 +208,7 @@ describe('ChatScreen', () => {
         });
         await mount(client);
 
-        expect(await screen.findByText(t('queue.notSent'))).toBeTruthy();
+        expect(await screen.findByText(t('queue.notSentBare'))).toBeTruthy();
         expect(screen.getByText('no connection')).toBeTruthy();
         expect(client.sent).toEqual([]);
 
@@ -279,6 +282,20 @@ describe('ChatScreen', () => {
             await waitFor(() => expect(client.confirmations).toEqual([{ session_id: CHAT, approved: true, always: false, confirm_id: 'c1' }]));
             await waitFor(() => expect(screen.queryByTestId('perm-card')).toBeNull());
             expect(useChatStreamStore.getState().resolved[CHAT]?.c1).toEqual({ state: 'answered' });
+            await act(async () => hold.open());
+        });
+
+        it('notes on the waiting card that Full access starts from the next step', async () => {
+            await mount(permissionClient(REQUEST));
+            await sendText('Save it');
+            await screen.findByTestId('perm-card');
+            await waitFor(() => expect(screen.queryByTestId('perm-full-pending')).toBeNull());
+            await fireEvent.press(screen.getByTestId('permission-chip'));
+            await fireEvent.press(await screen.findByTestId('permission-full_access'));
+            await fireEvent.press(await screen.findByText(t('env.turnOn')));
+            await screen.findByTestId('permission-pending');
+            await fireEvent.press(screen.getByTestId('permission-cancel'));
+            expect(await screen.findByTestId('perm-full-pending')).toBeTruthy();
             await act(async () => hold.open());
         });
 

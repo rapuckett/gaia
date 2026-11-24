@@ -150,7 +150,7 @@ def test_flag_beats_env_and_unknown_flag_id_names_the_flag(
     seen = {}
 
     def fake_run(*args):
-        seen["extra"] = args[-1]
+        seen["extra"] = args[-2]
         return 0
 
     monkeypatch.setattr(dev_backend, "run", fake_run)

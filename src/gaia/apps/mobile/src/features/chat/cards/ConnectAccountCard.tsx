@@ -1,12 +1,15 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { isConnectAccountPayload, PROVIDER_NAMES } from '@webui/utils/connectAccountCard.core';
+import { PROVIDER_NAMES } from '@webui/utils/connectAccountCard.core';
+import { isConnectAccountPayload } from '@webui/utils/connectCards';
+import { isolate } from '@webui/i18n/registry';
+import { accountRef, accountsOf, addedBesideDefault, middleCut, reconnectOffer, signInFixed, type ConnectOffer } from '@webui/utils/connectorAccounts';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
-import type { ConnectorRow } from '@/api/client.types';
+import type { ConnectorAccount, ConnectorRow } from '@/api/client.types';
 import { useConnectors } from '@/data';
 import { cardSignInScopes } from '@/features/connectors/connectorAccess';
 import { ProviderConnect } from '@/features/connectors/ProviderConnect';
@@ -26,6 +29,9 @@ export function ConnectAccountCard({ data }: { data: unknown }) {
     const t = useT();
     const connectors = useConnectors();
     const [ended, setEnded] = useState<'cancelled' | 'failed' | null>(null);
+    // The connectors as this card first saw them: only a change since counts as the fix.
+    const [before, setBefore] = useState<ConnectorRow[] | null>(null);
+    if (!before && connectors.data) setBefore(connectors.data.connectors.filter((c): c is ConnectorRow => !('error' in c)));
     const onEnded = useCallback((why: 'cancelled' | 'failed') => setEnded(why), []);
     const onStarted = useCallback(() => setEnded(null), []);
     useAnnounce(ended === 'cancelled' ? t('connectCard.cancelled') : null);
@@ -52,12 +58,19 @@ export function ConnectAccountCard({ data }: { data: unknown }) {
                     {connectors.isPending ? <Spinner size="sm" /> : null}
                     {connectors.isPending ? null : data.providers.map((id) => {
                         const row = rowFor(id);
+                        const named = data.account?.[id];
+                        const earlier = before?.find((c) => c.id === id);
+                        const fixed = before !== null && signInFixed(row, earlier, named);
                         return (
                             <ProviderRow
                                 key={id}
                                 connectorId={id}
                                 name={PROVIDER_NAMES[id] ?? row?.display_name ?? id}
                                 row={row}
+                                offer={reconnectOffer(row, named)}
+                                // With several accounts, a working one says nothing about the one that failed.
+                                saysConnected={fixed || (!!row?.configured && accountsOf(row).length <= 1)}
+                                added={fixed ? addedBesideDefault(row, earlier) : null}
                                 scopes={row ? cardSignInScopes(data.scopes?.[id], row) : undefined}
                                 onEnded={onEnded}
                                 onStarted={onStarted}
@@ -85,6 +98,9 @@ function ProviderRow({
     connectorId,
     name,
     row,
+    offer,
+    saysConnected,
+    added,
     scopes,
     onEnded,
     onStarted,
@@ -92,6 +108,11 @@ function ProviderRow({
     connectorId: string;
     name: string;
     row?: ConnectorRow;
+    offer: ConnectOffer;
+    /** Say the provider is connected: never while the account that failed may still be broken. */
+    saysConnected: boolean;
+    /** The account just signed in beside the default, which GAIA uses only when asked. */
+    added: ConnectorAccount | null;
     scopes?: string[];
     onEnded(why: 'cancelled' | 'failed'): void;
     onStarted(): void;
@@ -113,26 +134,54 @@ function ProviderRow({
             </Stack>
         );
     }
+    const { account } = offer;
+    const address = (a: ConnectorAccount) => isolate(middleCut(a.email || a.account_id), 'ltr');
     return (
         <Stack gap="sm">
-            {connected ? (
+            {saysConnected && !account ? (
                 <View role="status">
                     <Row gap="xs">
                         <Icon icon={CircleCheck} size="sm" tone="success" />
                         <Text role="label" tone="success">
-                            {t('connectCard.connected', { name })}
+                            {added ? t('connectCard.addedAccount', { address: address(added), name }) : t('connectCard.connected', { name })}
                         </Text>
                     </Row>
                 </View>
             ) : null}
-            <ProviderConnect
-                connectorId={connectorId}
-                row={row}
-                label={t(connected ? 'connectCard.reconnect' : 'connectCard.connect', { name })}
-                scopes={scopes}
-                onEnded={onEnded}
-                onStarted={onStarted}
-            />
+            {account ? (
+                <ProviderConnect
+                    connectorId={connectorId}
+                    row={row}
+                    label={t('connectCard.reconnectAccount', { address: address(account) })}
+                    scopes={scopes}
+                    target={{ account: accountRef(account) }}
+                    testID={`connect-reconnect-${connectorId}`}
+                    onEnded={onEnded}
+                    onStarted={onStarted}
+                />
+            ) : (
+                <ProviderConnect
+                    connectorId={connectorId}
+                    row={row}
+                    label={t(connected ? 'connectCard.reconnect' : 'connectCard.connect', { name })}
+                    scopes={scopes}
+                    onEnded={onEnded}
+                    onStarted={onStarted}
+                />
+            )}
+            {offer.otherAccount ? (
+                <ProviderConnect
+                    connectorId={connectorId}
+                    row={row}
+                    label={t('connectCard.otherAccount')}
+                    scopes={scopes}
+                    target={{ addAccount: true }}
+                    testID={`connect-other-${connectorId}`}
+                    secondary
+                    onEnded={onEnded}
+                    onStarted={onStarted}
+                />
+            ) : null}
         </Stack>
     );
 }

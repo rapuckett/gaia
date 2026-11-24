@@ -54,6 +54,7 @@ function useRefreshWhenDue(schedules: Schedule[], now: Date, refetch: () => void
 /** Dev gallery only: the state a tap would reach. */
 export interface SchedulesDevStart {
     form?: { when: string; name: string; prompt: string };
+    editing?: string;
     error?: string;
     confirmDelete?: string;
     historyOpen?: string;
@@ -76,7 +77,9 @@ export function SchedulesScreen({ onOpenChat, onOpenAutomations, dev }: Schedule
     const remove = useDeleteSchedule();
     const [actionError, setActionError] = useState<{ text: string; detail?: string } | null>(dev?.error ? { text: dev.error } : null);
     const [creating, setCreating] = useState(dev?.form !== undefined);
+    const [editingName, setEditingName] = useState<string | null>(dev?.editing ?? null);
     const schedules = query.data?.schedules ?? [];
+    const editing = schedules.find((s) => s.name === editingName);
     const now = useClock(schedules);
     useRefreshWhenDue(schedules, now, () => void query.refetch());
 
@@ -88,6 +91,7 @@ export function SchedulesScreen({ onOpenChat, onOpenAutomations, dev }: Schedule
     return (
         <Screen header={<ScreenHeader title={t('schedules.title')} />}>
             <NewScheduleSheet open={creating} onClose={() => setCreating(false)} initial={dev?.form} />
+            {editing ? <NewScheduleSheet key={editing.id} open editing={editing} onClose={() => setEditingName(null)} /> : null}
             <Stack paddingX="lg" paddingY="sm">
                 <Row gap="sm" wrap>
                     <ChipButton label={t.bare('schedules.new')} accessibilityLabel={t('schedules.new')} icon={Plus} variant="accent" onPress={() => setCreating(true)} />
@@ -146,6 +150,7 @@ export function SchedulesScreen({ onOpenChat, onOpenAutomations, dev }: Schedule
                                 update.mutate({ name: item.name, status: item.status === 'active' ? 'paused' : 'active' }, callbacks)
                             }
                             onDelete={() => remove.mutate(item.name, callbacks)}
+                            onEdit={() => setEditingName(item.name)}
                             initialConfirmDelete={dev?.confirmDelete === item.name}
                             initialHistoryOpen={dev?.historyOpen === item.name}
                         />

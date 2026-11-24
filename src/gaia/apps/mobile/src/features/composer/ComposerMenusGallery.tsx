@@ -24,7 +24,7 @@ import { ModelChip } from './ModelChip';
 import { SpendMeter } from './SpendMeter';
 
 /** Developer gallery (`/dev/composer?state=`): the context meter, spend meter, model menu and picked-model load banner in each state. */
-export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'spendOpen', 'permissionMenu', 'permissionAsk', 'permissionFull', 'permissionFullWaiting', 'private-off', 'private-on', 'private-memoryOff', 'folder-own', 'folder-add', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted'] as const;
+export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'spendOpen', 'permissionMenu', 'permissionAsk', 'permissionFull', 'permissionFullWaiting', 'private-off', 'private-on', 'private-memoryOff', 'private-menu', 'folder-own', 'folder-add', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted'] as const;
 export type ComposerMenuState = (typeof COMPOSER_MENU_STATES)[number];
 
 const USAGE: ContextUsage = {
@@ -78,12 +78,12 @@ const OWN_FOLDER = { path: '/Users/avery/.gaia/documents', name: 'documents', ga
 
 /** The left-hand chip under test; the private and permission chips keep their own state so a tap flips them. */
 function LeftChip({ state }: { state: ComposerMenuState }) {
-    const [priv, setPriv] = useState(state === 'private-on');
+    const [priv, setPriv] = useState(state === 'private-on' || state === 'private-menu');
     const [mode, setMode] = useState<PermissionMode>(state === 'permissionFull' || state === 'permissionFullWaiting' ? 'full_access' : 'ask');
     if (state === 'permissionMenu' || state === 'permissionAsk' || state === 'permissionFull' || state === 'permissionFullWaiting') {
         return <PermissionChip mode={mode} onChange={setMode} initialOpen={state === 'permissionMenu' || state === 'permissionFullWaiting'} promptWaiting={state === 'permissionFullWaiting'} />;
     }
-    if (state === 'private-off' || state === 'private-on') return <PrivateChip on={priv} onChange={setPriv} memoryEnabled />;
+    if (state === 'private-off' || state === 'private-on' || state === 'private-menu') return <PrivateChip on={priv} onChange={setPriv} memoryEnabled initialOpen={state === 'private-menu'} />;
     if (state === 'private-memoryOff') return <PrivateChip on={false} onChange={setPriv} memoryEnabled={false} />;
     if (state === 'folder-own') return <FolderChip folder={OWN_FOLDER} />;
     if (state === 'folder-add') return <FolderChip folder={{ ...OWN_FOLDER, choosable: true }} />;

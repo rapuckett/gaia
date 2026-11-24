@@ -6,12 +6,15 @@ import { useState } from 'react';
 
 import type { AgentStep } from '@webui/types';
 
-import type { StreamEvent } from '@/api/client.types';
+import type { Session, StreamEvent } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError, GaiaStreamDroppedError, GaiaTurnError, type GaiaError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
+import { ReadAloudButton, ReadAloudErrorNotice } from '@/features/audio/ReadAloud';
+import { useReadAloudStore } from '@/features/audio/readAloudStore';
 import { stampArrival } from '@/state/eventArrival';
-import { Divider, Screen, Stack, UIProvider } from '@/ui';
+import { Copy, Ellipsis, RotateCcw } from '@/ui/icons';
+import { Divider, IconButton, Row, Screen, Stack, UIProvider } from '@/ui';
 
 import { ActivityTimeline } from '../activity/ActivityTimeline';
 import { FIXTURES } from './__fixtures__/messages';
@@ -32,8 +35,10 @@ import { TurnTail } from '../TurnTail';
  * `activity-filter` (CV-48): `#tap=steps-summary` opens the seven finished calls and shows the filter.
  * `reply-server-down` (CV-14): a failed latest reply with the model-server fix under it and Try again; `reply-errors` also shows the unexpected-error "Report it on GitHub" link (CV-30, `report-github`).
  * `activity-variants` (CV-42): `#tap=steps-summary` opens a thought-first call, a failed call and a repeated one (x3); `#tap=steps-summary,step-row-1` expands the thought-first call to its thought, tool and arguments (the thought is row 0); `#tap=steps-summary,step-row-2` expands the failed one.
+ * `failed-local`: a failed reply on a local model, with Try again, Open Settings and Model server log in the desktop's order.
  * `step-error`: a running Waiting step cut off by a closed connection, then the same step cut off by Stop; both show the interrupted icon and a frozen 13s.
  * `latest-answer` (regenerate): a short exchange; only the latest answer has Try again (`regenerate`), and its retry does nothing.
+ * `read-aloud-error` (CV-23): the server-down read-aloud notice, Details closed (`#tap=read-aloud-details-toggle` opens it). `read-aloud-loading`: the action row while speech is being made.
  * `activity-vision` (CV-49): the vision offer under a tool step. `many-scrolled-up` (CV-09): the many-messages list with the jump button showing.
  */
 export const LIVE_SCENES = [
@@ -47,12 +52,15 @@ export const LIVE_SCENES = [
     'activity-vision',
     'many-scrolled-up',
     'reply-server-down',
+    'failed-local',
     'step-error',
     'latest-answer',
+    'read-aloud-error',
+    'read-aloud-loading',
 ] as const;
 export type LiveScene = (typeof LIVE_SCENES)[number];
 
-const LISTS: readonly LiveScene[] = ['many-scrolled-up', 'reply-server-down', 'latest-answer'];
+const LISTS: readonly LiveScene[] = ['many-scrolled-up', 'reply-server-down', 'latest-answer', 'failed-local'];
 const noop = () => undefined;
 const LATEST_ANSWER_ACTIONS = { send: () => false, retry: () => Promise.resolve(true), busy: false };
 const step = (id: number, extra: Partial<AgentStep>): AgentStep => ({ id, type: 'tool', label: 'Using tool', active: false, success: true, timestamp: id, ...extra });
@@ -113,9 +121,33 @@ const VISION: AgentStep[] = [step(1, { tool: 'analyze_image', narration: 'Readin
 const CUT_OFF_EVENTS = [{ type: 'tool_start', tool: 'sleep', detail: 'seconds: 60', narration: 'Waiting' }] as StreamEvent[];
 const ENDED_AFTER_MS = 13_000;
 
+const SPEAK_ID = 'dev:1';
+const SERVER_DOWN = `HTTPConnectionPool(host='localhost', port=13305): Max retries exceeded with url: /api/v1/audio/speech (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x1068>: Failed to establish a new connection: [Errno 61] Connection refused'))\nSet LEMONADE_BASE_URL to a running Lemonade server.`;
+
+function ReadAloudScene({ state }: { state: 'read-aloud-error' | 'read-aloud-loading' }) {
+    useState(() => {
+        if (state === 'read-aloud-error') useReadAloudStore.setState({ messageId: null, status: null, error: { messageId: SPEAK_ID, kind: 'unreachable', cause: new GaiaApiError(503, SERVER_DOWN) } });
+        else useReadAloudStore.setState({ messageId: SPEAK_ID, status: 'loading', error: null });
+        return null;
+    });
+    const control = { active: state === 'read-aloud-loading', loading: state === 'read-aloud-loading', label: state === 'read-aloud-loading' ? 'Stop reading' : 'Read aloud', toggle: noop };
+    return (
+        <Stack gap="md">
+            <Row>
+                <ReadAloudButton control={control} />
+                <IconButton icon={Copy} label="Copy" size="sm" onPress={noop} />
+                <IconButton icon={RotateCcw} label="Try again" size="sm" onPress={noop} />
+                <IconButton icon={Ellipsis} label="More" size="sm" onPress={noop} />
+            </Row>
+            <ReadAloudErrorNotice messageId={SPEAK_ID} />
+        </Stack>
+    );
+}
+
 function Body({ state }: { state: LiveScene }) {
     const [endedAt] = useState(() => Date.now() + ENDED_AFTER_MS);
     const [cutEvents] = useState(() => CUT_OFF_EVENTS.map((e) => stampArrival({ ...e }, endedAt - ENDED_AFTER_MS)));
+    if (state === 'read-aloud-error' || state === 'read-aloud-loading') return <ReadAloudScene state={state} />;
     if (state === 'step-error') {
         const cut: Tail = { ...TAIL, events: cutEvents };
         return (
@@ -172,6 +204,9 @@ function Body({ state }: { state: LiveScene }) {
             />
         );
     }
+    if (state === 'failed-local') {
+        return <MessageListView messages={FIXTURES['failed-model-load'].messages} loading={false} />;
+    }
     if (state === 'latest-answer') {
         return (
             <MessageActionsContext.Provider value={LATEST_ANSWER_ACTIONS}>
@@ -202,7 +237,7 @@ function Body({ state }: { state: LiveScene }) {
 
 export function LiveScenes({ state }: { state: LiveScene }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
-    const [client] = useState(() => createFakeClient({}));
+    const [client] = useState(() => createFakeClient({ sessions: [{ id: 'dev', title: 'Quarterly reports', created_at: '2026-11-14T10:00:00Z', updated_at: '2026-11-14T10:00:00Z', message_count: 2, document_ids: [], agent_type: 'gaia', inference_remote: false, model: 'Gemma-4-E4B-it-GGUF', system_prompt: null } as Session] }));
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>

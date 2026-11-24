@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { BrowseResponse, ChatPerformance, ContextUsage, LocalModelStatus, Message, OutputItem, ProviderModel, Session, SessionChanges, SessionEnvironment, SessionGit } from '@/api/client.types';
+import type { BrowseResponse, DocumentListResponse, Schedule, SystemStatus, ChatPerformance, ContextUsage, LocalModelStatus, Message, OutputItem, ProviderModel, Session, SessionChanges, SessionEnvironment, SessionGit } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaApiError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
@@ -13,7 +13,7 @@ import { FIXTURES } from '@/features/chat/messages/__fixtures__/messages';
 import { MessageListView } from '@/features/chat/messages/MessageList';
 import { Screen } from '@/ui';
 import { IDLE_TURN, writeTurn } from '@/state/chatStreams';
-import type { TurnPerformance, TurnSummary } from '@webui/types';
+import type { AgentStep, TurnPerformance, TurnSummary } from '@webui/types';
 
 import { useSessionPanelStore } from './panelStore';
 import { SessionPanel } from './SessionPanel';
@@ -34,6 +34,7 @@ export type SessionPanelGalleryState =
     | 'envFolders'
     | 'envRemove'
     | 'envOffline'
+    | 'envFullWaiting'
     | 'envFull'
     | 'envEmpty'
     | 'chgList'
@@ -52,11 +53,14 @@ export type SessionPanelGalleryState =
     | 'outItems'
     | 'outEmpty'
     | 'envPick'
-    | 'envPickRefused';
+    | 'envPickRefused'
+    | 'sp34'
+    | 'sp34Plain'
+    | 'sp34Session';
 
 const CONTEXT_STATES: readonly SessionPanelGalleryState[] = ['ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn'];
 
-const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty', 'envPick', 'envPickRefused'];
+const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFullWaiting', 'envFull', 'envEmpty', 'envPick', 'envPickRefused'];
 
 const CHANGES_STATES: readonly SessionPanelGalleryState[] = ['chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgGitPr', 'chgPending', 'chgError', 'chgReview'];
 
@@ -112,6 +116,8 @@ const GIT: SessionGit = {
 };
 
 const GIT_PR: SessionGit = { ...GIT, repos: [{ ...GIT.repos[0]!, branch: 'q3-summary', pr_blocked: null }] };
+
+const WAITING_PERMISSION = { type: 'permission_request', confirm_id: 'p1', tool: 'write_file', args: { file_path: '/Users/Shared/gaia-demo/notes.txt', content: 'hello' }, timeout_seconds: 600 };
 
 const ANSWER_STATES: readonly SessionPanelGalleryState[] = ['ansFull', 'ansPending', 'ansNoLive', 'ansLocal', 'ansError'];
 
@@ -336,15 +342,58 @@ const TOOLS = [
     { name: 'coding', description: 'Write and run code', category: 'skill' },
 ];
 
+const SP34_STATES: readonly SessionPanelGalleryState[] = ['sp34', 'sp34Plain', 'sp34Session'];
+
+const STEP = (id: number, extra: Partial<AgentStep>): AgentStep => ({ id, type: 'tool', label: 'Using tool', active: false, timestamp: id, ...extra }) as AgentStep;
+const SHELL = (id: number, command: string, extra: Partial<AgentStep>) => STEP(id, { tool: 'run_shell_command', detail: `command: ${command}`, ...extra });
+
+const SP34_STEPS: AgentStep[] = [
+    {
+        id: 1, type: 'plan', label: 'Created plan', timestamp: 0, currentStep: 2,
+        planSteps: ['read_file', 'run_shell_command', 'write_file'],
+        planNarrations: ['Read the permit', 'Run the scheduler tests', 'Write the summary'],
+    } as AgentStep,
+    STEP(2, { tool: 'read_file', success: true, result: 'ok' }),
+    SHELL(3, 'rm -rf build', { declined: true, success: false }),
+    SHELL(4, 'git status --short', { success: false, commandOutput: { command: 'git status --short', stdout: '', stderr: 'fatal', returnCode: 128 } }),
+    SHELL(5, 'npm test', { success: true, commandOutput: { command: 'npm test', stdout: 'ok', stderr: '', returnCode: 0 } }),
+    STEP(6, { tool: 'write_file', success: true, result: 'ok' }),
+];
+
+const SP34_DIR = '/Users/Shared/gaia-demo';
+const SP34_SESSION = { ...SESSION, title: 'Rainier weather and Aug 28 action items', created_at: '2026-11-24T09:12:00Z', agent_type: 'gaia' } as Session;
+const SP34_DOC = (name: string, chunks: number) =>
+    ({ id: name, filename: name, filepath: `${SP34_DIR}/trail-notes/${name}`, file_size: 1200, chunk_count: chunks, indexed_at: '2026-11-24T09:00:00Z', last_accessed_at: null, sessions_using: 1, indexing_status: 'complete' }) as DocumentListResponse['documents'][number];
+const SP34_ENV: SessionEnvironment = {
+    ...ENVIRONMENT,
+    folders: [
+        FOLDER(`${SP34_DIR}/trail-notes`, 'added'),
+        FILE(`${SP34_DIR}/trail-notes/permit-2026.pdf`),
+        FILE(`${SP34_DIR}/trail-notes/volunteer-schedule.xlsx`),
+    ],
+};
+const SP34_SCHEDULE = {
+    id: 'sch-1', name: 'Morning brief', interval_seconds: 86400, prompt: 'Summarize my inbox.', status: 'active', created_at: null,
+    last_run_at: null, next_run_at: new Date(Date.now() + 17 * 3_600_000).toISOString(), last_result: null, run_count: 9, error_count: 0,
+    session_id: 'dev', schedule_config: null, description: 'Every day',
+    description_parts: { kind: 'daily', count: null, unit: null, days: null, time: null, start_hour: null, end_hour: null },
+    last_error: null,
+} as Schedule;
+const SP34_STATUS = { lemonade_running: true, lemonade_version: '10.8.1', version: '0.26.0' } as unknown as SystemStatus;
+
 export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const client = useMemo(() => {
         const ctx = CONTEXT_STATES.includes(state);
         const env = ENV_STATES.includes(state);
         const chg = CHANGES_STATES.includes(state);
-        const seeded = env || chg || state === 'runsOnCpp';
+        const sp34 = SP34_STATES.includes(state);
+        const rich = sp34 && state !== 'sp34Plain';
+        const seeded = env || chg || state === 'runsOnCpp' || sp34;
         const environment: SessionEnvironment =
-            state === 'envOffline'
+            sp34
+              ? rich ? SP34_ENV : { ...ENVIRONMENT, folders: ENVIRONMENT.folders.slice(0, 1) }
+              : state === 'envOffline'
                 ? { ...ENVIRONMENT, folders: ENVIRONMENT.folders.slice(0, 2), internet: false, removed: ['/Users/avery/Downloads/old-drafts'] }
                 : state === 'envEmpty'
                   ? { ...ENVIRONMENT, folders: [], internet: false }
@@ -362,16 +411,19 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
                   : SUMMARY;
         const reply = FIXTURES.short.messages[1]!;
         const base = createFakeClient({
-            messages: { dev: [FIXTURES.short.messages[0]!, withSummary(reply, summary)] },
+            messages: { dev: rich ? [FIXTURES.short.messages[0]!, { ...reply, agentSteps: SP34_STEPS } as Message] : [FIXTURES.short.messages[0]!, sp34 ? reply : withSummary(reply, summary)] },
+            schedules: rich ? [SP34_SCHEDULE] : undefined,
+            documents: rich ? { documents: [SP34_DOC('permit-2026.pdf', 42), SP34_DOC('volunteer-schedule.xlsx', 18)], total: 2, total_chunks: 60, total_size_bytes: 2400 } : undefined,
+            status: sp34 ? SP34_STATUS : undefined,
             outputs: state === 'outItems' ? { dev: { session_id: 'dev', items: OUTPUTS } } : undefined,
             fileStatus: answerState ? { '/Users/avery/Documents/packing-list.md': { path: '/Users/avery/Documents/packing-list.md', exists: true, mtime: 200 }, '/Users/avery/Documents/old-plan.md': { path: '/Users/avery/Documents/old-plan.md', exists: false } } : undefined,
-            sessions: seeded ? [SESSION] : undefined,
+            sessions: seeded ? [sp34 ? SP34_SESSION : SESSION] : undefined,
             sessionChanges: chg && state !== 'chgError' ? { dev: { ...CHANGES, pending: state === 'chgPending' } } : undefined,
             sessionGit: state === 'chgGitPr' ? { dev: GIT_PR } : state === 'chgGit' || state === 'chgConfirm' ? { dev: GIT } : undefined,
             undoConflict: state === 'chgConflict' ? new GaiaApiError(409, UNDO_CONFLICT, undefined, undefined, { status: 'conflict' }) : undefined,
             environments: seeded ? { dev: environment } : undefined,
             fileFolders: env ? (state === 'envPickRefused' ? { ...BROWSE_FOLDERS, '': BROWSE_FOLDERS['/Users/avery']! } : BROWSE_FOLDERS) : undefined,
-            permissions: state === 'envOffline' ? { dev: 'full_access' } : undefined,
+            permissions: state === 'envOffline' || state === 'envFullWaiting' ? { dev: 'full_access' } : undefined,
             providerModels: state === 'ansLocal' ? { local: { provider: 'local', models: [LOCAL_LIST_ENTRY] } } : undefined,
             activeModel: seeded ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
             localModel: seeded ? LOCAL_MODEL : undefined,
@@ -433,11 +485,14 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
         const chg = CHANGES_STATES.includes(state);
         const ans = ANSWER_STATES.includes(state);
         const out = OUTPUT_STATES.includes(state);
+        const sp = SP34_STATES.includes(state);
         store.setSection('answer', ans);
         store.setSection('outputs', out);
         store.setSection('changes', chg);
-        store.setSection('skills', !ctx && !env && !chg && !ans && !out);
-        store.setSection('tools', !ctx && !env && !chg && !ans && !out);
+        store.setSection('skills', !ctx && !env && !chg && !ans && !out && !sp);
+        store.setSection('tools', !ctx && !env && !chg && !ans && !out && !sp);
+        store.setSection('session', state === 'sp34Session');
+        for (const id of ['plan', 'schedule', 'commands', 'documents'] as const) store.setSection(id, true);
         store.setChangesSeed(
             state === 'chgConfirm'
                 ? { phase: 'confirm' }
@@ -445,7 +500,14 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
                   ? { phase: 'conflict', detail: UNDO_CONFLICT }
                   : null,
         );
-        writeTurn('dev', state === 'ansPending' ? { ...IDLE_TURN, status: 'streaming' } : null);
+        writeTurn(
+            'dev',
+            state === 'ansPending'
+                ? { ...IDLE_TURN, status: 'streaming' }
+                : state === 'envFullWaiting'
+                  ? { ...IDLE_TURN, status: 'streaming', pendingPermission: WAITING_PERMISSION as typeof IDLE_TURN.pendingPermission }
+                  : null,
+        );
         store.setSection('context', ctx);
         store.setEnvPicking(state === 'envPick' || state === 'envPickRefused');
         store.setEnvConfirm(state === 'envRemove' ? { kind: 'remove', path: ENVIRONMENT.folders[0]!.path } : state === 'envFull' ? { kind: 'full' } : null);

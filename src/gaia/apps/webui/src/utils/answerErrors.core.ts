@@ -3,6 +3,13 @@
 
 /** How an assistant reply shows it failed. Pure, so the phone app can import it. */
 
+/** The agent's own crash or start failure, which ends by naming its log folder (relay `stream_ended_text`). */
+const AGENT_LOG_DIR_RE = /[\\/]agents[\\/][^\\/\s]+[\\/]logs\b/;
+
+export function namesAgentLog(content: string): boolean {
+    return AGENT_LOG_DIR_RE.test(content);
+}
+
 /** Detect if message content looks like an error. */
 export function isErrorContent(content: string): boolean {
     if (!content) return false;

@@ -34,6 +34,7 @@ export const ENDPOINTS = {
     gpuMemoryPending: '/api/gpu-memory/pending',
     gpuMemoryRevert: '/api/gpu-memory/revert',
     health: '/api/health',
+    imageSettings: '/api/images/settings',
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
     lemonadeTarget: '/api/lemonade/target',
@@ -161,6 +162,7 @@ export const ENDPOINTS = {
     chatRetryWithChoose: '/api/chat/retry-with/choose',
     chatUserInput: '/api/chat/user-input',
     connector: '/api/connectors/{connector_id}',
+    connectorAccount: '/api/connectors/{connector_id}/accounts/{account_id}',
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
     connectorActivations: '/api/connectors/{connector_id}/activations',
     connectorAuthorize: '/api/connectors/{connector_id}/authorize',
@@ -252,8 +254,12 @@ export function connectorDisablePath(connectorId: string): string {
     return ENDPOINTS.connectorDisable.replace('{connector_id}', encodeURIComponent(connectorId));
 }
 
-export function connectorPath(connectorId: string): string {
-    return ENDPOINTS.connector.replace('{connector_id}', encodeURIComponent(connectorId));
+export function connectorPath(connectorId: string, options?: { all?: boolean }): string {
+    return `${ENDPOINTS.connector.replace('{connector_id}', encodeURIComponent(connectorId))}${options?.all ? '?all=true' : ''}`;
+}
+
+export function connectorAccountPath(connectorId: string, accountId: string): string {
+    return ENDPOINTS.connectorAccount.replace('{connector_id}', encodeURIComponent(connectorId)).replace('{account_id}', encodeURIComponent(accountId));
 }
 
 export function connectorGrantPath(connectorId: string, agentId: string): string {

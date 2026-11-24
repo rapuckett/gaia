@@ -52,12 +52,12 @@ export function Button({
     const { colors, radius } = useTheme();
     const largeText = useLargeText();
     const look: Record<NonNullable<ButtonProps['variant']>, { bg: string; border: string; tone: Tone }> = {
-        primary: { bg: colors.accentFill, border: colors.accentSolid, tone: 'onAccent' },
+        primary: { bg: colors.actionFill, border: colors.actionFill, tone: 'onAction' },
         secondary: { bg: colors.bgTertiary, border: size === 'sm' ? colors.border : colors.borderLight, tone: 'primary' },
         ghost: { bg: 'transparent', border: colors.border, tone: 'accent' },
         danger: { bg: colors.dangerDim, border: 'transparent', tone: 'danger' },
     };
-    const pressedBg = { primary: colors.accentSolid, secondary: colors.bgActive, ghost: colors.bgTertiary, danger: colors.dangerDim };
+    const pressedBg = { primary: colors.actionFillHover, secondary: colors.bgActive, ghost: colors.bgTertiary, danger: colors.dangerDim };
     const v = look[variant];
     return (
         <View
@@ -83,7 +83,7 @@ export function Button({
                         paddingHorizontal: size === 'sm' ? 10 : 16,
                         borderRadius: size === 'sm' ? radius.sm : radius.md,
                         borderWidth: 1,
-                        borderColor: v.border,
+                        borderColor: highlight && variant === 'primary' ? colors.actionFillHover : v.border,
                         backgroundColor: highlight ? pressedBg[variant] : v.bg,
                         alignItems: 'center',
                         justifyContent: 'center',

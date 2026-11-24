@@ -216,39 +216,6 @@ button.copy-url-btn.copied {
     border-color: var(--accent-green);
 }
 
-/* Tunnel password hint */
-.tunnel-password-hint {
-    padding: 14px 16px;
-    background: color-mix(in srgb, var(--accent-yellow) 6%, transparent);
-    border: 1px solid color-mix(in srgb, var(--accent-yellow) 20%, transparent);
-    border-radius: var(--radius-sm);
-    text-align: center;
-}
-
-.tunnel-password-hint label {
-    display: block;
-    font-size: var(--fs-label);
-    font-weight: 500;
-    color: var(--accent-yellow);
-    margin-bottom: 6px;
-}
-
-.tunnel-password-value {
-    font-size: 22px;
-    font-family: var(--font-mono);
-    font-weight: 500;
-    color: var(--text-primary);
-    letter-spacing: 1px;
-    user-select: all;
-    cursor: text;
-    margin-bottom: 4px;
-}
-
-.tunnel-password-note {
-    font-size: 11px;
-    color: var(--text-muted);
-}
-
 /* Instructions */
 .mobile-instructions {
     padding: 14px 16px;
@@ -271,6 +238,21 @@ button.copy-url-btn.copied {
 
 .mobile-instructions li:last-child {
     margin-bottom: 0;
+}
+
+.mobile-app-hint {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.mobile-app-hint .link-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
 }
 
 .mobile-install-hint {

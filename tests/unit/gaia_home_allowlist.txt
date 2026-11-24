@@ -4,6 +4,5 @@
 
 src/gaia/daemon/paths.py:home_join 1
 src/gaia/installer/uninstall_command.py:home_join 5
-src/gaia/llm/lemonade_embedded.py:home_join 1
 src/gaia/security.py:home_join 1
 src/gaia/ui/utils.py:home_join 1

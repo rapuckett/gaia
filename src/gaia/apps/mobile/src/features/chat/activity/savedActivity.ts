@@ -15,6 +15,8 @@ export interface SavedActivity {
     ended: TurnEnding | undefined;
     /** The reply stands for a failure (the web bubble's `isError`): it isn't read aloud. */
     isError: boolean;
+    /** The error text the reply ends by, when the agent ended the turn (the web bubble's `endedBy`). */
+    endedBy: string | null;
 }
 
 const NO_STEPS: AgentStep[] = [];
@@ -25,5 +27,5 @@ export function savedActivity(message: Message): SavedActivity {
     const isError = dropped.echoed || message.failed === true || isErrorContent(message.content);
     const failed = isError || dropped.endedBy !== null;
     const stopState = message.stopState ?? (message.content.trim() === SERVER_CANCELLED_TEXT ? 'stopped' : undefined);
-    return { steps: dropped.steps, ended: turnEnding(message.content, stopState, failed), isError };
+    return { steps: dropped.steps, ended: turnEnding(message.content, stopState, failed), isError, endedBy: dropped.endedBy };
 }
