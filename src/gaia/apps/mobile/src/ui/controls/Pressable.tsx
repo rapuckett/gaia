@@ -32,6 +32,8 @@ export interface PressableProps {
     dimmed?: boolean;
     accessibilityLabel?: string;
     accessibilityHint?: string;
+    /** The current value a screen reader announces after the label, e.g. a header's summary. */
+    accessibilityValue?: { text: string };
     accessibilityRole?: AccessibilityRole;
     'aria-busy'?: boolean;
     'aria-checked'?: boolean | 'mixed';
@@ -69,6 +71,7 @@ export function Pressable({
     dimmed = disabled,
     accessibilityLabel,
     accessibilityHint,
+    accessibilityValue,
     accessibilityRole = 'button',
     'aria-busy': ariaBusy,
     'aria-checked': ariaChecked,
@@ -106,6 +109,7 @@ export function Pressable({
             accessibilityRole={accessibilityRole}
             accessibilityLabel={accessibilityLabel}
             accessibilityHint={accessibilityHint}
+            accessibilityValue={accessibilityValue}
             accessible={accessible}
             accessibilityActions={accessibilityActions}
             onAccessibilityAction={onAccessibilityAction}

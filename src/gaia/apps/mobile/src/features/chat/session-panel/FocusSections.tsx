@@ -9,6 +9,7 @@ import type { PlanItemStatus } from '@webui/utils/agentActivity.core';
 import { visibleText } from '@webui/utils/calendarApproval.core';
 import type { ChatDocument, CommandState, FocusFacet, FocusKind, LivePlan, RanCommand } from '@webui/utils/sessionFocus.core';
 import { sameFile } from '@webui/utils/sessionFocus.core';
+import { commandsSummary, planProgress } from '@webui/utils/sessionPanelSummary.core';
 import type { Message, Schedule } from '@webui/types';
 
 import { useRunSchedule, useUpdateScheduleStatus } from '@/data';
@@ -80,21 +81,20 @@ function PlanMark({ status }: { status: PlanItemStatus }) {
 export function PlanSection({ plan }: { plan: LivePlan | null }) {
     const t = useT();
     if (!plan) return null;
-    const total = plan.steps.length;
-    const done = plan.statuses.filter((s) => s === 'done').length;
+    const { done, total } = planProgress(plan);
     return (
         <PanelSection id="plan" title={t('plan.title')} summary={t('plan.progress', { done, total })}>
-            <Stack gap="md">
+            <Stack gap="sm">
                 <ProgressLine value={done / total} accessibilityLabel={t('plan.title')} />
-                <Stack gap="md" accessibilityRole="list" accessibilityLabel={t('plan.listLabel')}>
+                <Stack gap="sm" accessibilityRole="list" accessibilityLabel={t('plan.listLabel')}>
                     {plan.steps.map((step, i) => {
                         const status = plan.statuses[i] ?? 'pending';
                         return (
                             <Stack key={`${i}-${step}`} accessibilityLabel={`${t(PLAN_LABEL[status])}: ${step}`}>
-                                <Row gap="md" align="start">
+                                <Row gap="sm" align="start">
                                     <PlanMark status={status} />
                                     <Stack flex={1}>
-                                        <Text dir="auto">{step}</Text>
+                                        <Text role="label" tone="secondary" dir="auto">{step}</Text>
                                     </Stack>
                                 </Row>
                             </Stack>
@@ -118,8 +118,8 @@ export function ScheduleSection({ schedules, close }: { schedules: Schedule[]; c
     const failure = update.error ? { key: 'schedules.updateFailed' as const, error: update.error } : run.error ? { key: 'schedules.runNowFailed' as const, error: run.error } : null;
     return (
         <PanelSection id="schedule" title={t('sched.title')}>
-            <Stack gap="lg">
-                <Stack gap="lg" accessibilityRole="list" accessibilityLabel={t('sched.listLabel')}>
+            <Stack gap="md">
+                <Stack gap="md" accessibilityRole="list" accessibilityLabel={t('sched.listLabel')}>
                     {schedules.map((schedule) => {
                         const paused = schedule.status === 'paused';
                         const running = schedule.running === true;
@@ -135,7 +135,7 @@ export function ScheduleSection({ schedules, close }: { schedules: Schedule[]; c
                                 <Row gap="md">
                                     <Icon icon={CalendarClock} size="sm" tone="muted" />
                                     <Stack flex={1}>
-                                        <Text weight="medium" numberOfLines={1}>
+                                        <Text role="label" weight="medium" numberOfLines={1}>
                                             {isolate(schedule.name, 'ltr')}
                                         </Text>
                                     </Stack>
@@ -179,22 +179,29 @@ export function ScheduleSection({ schedules, close }: { schedules: Schedule[]; c
                     })}
                 </Stack>
                 {failure ? <Notice tone="danger" message={t(failure.key)} detail={describeHttpFailure(failure.error, t).text} testID="panel-schedule-error" /> : null}
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    label={t('sched.manage')}
+                <Pressable
+                    inline
+                    hugHeight
+                    minSize={44}
+                    accessibilityRole="link"
+                    accessibilityLabel={t('sched.manage')}
                     onPress={() => {
                         close?.();
                         router.push('/schedules');
                     }}
-                />
+                    testID="panel-schedule-manage"
+                >
+                    <Text role="label" tone="accent" underline>
+                        {t('sched.manage')}
+                    </Text>
+                </Pressable>
             </Stack>
         </PanelSection>
     );
 }
 
 /** Command and document rows are this tall, so the two lists share one rhythm and no tap target overlaps another. */
-const ROW_MIN = 44;
+const ROW_MIN = 40;
 
 /** Commands shown before "Show more": the latest ones, since those are what the chat is on now. */
 export const COMMANDS_SHOWN = 5;
@@ -223,14 +230,14 @@ export function CommandsSection({ commands, close }: { commands: RanCommand[]; c
     if (commands.length === 0) return null;
     const newestFirst = [...commands].reverse();
     const shown = all ? newestFirst : newestFirst.slice(0, COMMANDS_SHOWN);
-    const failed = commands.filter((c) => c.state === 'failed').length;
+    const count = commandsSummary(commands);
     const goTo = (messageId: number) => {
         const found = jumpToMessage(messageId);
         if (found) close?.();
         setNotLoaded(!found);
     };
     return (
-        <PanelSection id="commands" title={t('cmd.title')} summary={failed > 0 ? t.plural('cmd.failedCount', failed, { n: failed }) : String(commands.length)}>
+        <PanelSection id="commands" title={t('cmd.title')} summary={count.kind === 'failed' ? t.plural('cmd.failedCount', count.n, { n: count.n }) : String(count.n)}>
             <Stack gap="md">
                 <Stack accessibilityRole="list" accessibilityLabel={t('cmd.listLabel')}>
                     {shown.map((c) => {
@@ -239,7 +246,7 @@ export function CommandsSection({ commands, close }: { commands: RanCommand[]; c
                             <Row gap="md">
                                 <CommandMark state={c.state} />
                                 <Stack flex={1}>
-                                    <Text mono dir="ltr" align="ltr" numberOfLines={1} ellipsize="tail">
+                                    <Text role="label" mono dir="ltr" align="ltr" numberOfLines={1} ellipsize="tail">
                                         {text}
                                     </Text>
                                 </Stack>
@@ -292,7 +299,7 @@ export function DocumentsSection({ documents, messages }: { documents: ChatDocum
                             <Row gap="md">
                                 {indexing ? <Spinner size="sm" /> : <Icon icon={failed ? CircleAlert : FileText} size="sm" tone={failed ? 'danger' : 'muted'} />}
                                 <Stack flex={1}>
-                                    <Text numberOfLines={1} ellipsize="middle">
+                                    <Text role="label" tone="secondary" numberOfLines={1} ellipsize="middle">
                                         {isolate(name, 'ltr')}
                                     </Text>
                                 </Stack>

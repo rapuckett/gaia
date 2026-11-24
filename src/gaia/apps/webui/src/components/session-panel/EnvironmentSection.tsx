@@ -30,6 +30,7 @@ import { MODES } from '../PermissionModeChip';
 import { formatWindow } from '../modelMeta';
 import { LocalStatusError } from '../LocalStatusError';
 import { PanelSection } from './PanelSection';
+import { environmentOffline } from '../../utils/sessionPanelSummary.core';
 import { Switch } from './Switch';
 import { useAppear } from './appear';
 import type { ContextUsage, LocalModelStatus, PermissionMode, TunnelStatus } from '../../types';
@@ -82,7 +83,7 @@ export function EnvironmentSection({ sessionId, busy, usage, hideDocuments = fal
     const { env, refresh } = useSessionEnvironment(sessionId);
     // A turn can add a document or folder to what the chat reaches.
     useTurnEnd(busy, () => { void refresh(); });
-    const summary = env && !env.internet ? t('env.offline') : null;
+    const summary = environmentOffline(env) ? t('env.offline') : null;
     return (
         <PanelSection id="environment" title={t('env.title')} summary={summary}>
             <div className="sp-rows">

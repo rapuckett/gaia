@@ -23,6 +23,7 @@ import { describeSchedule, formatNextRun } from '../../utils/scheduleText';
 import type { PlanItemStatus } from '../AgentActivity';
 import { visibleText } from '../CalendarApproval';
 import { PanelSection } from './PanelSection';
+import { commandsSummary, planProgress } from '../../utils/sessionPanelSummary.core';
 import { useAppear } from './appear';
 import { sameFile, type ChatDocument, type CommandState, type FocusFacet, type FocusKind, type LivePlan, type RanCommand } from './sessionFocus';
 import type { Message, Schedule } from '../../types';
@@ -85,8 +86,7 @@ const PLAN_STATE: Record<PlanItemStatus, { label: MessageKey; Icon: LucideIcon }
 export function PlanSection({ plan }: { plan: LivePlan | null }) {
     const t = useT();
     if (!plan) return null;
-    const total = plan.steps.length;
-    const done = plan.statuses.filter((s) => s === 'done').length;
+    const { done, total } = planProgress(plan);
     return (
         <PanelSection id="plan" title={t('plan.title')} summary={t('plan.progress', { done, total })}>
             <div
@@ -235,12 +235,12 @@ export function CommandsSection({ commands, onJumpToMessage }: CommandsSectionPr
     if (commands.length === 0) return null;
     const newestFirst = [...commands].reverse();
     const shown = all ? newestFirst : newestFirst.slice(0, COMMANDS_SHOWN);
-    const failed = commands.filter((c) => c.state === 'failed').length;
+    const count = commandsSummary(commands);
     return (
         <PanelSection
             id="commands"
             title={t('cmd.title')}
-            summary={failed > 0 ? t.plural('cmd.failedCount', failed, { n: failed }) : <bdi dir="ltr">{commands.length}</bdi>}
+            summary={count.kind === 'failed' ? t.plural('cmd.failedCount', count.n, { n: count.n }) : <bdi dir="ltr">{count.n}</bdi>}
         >
             <ul className="sp-list" aria-label={t('cmd.listLabel')}>
                 {shown.map((c) => {
