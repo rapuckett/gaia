@@ -118,7 +118,7 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     'banner-server-setup': { view: 'banner', data: status({ lemonade_running: false, start_command: null, start_instruction: 'Run gaia init to install the model server.' }) },
     'banner-server-stopped': { view: 'banner', data: status({ lemonade_running: false, start_command: START_COMMAND }) },
     'banner-slow': { view: 'banner', slow: true },
-    'banner-starting': { view: 'banner', data: status({ init_state: 'initializing', init_tasks: [{ name: 'Loading the model', status: 'running' }] } as Partial<SystemStatus>) },
+    'banner-starting': { view: 'banner', data: status({ init_state: 'initializing', init_tasks: [{ name: 'Loading the model', step: 'load_model', status: 'running' }] } as Partial<SystemStatus>) },
     'banner-unreachable': { view: 'banner', unreachable: true },
     empty: { view: 'center', items: [] },
     'goal-store-error': { view: 'center', items: (t) => [finishedNote(t)], goalStore: true },

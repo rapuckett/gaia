@@ -28,6 +28,16 @@ describe('pickBanner', () => {
         expect(isServerDownBanner(null)).toBe(false);
     });
 
+    it('says the running start-up step in plain words, generic when unknown', () => {
+        const title = (step?: string | null) =>
+            pickBanner(withStatus({ init_state: 'initializing', init_tasks: [{ name: 'Raw English', step, status: 'running' }] }), null, t)?.title;
+        expect(title('load_model')).toBe(t('banner.boot.load_model'));
+        expect(title('check_server')).toBe(t('banner.boot.check_server'));
+        expect(title('load_libraries')).toBe(t('banner.boot.load_libraries'));
+        expect(title('mystery')).toBe(t('banner.boot.generic'));
+        expect(title(null)).toBe(t('banner.boot.generic'));
+    });
+
     it('shows the web banner for each state, in the web order', () => {
         expect(id(OK)).toBeNull();
         expect(id(undefined)).toBeNull();
