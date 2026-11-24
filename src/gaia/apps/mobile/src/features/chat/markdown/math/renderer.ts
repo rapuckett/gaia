@@ -2,5 +2,5 @@
 // SPDX-License-Identifier: MIT
 
 // What drawing a formula needs; only mathRenderer loads it, for an answer with formulas.
-export { SvgXml } from 'react-native-svg';
+export { default as Svg, Defs, LinearGradient, Rect, Stop, SvgXml } from 'react-native-svg';
 export { texToSvg } from './texToSvg';

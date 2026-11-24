@@ -23,7 +23,7 @@ import { openLinkFromPress } from '@/platform/openLink';
 import { Icon, Text } from '@/ui';
 import { FileText } from '@/ui/icons';
 
-import { InlineFormula, type MathContext } from './math/MathFormula';
+import { drawFormula, FormulaDrawing, type MathContext } from './math/MathFormula';
 
 export interface InlineContext {
     index: CitationIndex;
@@ -155,6 +155,11 @@ function inlineCode(value: string, ctx: InlineContext, key: string, page?: numbe
     if (doc) return citation(doc, page, ctx, key);
     const path = filePathOfCodeSpan(value);
     if (path) return pathText(path, ctx, key, value.trim());
+    return codeSpan(value, key);
+}
+
+/** A backtick span: left to right on the code surface. */
+function codeSpan(value: string, key: string): ReactNode {
     // No-break spaces keep a command on one line, so it never splits into reordered pieces.
     return (
         <Text key={key} code dir="ltr">
@@ -242,9 +247,12 @@ export function renderInline(nodes: PhrasingContent[], ctx: InlineContext, keyBa
             case 'break':
                 out.push('\n');
                 return;
-            case 'inlineMath':
-                out.push(<InlineFormula key={key} tex={node.value} math={ctx.math} />);
+            case 'inlineMath': {
+                // A formula that doesn't parse shows as its source in a code span, as on the desktop.
+                const formula = drawFormula(ctx.math, node.value, false);
+                out.push(formula ? <FormulaDrawing key={key} formula={formula} tex={node.value} math={ctx.math} inline /> : codeSpan(node.value, key));
                 return;
+            }
             case 'link':
                 out.push(link(node.url, renderInline(node.children, ctx, `${key}.`), key, ctx));
                 return;

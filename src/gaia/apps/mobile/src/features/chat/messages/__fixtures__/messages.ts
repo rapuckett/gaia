@@ -204,7 +204,8 @@ export type MessagesFixture =
     | 'math-inline'
     | 'math-display'
     | 'math-wide'
-    | 'math-failed';
+    | 'math-failed'
+    | 'math-answer';
 
 export const PRESCAN_PAYLOAD = {
     kind: 'email_pre_scan',
@@ -381,6 +382,13 @@ export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Mes
         messages: [
             msg('user', 'Show the formula again.', 0),
             msg('assistant', 'This one is cut off:\n\n$$\\frac{1}{$$\n\nand $\\badmacro{x}$ is not TeX.', 1),
+        ],
+    },
+    // The desktop reference answer for CV-66, word for word.
+    'math-answer': {
+        messages: [
+            msg('user', 'How much does a columnar scan save?', 0),
+            msg('assistant', 'A row store reads every column of every row, so the scan amplification is\n\n$$R = \\frac{C_{\\text{row}}}{C_{\\text{col}}} \\approx \\frac{W}{w}$$\n\nWith 50 columns and 4 read, $R \\approx 12.5$, so a scan that cost $5 on the row store costs about $0.40 on the column store.\n\nThe quadratic formula is a good second check: $x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$.', 1),
         ],
     },
 };

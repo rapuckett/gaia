@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import type { PhrasingContent } from 'mdast';
-import { View } from 'react-native';
+import { useId, useState, type ReactNode } from 'react';
+import { Platform, ScrollView, View, type ViewStyle } from 'react-native';
 
-import { isolate } from '@webui/i18n/registry';
-import { HScroll, Text } from '@/ui';
+import { dirProp } from '@/platform/dirProp';
+import { useTheme } from '@/ui';
 
+import { CodeBlock } from '../CodeBlock';
 import type { DrawnFormula } from './texToSvg';
 import type { MathModule } from './mathRenderer';
 
@@ -23,6 +25,7 @@ export interface MathContext {
 
 // The desktop draws formulas at 1.05em of the prose.
 export const MATH_SCALE = 1.05;
+const FADE_WIDTH = 24;
 
 function rendererOf(math: MathContext): MathModule {
     if (!math.renderer) throw new Error('A formula was rendered without the formula renderer: Markdown loads it when the tree has math.');
@@ -30,65 +33,81 @@ function rendererOf(math: MathContext): MathModule {
 }
 
 /** The drawn formula, or null when it doesn't parse. */
-function drawn(math: MathContext, tex: string, display: boolean): DrawnFormula | null {
+export function drawFormula(math: MathContext, tex: string, display: boolean): DrawnFormula | null {
     return rendererOf(math).texToSvg(tex, display);
 }
 
-function Drawing({ formula, tex, math, inline }: { formula: DrawnFormula; tex: string; math: MathContext; inline: boolean }) {
+/** A drawn formula, read out as its TeX source; inline, its baseline sits on the text's. */
+export function FormulaDrawing({ formula, tex, math, inline }: { formula: DrawnFormula; tex: string; math: MathContext; inline: boolean }) {
+    const { SvgXml } = rendererOf(math);
     const width = formula.width * math.size;
     const height = (formula.height + formula.depth) * math.size;
-    const { SvgXml } = rendererOf(math);
+    const depth = formula.depth * math.size;
+    // Web lowers the box in the line, so the line grows only as much as the formula needs; native lays an inline
+    // box on the baseline at a fixed line height, so it is moved down after layout (Markdown makes the room).
+    const place = !inline || depth <= 0 ? null : Platform.OS === 'web' ? ({ verticalAlign: -depth } as unknown as ViewStyle) : { transform: [{ translateY: depth }] };
     return (
-        <View
-            accessible
-            accessibilityRole="image"
-            accessibilityLabel={tex}
-            testID={inline ? 'math-inline' : 'math-display'}
-            // An inline box sits on the baseline; moving it down by its depth lines the formula's baseline up with the text's.
-            style={{ width, height, ...(inline && formula.depth > 0 ? { transform: [{ translateY: formula.depth * math.size }] } : null) }}
-        >
+        <View accessible accessibilityRole="text" accessibilityLabel={tex} testID={inline ? 'math-inline' : 'math-display'} style={{ width, height, ...place }}>
             <SvgXml xml={formula.svg} width={width} height={height} color={math.color} />
         </View>
     );
 }
 
-/** A formula in a line of text; its TeX source in the danger color when it doesn't parse, as on the desktop. */
-export function InlineFormula({ tex, math }: { tex: string; math: MathContext }) {
-    const formula = drawn(math, tex, false);
-    if (formula) return <Drawing formula={formula} tex={tex} math={math} inline />;
+/** Content wider than the answer scrolls sideways on its own, with a fade at the trailing edge while more is hidden. */
+function FormulaScroller({ children, math, center, testID }: { children: ReactNode; math: MathContext; center: boolean; testID: string }) {
+    const { colors } = useTheme();
+    const { Svg, Defs, LinearGradient, Stop, Rect } = rendererOf(math);
+    const gradient = `fade${useId().replace(/[^A-Za-z0-9]/g, '')}`;
+    const [box, setBox] = useState({ view: 0, content: 0, offset: 0 });
+    const more = box.content - box.view - box.offset > 1;
     return (
-        <Text mono dir="ltr" tone="danger" testID="math-source">
-            {isolate(tex, 'ltr')}
-        </Text>
+        <View style={{ direction: 'ltr' }} {...dirProp('ltr')}>
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                contentContainerStyle={center ? { flexGrow: 1, justifyContent: 'center' } : undefined}
+                onLayout={(e) => setBox((b) => ({ ...b, view: e.nativeEvent.layout.width }))}
+                onContentSizeChange={(w) => setBox((b) => ({ ...b, content: w }))}
+                onScroll={(e) => setBox((b) => ({ ...b, offset: e.nativeEvent.contentOffset.x }))}
+                scrollEventThrottle={32}
+                testID={testID}
+            >
+                {children}
+            </ScrollView>
+            {more ? (
+                <View pointerEvents="none" testID={`${testID}-fade`} style={{ position: 'absolute', top: 0, bottom: 0, end: 0, width: FADE_WIDTH }}>
+                    <Svg width="100%" height="100%">
+                        <Defs>
+                            <LinearGradient id={gradient} x1="0" y1="0" x2="1" y2="0">
+                                <Stop offset="0" stopColor={colors.bgPrimary} stopOpacity={0} />
+                                <Stop offset="1" stopColor={colors.bgPrimary} stopOpacity={1} />
+                            </LinearGradient>
+                        </Defs>
+                        <Rect width="100%" height="100%" fill={`url(#${gradient})`} />
+                    </Svg>
+                </View>
+            ) : null}
+        </View>
     );
 }
 
-/** A display formula, or an inline one wider than the column, on its own line: it scrolls sideways when wider than the answer. */
-export function BlockFormula({ tex, math, display }: { tex: string; math: MathContext; display: boolean }) {
-    const formula = drawn(math, tex, display);
-    if (!formula) {
-        return (
-            <Text mono dir="ltr" align="ltr" selectable tone="danger" testID="math-source">
-                {tex}
-            </Text>
-        );
-    }
+/** A display formula, or an inline one wider than the column, on its own line; a display formula that doesn't parse shows as a code block. */
+export function BlockFormula({ tex, math, display, streaming = false }: { tex: string; math: MathContext; display: boolean; streaming?: boolean }) {
+    const formula = drawFormula(math, tex, display);
+    if (!formula) return <CodeBlock lang="tex" code={tex} streaming={streaming} />;
     return (
-        <HScroll dir="ltr" testID={display ? 'math-display-scroll' : 'math-wide-scroll'}>
-            {/* A display formula is centered in the column while it fits, as on the desktop. */}
-            <View style={{ minWidth: math.columnWidth, alignItems: display ? 'center' : 'flex-start' }}>
-                <Drawing formula={formula} tex={tex} math={math} inline={false} />
-            </View>
-        </HScroll>
+        <FormulaScroller math={math} center={display} testID={display ? 'math-display-scroll' : 'math-wide-scroll'}>
+            <FormulaDrawing formula={formula} tex={tex} math={math} inline={false} />
+        </FormulaScroller>
     );
 }
 
 export type ParagraphRun = { kind: 'text'; nodes: PhrasingContent[] } | { kind: 'wide'; tex: string };
 
 /** A paragraph split around its inline formulas that are wider than the column, which can't wrap and get lines of their own. */
-export function splitWideFormulas(nodes: PhrasingContent[], math: MathContext | undefined): ParagraphRun[] {
-    if (!math?.renderer || math.columnWidth <= 0) return [{ kind: 'text', nodes }];
-    const { renderer } = math;
+export function splitWideFormulas(nodes: PhrasingContent[], math: MathContext): ParagraphRun[] {
+    if (!math.renderer || math.columnWidth <= 0) return [{ kind: 'text', nodes }];
     const runs: ParagraphRun[] = [];
     let current: PhrasingContent[] = [];
     const flush = () => {
@@ -96,7 +115,7 @@ export function splitWideFormulas(nodes: PhrasingContent[], math: MathContext | 
         current = [];
     };
     for (const node of nodes) {
-        const formula = node.type === 'inlineMath' ? renderer.texToSvg(node.value, false) : null;
+        const formula = node.type === 'inlineMath' ? drawFormula(math, node.value, false) : null;
         if (node.type === 'inlineMath' && formula && formula.width * math.size > math.columnWidth) {
             flush();
             runs.push({ kind: 'wide', tex: node.value });
@@ -106,4 +125,35 @@ export function splitWideFormulas(nodes: PhrasingContent[], math: MathContext | 
     }
     flush();
     return runs;
+}
+
+// Inter's ascent and descent, in ems: where a line of prose has room above and below its baseline.
+const PROSE_ASCENT = 0.969;
+const PROSE_DESCENT = 0.241;
+
+/**
+ * The line height, in points, a native paragraph needs so its inline formulas don't reach into the lines around it,
+ * or null when `lineHeight` already holds them. Native text has one line height per paragraph, so every line grows.
+ */
+export function lineHeightForFormulas(nodes: PhrasingContent[], math: MathContext, fontSize: number, lineHeight: number): number | null {
+    if (Platform.OS === 'web' || !math.renderer) return null;
+    const ascent = PROSE_ASCENT * fontSize;
+    const descent = PROSE_DESCENT * fontSize;
+    let need = lineHeight;
+    const visit = (list: PhrasingContent[]) => {
+        for (const node of list) {
+            if (node.type === 'inlineMath') {
+                const formula = drawFormula(math, node.value, false);
+                if (!formula) continue;
+                // Text sits centered in its line, so the line grows by twice whichever side lacks room.
+                const above = formula.height * math.size - ascent;
+                const below = formula.depth * math.size - descent;
+                need = Math.max(need, ascent + descent + 2 * Math.max(above, below));
+            } else if ('children' in node) {
+                visit(node.children as PhrasingContent[]);
+            }
+        }
+    };
+    visit(nodes);
+    return need > lineHeight ? Math.ceil(need) : null;
 }

@@ -13,10 +13,11 @@ import { useFileScope } from '@/features/files/scopeContext';
 import { contentDir, Divider, HScroll, Icon, Notice, NumberMarker, Row, Stack, Surface, Text, useTheme } from '@/ui';
 import { Check, Square } from '@/ui/icons';
 import { ForcedDirection } from '@/ui/text/ForcedDirection';
+import { lineHeightOf } from '@/ui/text/Text';
 
 import { CodeBlock } from './CodeBlock';
 import { Caret, plainText, renderInline, type InlineContext } from './inline';
-import { BlockFormula, MATH_SCALE, splitWideFormulas, type MathContext } from './math/MathFormula';
+import { BlockFormula, lineHeightForFormulas, MATH_SCALE, splitWideFormulas, type MathContext } from './math/MathFormula';
 import { hasMath, mathRenderer } from './math/mathRenderer';
 import { parseAnswer, parseFormatting } from './parse';
 import { useThrottledText } from './useStreamingText';
@@ -39,6 +40,8 @@ export interface MarkdownProps {
 interface RenderContext extends InlineContext {
     uiDir: 'ltr' | 'rtl';
     streaming: boolean;
+    /** Prose size and line height in points, at the person's text size. */
+    prose: { size: number; lineHeight: number; scale: number };
 }
 
 type Dir = 'ltr' | 'rtl';
@@ -114,11 +117,14 @@ function renderBlock(node: RootContent, ctx: RenderContext, key: string, caret =
         case 'paragraph': {
             const dir = contentDir(plainText(node), ctx.uiDir);
             const runs = splitWideFormulas(node.children, ctx.math);
-            const prose = (children: PhrasingContent[], runKey: string, withCaret: boolean) => (
-                <Text key={runKey} role="prose" selectable dir={dir} align={dir}>
-                    {inline({ children }, ctx, runKey, withCaret)}
-                </Text>
-            );
+            const prose = (children: PhrasingContent[], runKey: string, withCaret: boolean) => {
+                const room = lineHeightForFormulas(children, ctx.math, ctx.prose.size, ctx.prose.lineHeight);
+                return (
+                    <Text key={runKey} role="prose" selectable dir={dir} align={dir} minLineHeight={room === null ? undefined : room / ctx.prose.scale}>
+                        {inline({ children }, ctx, runKey, withCaret)}
+                    </Text>
+                );
+            };
             if (runs.length === 1 && runs[0].kind === 'text') return prose(runs[0].nodes, key, caret);
             return (
                 <Stack key={key} gap="xs">
@@ -133,7 +139,7 @@ function renderBlock(node: RootContent, ctx: RenderContext, key: string, caret =
             );
         }
         case 'math':
-            return <BlockFormula key={key} tex={node.value} math={ctx.math} display />;
+            return <BlockFormula key={key} tex={node.value} math={ctx.math} display streaming={ctx.streaming} />;
         case 'heading': {
             const dir = contentDir(plainText(node), ctx.uiDir);
             const role = node.depth === 1 ? 'title' : node.depth === 2 ? 'body' : 'ui';
@@ -205,7 +211,8 @@ export function Markdown({ text, variant = 'answer', streaming: streamingProp = 
     const { fontScale } = useWindowDimensions();
     const [columnWidth, setColumnWidth] = useState(0);
     const math: MathContext = { renderer, size: type.prose * fontScale * MATH_SCALE, color: colors.textPrimary, columnWidth };
-    const ctx: RenderContext = { index, t, onOpenCitation: formatting ? undefined : (onOpenCitation ?? (sessionId ? openCitation : undefined)), sessionId: formatting ? null : sessionId, uiDir, streaming, math };
+    const prose = { size: type.prose * fontScale, lineHeight: lineHeightOf(type.prose, 'prose', uiDir === 'rtl') * fontScale, scale: fontScale };
+    const ctx: RenderContext = { index, t, onOpenCitation: formatting ? undefined : (onOpenCitation ?? (sessionId ? openCitation : undefined)), sessionId: formatting ? null : sessionId, uiDir, streaming, math, prose };
     const caretInline = streaming && endsInline(tree);
 
     const answer = (

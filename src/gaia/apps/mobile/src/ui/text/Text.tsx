@@ -38,6 +38,8 @@ export interface TextProps {
     underline?: boolean;
     /** Equal-width digits, so numbers in a column line up. */
     tabular?: boolean;
+    /** A taller line than the role's, in points before the person's text size applies: room for a tall inline formula. */
+    minLineHeight?: number;
     /** Inline code: mono on the code surface. */
     code?: boolean;
     /** Writing direction of this run; explicit `ltr`/`rtl` never move the line, `auto` aligns the block to its content. Content whose language differs from the UI's. `auto` follows the first strong letter of a string child. */
@@ -167,6 +169,7 @@ export function Text({
     strike,
     underline,
     tabular,
+    minLineHeight,
     code,
     dir: dirProp,
     glossInline,
@@ -204,7 +207,7 @@ export function Text({
         style.fontFamily = fontFamily({ weight: w, mono: !!mono || !!code, display });
         if (!nested || role) {
             style.fontSize = type[r];
-            style.lineHeight = lineHeightOf(type[r], r, rtl);
+            style.lineHeight = Math.max(lineHeightOf(type[r], r, rtl), minLineHeight ?? 0);
         }
     }
     if (!nested || tone) style.color = toneColor(colors, tone ?? 'primary');
