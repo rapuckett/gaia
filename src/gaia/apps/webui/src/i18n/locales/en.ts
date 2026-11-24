@@ -2168,6 +2168,7 @@ export const enMessages = {
     'notifications.devices.pairedTitle': 'A device paired with this PC',
     'notifications.devices.pairedBody': '{name} ({platform}) is waiting for you to allow or deny it.',
     'notifications.devices.review': 'Review',
+    'notifications.devices.denyFailed': "Couldn't deny the device: {error}",
     'notifications.devices.failedTitle': 'Failed attempts to pair',
     'notifications.devices.failedBody.one': 'An attempt to pair with this PC failed.',
     'notifications.devices.failedBody.other': '{n} attempts to pair with this PC failed.',

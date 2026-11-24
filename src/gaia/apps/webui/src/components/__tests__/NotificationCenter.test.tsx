@@ -11,7 +11,7 @@
  * for real so a selector that stops being cached crashes the suite, not a user.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotificationCenter } from '../NotificationCenter';
 import { useNotificationStore, PATH_ACCESS_TOOL } from '../../stores/notificationStore';
@@ -234,5 +234,34 @@ describe('NotificationCenter marks hidden characters', () => {
         expect(container.querySelector('.notification-title')!.textContent).toBe(title);
         expect(container.querySelector('.notification-message')!.textContent).toBe('⁨invoice[U+202E]txt.md⁩');
         resetUiLocale();
+    });
+});
+
+describe('a device pairing notice', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('says why Deny failed, keeps its buttons, and shows Denied once it works', async () => {
+        let removal: { status: number; body: unknown } = { status: 500, body: { detail: 'The device store is locked.' } };
+        vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
+            const path = new URL(input, 'http://localhost').pathname;
+            const reply = init?.method === 'DELETE' && path === '/api/devices/d1' ? removal
+                : path === '/api/devices/status' ? { status: 403, body: { detail: 'Device pairing is off.' } }
+                : { status: 200, body: { devices: [] } };
+            return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { 'content-type': 'application/json' } });
+        }));
+        useNotificationStore.setState({
+            notifications: [{ ...notif('device-paired-d1', 'Phone (iPhone) is waiting'), type: 'security_alert', deviceId: 'd1', actions: ['review', 'deny'] }],
+        });
+        render(<NotificationCenter onClose={vi.fn()} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't deny the device: The device store is locked.");
+        expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
+
+        removal = { status: 200, body: {} };
+        fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
+        await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+        expect(await screen.findByText('Denied')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Deny' })).not.toBeInTheDocument();
     });
 });

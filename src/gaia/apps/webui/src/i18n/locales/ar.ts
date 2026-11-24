@@ -2168,6 +2168,7 @@ const messages: Messages = {
     'notifications.devices.pairedTitle': 'اقترن جهاز بهذا الحاسوب',
     'notifications.devices.pairedBody': '{name} ({platform}) ينتظر أن تسمح له أو ترفضه.',
     'notifications.devices.review': 'مراجعة',
+    'notifications.devices.denyFailed': 'تعذّر رفض الجهاز: {error}',
     'notifications.devices.failedTitle': 'محاولات اقتران فاشلة',
     'notifications.devices.failedBody.one': 'فشلت محاولة للاقتران بهذا الحاسوب.',
     'notifications.devices.failedBody.other': 'فشلت محاولات للاقتران بهذا الحاسوب ({n}).',

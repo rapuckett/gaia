@@ -148,16 +148,22 @@ export function NotificationCenter({ onClose, onOpenChat }: NotificationCenterPr
 
   const handleDeviceDeny = useCallback((notif: GaiaNotification) => {
     if (!notif.deviceId) return;
-    const answered = () =>
+    const update = (change: Partial<GaiaNotification>) =>
       useNotificationStore.setState((s) => ({
-        notifications: s.notifications.map((n) => (n.id === notif.id ? { ...n, response: 'deny', respondedAt: Date.now() } : n)),
+        notifications: s.notifications.map((n) => (n.id === notif.id ? { ...n, ...change } : n)),
       }));
+    const answered = () => update({ response: 'deny', respondedAt: Date.now(), actionError: undefined });
+    update({ actionError: undefined });
     removeDevice(notif.deviceId)
       .then(answered)
       .catch((err) => {
         // 404: already unpaired or expired, which is what Deny asks for.
-        if (err instanceof ApiError && err.httpStatus === 404) answered();
-        else log.ui.error('Denying the paired device failed', err);
+        if (err instanceof ApiError && err.httpStatus === 404) {
+          answered();
+          return;
+        }
+        log.ui.error('Denying the paired device failed', err);
+        update({ actionError: err instanceof ApiError ? err.detail || err.message : err instanceof Error ? err.message : String(err) });
       })
       .finally(() => void useDeviceStore.getState().refresh());
   }, []);
@@ -346,6 +352,11 @@ export function NotificationCenter({ onClose, onOpenChat }: NotificationCenterPr
                         {t('notifications.deny')}
                       </button>
                     </div>
+                  )}
+                  {n.deviceId && !n.response && n.actionError && (
+                    <p className="notification-action-error" role="alert">
+                      {t('notifications.devices.denyFailed', { error: n.actionError })}
+                    </p>
                   )}
                   {n.deviceId && n.response === 'deny' && (
                     <span className="notification-response-badge response-deny">{t('notifications.denied')}</span>
