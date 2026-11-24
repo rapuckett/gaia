@@ -96,3 +96,24 @@ describeNative('step rows with a folded thought', () => {
         expect(screen.queryByTestId('step-row--1')).toBeNull();
     });
 });
+
+describeNative('a confirmation that timed out', () => {
+    const RAW = 'Tool approval for write_file timed out after 60 s';
+
+    it('is a translated warning with the raw text under a closed Details', async () => {
+        const steps = stepsFromEvents([{ type: 'status', status: 'warning', phase: 'confirm_timeout', message: RAW }] as StreamEvent[], translator('en'));
+        expect(steps[0]).toMatchObject({ type: 'status', success: false, detail: RAW });
+
+        await render(<ActivityTimeline steps={steps} />, { wrapper: ThemeProvider });
+        expect(screen.getByText("You didn't answer in time, so GAIA didn't do this step.")).toBeTruthy();
+        expect(screen.queryByText(RAW)).toBeNull();
+        await fireEvent.press(screen.getByTestId('step-warning-details-toggle'));
+        expect(screen.getByTestId('step-warning-details-text')).toBeTruthy();
+    });
+
+    it('gives other warnings no Details', async () => {
+        const steps = stepsFromEvents([{ type: 'status', status: 'warning', message: 'Execution paused' }] as StreamEvent[], translator('en'));
+        await render(<ActivityTimeline steps={steps} />, { wrapper: ThemeProvider });
+        expect(screen.queryByTestId('step-warning-details-toggle')).toBeNull();
+    });
+});

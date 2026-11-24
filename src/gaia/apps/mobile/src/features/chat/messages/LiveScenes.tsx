@@ -39,6 +39,7 @@ import { TurnTail } from '../TurnTail';
  * `step-error`: a running Waiting step cut off by a closed connection, then the same step cut off by Stop; both show the interrupted icon and a frozen 13s.
  * `latest-answer` (regenerate): a short exchange; only the latest answer has Try again (`regenerate`), and its retry does nothing.
  * `read-aloud-error` (CV-23): the server-down read-aloud notice, Details closed (`#tap=read-aloud-details-toggle` opens it). `read-aloud-loading`: the action row while speech is being made.
+ * `activity-timeout` (PRM-05): an unanswered tool approval, Details closed (`#tap=step-warning-details-toggle` opens it).
  * `activity-vision` (CV-49): the vision offer under a tool step. `many-scrolled-up` (CV-09): the many-messages list with the jump button showing.
  */
 export const LIVE_SCENES = [
@@ -50,6 +51,7 @@ export const LIVE_SCENES = [
     'activity-filter',
     'activity-variants',
     'activity-vision',
+    'activity-timeout',
     'many-scrolled-up',
     'reply-server-down',
     'failed-local',
@@ -116,6 +118,9 @@ const VARIANTS: AgentStep[] = [
     ...[6, 7, 8].map((id) => step(id, { tool: 'search_files', narration: 'Searching the reports folder', detail: 'query: Q3', result: 'done', timestamp: id * 1000 })),
 ];
 
+const TIMEOUT: AgentStep[] = [
+    step(1, { type: 'status', label: "You didn't answer in time, so GAIA didn't do this step.", detail: 'Tool approval for write_file timed out after 60 s; the call was not run.', success: false }),
+];
 const VISION: AgentStep[] = [step(1, { tool: 'analyze_image', narration: 'Reading photo.jpg', success: false, needsModel: 'vision', result: 'A vision model is needed.' })];
 
 const CUT_OFF_EVENTS = [{ type: 'tool_start', tool: 'sleep', detail: 'seconds: 60', narration: 'Waiting' }] as StreamEvent[];
@@ -231,7 +236,7 @@ function Body({ state }: { state: LiveScene }) {
             </Stack>
         );
     }
-    const steps = state === 'activity-terminal' ? TERMINAL : state === 'activity-plan' ? PLAN() : state === 'activity-filter' ? FILTER : state === 'activity-variants' ? VARIANTS : VISION;
+    const steps = state === 'activity-terminal' ? TERMINAL : state === 'activity-plan' ? PLAN() : state === 'activity-filter' ? FILTER : state === 'activity-variants' ? VARIANTS : state === 'activity-timeout' ? TIMEOUT : VISION;
     return <ActivityTimeline steps={steps} running={state === 'activity-plan'} />;
 }
 

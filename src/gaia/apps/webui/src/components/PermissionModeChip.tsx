@@ -11,6 +11,7 @@ import type { PermissionMode } from '../types';
 import { ref, type MessageKey } from '../i18n/registry';
 import { useT } from '../i18n/useT';
 import { requestErrorParam, requestErrorText } from '../utils/requestErrors';
+import { permissionChipView } from '../utils/permissionChip.core';
 import { announcePermissionMode, usePermissionModeEvents } from '../utils/permissionModeEvents';
 
 export const MODES: Array<{ mode: PermissionMode; label: MessageKey; note: MessageKey }> = [
@@ -85,21 +86,22 @@ export function PermissionModeChip({ sessionId, disabled }: { sessionId: string 
         }
     }, [confirming, promptWaiting, sessionId, setDraftMode, t]);
 
-    const full = mode === 'full_access';
-    const unread = mode === null;
-    const Icon = full || (unread && error) ? ShieldAlert : ShieldCheck;
-    const chipLabel = full ? t('perm.full') : unread ? t(error ? 'perm.unknown' : 'perm.checking') : t('env.ask');
+    const view = permissionChipView(mode, !!error);
+    const full = view.state === 'full_access';
+    const unread = view.unread;
+    const Icon = view.warning ? ShieldAlert : ShieldCheck;
+    const chipLabel = t(view.labelKey);
     return (
         <div className="composer-chip-wrap">
             <button
                 ref={anchor}
                 type="button"
-                className={`composer-chip${full || (unread && error) ? ' is-warning' : ''}`}
+                className={`composer-chip${view.warning ? ' is-warning' : ''}`}
                 onClick={() => { setConfirming(false); setOpen((v) => !v); }}
                 disabled={disabled}
                 aria-haspopup="dialog"
                 aria-expanded={open}
-                aria-label={unread ? t('perm.chipAriaUnread', { state: chipLabel }) : t('perm.chipAria', { mode: ref(full ? 'perm.fullLower' : 'perm.askLower') })}
+                aria-label={unread ? t('perm.chipAriaUnread', { state: chipLabel }) : t('perm.chipAria', { mode: ref(view.modeKey) })}
             >
                 <Icon size={13} aria-hidden="true" />
                 <span className="composer-chip-label" dir="auto">{chipLabel}</span>
