@@ -196,8 +196,10 @@ describe('app config', () => {
         expect(Object.keys(arabic).sort()).toEqual([...keys].sort());
         for (const [key, value] of Object.entries(arabic)) {
             expect({ key, ok: value.trim() !== '' }).toEqual({ key, ok: true });
-            // GAIA and Wi-Fi are names, kept in Latin as the in-app Arabic catalog keeps them.
-            expect({ key, latin: value.replace(/GAIA|Wi-Fi/g, '').match(/[A-Za-z]/g) }).toEqual({ key, latin: null });
+            // GAIA and Wi-Fi (plain or with the non-breaking hyphen U+2011) are names, kept in Latin as the in-app Arabic catalog keeps them.
+            expect({ key, latin: value.replace(/GAIA|Wi[-\u2011]Fi/g, '').match(/[A-Za-z]/g) }).toEqual({ key, latin: null });
         }
+        expect(arabic.NSLocalNetworkUsageDescription).toContain('Wi\u2011Fi');
+        expect(arabic.NSLocalNetworkUsageDescription).not.toContain('Wi-Fi');
     });
 });
