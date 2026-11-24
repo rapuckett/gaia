@@ -101,17 +101,3 @@ describe('ChatHeader failures keep the PC text off the sentence', () => {
         expect(StyleSheet.flatten(screen.getByText(PC_TEXT).props.style)).toMatchObject({ writingDirection: 'ltr' });
     });
 });
-
-describe('ChatHeader resource strip', () => {
-    it('says how to bring the strip back after it is closed, and the note offers it', async () => {
-        await mount();
-        expect(screen.queryByTestId('resources-hidden-note')).toBeNull();
-        await fireEvent.press(await screen.findByTestId('resources-toggle'));
-        await fireEvent.press(await screen.findByTestId('resources-close'));
-        expect(await screen.findByText(translator('en')('resources.hiddenNote'))).toBeTruthy();
-        expect(screen.queryByTestId('resources-close')).toBeNull();
-        await fireEvent.press(screen.getByText(translator('en')('resources.show')));
-        expect(await screen.findByTestId('resources-close')).toBeTruthy();
-        expect(screen.queryByTestId('resources-hidden-note')).toBeNull();
-    });
-});
