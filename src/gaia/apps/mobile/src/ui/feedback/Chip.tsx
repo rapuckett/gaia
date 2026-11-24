@@ -28,7 +28,7 @@ export interface ChipProps {
 export function Chip({ label, accessibilityLabel, hint, selected, role, onPress, icon, testID }: ChipProps) {
     const { colors, radius } = useTheme();
     return (
-        <Pressable onPress={onPress} accessibilityRole={role} accessibilityLabel={accessibilityLabel ?? label} accessibilityHint={hint} aria-selected={!!selected} testID={testID}>
+        <Pressable inline hugHeight shape={{ radius: radius.full, hug: true }} onPress={onPress} accessibilityRole={role} accessibilityLabel={accessibilityLabel ?? label} accessibilityHint={hint} aria-selected={!!selected} testID={testID}>
             <View
                 style={{
                     alignSelf: 'flex-start',
