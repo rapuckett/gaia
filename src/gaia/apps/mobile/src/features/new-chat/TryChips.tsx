@@ -1,8 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { View } from 'react-native';
+
 import { useT } from '@/i18n/useT';
-import { Chip, Row, Stack, Text } from '@/ui';
+import { Chip, Row } from '@/ui';
 
 import { TRY_EXAMPLES } from './tryExamples';
 
@@ -10,16 +12,13 @@ import { TRY_EXAMPLES } from './tryExamples';
 export function TryChips({ onPick }: { onPick: (prompt: string) => void }) {
     const t = useT();
     return (
-        <Stack gap="xs" accessibilityRole="toolbar">
-            <Text role="caption" tone="secondary" accessibilityLabel={t('cards.tryGroup')}>
-                {t('cards.try')}
-            </Text>
+        <View accessibilityRole="toolbar" accessibilityLabel={t('newChat.cardsLabel')}>
             <Row gap="sm" wrap>
                 {TRY_EXAMPLES.map(({ icon, label, prompt }) => (
                     // Plain text for the box: no English gloss in brackets.
                     <Chip key={label} icon={icon} label={t(label)} onPress={() => onPick(t.bare(prompt))} />
                 ))}
             </Row>
-        </Stack>
+        </View>
     );
 }

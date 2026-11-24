@@ -140,7 +140,7 @@ export interface RowText {
 export function rowText(row: ChatRow, t: Say): RowText {
     const place = row.place > 0 ? t('row.inLine', { n: row.place }) : null;
     const status = row.dot ? [t(STATUS_TITLE[row.dot]), place].filter(Boolean).join(', ') : null;
-    const waiting = row.failed > 0 ? t('row.notSent', { n: row.failed }) : row.unsent > 0 ? t('row.toSend', { n: row.unsent }) : null;
+    const waiting = row.failed > 0 ? t(pluralKey('row.notSent', row.failed), { n: row.failed }) : row.unsent > 0 ? t(pluralKey('row.toSend', row.unsent), { n: row.unsent }) : null;
     const note = [place, waiting].filter(Boolean).join(' · ') || null;
     const aria = [row.title, status, waiting, row.unread ? t('row.unread') : null].filter(Boolean).join(', ');
     return { status, note, noteFailed: row.failed > 0, aria };

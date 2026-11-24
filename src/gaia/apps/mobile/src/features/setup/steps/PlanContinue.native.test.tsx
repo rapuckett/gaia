@@ -31,7 +31,7 @@ const entry = (e: Partial<SetupCatalogEntry>): SetupCatalogEntry => ({
     id: 'chat', name: 'Big Chat', roles: ['chat'], purpose: '', if_skipped: null, recipe: null, size_gb: 10, full_size_gb: 10,
     partial: false, partial_gb: 0, downloaded: false, in_lemonade: false, recommended: true, planned: true,
     gaia_model: true, selected: true, skipped: false, chat_choice: true, support: 'verified', reads_images: true,
-    feature_tier: 'full', source: null, fits: true, need_gb: 12, capacity_gb: 64, fit_reason: null, ...e,
+    feature_tier: 'full', source: null, fits: true, need_gb: 12, capacity_gb: 64, fit_reason: null, setup_offer: true, ...e,
 });
 
 const planOf = (chat: SetupCatalogEntry): SetupPlan => ({

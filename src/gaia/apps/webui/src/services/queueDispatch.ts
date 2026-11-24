@@ -29,7 +29,7 @@ export type SendOutcome =
     | { kind: 'accepted' }
     | { kind: 'busy' }
     | { kind: 'gone' }
-    | { kind: 'failed'; error: string };
+    | { kind: 'failed'; error: messageQueue.QueueError };
 
 /** Starts `text` as the chat's next turn; resolves once the server took it, or didn't. */
 export type QueuedSend = (sessionId: string, text: string) => Promise<SendOutcome>;
@@ -138,7 +138,7 @@ export async function dispatchNext(sessionId: string, send: QueuedSend, canSend:
                 }
                 log.chat.error(`Could not learn what chat ${sessionId}'s last reply did with the messages added to it`, err);
                 store().updateQueue(sessionId, (q) => messageQueue.failDelivered(
-                    q, `${getT()('queue.err.unread')}${messageQueue.ERROR_DETAIL_SEP}${errorText(err)}`,
+                    q, messageQueue.unreadError(errorText(err)),
                 ));
                 return;
             }
@@ -170,7 +170,7 @@ export async function dispatchNext(sessionId: string, send: QueuedSend, canSend:
             dropGone(sessionId);
             return;
         }
-        log.chat.error(`Queued message for chat ${sessionId} was not sent: ${result.error}`);
+        log.chat.error(`Queued message for chat ${sessionId} was not sent: ${typeof result.error === 'string' ? result.error : result.error.key}`);
         store().updateQueue(sessionId, (q) => messageQueue.notStarted(q, next.id, result.error));
     } finally {
         inFlight.delete(sessionId);
