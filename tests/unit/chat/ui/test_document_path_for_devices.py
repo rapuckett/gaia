@@ -110,3 +110,88 @@ def test_a_malformed_documents_list_is_not_sent_whole_to_a_device(fake_home):
 
     frame = f'data: {{"type": "done", "documents_added": "{fake_home}/a.pdf"}}\n\n'
     assert str(fake_home) not in _hide_pc_paths(frame)
+
+
+def _audio_card(fake_home):
+    return {
+        "src": "/api/generated-media/audio/a.wav",
+        "path": str(fake_home / "gaia" / "audio" / "a.wav"),
+        "saved_to": str(fake_home / "Music" / "a.wav"),
+        "script_path": "/mnt/other/drive/script.txt",
+    }
+
+
+def test_a_media_card_frame_hides_pc_paths_from_a_device(fake_home):
+    from gaia.ui._chat_helpers import _hide_pc_paths
+
+    data = _audio_card(fake_home)
+    frame = (
+        "data: "
+        + json.dumps({"type": "tool_result", "render": "audio", "data": data})
+        + "\n\n"
+    )
+    shown = json.loads(_hide_pc_paths(frame)[len("data: ") :].split("\n\n")[0])
+    assert shown["data"] == {
+        "src": data["src"],
+        "path": "~/gaia/audio/a.wav",
+        "saved_to": "~/Music/a.wav",
+        "script_path": "script.txt",
+    }
+    assert str(fake_home) not in json.dumps(shown)
+
+
+def test_a_media_card_stream_and_history_for_pc_and_device(fake_home, paired):
+    from gaia.ui.run_manager import Run, run_manager
+
+    app, _, clients, _, _ = paired
+    data = _audio_card(fake_home)
+    run = Run("sess-media")
+    run.emit(
+        "data: "
+        + json.dumps({"type": "tool_result", "render": "audio", "data": data})
+        + "\n\n"
+    )
+    run.finish()
+    run_manager._runs["sess-media"] = run
+    try:
+        seen = {}
+        for who in ("pc", "phone"):
+            resp = clients[who].get(
+                "/api/chat/attach", params={"session_id": "sess-media"}
+            )
+            assert resp.status_code == 200, resp.text
+            line = next(ln for ln in resp.text.splitlines() if '"render"' in ln)
+            seen[who] = json.loads(line[len("data: ") :])["data"]
+    finally:
+        run_manager._runs.pop("sess-media", None)
+    assert seen["pc"] == data
+    assert seen["phone"]["path"] == "~/gaia/audio/a.wav"
+    assert seen["phone"]["src"] == data["src"]
+
+    session = app.state.db.create_session(title="media")
+    sid = session["id"]
+    step = {
+        "id": 1,
+        "type": "tool",
+        "label": "Generate audio",
+        "render": "audio",
+        "data": data,
+    }
+    app.state.db.add_message(sid, "assistant", "done", agent_steps=[step])
+
+    def shown(who, url):
+        body = clients[who].get(url).json()
+        return body["messages"][0]["agent_steps"][0]["data"]
+
+    for url in (
+        f"/api/sessions/{sid}/messages",
+        f"/api/sessions/{sid}/export?format=json",
+    ):
+        assert shown("pc", url) == data
+        phone = shown("phone", url)
+        assert phone == {
+            "src": data["src"],
+            "path": "~/gaia/audio/a.wav",
+            "saved_to": "~/Music/a.wav",
+            "script_path": "script.txt",
+        }
