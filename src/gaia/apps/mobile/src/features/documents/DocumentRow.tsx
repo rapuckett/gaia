@@ -95,6 +95,15 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
             {status === 'failed' ? (
                 retryButton
             ) : null}
+            {attach && status === 'complete' ? (
+                <IconButton
+                    icon={Link2}
+                    size="sm"
+                    testID="doc-attach"
+                    label={attach.chatName === null ? t('docs.attachNextAria', { name: doc.filename }) : t('docs.attachAria', { name: doc.filename, chat: attach.chatName })}
+                    onPress={() => attach.onAttach(doc.id)}
+                />
+            ) : null}
             {onPreview && doc.filepath && status === 'complete' ? (
                 <IconButton icon={Eye} label={t('mobileApp.docs.previewShare', { name: doc.filename })} size="sm" onPress={() => onPreview(doc.id, doc.filename)} />
             ) : null}
@@ -125,22 +134,6 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
             {largeText ? (
                 <Stack paddingX="lg" paddingY="xs" align="start">
                     {actions}
-                </Stack>
-            ) : null}
-            {attach && status === 'complete' ? (
-                <Stack paddingX="lg" paddingY="xs" align="start">
-                    <Button
-                        size="sm"
-                        variant="secondary"
-                        icon={Link2}
-                        label={attach.chatName === null ? t('docs.addToNextChat') : t('docs.addToThisChat')}
-                        accessibilityLabel={
-                            attach.chatName === null
-                                ? t('docs.attachNextAria', { name: doc.filename })
-                                : t('docs.attachAria', { name: doc.filename, chat: attach.chatName })
-                        }
-                        onPress={() => attach.onAttach(doc.id)}
-                    />
                 </Stack>
             ) : null}
             {running ? (
