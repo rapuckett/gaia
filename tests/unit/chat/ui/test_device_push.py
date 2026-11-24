@@ -528,9 +528,7 @@ def test_answering_and_expiring_a_prompt_both_clear_the_phone(sender):
     handler.active_relay_proxy = SimpleNamespace(tool_decision=lambda *a: None)
     handler._expire_relay_confirmation("c-9")
     handler.set_relay_confirmation(None)
-    cleared = [
-        _opened(sender, c)["params"]["resolved"] for c in sender.relay.calls[2:]
-    ]
+    cleared = [_opened(sender, c)["params"]["resolved"] for c in sender.relay.calls[2:]]
     assert cleared == [["c-8"], ["c-9"]]
 
 
