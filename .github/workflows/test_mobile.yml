@@ -1,0 +1,67 @@
+# Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+# SPDX-License-Identifier: MIT
+
+name: Test Phone App
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'src/gaia/apps/mobile/**'
+      # The phone imports the Agent UI's shared cores and reads its CSS tokens.
+      - 'src/gaia/apps/webui/src/**'
+      - '.github/workflows/test_mobile.yml'
+  pull_request:
+    # No `branches:` filter: it matches the PR base, so `[ main ]` skipped stacked PRs (#2767).
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    paths:
+      - 'src/gaia/apps/mobile/**'
+      - 'src/gaia/apps/webui/src/**'
+      - '.github/workflows/test_mobile.yml'
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test-mobile:
+    name: Typecheck, lint and test the phone app
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ready_for_ci')
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: src/gaia/apps/mobile/package-lock.json
+
+      - name: Install dependencies
+        working-directory: src/gaia/apps/mobile
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: src/gaia/apps/mobile
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: src/gaia/apps/mobile
+        run: npm run lint
+
+      - name: Check the generated design tokens
+        working-directory: src/gaia/apps/mobile
+        run: npm run check:tokens
+
+      # APP_ENV stays unset: jest must not need it (see README).
+      - name: Run unit tests
+        working-directory: src/gaia/apps/mobile
+        run: npm test -- --maxWorkers=2
