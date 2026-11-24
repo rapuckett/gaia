@@ -227,12 +227,13 @@ describe('DocumentsScreen', () => {
             expect(client.documentActions).toEqual([{ action: 'delete', docId: 'a' }]);
         });
 
-        it('a failed DELETE brings the row back with the reason', async () => {
+        it('a failed DELETE brings the row back, saying our words and not the PC\'s reason', async () => {
             const client = createFakeClient({ documents: library(), documentFailures: { delete: 'disk is read-only' } });
             await mount(client);
             await fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
             await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS));
-            expect(await screen.findByText(/Couldn't remove notes\.txt: .*disk is read-only/)).toBeTruthy();
+            expect(await screen.findByText(/Couldn't remove notes\.txt: .*Something went wrong on your PC\./)).toBeTruthy();
+            expect(screen.queryByText(/disk is read-only/)).toBeNull();
             expect(screen.getByLabelText('Remove notes.txt')).toBeTruthy();
         });
     });

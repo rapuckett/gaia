@@ -99,7 +99,7 @@ describe('first send', () => {
         await submit('first');
         flow.observe(turn({ status: 'idle', error: new GaiaApiError(500, 'boom') }));
         expect(flow.getState()).toMatchObject({ text: 'first\n\nsecond', sending: false, open: null, waiting: null });
-        expect(flow.getState().error).toContain('mobileApp.error.http');
+        expect(flow.getState().error).toContain('mobileApp.error.httpNoDetail');
         expect(flushed).toEqual([]);
     });
 });

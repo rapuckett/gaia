@@ -734,6 +734,11 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     // `#tap=memory-embedder,memory-embedder-option-npu` picks the NPU on a PC whose NPU embedder is proven.
     'memory-embedder-applying': embedderScene(EMBEDDER_NPU_OK, { override: { setMemoryEmbedder: never } }),
     'memory-embedder-refused': embedderScene(EMBEDDER_NPU_OK, { override: { setMemoryEmbedder: () => Promise.reject(new GaiaApiError(409, 'A reply is running. Change the embedder once it finishes.')) } }),
+    // The model list read fails with the PC's own text: `#tap=local-models-toggle` opens Models on this PC, whose notice keeps that text on its own line.
+    'model-plan-failed': {
+        section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE]),
+        override: { getSetupPlan: () => Promise.reject(new GaiaApiError(500, 'lemond is not responding: connection refused')) },
+    },
 };
 
 export function settingsSceneClient(scene: SettingsScene): GaiaClient {

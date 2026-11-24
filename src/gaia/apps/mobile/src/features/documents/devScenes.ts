@@ -139,7 +139,7 @@ export const DOCUMENTS_SCENES: Record<string, DocumentsScene> = {
     'path-empty': scene({ docs: MIXED }),
     'path-invalid': scene({
         docs: MIXED,
-        start: { path: '/Users/me/Documents/q4-forecst.xlsx', add: { kind: 'failed', upload: { filename: 'q4-forecst.xlsx', status: 404, error: { key: 'mobileApp.error.http', params: { status: 404, detail: 'File not found: there is no file at /Users/me/Documents/q4-forecst.xlsx. Check the path for typos.' } } } } },
+        start: { path: '/Users/me/Documents/q4-forecst.xlsx', add: { kind: 'failed', upload: { filename: 'q4-forecst.xlsx', status: 404, error: { key: 'mobileApp.error.httpNoDetail', params: {} } } } },
     }),
     'path-refused': scene({
         docs: MIXED,
@@ -154,6 +154,9 @@ export const DOCUMENTS_SCENES: Record<string, DocumentsScene> = {
         start: { add: { kind: 'folder', name: 'Contracts', result: folderResult(CONTRACTS.slice(0, 2), { errors: ['scan-0042.pdf: the file is damaged'] }) } },
     }),
     'folder-none': scene({ docs: MIXED, start: { add: { kind: 'folder', name: 'Photos', result: folderResult([], { skipped: 4, skipped_images: 12 }) } } }),
+    // The PC answers with an error and its own text: a toast with our words only, and an add failure with the PC's text on its own line.
+    'remove-failed-pc': scene({ docs: MIXED, start: { error: { key: 'docs.deleteFailed', params: { name: 'budget-2026.xlsx' }, cause: new GaiaApiError(500, 'disk is read-only') } } }),
+    'add-failed-pc': scene({ docs: MIXED, start: { add: { kind: 'failed', upload: { filename: 'handbook.pdf', status: 500, error: 'The index could not be written: disk is read-only.' } } } }),
 };
 
 /** The library on a fake PC; a removal that never finishes and a library read that fails are overlaid on the fake. */

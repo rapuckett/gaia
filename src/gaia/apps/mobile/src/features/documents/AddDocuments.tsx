@@ -6,7 +6,7 @@ import { useState } from 'react';
 import type { DocumentResponse, IndexFolderResponse } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useAddDocument, useAddPcPath, useSetupPreflight } from '@/data';
-import { describeError, describeErrorWith, useT } from '@/i18n/useT';
+import { describeError, describeErrorWith, describeHttpFailure, useT } from '@/i18n/useT';
 import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
 import { Button, Notice, ProgressLine, Row, Stack, Text, TextField } from '@/ui';
 import { FileText, FolderOpen, Image as ImageIcon } from '@/ui/icons';
@@ -61,7 +61,7 @@ function resolveStart(t: Translate, start: AddStart): AddLine {
             return { kind: 'failed', error: describeUploadError(t, { ...rest, error: typeof error === 'string' ? error : t(error.key, error.params) }) };
         }
         case 'refused':
-            return isFileRefusal(start.cause) ? refusedLine(t, start.cause) : { kind: 'refused', message: describeError(start.cause, t) };
+            return isFileRefusal(start.cause) ? refusedLine(t, start.cause) : { kind: 'refused', ...refusalFailure(t, start.cause) };
         default:
             return { kind: start.kind, message: describeError(start.cause, t) };
     }
@@ -71,6 +71,11 @@ function resolveStart(t: Translate, start: AddStart): AddLine {
 function folderLine(t: Translate, name: string, result: IndexFolderResponse): AddLine {
     const reason = result.failed > 0 ? result.errors[0]?.split('\n')[0] : undefined;
     return { kind: 'folder', message: describeFolderResult(t, isolateUnit(name), { ...result, errors: [] }), added: result.indexed > 0, detail: reason };
+}
+
+function refusalFailure(t: Translate, cause: unknown): { message: string; detail?: string } {
+    const { text, detail } = describeHttpFailure(cause, t);
+    return { message: text, detail };
 }
 
 // A code this app words is fully translated; the PC's sentence for any other code is shown as a detail line.
@@ -133,7 +138,8 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
         if (isFileRefusal(err)) return refusedLine(t, err);
         const api = err instanceof GaiaApiError ? err : null;
         const kind = typeof api?.body?.status === 'string' ? api.body.status : null;
-        const error = kind === 'too_large' ? t('docs.tooLargeDetail', { max: String(api?.body?.max_mb) }) : describeError(err, t);
+        const failure = describeHttpFailure(err, t);
+        const error = kind === 'too_large' ? t('docs.tooLargeDetail', { max: String(api?.body?.max_mb) }) : failure.detail ?? failure.text;
         return { kind: 'failed', error: describeUploadError(t, { filename, error, status: api?.status, kind }) };
     }
 

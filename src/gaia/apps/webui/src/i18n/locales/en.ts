@@ -4410,7 +4410,6 @@ export const enMessages = {
     'mobileApp.error.network': 'Can\'t reach GAIA on your PC. Check that it\'s on and reachable from this phone.',
     'mobileApp.error.auth': 'GAIA did not accept this phone\'s pairing: {detail}. Pair this phone with your PC again.',
     'mobileApp.error.authNoDetail': 'GAIA did not accept this phone\'s pairing. Pair this phone with your PC again.',
-    'mobileApp.error.http': 'GAIA answered with an error ({status}): {detail}',
     'mobileApp.error.httpNoDetail': "Something went wrong on your PC.",
     'mobileApp.error.agentInstallFailed': 'The GAIA agent could not be installed.',
     'mobileApp.newChat.agent.cantDownload': "{name} can't be downloaded here.",

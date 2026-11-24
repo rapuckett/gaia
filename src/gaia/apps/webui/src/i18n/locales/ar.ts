@@ -4409,7 +4409,6 @@ const messages: Messages = {
     'mobileApp.error.network': 'تعذّر الوصول إلى GAIA على الكمبيوتر. تأكد من أن الكمبيوتر يعمل ويمكن الوصول إليه من هذا الهاتف.',
     'mobileApp.error.auth': 'لم يقبل GAIA اقتران هذا الهاتف: {detail}. اقرن هذا الهاتف بالكمبيوتر مرة أخرى.',
     'mobileApp.error.authNoDetail': 'لم يقبل GAIA اقتران هذا الهاتف. اقرن هذا الهاتف بالكمبيوتر مرة أخرى.',
-    'mobileApp.error.http': 'ردّ GAIA بخطأ ({status}): {detail}',
     'mobileApp.error.httpNoDetail': 'حدث خطأ في الكمبيوتر لديك.',
     'mobileApp.error.agentInstallFailed': 'تعذّر تثبيت وكيل GAIA.',
     'mobileApp.newChat.agent.cantDownload': 'لا يمكن تنزيل {name} هنا.',
