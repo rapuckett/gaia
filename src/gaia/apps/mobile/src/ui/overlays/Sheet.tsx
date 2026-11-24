@@ -14,15 +14,16 @@ export interface SheetProps {
     /** Whether the handle, the scrim, Android back and the escape gesture close it. Default true. */
     dismissible?: boolean;
     scrollTestID?: string;
+    scrollToEnd?: boolean;
 }
 
 // Renders nothing in place: the content shows in the SheetHost, one sheet at a time, except that a sheet opened from inside another shows over it.
-export function Sheet({ open, onClose, title, children, footer, dismissible = true, scrollTestID }: SheetProps) {
+export function Sheet({ open, onClose, title, children, footer, dismissible = true, scrollTestID, scrollToEnd }: SheetProps) {
     const id = useId();
     const scope = useSheetScope();
     const parent = useParentSheet();
     useEffect(() => {
-        if (open) sheetStore.present({ id, open: true, onClose, title, children, footer, dismissible, scrollTestID, scope, parent });
+        if (open) sheetStore.present({ id, open: true, onClose, title, children, footer, dismissible, scrollTestID, scrollToEnd, scope, parent });
         else sheetStore.release(id);
     });
     useEffect(() => () => sheetStore.release(id), [id]);

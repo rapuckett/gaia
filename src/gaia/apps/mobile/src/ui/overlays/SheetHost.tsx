@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { createContext, useContext, useEffect, useId, useRef, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useRef, useSyncExternalStore, type ComponentRef, type ReactNode } from 'react';
 import { BackHandler, Pressable as RNPressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { KeyboardAvoidingView, useKeyboardState } from 'react-native-keyboard-controller';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
@@ -89,6 +89,7 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
     const { colors, radius, space, shadows } = useTheme();
     const { width, height } = useWindowDimensions();
     const insets = useSafeAreaInsets();
+    const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
     const keyboardHeight = useKeyboardState((k) => (k.isVisible ? k.height : 0));
     // The keyboard pads the panel upward; cap it so its header stays below the status bar and the body scrolls.
     const maxHeight = Math.min(height * 0.9, height - keyboardHeight - insets.top - space.sm);
@@ -207,7 +208,11 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
                 >
                     {wide ? header : <GestureDetector gesture={pan}>{header}</GestureDetector>}
                     <ScrollView
+                        ref={scrollRef}
                         testID={entry.scrollTestID}
+                        onContentSizeChange={() => {
+                            if (entry.scrollToEnd) scrollRef.current?.scrollToEnd({ animated: true });
+                        }}
                         keyboardShouldPersistTaps="handled"
                         style={{ flexGrow: 0 }}
                         contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.lg }}
