@@ -86,6 +86,7 @@ export interface ApiSchemas {
   DevicePairRequest: DevicePairRequest;
   DevicePairResponse: DevicePairResponse;
   DevicePairingOffer: DevicePairingOffer;
+  DevicePushStatus: DevicePushStatus;
   DeviceRemoved: DeviceRemoved;
   DeviceRoutes: DeviceRoutes;
   DeviceUsage: DeviceUsage;
@@ -1431,6 +1432,13 @@ export interface DevicePairingOffer {
    * Format version
    */
   v: number;
+}
+/**
+ * Whether this device has push on, and its relay's host. Never the send token or key.
+ */
+export interface DevicePushStatus {
+  enabled: boolean;
+  relay_host?: string | null;
 }
 /**
  * A device the PC unpaired: how many of its changes stay on the PC.
