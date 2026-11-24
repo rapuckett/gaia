@@ -37,7 +37,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request
@@ -412,6 +412,38 @@ def device_display_path(path: str) -> str:
     except ValueError:
         return resolved.name or Path(path).name
     return "~/" + inside.as_posix() if inside.parts else "~"
+
+
+MEDIA_CARD_PATH_KEYS = ("path", "saved_to", "script_path")
+MEDIA_CARD_KINDS = ("image", "audio")
+
+
+def device_media_data(data: Any) -> Any:
+    """A media card's ``data`` with its PC paths shown as a paired device sees them."""
+    if not isinstance(data, dict):
+        return data
+    return {
+        key: (
+            device_display_path(value)
+            if key in MEDIA_CARD_PATH_KEYS and isinstance(value, str)
+            else value
+        )
+        for key, value in data.items()
+    }
+
+
+def steps_for_device(steps: Any) -> Any:
+    """Persisted agent steps with each image or audio card's PC paths hidden."""
+    if not isinstance(steps, list):
+        return steps
+    return [
+        (
+            {**step, "data": device_media_data(step.get("data"))}
+            if isinstance(step, dict) and step.get("render") in MEDIA_CARD_KINDS
+            else step
+        )
+        for step in steps
+    ]
 
 
 def detail_for(request: Request, text: str) -> str:

@@ -45,7 +45,7 @@ from .models import (
     SessionResponse,
     SourceInfo,
 )
-from .security import device_display_path
+from .security import MEDIA_CARD_KINDS, device_display_path, device_media_data
 
 logger = logging.getLogger(__name__)
 
@@ -224,8 +224,11 @@ def _steps_to_response(msg: dict, step_model) -> Optional[list]:
     return steps
 
 
-def message_to_response(msg: dict) -> MessageResponse:
-    """Convert database message dict to response model."""
+def message_to_response(msg: dict, *, away: bool = False) -> MessageResponse:
+    """Convert database message dict to response model.
+
+    *away* is a caller away from the PC: media cards show home-relative paths.
+    """
     from .models import AgentStepResponse
 
     sources = None
@@ -242,6 +245,10 @@ def message_to_response(msg: dict) -> MessageResponse:
     agent_steps = None
     if msg.get("agent_steps"):
         agent_steps = _steps_to_response(msg, AgentStepResponse)
+        if away and agent_steps:
+            for step in agent_steps:
+                if step.render in MEDIA_CARD_KINDS:
+                    step.data = device_media_data(step.data)
 
     # Map inference_stats column to stats response field
     stats = None

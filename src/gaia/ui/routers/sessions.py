@@ -62,6 +62,7 @@ from ..security import (
     detail_for,
     flagship_only,
     is_local_pc,
+    steps_for_device,
 )
 from ..shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_opened
 from ..utils import UPLOAD_LINK_RE, message_to_response, session_to_response
@@ -742,6 +743,7 @@ async def mark_session_read(session_id: str, db: ChatDatabase = Depends(get_db))
 
 @router.get("/api/sessions/{session_id}/messages", response_model=MessageListResponse)
 async def get_messages(
+    http_request: Request,
     session_id: str,
     limit: int = 100,
     offset: int = Query(0, le=SQLITE_INT_MAX),
@@ -754,11 +756,12 @@ async def get_messages(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    away = not is_local_pc(http_request)
     messages = db.get_messages(session_id, limit=limit, offset=offset)
     total = db.count_messages(session_id)
 
     return MessageListResponse(
-        messages=[message_to_response(m) for m in messages],
+        messages=[message_to_response(m, away=away) for m in messages],
         total=total,
     )
 
@@ -837,6 +840,7 @@ def _plain_attachments(content: str) -> str:
     response_model_exclude_unset=True,
 )
 async def export_session(
+    http_request: Request,
     session_id: str,
     format: str = "markdown",  # noqa: A002
     db: ChatDatabase = Depends(get_db),
@@ -884,6 +888,11 @@ async def export_session(
 
         content = "\n".join(lines)
         return {"content": content, "format": "markdown"}
+    if not is_local_pc(http_request):
+        messages = [
+            {**m, "agent_steps": steps_for_device(m.get("agent_steps"))}
+            for m in messages
+        ]
     return {
         "session": {**session, "effective_model": effective_model},
         "messages": messages,
