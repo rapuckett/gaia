@@ -94,6 +94,18 @@ describeNative('ConnectionBanner', () => {
         });
     });
 
+    it('names a failed download by its display name once the model list loads, with the PC\'s text on the detail line', async () => {
+        const client = createFakeClient({
+            status: failedDownload,
+            providerModels: { local: { provider: 'local', models: [{ id: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', context_length: null, downloaded: false, labels: [], rank: null, note: null, evidence: null, available: true }] } },
+        });
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        await render(<ConnectionBanner />, { wrapper: wrapper(client, queryClient) });
+        expect(await screen.findByText(t('mobileApp.model.downloadFailedShort', { model: '\u2066Gemma 4 E4B\u2069' }))).toBeTruthy();
+        expect(screen.queryByText(/Gemma-4-E4B-it-GGUF/)).toBeNull();
+        expect(screen.getByText('\u2066Not enough disk space.\u2069')).toBeTruthy();
+    });
+
     it('offers Retry on a failed download, which starts that model downloading again through the client', async () => {
         const client = createFakeClient({ status: failedDownload });
         const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

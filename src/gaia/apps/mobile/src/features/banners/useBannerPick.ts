@@ -1,10 +1,11 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useActiveModel, useGoalStoreError, useQueryFailure, useStatusHealth, useSystemStatus } from '@/data';
+import { useActiveModel, useLocalModels, useGoalStoreError, useQueryFailure, useStatusHealth, useSystemStatus } from '@/data';
 import { useT } from '@/i18n/useT';
 import { hasTailnetRoute, useActiveConnection } from '@/features/pairing/routes';
 import { usePickLoadStore } from '@/state/pickLoad';
+import { modelLabel } from '@/features/composer/ModelMenu';
 import { sameModelId } from '@webui/utils/modelList.core';
 
 import { pickBanner, type Banner } from './pickBanner';
@@ -23,6 +24,9 @@ export function useBannerPick(): { picked: Banner | null; refetch: () => unknown
     const load = usePickLoadStore((s) => s.pickLoad);
     const activeModel = useActiveModel().data;
     const name = load && sameModelId(activeModel?.model, load.model) ? activeModel?.display_name : null;
-    const picked = pickBanner(data, error, t, goalStoreError, { load, name, awayHint: hasTailnetRoute(connection), slow, slowPending, lost });
+    const failedDownload = data?.download_progress?.state === 'error';
+    const localModels = useLocalModels(failedDownload).data?.models;
+    const modelNames = Object.fromEntries((localModels ?? []).map((m) => [m.id, modelLabel(m)]));
+    const picked = pickBanner(data, error, t, goalStoreError, { load, name, modelNames, awayHint: hasTailnetRoute(connection), slow, slowPending, lost });
     return { picked, refetch: status.refetch, status };
 }

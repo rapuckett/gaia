@@ -45,6 +45,16 @@ export function useProviderModels(provider: string | undefined, watching: boolea
     });
 }
 
+/** The local models once, without polling: for a name beside a banner, not a live list. */
+export function useLocalModels(enabled: boolean) {
+    const client = useGaiaClient();
+    return useQuery<ProviderModelsResponse>({
+        queryKey: modelMenuKeys.models('local'),
+        enabled: client !== null && enabled,
+        queryFn: ({ signal }) => requireClient(client).listProviderModels('local', { signal }),
+    });
+}
+
 /** Switches the model: `mutate(modelId)`. */
 export function useSelectModel() {
     const client = useGaiaClient();
