@@ -53,7 +53,7 @@ export function SessionInfoSection({ sessionId }: { sessionId: string }) {
     const startedText =
         started && !Number.isNaN(started.getTime()) ? started.toLocaleString(dateLocale(t), { dateStyle: 'medium', timeStyle: 'short' }) : null;
     return (
-        <PanelSection id="session" title={t('sp.section.session')}>
+        <PanelSection id="session" title={t('sp.section.session')} divider={false}>
             <Stack gap="md" testID="session-facts">
                 <Fact label={t('session.id')}>
                     <Row gap="xs" flex={1} justify="end">

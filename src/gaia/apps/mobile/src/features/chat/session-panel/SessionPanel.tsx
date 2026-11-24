@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 import type { ReactNode } from 'react';
-import { useWindowDimensions } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { useChatStream, useMessages } from '@/data';
 import { useT } from '@/i18n/useT';
 import { usePermissionPrompt } from '../permission/usePermissionPrompt';
-import { Sheet, Stack, Text } from '@/ui';
+import { Sheet, Stack, Text, useTheme } from '@/ui';
 
 import { AgentInfoSection } from './AgentInfoSection';
 import { AnswerSection } from './AnswerSection';
@@ -42,6 +42,7 @@ export function SessionPanel({ sessionId, open, onClose, wrap }: SessionPanelPro
 export function PanelBody({ sessionId, close }: { sessionId: string; close: () => void }) {
     const t = useT();
     const { height } = useWindowDimensions();
+    const { colors, space } = useTheme();
     const live = useChatStream(sessionId).status !== 'idle';
     const promptWaiting = usePermissionPrompt(sessionId) !== null;
     const messages = useMessages(sessionId).data?.messages;
@@ -50,7 +51,7 @@ export function PanelBody({ sessionId, close }: { sessionId: string; close: () =
     // Coding leads with what changed; other chats with what they read and made. One key, so moving keeps its state.
     const changes = <ChangesSection key="changes" {...props} />;
     return (
-        <Stack gap="md" paddingY="sm" minHeight={height * 0.6}>
+        <Stack gap="sm" paddingY="sm" minHeight={height * 0.6}>
             <FocusBar facets={focus.facets} />
             <EnvironmentSection {...props} />
             <PlanSection plan={focus.plan} />
@@ -62,9 +63,11 @@ export function PanelBody({ sessionId, close }: { sessionId: string; close: () =
             <OutputsSection {...props} />
             {focus.coding ? null : changes}
             <SkillsSection {...props} />
-            <Text role="caption" weight="semibold" tone="muted" accessibilityRole="header">
-                {t(DETAILS_HEADING)}
-            </Text>
+            <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderLight, paddingTop: space.md }}>
+                <Text role="caption" weight="semibold" tone="muted" accessibilityRole="header">
+                    {t(DETAILS_HEADING)}
+                </Text>
+            </View>
             <ContextSection {...props} />
             <AgentInfoSection {...props} />
             <SessionInfoSection sessionId={sessionId} />

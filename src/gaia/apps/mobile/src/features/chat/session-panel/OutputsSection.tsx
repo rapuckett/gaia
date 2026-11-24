@@ -18,6 +18,7 @@ import { PanelSection } from './PanelSection';
 import { useSessionPanelStore } from './panelStore';
 import { whenOf } from './outputTime';
 import type { SectionProps } from './sections';
+import { outputsCount } from '@webui/utils/sessionPanelSummary.core';
 
 /** Rows shown before "Show more". */
 export const OUTPUTS_SHOWN = 5;
@@ -42,7 +43,7 @@ export function OutputsSection({ sessionId, live, close }: SectionProps) {
     const open = useSessionPanelStore((s) => s.sections.outputs);
     const query = useSessionOutputs(sessionId, { enabled: open, live });
     return (
-        <PanelSection id="outputs" title={t('out.title')}>
+        <PanelSection id="outputs" title={t('out.title')} summary={outputsCount(query.data?.items)?.toString()}>
             <OutputList sessionId={sessionId} items={query.data?.items} error={query.error} close={close} />
         </PanelSection>
     );

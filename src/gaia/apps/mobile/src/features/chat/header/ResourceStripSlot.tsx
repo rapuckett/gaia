@@ -4,8 +4,7 @@
 import { useEffect, useState } from 'react';
 
 import { useT } from '@/i18n/useT';
-import { Notice, Stack, useAppearance } from '@/ui';
-import { useAnnounceOnIos } from '@/ui/controls/Spinner';
+import { Notice, Stack, useAnnounceOnIos, useAppearance } from '@/ui';
 
 import { ResourceStrip } from './ResourceStrip';
 

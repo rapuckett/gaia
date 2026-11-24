@@ -38,7 +38,7 @@ export function AgentInfoSection({ sessionId, live }: SectionProps) {
     const open = useSessionPanelStore((s) => s.sections.tools);
     const query = useCapabilities(sessionId, { enabled: open, live });
     return (
-        <PanelSection id="tools" title={t('tools.title')}>
+        <PanelSection id="tools" title={t('tools.title')} divider={false}>
             <ToolList tools={query.data?.tools} program={query.data?.program ?? null} error={query.error} />
         </PanelSection>
     );

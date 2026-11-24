@@ -29,6 +29,7 @@ import type {
     LinkAddResult,
     LinkPreview,
     LocalModelStatus,
+    TunnelStatus,
     MCPServerStatus,
     Message,
     ModelNeed,
@@ -122,6 +123,7 @@ export type {
     LinkPreview,
     LinkSkill,
     LocalModelStatus,
+    TunnelStatus,
     MCPServerStatus,
     Message,
     ModelNeed,
@@ -872,6 +874,8 @@ export interface GaiaClient {
     loadModel(modelName: string, force: boolean, options?: { ctxSize?: number } & RequestOptions): Promise<{ status: string; model: string; ctx_size: number }>;
     /** The model server's state, what it runs on and its memory; the pill and its sheet read it. */
     getLocalModelStatus(options?: RequestOptions): Promise<LocalModelStatus>;
+    /** Whether the PC's phone access is on; turning it on or off stays on the PC. */
+    getTunnelStatus(options?: RequestOptions): Promise<TunnelStatus>;
     /** Starts the model server if stopped, then reloads the chat model. `confirm` agrees to reload a Lemonade GAIA doesn't own. */
     restartLocalModel(confirm: boolean, options?: RequestOptions): Promise<RestartModelResult>;
     /** Whether a job needs a model that isn't on the PC, and which. */
