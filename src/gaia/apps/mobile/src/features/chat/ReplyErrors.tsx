@@ -101,7 +101,6 @@ export function SavedReplyErrors({ message, fixShownBelow = false, latest = fals
                     <Button size="sm" icon={RotateCcw} label={t('msg.tryAgain')} onPress={tryAgain} testID="try-again" />
                 </Row>
             ) : null}
-            {offersAgentRecovery(message, ownsRetry) ? <ChatAgentRecovery onTryAgain={tryAgain} /> : null}
             {turn ? <OpenSettingsButtons turn={turn} /> : null}
             {agentLog ? (
                 <Row gap="sm" wrap stack>
@@ -114,6 +113,7 @@ export function SavedReplyErrors({ message, fixShownBelow = false, latest = fals
                 </Row>
             ) : null}
             <PcOnlyFailureLines showLog={false} showReport={showReport} />
+            {offersAgentRecovery(message, ownsRetry) ? <ChatAgentRecovery onTryAgain={tryAgain} /> : null}
         </Stack>
     );
 }

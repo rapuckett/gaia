@@ -266,12 +266,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                                 />
                             </>
                         }
-                        rightControls={
-                            <>
-                                <AgentChip />
-                                <ModelChip />
-                            </>
-                        }
+                        rightControls={<ModelChip />}
                     />
                 </View>
             }
@@ -301,7 +296,12 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                         detail={failedSetup}
                     />
                 )}
-                {!state.sending && <FolderChip folder={startScreen?.working_folder} initialPicking={initialPicking} />}
+                {!state.sending && (
+                    <Row gap="sm" wrap align="start">
+                        <FolderChip folder={startScreen?.working_folder} initialPicking={initialPicking} />
+                        <AgentChip line />
+                    </Row>
+                )}
                 {documents && !state.sending && (
                     <LibraryDocuments
                         documents={documents}

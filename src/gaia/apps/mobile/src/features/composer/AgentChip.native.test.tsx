@@ -23,12 +23,12 @@ const SETTINGS = {
     agent_mode: 'manual', network_policy: 'cloud_allowed', flagship_agent: 'gaiapy', gaiacpp_available: true,
 } as Settings;
 
-const show = (agent: Settings['flagship_agent']) =>
+const show = (agent: Settings['flagship_agent'], line = false) =>
     render(
         <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
             <GaiaClientProvider client={createFakeClient({ settings: { ...SETTINGS, flagship_agent: agent } })}>
                 <ThemeProvider>
-                    <AgentChip />
+                    <AgentChip line={line} />
                 </ThemeProvider>
             </GaiaClientProvider>
         </QueryClientProvider>,
@@ -52,5 +52,19 @@ describeNative('the Fast and light chip', () => {
             () => undefined,
         );
         expect(screen.queryByTestId('agent-chip')).toBeNull();
+    });
+
+    it('on the new chat shows the label itself for gaiacpp and opens the model settings', async () => {
+        await show('gaiacpp', true);
+        const line = await screen.findByTestId('agent-line');
+        expect(screen.getByText(t('composer.agentFast'))).toBeTruthy();
+        await fireEvent.press(line);
+        expect(openSettings).toHaveBeenCalledWith('model');
+    });
+
+    it('on the new chat shows nothing for gaiapy', async () => {
+        await show('gaiapy', true);
+        await new Promise((r) => setTimeout(r, 50));
+        expect(screen.queryByTestId('agent-line')).toBeNull();
     });
 });

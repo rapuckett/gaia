@@ -76,4 +76,14 @@ describeNative('the agent recovery under a failed reply', () => {
         await waitFor(() => expect(retry).toHaveBeenCalledWith(7));
         expect(client.flagshipAgentSets).toEqual(['gaiapy']);
     });
+
+    it('comes after every button of the failed reply', async () => {
+        await show(failed({ content: 'Error: the agent did not start. Log: /Users/a/.gaia/agents/gaia/logs' }), { start: { ...START, agent_problem: MISSING } });
+        await screen.findByTestId('agent-recovery');
+        const tree = JSON.stringify(screen.toJSON());
+        const at = (id: string) => tree.indexOf(`"testID":"${id}"`);
+        expect(at('try-again')).toBeGreaterThan(-1);
+        expect(at('agent-log')).toBeGreaterThan(at('try-again'));
+        expect(at('agent-recovery')).toBeGreaterThan(at('agent-log'));
+    });
 });
