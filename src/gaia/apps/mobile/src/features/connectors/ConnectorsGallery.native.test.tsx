@@ -86,7 +86,7 @@ describeNative('/dev/connectors scenes', () => {
 
     it.each([
         ['disconnected', /This provider has no API to revoke access remotely/],
-        ['revoked', /did not confirm the revoke/],
+        ['revoked', /didn't confirm it removed GAIA's access/],
     ] as const)('%s shows its notice after Disconnect is confirmed', async (state, text) => {
         await mount(state);
         await fireEvent.press((await screen.findAllByText('Disconnect'))[0]!);

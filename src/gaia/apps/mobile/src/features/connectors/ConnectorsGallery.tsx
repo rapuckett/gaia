@@ -24,7 +24,7 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * (`#tap=device-sign-in-microsoft` shows the code), `codeFailed` (the same tap, then the failure).
  * CON-02: `many` (8 connectors, so the search field shows). CON-11: `disconnected` and `revoked` open Microsoft Personal;
  * `#tap=connector-disconnect-microsoft,connector-disconnect-confirm`: `disconnected` answers that the provider has no revoke API, `revoked`
- * that the provider did not confirm the revoke (reason on the notice); `nothingStored` (the same tap) that the PC held no sign-in to remove, `accountsOne` and `accountsMany` (one expired) open Google with its accounts; `unreadable` that it could not read the stored sign-in and removed the local copy unrevoked. CON-09: `oauthSetup` opens Google's first-time setup sheet. CON-10: `oauthClient`
+ * that the provider did not confirm removing access (reason on the notice); `nothingStored` (the same tap) that the PC held no sign-in to remove, `accountsOne` and `accountsMany` (one expired) open Google with its accounts; `unreadable` that it could not read the stored sign-in and removed the local copy unrevoked. CON-09: `oauthSetup` opens Google's first-time setup sheet. CON-10: `oauthClient`
  * opens a connected account's OAuth client sheet. CON-12: `mcpConfigure` opens Slack's key sheet. CON-13: `checkRunning`, `checkOk`, `checkSlow`,
  * `checkFailed` and `checkLocked` (the PC's key store is locked) show a Linear server's Check line (`#tap=connector-check-linear` runs it again). CON-07: on a paired phone, `googleReady` shows Google's
  * Connect, and with `#tap=connector-connect-google`: `googleBrowser` waits on the browser, `googleFinishing` waits on the PC, `googleDone` ends

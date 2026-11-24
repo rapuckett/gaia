@@ -3242,7 +3242,7 @@ const messages: Messages = {
     'settings.connectors.keyStore.locked': "مخزن المفاتيح في نظام التشغيل مقفل، لذلك لا يستطيع GAIA قراءة بعض حساباتك المتصلة. لا يمكن استخدامها حتى يُفتح.",
     'settings.connectors.keyStore.waiting': "في انتظار سماح نظام التشغيل بقراءة حساباتك المتصلة.",
     'settings.connectors.tile.heldBack': "غير متاح حتى يُفتح مخزن المفاتيح",
-    'settings.connectors.notRevoked': 'قُطع الاتصال محليًا، لكن المزوّد لم يؤكد الإلغاء ({reason}). قد يظل ظاهرًا كمتصل في أذونات التطبيقات بحسابك.',
+    'settings.connectors.notRevoked': "قُطع اتصال GAIA، لكن المزوّد لم يؤكد إزالة وصول GAIA ({reason}). إذا ظل GAIA ظاهرًا في أذونات التطبيقات بحسابك، فأزِله من هناك.",
     'settings.connectors.localOnly': 'قُطع الاتصال محليًا. {reason}',
     'settings.connectors.noRevokeApi': 'قُطع الاتصال محليًا. لا يوفر هذا المزوّد واجهة لإلغاء الوصول عن بُعد — أزل GAIA من صفحة التطبيقات المتصلة بحسابك لإلغائه بالكامل.',
     'settings.connectors.nothingStored': 'لم يُخزَّن أي شيء لهذا الموصل، لذا لم يكن هناك ما يمكن قطع اتصاله أو إلغاء الوصول إليه.',
