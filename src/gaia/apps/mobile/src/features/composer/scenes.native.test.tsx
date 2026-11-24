@@ -125,7 +125,7 @@ describeNative('composer and retry scenes', () => {
     it('compare-failed shows our sentence with the PC text on its own line', async () => {
         mockState = 'compare-failed';
         await mount(messagesRoute());
-        expect(await screen.findByText(translator('en')('mobileApp.error.httpNoDetail', { status: 500 }), opts)).toBeTruthy();
+        expect(await screen.findByText(translator('en')('mobileApp.error.httpNoDetail'), opts)).toBeTruthy();
         expect(screen.getByText('Not enough free memory to load the model.', opts)).toBeTruthy();
     });
 });
