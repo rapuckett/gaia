@@ -668,3 +668,60 @@ def test_dismiss_requires_a_model_name():
         _dismiss("   ")
 
     assert err.value.status_code == 400
+
+
+def _failed_pull(monkeypatch, body: bytes):
+    class _Failed:
+        status_code = 500
+
+        async def aread(self):
+            return body
+
+    class _FailedStream:
+        async def __aenter__(self):
+            return _Failed()
+
+        async def __aexit__(self, *exc):
+            return False
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        def stream(self, method, url, json=None, headers=None):
+            return _FailedStream()
+
+        async def get(self, url, params=None, headers=None):
+            return httpx.Response(
+                200, json={"data": []}, request=httpx.Request("GET", url)
+            )
+
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    monkeypatch.setattr(system, "_download_progress", {})
+    monkeypatch.setattr(system, "_evict_progress_after_ttl", _keep)
+    asyncio.run(system._stream_lemonade_pull("Some-Unknown-GGUF", False))
+    return system._get_download_progress("Some-Unknown-GGUF")["message"]
+
+
+@pytest.mark.parametrize(
+    "body,expected",
+    [
+        (
+            b'{"error":{"message":"Download interrupted: the connection to '
+            b'huggingface.co was reset."}}',
+            "Download interrupted: the connection to huggingface.co was reset.",
+        ),
+        (b'{"error":"Disk full"}', "Disk full"),
+        (b'{"detail":"Not Found"}', "Not Found"),
+        (b"upstream exploded", "Lemonade /pull returned 500: upstream exploded"),
+        (b'{"other":1}', 'Lemonade /pull returned 500: {"other":1}'),
+    ],
+)
+def test_a_failed_pull_shows_the_servers_sentence(monkeypatch, body, expected):
+    assert _failed_pull(monkeypatch, body) == expected
