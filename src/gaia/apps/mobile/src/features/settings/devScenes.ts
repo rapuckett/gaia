@@ -589,7 +589,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'adv-custom-unlisted': advanced({ custom_model: 'user.missing-GGUF', model_status: { checked: true, found: false, downloaded: false, loaded: false } }),
     'adv-custom-unchecked': advanced({ custom_model: 'user.maybe-GGUF', model_status: { checked: false, found: false, downloaded: false, loaded: false } }),
     // SET-ADV-24: an ID over 256 characters is refused in the app's language, and Save is off.
-    'adv-custom-invalid': advanced({ custom_model: `user.${'long-model-name-'.repeat(20)}GGUF` }),
+    'adv-custom-invalid': { ...advanced({ custom_model: `user.${'long-model-name-'.repeat(20)}GGUF` }), target: 'custom-model' },
     'adv-custom-pc-only': { section: 'advanced', gpuMemory: GPU, data: { settings: SETTINGS }, override: { getSettings: refused } },
     // SET-ADV-21: Dynamic tools, closed until tapped (`#tap=advanced-dynamic-toggle`): on, and locked by GAIA_DYNAMIC_TOOLS.
     'adv-dynamic-on': advanced({ dynamic_tools: true }),
