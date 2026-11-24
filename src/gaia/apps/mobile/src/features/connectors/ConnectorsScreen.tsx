@@ -3,7 +3,7 @@
 
 import { scopeLabel } from '@webui/utils/connectorScopes';
 import { isolate, ref } from '@webui/i18n/registry';
-import { accountChoices, accountsOf, showsAccountList } from '@webui/utils/connectorAccounts';
+import { accountChoices, accountsOf, middleCut, showsAccountList } from '@webui/utils/connectorAccounts';
 import { useRouter } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useWindowDimensions, View } from 'react-native';
@@ -442,7 +442,7 @@ function StatusText({ connector, check, t }: { connector: ConnectorRow; check?: 
                         <View style={{ flexShrink: 1, minWidth: 0 }}>
                             {status.accountId ? (
                                 <Text role="label" tone="success" numberOfLines={1} largeLines={1} ellipsize="middle" accessibilityLabel={status.accountId}>
-                                    <Ltr>{status.accountId}</Ltr>
+                                    <Ltr>{middleCut(status.accountId, 40)}</Ltr>
                                 </Text>
                             ) : (
                                 <Text role="label" tone="success" numberOfLines={1}>{t('settings.connectors.connected')}</Text>

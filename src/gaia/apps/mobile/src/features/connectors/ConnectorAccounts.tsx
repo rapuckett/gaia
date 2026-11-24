@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { isolate } from '@webui/i18n/registry';
-import { accountRef, accountsOf, needsSignIn } from '@webui/utils/connectorAccounts';
+import { accountRef, accountsOf, middleCut, needsSignIn } from '@webui/utils/connectorAccounts';
 import { useState } from 'react';
 import { View } from 'react-native';
 
@@ -11,7 +11,7 @@ import { useChangeConnectorAccount } from '@/data';
 import { ChipButton } from '@/features/schedules/ChipButton';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { describeHttpFailure, useT } from '@/i18n/useT';
-import { ActionSheet, Icon, Ltr, Notice, Row, Stack, Surface, Text, useTheme } from '@/ui';
+import { ActionSheet, Button, Icon, Ltr, Notice, Row, Stack, Surface, Text, useTheme } from '@/ui';
 import { CircleAlert, CircleCheck, Trash2 } from '@/ui/icons';
 
 import { ProviderConnect } from './ProviderConnect';
@@ -76,7 +76,7 @@ export function ConnectorAccountList({ connector }: { connector: ConnectorRow })
                                 <Row gap="sm" wrap>
                                     <View style={{ flexShrink: 1, minWidth: 0 }}>
                                         <Text role="label" weight="semibold" numberOfLines={1} largeLines={1} ellipsize="middle" accessibilityLabel={addressOf(account)}>
-                                            <Ltr>{addressOf(account)}</Ltr>
+                                            <Ltr>{middleCut(addressOf(account))}</Ltr>
                                         </Text>
                                     </View>
                                     {account.is_default && accounts.length > 1 ? <DefaultPill /> : null}
@@ -103,8 +103,9 @@ export function ConnectorAccountList({ connector }: { connector: ConnectorRow })
                                             testID={`connector-make-default-${ref}`}
                                         />
                                     ) : null}
-                                    <ChipButton
-                                        label={t.bare('settings.connectors.disconnect')}
+                                    <Button
+                                        size="sm"
+                                        label={t('settings.connectors.disconnect')}
                                         accessibilityLabel={t('settings.connectors.disconnectNamed', address)}
                                         variant="danger"
                                         disabled={change.isPending}
