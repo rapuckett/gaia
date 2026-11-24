@@ -403,3 +403,122 @@ describe("send validation and limits", () => {
     expect(res.headers.get("retry-after")).toBe("3600");
   });
 });
+
+describe("loopback provider overrides", () => {
+  const OVERRIDES = ["APNS_HOST_OVERRIDE", "FCM_TOKEN_URL_OVERRIDE", "FCM_API_BASE_OVERRIDE"] as const;
+  const fakeOAuth = (url: string) =>
+    new URL(url).pathname === "/token"
+      ? Response.json({ access_token: "ya29.fake-access", expires_in: 3599, token_type: "Bearer" })
+      : new Response("{}", { status: 200 });
+
+  it.each([
+    ["http://127.0.0.1:8443", "http://127.0.0.1:8443"],
+    ["localhost:8443", "https://localhost:8443"],
+    ["http://[::1]:8443/", "http://[::1]:8443"],
+  ])("sends APNs for both environments to APNS_HOST_OVERRIDE %s", async (value, origin) => {
+    const { env } = apnsEnv({ APNS_HOST_OVERRIDE: value });
+    const sandbox = await register(env, { environment: "sandbox" });
+    const production = await register(env, { environment: "production", token: "b2".repeat(32) });
+    expect((await send(env, sandbox)).status).toBe(202);
+    expect((await send(env, production)).status).toBe(202);
+    expect(seen.map((s) => s.url)).toEqual([`${origin}/3/device/${APNS_TOKEN}`, `${origin}/3/device/${"b2".repeat(32)}`]);
+    expect(seen[0].headers.get("authorization")!.startsWith("bearer ")).toBe(true);
+  });
+
+  it.each([
+    ["http://127.0.0.1:9000", "http://127.0.0.1:9000"],
+    ["https://localhost:9000", "https://localhost:9000"],
+    ["http://[::1]:9000", "http://[::1]:9000"],
+  ])("sends FCM to the token and API overrides on %s, with the assertion bound to the test endpoint", async (value, origin) => {
+    const { env } = fcmEnv({ FCM_TOKEN_URL_OVERRIDE: `${value}/token`, FCM_API_BASE_OVERRIDE: `${value}/fcm/` });
+    const h = await register(env, { platform: "fcm", token: FCM_TOKEN });
+    reply = fakeOAuth;
+    expect((await send(env, h)).status).toBe(202);
+
+    const [oauth, msg] = seen;
+    expect(oauth.url).toBe(`${origin}/token`);
+    const jwt = await verifyJwt(new URLSearchParams(oauth.body).get("assertion")!, fcmKeys.publicKey, { name: "RSASSA-PKCS1-v1_5" });
+    expect(jwt.claims.aud).toBe(`${origin}/token`);
+    expect(msg.url).toBe(`${origin}/fcm/v1/projects/example-project/messages:send`);
+    expect(msg.headers.get("authorization")).toBe("Bearer ya29.fake-access");
+  });
+
+  it.each([undefined, "", "   "])("uses the real hosts when every override is %j", async (value) => {
+    const unset = Object.fromEntries(OVERRIDES.map((k) => [k, value]));
+    const a = apnsEnv(unset);
+    await send(a.env, await register(a.env));
+    const f = fcmEnv(unset);
+    reply = oauthReply;
+    await send(f.env, await register(f.env, { platform: "fcm", token: FCM_TOKEN }));
+    expect(seen.map((s) => s.url)).toEqual([
+      `https://api.sandbox.push.apple.com/3/device/${APNS_TOKEN}`,
+      "https://oauth2.googleapis.com/token",
+      "https://fcm.googleapis.com/v1/projects/example-project/messages:send",
+    ]);
+    const jwt = await verifyJwt(new URLSearchParams(seen[1].body).get("assertion")!, fcmKeys.publicKey, { name: "RSASSA-PKCS1-v1_5" });
+    expect(jwt.claims.aud).toBe("https://oauth2.googleapis.com/token");
+  });
+
+  const BAD = ["https://evil.example", "127.0.0.1.evil.example", "localhost@evil.example", "http://169.254.169.254"];
+  const cases = OVERRIDES.flatMap((name) => BAD.map((value) => [name, value] as const));
+
+  it.each(cases)("refuses %s=%s with a 500 naming it, before any fetch or quota", async (name, value) => {
+    const fcm = name.startsWith("FCM");
+    const { env, t } = fcm ? fcmEnv({ [name]: value }) : apnsEnv({ [name]: value });
+    const h = await register(env, fcm ? { platform: "fcm", token: FCM_TOKEN } : {});
+    reply = oauthReply;
+    const res = await send(env, h);
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as any;
+    expect(body.error).toBe("invalid_config");
+    expect(body.message).toContain(name);
+    expect(body.message).toContain("loopback-only");
+    expect(body.message).not.toContain("evil");
+    expect(seen).toEqual([]);
+    expect(t.query("SELECT * FROM rate_counters WHERE scope LIKE 'send%'")).toEqual([]);
+  });
+
+  it("never mints an assertion for the token override when the API override is refused", async () => {
+    const { env } = fcmEnv({ FCM_TOKEN_URL_OVERRIDE: "http://127.0.0.1:9000/token", FCM_API_BASE_OVERRIDE: "https://evil.example" });
+    const h = await register(env, { platform: "fcm", token: FCM_TOKEN });
+    reply = fakeOAuth;
+    expect((await send(env, h)).status).toBe(500);
+    expect(seen).toEqual([]);
+  });
+
+  it.each([
+    ["APNS_HOST_OVERRIDE", "http://127.0.0.1:8443/3/device"],
+    ["APNS_HOST_OVERRIDE", "http://127.0.0.1:8443?x=1"],
+    ["FCM_TOKEN_URL_OVERRIDE", "http://127.0.0.1:9000/token#frag"],
+    ["FCM_API_BASE_OVERRIDE", "http://user:pw@127.0.0.1:9000"],
+    ["FCM_API_BASE_OVERRIDE", "ftp://127.0.0.1:9000"],
+  ])("refuses the malformed loopback value %s=%s", async (name, value) => {
+    const fcm = name.startsWith("FCM");
+    const { env } = fcm ? fcmEnv({ [name]: value }) : apnsEnv({ [name]: value });
+    const h = await register(env, fcm ? { platform: "fcm", token: FCM_TOKEN } : {});
+    const res = await send(env, h);
+    expect(res.status).toBe(500);
+    const msg = ((await res.json()) as any).message;
+    expect(msg).toContain(name);
+    expect(msg).not.toContain("pw");
+    expect(seen).toEqual([]);
+  });
+
+  it("never sends an access token from a test endpoint to FCM once the overrides are removed", async () => {
+    const { env } = fcmEnv({ FCM_TOKEN_URL_OVERRIDE: "http://127.0.0.1:9000/token", FCM_API_BASE_OVERRIDE: "http://127.0.0.1:9000" });
+    const h = await register(env, { platform: "fcm", token: FCM_TOKEN });
+    reply = fakeOAuth;
+    await send(env, h);
+    env.FCM_TOKEN_URL_OVERRIDE = undefined;
+    env.FCM_API_BASE_OVERRIDE = undefined;
+    reply = oauthReply;
+    await send(env, h);
+    expect(seen.map((s) => s.url)).toEqual([
+      "http://127.0.0.1:9000/token",
+      "http://127.0.0.1:9000/v1/projects/example-project/messages:send",
+      "https://oauth2.googleapis.com/token",
+      "https://fcm.googleapis.com/v1/projects/example-project/messages:send",
+    ]);
+    expect(seen[3].headers.get("authorization")).toBe("Bearer ya29.test-access");
+  });
+});
