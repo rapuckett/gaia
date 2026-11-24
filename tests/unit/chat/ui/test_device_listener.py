@@ -17,6 +17,7 @@ import logging
 import os
 import socket
 import ssl
+import sys
 import threading
 import time
 import uuid
@@ -862,18 +863,9 @@ def test_listener_answers_with_the_os_trust_store_injected(tmp_path, monkeypatch
         truststore.extract_from_ssl()
 
 
-def test_listener_that_cannot_finish_tls_does_not_report_listening(
-    tmp_path, monkeypatch
-):
-    import truststore
-
-    def truststore_context(identity):
-        context = truststore.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain(identity.certificate_path, identity.key_path)
-        return context
-
+def _assert_unfinishable_tls_is_not_listening(tmp_path, monkeypatch, build_context):
     access = _left_on(tmp_path, monkeypatch)
-    monkeypatch.setattr(access_module, "server_context", truststore_context)
+    monkeypatch.setattr(access_module, "server_context", build_context)
 
     async def scenario():
         try:
@@ -887,3 +879,26 @@ def test_listener_that_cannot_finish_tls_does_not_report_listening(
             await access.shutdown()
 
     asyncio.run(scenario())
+
+
+def test_listener_that_cannot_finish_tls_does_not_report_listening(
+    tmp_path, monkeypatch
+):
+    # A server context with no certificate has nothing to offer a client.
+    _assert_unfinishable_tls_is_not_listening(
+        tmp_path, monkeypatch, lambda identity: ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    )
+
+
+@pytest.mark.skipif(
+    sys.platform != "darwin", reason="truststore wraps Security.framework only on macOS"
+)
+def test_truststore_server_context_does_not_report_listening(tmp_path, monkeypatch):
+    import truststore
+
+    def truststore_context(identity):
+        context = truststore.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(identity.certificate_path, identity.key_path)
+        return context
+
+    _assert_unfinishable_tls_is_not_listening(tmp_path, monkeypatch, truststore_context)
