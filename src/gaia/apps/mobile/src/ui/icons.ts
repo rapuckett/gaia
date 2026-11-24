@@ -102,6 +102,7 @@ export {
   TriangleAlert,
   User,
   Volume2,
+  Wifi,
   Wrench,
   X,
   Zap,

@@ -196,7 +196,8 @@ describe('app config', () => {
         expect(Object.keys(arabic).sort()).toEqual([...keys].sort());
         for (const [key, value] of Object.entries(arabic)) {
             expect({ key, ok: value.trim() !== '' }).toEqual({ key, ok: true });
-            expect({ key, latin: value.replace(/GAIA/g, '').match(/[A-Za-z]/g) }).toEqual({ key, latin: null });
+            // GAIA and Wi-Fi are names, kept in Latin as the in-app Arabic catalog keeps them.
+            expect({ key, latin: value.replace(/GAIA|Wi-Fi/g, '').match(/[A-Za-z]/g) }).toEqual({ key, latin: null });
         }
     });
 });
