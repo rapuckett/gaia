@@ -137,16 +137,16 @@ describeNative('the notification center accessibility', () => {
 });
 
 describeNative('the notification center layout', () => {
-    it('an unread row has a bold title and an accent dot', async () => {
+    it('an unread row has a semibold title and an accent dot', async () => {
         await mount('permission-pending');
         expect(screen.getByTestId('ntf-unread-confirm-1')).toBeTruthy();
-        expect(StyleSheet.flatten(screen.getByTestId('ntf-title-confirm-1').props.style).fontFamily).toMatch(/700/);
+        expect(StyleSheet.flatten(screen.getByTestId('ntf-title-confirm-1').props.style).fontFamily).toMatch(/600/);
     });
 
-    it('a read row has a semibold title and no dot', async () => {
+    it('a read row has a regular title and no dot', async () => {
         await mount('all-read');
         expect(screen.queryByTestId('ntf-unread-n-policy')).toBeNull();
-        expect(StyleSheet.flatten(screen.getByTestId('ntf-title-n-policy').props.style).fontFamily).not.toMatch(/700/);
+        expect(StyleSheet.flatten(screen.getByTestId('ntf-title-n-policy').props.style).fontFamily).toMatch(/400/);
     });
 
     it('the pinned bar has a small Mark all read that works and a danger Clear that empties the list', async () => {

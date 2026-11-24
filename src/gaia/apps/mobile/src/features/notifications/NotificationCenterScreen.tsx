@@ -253,8 +253,8 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat, onLai
                         {largeText ? null : meta}
                         <IconButton icon={X} size="sm" label={t('notifications.dismiss')} onPress={() => dismissNotification(n.id)} />
                     </Row>
-                    <Text role="body" weight={n.read ? 'semibold' : 'bold'} testID={`ntf-title-${n.id}`}>{title}</Text>
-                    <Text role="ui" tone="secondary">{message}</Text>
+                    <Text role="ui" weight={n.read ? 'regular' : 'semibold'} testID={`ntf-title-${n.id}`}>{title}</Text>
+                    <Text role="label" tone="secondary">{message}</Text>
                     {n.type === 'policy_alert' ? <PolicyDetails n={n} /> : null}
                     {canAnswer ? (
                         <Row gap="sm" stack>
