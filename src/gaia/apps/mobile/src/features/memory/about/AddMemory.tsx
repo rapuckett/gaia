@@ -4,7 +4,7 @@
 import { useState } from 'react';
 
 import { useAddMemory } from '@/data';
-import { describeFailureWith, useT } from '@/i18n/useT';
+import { plainFailureText, useT } from '@/i18n/useT';
 import { Button, Row, Select, Stack, TextField } from '@/ui';
 import { Plus } from '@/ui/icons';
 
@@ -40,7 +40,7 @@ export function AddMemory({ notify }: Pick<MemoryPaneProps, 'notify'>) {
                     setWhen('');
                     notify({ tone: 'success', text: t('mem.about.saved') });
                 },
-                onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.about.addFailed', { error: describeFailureWith(error, say) })) }),
+                onError: (error) => notify({ tone: 'danger', text: plainFailureText(t, 'mem.about.addFailed', {}, error) }),
             },
         );
     };

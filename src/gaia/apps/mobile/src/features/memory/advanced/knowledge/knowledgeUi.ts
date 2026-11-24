@@ -5,7 +5,7 @@ import { CATEGORY_KEYS, type KnowledgeEntry } from '@webui/utils/memoryFormat.co
 
 import { compose, type MessageKey } from '@webui/i18n/registry';
 
-import { describeFailureWith, type Translate } from '@/i18n/useT';
+import { plainFailure, translator, type Translate } from '@/i18n/useT';
 import type { BadgeTone } from '@/ui';
 
 export const CATEGORY_TONE: Record<string, BadgeTone> = {
@@ -24,13 +24,13 @@ export function categoryLabel(category: string, source: string | undefined, t: T
     return bare ? t.bare(key) : t(key);
 }
 
-export type KnowledgeFeedback = { tone: 'danger' | 'info' | 'success'; text: string } | null;
+export type KnowledgeFeedback = { tone: 'danger' | 'info' | 'success'; text: string; detail?: string } | null;
 
 export type { KnowledgeEntry };
 
-/** A failure inside its message, bracketed once: a PC's reason goes in as sent, one of ours is filled in the same language. */
-export function failureText(code: string, key: MessageKey, error: unknown): string {
-    return compose(code, (say) => say(key, { error: describeFailureWith(error, say) }));
+/** A failed save as a danger notice: the plain sentence, with a PC's own reason on the detail line; one of ours is filled in the same language. */
+export function failureFeedback(code: string, key: MessageKey, error: unknown): { tone: 'danger'; text: string; detail?: string } {
+    return { tone: 'danger', ...plainFailure(translator(code), key, {}, error) };
 }
 
 /** The notice after a save; a memory the PC couldn't embed says why when it gave a reason, as the web does. */
