@@ -260,4 +260,69 @@ describe('DocumentsScreen', () => {
             expect(useNextChatDocs.getState().ids).toEqual([]);
         });
     });
+
+    describe('which chats hold each document (DOC-42)', () => {
+        const withUsers = (id: string, name: string, using: number) => ({ ...doc(id, name, 'complete', 2048), sessions_using: using });
+        const lib = (documents: ReturnType<typeof withUsers>[]) => ({ documents, total: documents.length, total_chunks: 3, total_size_bytes: 2048 * documents.length }) as DocumentListResponse;
+        const chat = { id: 'c1', title: 'A chat', created_at: '2026-11-14T00:00:00Z', updated_at: '2026-11-14T00:00:00Z', model: '', system_prompt: null, message_count: 1, document_ids: ['h1', 'h2'] };
+        beforeEach(() => useNextChatDocs.getState().clear());
+
+        it('says in this chat, in this chat and others, in n chats, in one chat and in none', async () => {
+            const documents = [withUsers('h1', 'here.txt', 1), withUsers('h2', 'both.txt', 3), withUsers('o1', 'elsewhere.txt', 2), withUsers('o2', 'single.txt', 1), withUsers('n1', 'nowhere.txt', 0)];
+            await mount(createFakeClient({ documents: lib(documents), sessions: [chat] }), 'c1');
+            expect(await screen.findByText('In this chat')).toBeTruthy();
+            expect(screen.getByText(/^In this chat and \u2066?2\u2069? others$/)).toBeTruthy();
+            expect(screen.getByText(/^In \u2066?2\u2069? chats$/)).toBeTruthy();
+            expect(screen.getByText(/^In \u2066?1\u2069? chat$/)).toBeTruthy();
+            expect(screen.getByText('Not in any chat')).toBeTruthy();
+        });
+
+        it('says one other, not others', async () => {
+            await mount(createFakeClient({ documents: lib([withUsers('h1', 'here.txt', 2)]), sessions: [chat] }), 'c1');
+            expect(await screen.findByText(/^In this chat and \u2066?1\u2069? other$/)).toBeTruthy();
+        });
+
+        it('says waiting for the next chat for a document held there, and none for an unreadable one', async () => {
+            useNextChatDocs.getState().add(['x']);
+            const documents = [withUsers('x', 'held.txt', 0), { ...withUsers('f', 'bad.pdf', 0), indexing_status: 'failed' }];
+            await mount(createFakeClient({ documents: lib(documents) }));
+            expect(await screen.findByText('Waiting for your next new chat')).toBeTruthy();
+            expect(screen.queryByText('Not in any chat')).toBeNull();
+        });
+
+        it('labels the add button for this chat and for the next chat', async () => {
+            await mount(createFakeClient({ documents: lib([withUsers('o1', 'elsewhere.txt', 2)]), sessions: [chat] }), 'c1');
+            expect(await screen.findByText('Add to this chat')).toBeTruthy();
+        });
+
+        it('labels the add button for the next chat', async () => {
+            await mount(createFakeClient({ documents: lib([withUsers('o1', 'elsewhere.txt', 0)]) }));
+            expect(await screen.findByText('Add to next chat')).toBeTruthy();
+        });
+    });
+
+    describe('the library filter (DOC-42)', () => {
+        const many = Array.from({ length: 6 }, (_, i) => doc(`m${i}`, `report-${i}.pdf`, 'complete', 2048));
+        const lib = (documents: typeof many) => ({ documents, total: documents.length, total_chunks: 3, total_size_bytes: 2048 * documents.length }) as DocumentListResponse;
+
+        it('is not shown for a short library', async () => {
+            await mount(createFakeClient({ documents: lib(many.slice(0, 5)) }));
+            await screen.findByText(/report-0\.pdf/);
+            expect(screen.queryByTestId('docs-filter')).toBeNull();
+        });
+
+        it('narrows by name, ignoring case', async () => {
+            await mount(createFakeClient({ documents: lib([...many, doc('g', 'garden-notes.txt', 'complete', 10)]) }));
+            fireEvent.changeText(await screen.findByLabelText('Filter documents'), 'GARDEN');
+            expect(await screen.findByText(/garden-notes\.txt/)).toBeTruthy();
+            expect(screen.queryByText(/report-0\.pdf/)).toBeNull();
+        });
+
+        it('says so when nothing matches, without the empty-library message', async () => {
+            await mount(createFakeClient({ documents: lib(many) }));
+            fireEvent.changeText(await screen.findByLabelText('Filter documents'), 'zzz');
+            expect(await screen.findByText(/^No documents match “\u2066?zzz\u2069?”\.$/)).toBeTruthy();
+            expect(screen.queryByText('No documents yet')).toBeNull();
+        });
+    });
 });

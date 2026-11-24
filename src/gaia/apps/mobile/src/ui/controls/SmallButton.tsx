@@ -29,7 +29,7 @@ export function SmallButton({ label, accessibilityLabel, icon, variant = 'defaul
     const { colors, radius, space } = useTheme();
     const largeText = useLargeText();
     const accent = variant === 'accent' || variant === 'plain' || variant === 'primary';
-    const tone: Tone = variant === 'default' || variant === 'plain' ? 'primary' : variant === 'primary' ? 'onAccent' : 'accent';
+    const tone: Tone = variant === 'default' || variant === 'plain' ? 'primary' : variant === 'primary' ? 'onAction' : 'accent';
     return (
         // Never wider than its row: a long label wraps inside the button instead of running off the screen.
         <View style={{ maxWidth: '100%' }}>
@@ -49,7 +49,7 @@ export function SmallButton({ label, accessibilityLabel, icon, variant = 'defaul
                         borderRadius: accent ? radius.md : radius.sm,
                         borderWidth: accent ? 0 : 1,
                         borderColor: variant === 'danger' ? colors.accent : colors.border,
-                        backgroundColor: variant === 'accent' ? colors.accentDim : variant === 'primary' ? colors.accentFill : colors.bgTertiary,
+                        backgroundColor: variant === 'accent' ? colors.accentDim : variant === 'primary' ? colors.actionFill : colors.bgTertiary,
                     }}
                 >
                     <Row gap="xs" justify="center">

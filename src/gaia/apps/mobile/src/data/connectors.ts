@@ -110,18 +110,38 @@ export function useChangeConnectorAccess(connectorId: string) {
     });
 }
 
-/** Pauses an MCP server, or removes its credentials (resolving with the revoke outcome), then reloads the connector list. */
+/**
+ * Pauses an MCP server, or removes its credentials (resolving with the revoke outcome), then reloads the connector list.
+ * `disconnectAll` removes every account of a connector that has several, which a plain `disconnect` is refused for (409).
+ */
 export function useConnectorServerAction(connectorId: string, onDisconnected?: (outcome: DisconnectOutcome | null) => void) {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    return useMutation<DisconnectOutcome | null | undefined, Error, 'disable' | 'disconnect'>({
+    return useMutation<DisconnectOutcome | null | undefined, Error, 'disable' | 'disconnect' | 'disconnectAll'>({
         mutationFn: (action) => {
             const c = requireClient(client);
-            return action === 'disable' ? c.disableConnector(connectorId).then(() => undefined) : c.disconnectConnector(connectorId);
+            if (action === 'disable') return c.disableConnector(connectorId).then(() => undefined);
+            return c.disconnectConnector(connectorId, action === 'disconnectAll' ? { all: true } : undefined);
         },
         // Runs even after the tile moved to another group and remounted.
         onSuccess: (outcome, action) => {
-            if (action === 'disconnect') onDisconnected?.(outcome ?? null);
+            if (action !== 'disable') onDisconnected?.(outcome ?? null);
+        },
+        onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.connectors }),
+    });
+}
+
+export type ConnectorAccountChange = { kind: 'default' | 'disconnect'; accountId: string };
+
+/** Makes one account the default, or signs out of just that one, then reloads the connector list. */
+export function useChangeConnectorAccount(connectorId: string) {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<void, Error, ConnectorAccountChange>({
+        mutationFn: async ({ kind, accountId }) => {
+            const c = requireClient(client);
+            if (kind === 'default') await c.setDefaultConnectorAccount(connectorId, accountId);
+            else await c.disconnectConnectorAccount(connectorId, accountId);
         },
         onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.connectors }),
     });

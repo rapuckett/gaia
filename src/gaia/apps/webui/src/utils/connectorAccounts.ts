@@ -92,8 +92,8 @@ export function middleCut(text: string, max = 32): string {
 
 /** The accounts a whole-connector disconnect would remove, when the server refused it for having several. */
 export function accountChoices(error: unknown): string[] | null {
-    const e = error as { httpStatus?: number; body?: Record<string, unknown> | null } | null;
-    const choices = e?.httpStatus === 409 && e.body?.error === 'account_choice_required' ? e.body.choices : null;
+    const e = error as { httpStatus?: number; status?: number; body?: Record<string, unknown> | null } | null;
+    const choices = e && (e.httpStatus ?? e.status) === 409 && e.body?.error === 'account_choice_required' ? e.body.choices : null;
     return Array.isArray(choices) ? choices.map(String) : null;
 }
 

@@ -23,6 +23,9 @@ import { pluralKey, type Say } from '../i18n/registry';
 import { tEn, useT, type Translate } from '../i18n/useT';
 import './SideRail.css';
 import { visibleName } from './CalendarApproval';
+import { liveDataFailed, turnHasDetails } from '../utils/sessionFocus.core';
+
+export { liveDataFailed, turnHasDetails };
 
 /** What the rail shows: the latest answer's summary, a turn in progress, or nothing. */
 export type RailState = { kind: 'turn'; turn: Message } | { kind: 'busy' } | null;
@@ -33,12 +36,6 @@ export function railState(messages: Message[], busy: boolean): RailState {
     const last = messages[messages.length - 1];
     if (!last || last.role !== 'assistant' || !last.turnSummary) return null;
     return { kind: 'turn', turn: last };
-}
-
-/** Every internet tool this turn failed, so the answer has no live data. */
-export function liveDataFailed(summary: TurnSummary): boolean {
-    const attempted = summary.live_data?.attempted ?? 0;
-    return attempted > 0 && (summary.live_data?.failed ?? 0) >= attempted;
 }
 
 function hostOf(url: string): string {
@@ -276,18 +273,6 @@ function FilesSection({ summary }: { summary: TurnSummary }) {
             )}
         </Section>
     );
-}
-
-/** Whether the turn left anything worth a line: a local turn with no sources, files or sites did not. */
-export function turnHasDetails(summary: TurnSummary): boolean {
-    return !!summary.error
-        || liveDataFailed(summary)
-        || (summary.pages ?? []).length > 0
-        || (summary.documents ?? []).length > 0
-        || (summary.files ?? []).length > 0
-        || (summary.sites ?? []).length > 0
-        || summary.model?.remote !== false
-        || summary.cost.kind !== 'local';
 }
 
 /** Where the turn's data went. Only what happened gets a row: no cost for a model on this PC, no sites when none were contacted. */

@@ -17,12 +17,14 @@ import type {
     AutomationList,
     MCPServerStatus,
     ChatPerformance,
+    ConnectorAccount,
     ConnectorDeviceAuthResponse,
     DeviceChange,
     ConnectorKeyStore,
     ConnectorListEntry,
     ConnectorRow,
     ConnectorSignInEnd,
+    ConnectorSignInTarget,
     ConnectorTestResponse,
     DisconnectOutcome,
     ContextUsageResult,
@@ -100,6 +102,7 @@ import type {
     Settings,
     SkillList,
     SpeechModel,
+    ImageSettings,
     SpeechSettings,
     FeaturedLibraries,
     LinkAddResult,
@@ -162,6 +165,8 @@ export interface FakeClientData {
     schedules?: Schedule[];
     /** Past runs by schedule name, newest first. */
     scheduleResults?: Record<string, ScheduleResult[]>;
+    /** What editSchedule does instead of saving: an Error is thrown, and `'saving'` never answers. */
+    editScheduleError?: Error | 'saving';
     messages?: Record<string, Message[]>;
     /** What every send streams back; a function takes the sent text and streams what a test scripts. */
     replies?: StreamEvent[] | ((message: string) => AsyncIterable<StreamEvent>);
@@ -316,6 +321,8 @@ export interface FakeClientData {
     /** What getEnvironment answers, by chat; removing a folder and the internet switch change it. A chat not listed is a 404. */
     environments?: Record<string, SessionEnvironment>;
     memorySettings?: MemorySettings;
+    /** What getImageSettings answers; updateImageSettings changes it. */
+    imageSettings?: ImageSettings;
     /** What getSpeechSettings answers; updateSpeechSettings changes it. */
     speechSettings?: SpeechSettings;
     /** What getSpeechModel answers; defaults to downloaded. */
@@ -430,7 +437,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly deletedOne: { sessionId: string; messageId: number }[];
     readonly confirmations: ToolConfirmRequest[];
     readonly answers: UserInputRequest[];
-    readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
+    readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete' | 'edit'; name: string }[];
     readonly automationActions: { action: AutomationAction | 'delete'; ref: string }[];
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
@@ -467,7 +474,9 @@ export interface FakeGaiaClient extends GaiaClient {
     /** The providers connectProvider was asked for, in order. */
     readonly connects: string[];
     /** Each browser sign-in started from the phone, with the loopback port it named. */
-    readonly browserSignIns: { connectorId: string; redirectPort: number; scopes: string[] }[];
+    readonly browserSignIns: { connectorId: string; redirectPort: number; scopes: string[]; target?: ConnectorSignInTarget }[];
+    /** Each account call made: a default choice, one account's removal, or a whole-connector disconnect. */
+    readonly accountCalls: ({ kind: 'default' | 'disconnect'; connectorId: string; accountId: string } | { kind: 'disconnectAll'; connectorId: string })[];
     /** Each browser sign-in handed back to the PC to finish. */
     readonly browserCompletions: { flowId: string; code: string; state: string }[];
     /** Each pending sign-in dropped. */
@@ -615,6 +624,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
     const connects: string[] = [];
     const browserSignIns: FakeGaiaClient['browserSignIns'] = [];
+    const accountCalls: FakeGaiaClient['accountCalls'] = [];
+    const flowTargets = new Map<string, ConnectorSignInTarget>();
     const browserCompletions: FakeGaiaClient['browserCompletions'] = [];
     const flowCancels: string[] = [];
     const browserFlows = new Map<string, string>();
@@ -757,6 +768,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         setupChoices,
         connects,
         browserSignIns,
+        accountCalls,
         browserCompletions,
         flowCancels,
         keyedConnects,
@@ -1173,14 +1185,15 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return null;
         },
         // As the PC: the link sends the browser to the phone's port, and only that flow's state finishes it.
-        async startConnectorBrowserSignIn(connectorId, redirectPort, scopes) {
-            browserSignIns.push({ connectorId, redirectPort, scopes: [...scopes] });
+        async startConnectorBrowserSignIn(connectorId, redirectPort, scopes, options) {
+            browserSignIns.push({ connectorId, redirectPort, scopes: [...scopes], ...(options?.target ? { target: options.target } : {}) });
             if (data.browserSignInError) throw data.browserSignInError;
             const row = (data.connectors ?? []).find((c) => c.id === connectorId);
             if (!row || 'error' in row) throw new GaiaApiError(404, `Unknown connector: '${connectorId}'`);
             const flowId = `flow-${browserSignIns.length}`;
             const state = data.browserSignInState ?? FAKE_SIGN_IN_STATE;
             browserFlows.set(flowId, connectorId);
+            if (options?.target) flowTargets.set(flowId, options.target);
             const redirect = encodeURIComponent(`http://127.0.0.1:${redirectPort}/callback`);
             return {
                 flow_id: flowId,
@@ -1194,9 +1207,19 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!connectorId) throw new GaiaApiError(404, `No sign-in is waiting with flow_id '${flowId}'.`);
             if (state !== (data.browserSignInState ?? FAKE_SIGN_IN_STATE)) throw new GaiaApiError(400, 'The sign-in state did not match.');
             browserFlows.delete(flowId);
-            data.connectors = (data.connectors ?? []).map((c) =>
-                c.id === connectorId && !('error' in c) ? { ...c, configured: true, account_id: 'avery@example.com' } : c,
-            );
+            const target = flowTargets.get(flowId);
+            flowTargets.delete(flowId);
+            data.connectors = (data.connectors ?? []).map((c) => {
+                if (c.id !== connectorId || 'error' in c) return c;
+                if (c.accounts && target && 'addAccount' in target) {
+                    return { ...c, configured: true, accounts: [...c.accounts, { account_id: 'jordan@example.com', email: 'jordan@example.com', status: 'ok', is_default: false }] };
+                }
+                if (c.accounts && target && 'account' in target) {
+                    const accounts = c.accounts.map((a) => (a.account_id === target.account || a.email === target.account ? { ...a, status: 'ok' as const } : a));
+                    return { ...c, configured: accounts.some((a) => a.status === 'ok'), accounts };
+                }
+                return { ...c, configured: true, account_id: 'avery@example.com' };
+            });
             return { ...(data.connectors.find((c) => c.id === connectorId) as ConnectorRow) };
         },
         async cancelConnectorFlow(flowId) {
@@ -1225,11 +1248,40 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async disableConnector(connectorId) {
             data.connectors = (data.connectors ?? []).map((c) => (c.id === connectorId && !('error' in c) ? { ...c, enabled: false } : c));
         },
-        async disconnectConnector(connectorId) {
+        async disconnectConnector(connectorId, options) {
+            const row = (data.connectors ?? []).find((c) => c.id === connectorId);
+            const held = row && !('error' in row) ? (row.accounts ?? []) : [];
+            if (held.length > 1 && !options?.all) {
+                throw new GaiaApiError(409, 'This connector has several accounts.', undefined, undefined, { error: 'account_choice_required', choices: held.map((a) => a.email) });
+            }
+            if (held.length > 1) accountCalls.push({ kind: 'disconnectAll', connectorId });
             data.connectors = (data.connectors ?? []).map((c) =>
-                c.id === connectorId && !('error' in c) ? { ...c, configured: false, enabled: true, account_id: null } : c,
+                c.id === connectorId && !('error' in c)
+                    ? { ...c, configured: false, enabled: true, account_id: null, ...(c.accounts ? { accounts: [] } : {}) }
+                    : c,
             );
             return data.disconnectOutcome ?? {};
+        },
+        // As the PC: the next account takes over as default, and the connector is disconnected with its last account.
+        async disconnectConnectorAccount(connectorId, accountId) {
+            accountCalls.push({ kind: 'disconnect', connectorId, accountId });
+            data.connectors = (data.connectors ?? []).map((c) => {
+                if (c.id !== connectorId || 'error' in c) return c;
+                const left = (c.accounts ?? []).filter((a) => a.account_id !== accountId && a.email !== accountId);
+                const accounts = left.length > 0 && !left.some((a) => a.is_default) ? left.map((a, i) => (i === 0 ? { ...a, is_default: true } : a)) : left;
+                const first = accounts.find((a) => a.is_default);
+                return { ...c, accounts, configured: accounts.length > 0, account_id: first ? first.email : null };
+            });
+        },
+        async setDefaultConnectorAccount(connectorId, accountId) {
+            accountCalls.push({ kind: 'default', connectorId, accountId });
+            let accounts: ConnectorAccount[] = [];
+            data.connectors = (data.connectors ?? []).map((c) => {
+                if (c.id !== connectorId || 'error' in c) return c;
+                accounts = (c.accounts ?? []).map((a) => ({ ...a, is_default: a.account_id === accountId || a.email === accountId }));
+                return { ...c, accounts, account_id: accounts.find((a) => a.is_default)?.email ?? c.account_id };
+            });
+            return { accounts };
         },
         async listDeviceChanges(_deviceId, limit, options) {
             const rows = data.deviceChanges ?? [];
@@ -1495,6 +1547,15 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             data.undoSettings = { ...data.undoSettings, retention_days: retentionDays, max_mb: maxMb };
             return data.undoSettings;
         },
+        async getImageSettings() {
+            if (!data.imageSettings) throw new GaiaApiError(503, 'This fake client was given no image settings.');
+            return data.imageSettings;
+        },
+        async updateImageSettings(change) {
+            if (!data.imageSettings) throw new GaiaApiError(503, 'This fake client was given no image settings.');
+            data.imageSettings = { ...data.imageSettings, ...change };
+            return data.imageSettings;
+        },
         async getSpeechSettings() {
             if (!data.speechSettings) throw new GaiaApiError(503, 'This fake client was given no speech settings.');
             return data.speechSettings;
@@ -1618,6 +1679,15 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
                 next_run_at: valid ? new Date(Date.now() + 3_600_000).toISOString() : null,
                 valid,
             };
+        },
+        async editSchedule(name, request) {
+            const schedule = findSchedule(name);
+            scheduleActions.push({ action: 'edit', name });
+            if (data.editScheduleError === 'saving') return new Promise<never>(() => {});
+            if (data.editScheduleError) throw data.editScheduleError;
+            if (schedule.running) throw new GaiaApiError(409, `Schedule '${name}' is running`);
+            Object.assign(schedule, { prompt: request.prompt, description: request.interval, schedule_config: JSON.stringify({ raw_input: request.interval }) });
+            return { ...schedule };
         },
         async updateScheduleStatus(name, status) {
             const schedule = findSchedule(name);
