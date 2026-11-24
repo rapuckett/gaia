@@ -17,7 +17,18 @@ import { sweepStale, syncAll, unregisterAll, unregisterPc, type PushDeps } from 
 import { usePushStore, type PushPermission } from './pushStore';
 import { createRelayClient } from './relayClient';
 
-const relayFetch: FetchLike = (url, init) => fetch(url, init as RequestInit);
+// The relay is a cloud service: a call it hasn't answered in this long counts as unreachable, and is tried again later.
+const RELAY_TIMEOUT_MS = 10_000;
+
+const relayFetch: FetchLike = async (url, init) => {
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(), RELAY_TIMEOUT_MS);
+    try {
+        return await fetch(url, { ...(init as RequestInit), signal: timeout.signal });
+    } finally {
+        clearTimeout(timer);
+    }
+};
 
 async function buildDeps(): Promise<{ deps: PushDeps; pairedIds: string[] } | null> {
     const config = pushBuildConfig();

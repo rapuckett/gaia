@@ -10,7 +10,7 @@ import { useSpeechSettings, useUpdateSpeechSettings } from '@/data';
 import { ReadAloudErrorNotice, useReadAloud } from '@/features/audio/ReadAloud';
 import { kindOf, useReadAloudStore } from '@/features/audio/readAloudStore';
 import type { SpeechSettingsUpdate } from '@/api/client.types';
-import { describeFailureWith, useT } from '@/i18n/useT';
+import { plainFailure, useT } from '@/i18n/useT';
 import { Button, Card, Notice, Row, Select, Spinner, Stack, Switch, Text } from '@/ui';
 import { Square, Volume2 } from '@/ui/icons';
 
@@ -53,17 +53,10 @@ export default function ReadAloud() {
 
     if (settings.error) {
         const unsupported = kindOf(settings.error) === 'unsupported';
+        const failure = unsupported ? null : plainFailure(t, 'readAloud.settings.loadFailed', {}, settings.error, 'reason');
         return (
             <Stack gap="lg" padding="lg">
-                <Notice
-                    tone="danger"
-                    message={
-                        unsupported
-                            ? t('mobileApp.readAloud.unsupported')
-                            : t.compose((say) => say('readAloud.settings.loadFailed', { reason: describeFailureWith(settings.error, say) }))
-                    }
-                    testID="read-aloud-load-error"
-                />
+                <Notice tone="danger" message={failure ? failure.text : t('mobileApp.readAloud.unsupported')} detail={failure?.detail} testID="read-aloud-load-error" />
             </Stack>
         );
     }
@@ -149,9 +142,13 @@ export default function ReadAloud() {
             <Text role="label" tone="muted">
                 {t('readAloud.settings.shared')}
             </Text>
-            {update.error ? (
-                <Notice tone="danger" message={t.compose((say) => say('readAloud.settings.saveFailed', { reason: describeFailureWith(update.error, say) }))} testID="read-aloud-save-error" />
-            ) : null}
+            {update.error ? <SaveFailed error={update.error} /> : null}
         </Stack>
     );
+}
+
+function SaveFailed({ error }: { error: unknown }) {
+    const t = useT();
+    const { text, detail } = plainFailure(t, 'readAloud.settings.saveFailed', {}, error, 'reason');
+    return <Notice tone="danger" message={text} detail={detail} testID="read-aloud-save-error" />;
 }

@@ -7,7 +7,7 @@ import { keepTogether, ref, type MessageKey, type Params, type Say } from '@webu
 import { dueInputValue, dueLabel, relativeDay, sourceKey, type AboutYouItem } from '@webui/utils/memoryFormat.core';
 
 import { useEditMemory } from '@/data';
-import { describeFailureWith, translator, useT, type Translate } from '@/i18n/useT';
+import { plainFailureText, translator, useT, type Translate } from '@/i18n/useT';
 import { Button, IconButton, Row, Stack, Text, TextField } from '@/ui';
 import { Eye, Pencil, Trash2 } from '@/ui/icons';
 
@@ -76,7 +76,7 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
                     setEditing(false);
                     notify({ tone: 'success', text: t('mem.about.updated') });
                 },
-                onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.about.editFailed', { error: describeFailureWith(error, say) })) }),
+                onError: (error) => notify({ tone: 'danger', text: plainFailureText(t, 'mem.about.editFailed', {}, error) }),
             },
         );
     };

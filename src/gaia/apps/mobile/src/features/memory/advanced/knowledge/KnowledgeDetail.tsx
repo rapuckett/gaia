@@ -13,7 +13,7 @@ import { dateLocale, useLocaleCode, useT } from '@/i18n/useT';
 import { Badge, Button, Divider, Ltr, Notice, Row, Stack, Text } from '@/ui';
 import { Copy, Pencil, Shield, ShieldOff, Trash2 } from '@/ui/icons';
 
-import { CATEGORY_TONE, categoryLabel, failureText, type KnowledgeFeedback } from './knowledgeUi';
+import { CATEGORY_TONE, categoryLabel, failureFeedback, type KnowledgeFeedback } from './knowledgeUi';
 import { ContentText } from '../../ContentText';
 
 /** The browser owns the mutations: a sheet draws outside the screen's providers in the dev gallery, so its content can't reach the client itself. */
@@ -61,7 +61,7 @@ export function KnowledgeDetail({ item, edit, forget, onEdit, onChanged, onFilte
                     onChanged({ ...item, sensitive: !item.sensitive });
                     setFeedback({ tone: 'info', text: t(item.sensitive ? 'mem.toast.unmarkedSensitive' : 'mem.toast.markedSensitive') });
                 },
-                onError: (error) => setFeedback({ tone: 'danger', text: failureText(code, 'mem.toast.sensitiveFailed', error) }),
+                onError: (error) => setFeedback(failureFeedback(code, 'mem.toast.sensitiveFailed', error)),
             },
         );
     };
@@ -70,7 +70,7 @@ export function KnowledgeDetail({ item, edit, forget, onEdit, onChanged, onFilte
         setFeedback(null);
         Clipboard.setStringAsync(item.id).then(
             () => setFeedback({ tone: 'info', text: t('mem.toast.idCopied') }),
-            (error: unknown) => setFeedback({ tone: 'danger', text: failureText(code, 'mem.toast.copyFailed', error) }),
+            (error: unknown) => setFeedback(failureFeedback(code, 'mem.toast.copyFailed', error)),
         );
     };
 
@@ -80,7 +80,7 @@ export function KnowledgeDetail({ item, edit, forget, onEdit, onChanged, onFilte
             onSuccess: onClose,
             onError: (error) => {
                 setConfirming(false);
-                setFeedback({ tone: 'danger', text: failureText(code, 'mem.toast.deleteFailed', error) });
+                setFeedback(failureFeedback(code, 'mem.toast.deleteFailed', error));
             },
         });
     };
@@ -101,7 +101,7 @@ export function KnowledgeDetail({ item, edit, forget, onEdit, onChanged, onFilte
                 </ContentText>
             </Stack>
 
-            {feedback ? <Notice tone={feedback.tone} message={feedback.text} testID="memory-knowledge-feedback" /> : null}
+            {feedback ? <Notice tone={feedback.tone} message={feedback.text} detail={feedback.detail} testID="memory-knowledge-feedback" /> : null}
 
             {confirming ? (
                 <Stack gap="md" testID="memory-knowledge-confirm">

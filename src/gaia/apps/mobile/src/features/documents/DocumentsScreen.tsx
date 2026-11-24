@@ -9,9 +9,10 @@ import { FILTER_AFTER, filterNeedle, matchesName } from '@webui/utils/documentLi
 import { useAttachDocument, useCancelIndexing, useDocumentRemoval, useDocuments, useIndexingView, type IndexingSeed, useReindexDocument, useSession } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { plainOr, useT } from '@/i18n/useT';
-import { EmptyState, ErrorState, List, ListSkeleton, Notice, Row, Screen, SearchField, Stack, Text, useTheme } from '@/ui';
+import { ErrorState, Icon, List, ListSkeleton, Notice, Row, Screen, SearchField, Stack, Text, useTheme } from '@/ui';
+import { FileText } from '@/ui/icons';
 
-import { AddDocuments, type AddStart, type StartMessage } from './AddDocuments';
+import { AddButton, AddDocuments, type AddStart, type StartMessage } from './AddDocuments';
 import { DocumentRow } from './DocumentRow';
 import { libraryStats } from './libraryStats';
 import { loadFailedText } from './loadFailedText';
@@ -99,6 +100,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
     const documents = all.filter((d) => d.id !== removal.pending?.id);
     const view = useIndexingView(all, initial?.indexing);
     const stats = libraryStats(documents, t);
+    const [menuOpen, setMenuOpen] = useState(false);
     const [filter, setFilter] = useState(initial?.filter ?? '');
     const needle = filterNeedle(filter, documents.length);
     const shown = documents.filter((d) => matchesName(d.filename, needle));
@@ -133,7 +135,8 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
     };
     const attachedIds = targetChat ? targetChat.documentIds : nextIds;
     const loadFailed = query.isError ? loadFailedText(t, query.error) : null;
-    const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} onBrowse={onBrowseFiles} pcChatId={chat?.id ?? null} initialLine={initial?.add} initialPath={initial?.path} />;
+    const empty = documents.length === 0;
+    const adder = <AddDocuments showButton={!empty} menuOpen={menuOpen} onMenuOpenChange={setMenuOpen} chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} onBrowse={onBrowseFiles} pcChatId={chat?.id ?? null} initialLine={initial?.add} initialPath={initial?.path} />;
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
     const top = (
@@ -158,8 +161,6 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
     );
     const header = <ScreenHeader title={t('docs.title')} />;
 
-    const empty = documents.length === 0;
-
     return (
         <Screen header={header}>
             <List
@@ -171,7 +172,20 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                     <>
                         {query.isPending ? <ListSkeleton rows={4} /> : null}
                         {loadFailed ? <ErrorState title={loadFailed.text} detail={loadFailed.detail} action={retry} /> : null}
-                        {query.data && empty ? <EmptyState title={t('docs.empty')} message={t('docs.emptyHintPhone')} /> : null}
+                        {query.data && empty ? (
+                            <Stack flex={1} align="center" justify="center" gap="md" padding="xl" testID="docs-empty">
+                                <Icon icon={FileText} size="lg" tone="muted" />
+                                <Text role="title" weight="semibold" align="center">
+                                    {t('docs.empty')}
+                                </Text>
+                                <Text tone="secondary" align="center">
+                                    {t('docs.emptyHintPhone')}
+                                </Text>
+                                <Row justify="center">
+                                    <AddButton onPress={() => setMenuOpen(true)} />
+                                </Row>
+                            </Stack>
+                        ) : null}
                     </>
                 }
                 ListHeaderComponent={

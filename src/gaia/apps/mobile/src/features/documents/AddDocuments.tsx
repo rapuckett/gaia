@@ -8,8 +8,8 @@ import { GaiaApiError } from '@/api/errors';
 import { useAddDocument, useAddPcPath, useSetupPreflight } from '@/data';
 import { describeError, describeHttpFailure, plainOr, useT } from '@/i18n/useT';
 import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
-import { Button, Notice, ProgressLine, Row, Stack, Text, TextField } from '@/ui';
-import { FileText, FolderOpen, Image as ImageIcon } from '@/ui/icons';
+import { ActionSheet, Button, Notice, ProgressLine, Row, Sheet, Stack, Text, TextField } from '@/ui';
+import { FileText, FolderOpen, Image as ImageIcon, Pencil, Plus } from '@/ui/icons';
 import { isolateUnit, type MessageKey, type Params } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
 import { describeFolderResult } from '@webui/utils/documentLibrary.core';
@@ -111,9 +111,14 @@ interface AddDocumentsProps {
     // Dev gallery only: the line shown on open, and the text in the path box.
     initialLine?: AddStart;
     initialPath?: string;
+    // The add sheet's state lives in the screen, so its empty state can open it too.
+    menuOpen: boolean;
+    onMenuOpenChange: (open: boolean) => void;
+    // False leaves the Add button to the screen; the sheet and the add line stay here.
+    showButton?: boolean;
 }
 
-export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, initialLine, initialPath }: AddDocumentsProps) {
+export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, initialLine, initialPath, menuOpen, onMenuOpenChange, showButton = true }: AddDocumentsProps) {
     const t = useT();
     const add = useAddDocument();
     const addPath = useAddPcPath();
@@ -121,6 +126,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
     const holdForNextChat = useNextChatDocs((s) => s.add);
     const [line, setLine] = useState<AddLine | null>(() => (initialLine ? resolveStart(t, initialLine) : null));
     const [path, setPath] = useState(initialPath ?? '');
+    const [pathOpen, setPathOpen] = useState(false);
     const busy = line?.kind === 'busy';
     const pcOs = preflight.data?.os;
     // The example follows the PC's way of writing paths; darwin is a Mac too.
@@ -168,6 +174,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
     async function submitPath() {
         const typed = path.trim();
         if (!typed || busy || !pcChatId) return;
+        setPathOpen(false);
         onStart?.();
         const name = pathName(cleanPastedPath(typed));
         setLine({ kind: 'busy', name });
@@ -211,18 +218,19 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
         setLine(result);
     }
 
+    const sheetActions = [
+        { label: t('mobileApp.docs.add.photos'), icon: ImageIcon, disabled: busy, testID: 'docs-add-photos', onPress: () => void run(pickPhotos) },
+        { label: t('mobileApp.docs.add.files'), icon: FileText, disabled: busy, testID: 'docs-add-file', onPress: () => void run(pickDocuments) },
+        ...(onBrowse && chatId ? [{ label: t('chat.browseFiles'), icon: FolderOpen, disabled: busy, testID: 'docs-browse', onPress: () => onBrowse(chatId) }] : []),
+        ...(pcChatId ? [{ label: t('mobileApp.docs.add.path'), icon: Pencil, disabled: busy, testID: 'docs-add-path', onPress: () => setPathOpen(true) }] : []),
+    ];
+
     return (
         <Stack gap="sm">
-            <Row gap="sm" wrap stack>
-                <Button label={t('docs.addPhotos')} icon={ImageIcon} variant="secondary" disabled={busy} onPress={() => void run(pickPhotos)} />
-                <Button label={t('docs.addFile')} icon={FileText} variant="secondary" disabled={busy} onPress={() => void run(pickDocuments)} />
-            </Row>
-            {onBrowse && chatId ? <Button label={t('chat.browseFiles')} icon={FolderOpen} variant="secondary" full disabled={busy} onPress={() => onBrowse(chatId)} /> : null}
-            {pcChatId ? (
-                <Stack gap="xs">
-                    <Text role="caption" tone="secondary">
-                        {t('docs.pathHint')}
-                    </Text>
+            {showButton ? <AddButton onPress={() => onMenuOpenChange(true)} /> : null}
+            <ActionSheet open={menuOpen} onClose={() => onMenuOpenChange(false)} title={t('mobileApp.docs.add')} actions={sheetActions} />
+            <Sheet open={pathOpen} onClose={() => setPathOpen(false)} title={t('mobileApp.docs.add.path')}>
+                <Stack gap="sm">
                     <Row gap="sm" align="center">
                         <Stack flex={1}>
                             <TextField
@@ -236,13 +244,13 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
                                 testID="docs-path"
                             />
                         </Stack>
-                        <Button label={t('docs.index')} variant="secondary" disabled={!path.trim() || busy} onPress={() => void submitPath()} />
+                        <Button label={t('docs.index')} variant="secondary" disabled={!path.trim() || busy} onPress={() => void submitPath()} testID="docs-path-add" />
                     </Row>
                     <Text role="caption" tone="secondary">
                         {t('docs.pathSubfolders')}
                     </Text>
                 </Stack>
-            ) : null}
+            </Sheet>
             {line?.kind === 'busy' ? (
                 <Stack gap="xs">
                     <Text role="caption" tone="secondary">
@@ -271,4 +279,10 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
             ) : null}
         </Stack>
     );
+}
+
+/** The one Add button; the empty state shows the same one under its message. */
+export function AddButton({ onPress, full }: { onPress: () => void; full?: boolean }) {
+    const t = useT();
+    return <Button label={t('mobileApp.docs.add')} icon={Plus} variant="secondary" full={full} testID="docs-add" onPress={onPress} />;
 }

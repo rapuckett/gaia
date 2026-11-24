@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useCloudPrices } from '@/data';
-import { describeFailureWith, useT } from '@/i18n/useT';
+import { plainFailure, useT } from '@/i18n/useT';
 import { Divider, Notice, Row, Spinner, Stack, Text } from '@/ui';
 
 import { isPcRefusal, PcOnlyNotice } from '../../PcOnlyNotice';
@@ -16,7 +16,8 @@ export function CloudPrices({ provider }: { provider: string }) {
 
     if (isPcRefusal(prices.error)) return <PcOnlyNotice testID="prices-pc-only" />;
     if (prices.error) {
-        return <Notice tone="danger" message={t.compose((say) => say('settings.price.loadFailed', { reason: describeFailureWith(prices.error, say) }))} />;
+        const { text, detail } = plainFailure(t, 'settings.price.loadFailed', {}, prices.error, 'reason');
+        return <Notice tone="danger" message={text} detail={detail} />;
     }
     if (!list) {
         return (

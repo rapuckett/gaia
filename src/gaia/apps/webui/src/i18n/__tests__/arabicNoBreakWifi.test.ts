@@ -14,4 +14,12 @@ describe('Arabic local-network strings', () => {
       expect({ key, ok: String(value).includes('Wi‑Fi') && !String(value).includes('Wi-Fi') }).toEqual({ key, ok: true });
     }
   });
+
+  it('does the same in the pairing, devices and resources strings', () => {
+    const keys = ['mobileApp.pairing.unreachable.body', 'settings.devices.waitingForHomeHint', 'resources.wifi'];
+    for (const key of keys) {
+      const value = String((ar.messages as Record<string, string>)[key]);
+      expect({ key, ok: value.includes('Wi\u2011Fi') && !value.includes('Wi-Fi') }).toEqual({ key, ok: true });
+    }
+  });
 });

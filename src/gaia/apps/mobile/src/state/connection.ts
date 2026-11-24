@@ -27,6 +27,8 @@ interface ConnectionState {
     restored: boolean;
     /** The PC that said this phone is no longer paired with it, for a one-line note on the pairing screen. */
     removedFrom: string | null;
+    /** "Pair again" found that this PC no longer knows the phone: the pairing screen says so, then forgets it. */
+    forgottenPc: { id: string; name: string } | null;
     /** Throws GaiaConfigError for an address that isn't an http(s) URL; nothing is stored then. */
     setConnection(connection: ConnectionConfig): void;
     clearConnection(): void;
@@ -34,6 +36,8 @@ interface ConnectionState {
     finishRestore(connection: ConnectionConfig | null): void;
     /** The PC refused this phone's token (it was unpaired there): back to pairing, with a note naming it. */
     connectionRemoved(pcName: string): void;
+    /** "Pair again" answered that the PC no longer knows this phone: off it, to the pairing screen that says so. */
+    pcForgotPhone(pc: { id: string; name: string }): void;
 }
 
 // The PC's address for development, inlined by Expo when Metro starts; GAIA's port changes at every launch.
@@ -48,8 +52,9 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
     connection: SEED_URL ? { baseUrl: normalizeBaseUrl(SEED_URL) } : null,
     restored: true,
     removedFrom: null,
+    forgottenPc: null,
     setConnection: (connection) =>
-        set({ connection: { ...connection, baseUrl: normalizeBaseUrl(connection.baseUrl) }, removedFrom: null }),
+        set({ connection: { ...connection, baseUrl: normalizeBaseUrl(connection.baseUrl) }, removedFrom: null, forgottenPc: null }),
     clearConnection: () => set({ connection: null }),
     beginRestore: () => set({ restored: false }),
     finishRestore: (connection) =>
@@ -59,4 +64,5 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
             connection: state.connection ?? (connection ? { ...connection, baseUrl: normalizeBaseUrl(connection.baseUrl) } : null),
         })),
     connectionRemoved: (pcName) => set({ connection: null, removedFrom: pcName }),
+    pcForgotPhone: (pc) => set({ connection: null, removedFrom: null, forgottenPc: pc }),
 }));

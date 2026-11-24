@@ -9,7 +9,7 @@ import { isolate, pluralKey, type Say } from '@webui/i18n/registry';
 
 import { useFileStatus, useLocalModels, useMessages } from '@/data';
 import { openPcFile } from '@/features/files/openPcFile';
-import { describeFailureWith, useT } from '@/i18n/useT';
+import { plainFailure, useT } from '@/i18n/useT';
 import { Icon, Notice, Pressable, Row, Stack, Text } from '@/ui';
 import { Cloud, ExternalLink, FileText, Globe, Monitor } from '@/ui/icons';
 
@@ -129,6 +129,7 @@ function Files({ sessionId, summary }: { sessionId: string; summary: TurnSummary
         { enabled: files.length > 0 },
     );
     if (files.length === 0) return null;
+    const checkFailure = status.error ? plainFailure(t, 'rail.checkFailed', {}, status.error) : null;
     const now = new Map((status.data ?? []).map((f) => [f.path, f]));
     return (
         <Group label={t('rail.files')}>
@@ -171,9 +172,7 @@ function Files({ sessionId, summary }: { sessionId: string; summary: TurnSummary
                     );
                 })}
             </Stack>
-            {status.error ? (
-                <Notice tone="danger" message={t.compose((say) => say('rail.checkFailed', { error: describeFailureWith(status.error, say) }))} />
-            ) : null}
+            {checkFailure ? <Notice tone="danger" message={checkFailure.text} detail={checkFailure.detail} /> : null}
         </Group>
     );
 }

@@ -47,6 +47,17 @@ export function plainOr(t: Translate, key: string, params: Params | undefined, e
     return t.compose((say) => say(key as MessageKey, { ...(params ?? {}), [slot]: describeErrorWith(error, say) }));
 }
 
+/** A failure sentence that ends in `{error}`/`{reason}`: our own translated cause still ends the sentence, but a PC's HTTP error gets the `mobileApp.plain.<key>` twin with its raw text as `detail`, off the sentence. */
+export function plainFailure(t: Translate, key: string, params: Params | undefined, error: unknown, slot = 'error'): { text: string; detail?: string } {
+    if (error instanceof GaiaApiError) return { text: t(`mobileApp.plain.${key}` as MessageKey, params ?? {}), detail: error.detail || undefined };
+    return { text: t.compose((say) => say(key as MessageKey, { ...(params ?? {}), [slot]: describeErrorWith(error, say) })) };
+}
+
+/** `plainFailure` for a toast, which has no detail line. */
+export function plainFailureText(t: Translate, key: string, params: Params | undefined, error: unknown, slot = 'error'): string {
+    return plainFailure(t, key, params, error, slot).text;
+}
+
 /** Like `describeErrorWith`, but a PC's own reason (`GaiaApiError.detail`) goes in as sent. */
 export function describeFailureWith(error: unknown, say: Say): string {
     if (error instanceof GaiaApiError) return error.detail;

@@ -7,7 +7,7 @@ import { ref } from '@webui/i18n/registry';
 
 import type { GoalPriority } from '@/api/client.types';
 import { useCreateGoal } from '@/data';
-import { describeFailureWith, useT } from '@/i18n/useT';
+import { plainFailure, useT } from '@/i18n/useT';
 import { Button, Notice, Row, SegmentedControl, Sheet, Stack, TextField } from '@/ui';
 
 import { PRIORITY_CHOICES } from './goalText';
@@ -21,6 +21,7 @@ export interface NewGoalSheetProps {
 export function NewGoalSheet({ open, onClose }: NewGoalSheetProps) {
     const t = useT();
     const create = useCreateGoal();
+    const createFailure = create.isError ? plainFailure(t, 'mem.goals.failed', { what: ref('mem.goals.createFailed') }, create.error) : null;
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [priority, setPriority] = useState<GoalPriority>('medium');
@@ -95,9 +96,7 @@ export function NewGoalSheet({ open, onClose }: NewGoalSheetProps) {
                     }))}
                     testID="goals-create-priority"
                 />
-                {create.isError ? (
-                    <Notice tone="danger" message={t.compose((say) => say('mem.goals.failed', { what: ref('mem.goals.createFailed'), error: describeFailureWith(create.error, say) }))} />
-                ) : null}
+                {createFailure ? <Notice tone="danger" message={createFailure.text} detail={createFailure.detail} /> : null}
             </Stack>
         </Sheet>
     );

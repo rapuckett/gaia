@@ -11,7 +11,7 @@ import type { Translate } from '@webui/i18n/translator';
 import type { DiscoveryFinding, InferenceInsight, MemorySettings, ProfileStreamEvent } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { memoryKeys, useCommitProfile, useGaiaClient, useMemorySettings, useUpdateMemorySettings } from '@/data';
-import { describeFailureWith, plainOr, technicalDetail, useT } from '@/i18n/useT';
+import { plainFailureText, plainOr, technicalDetail, useT } from '@/i18n/useT';
 
 import { useConfirmSheet } from '../../setup/sheets/ConfirmSheet';
 import { discoveryScanRequest } from '../discoveryConfirm';
@@ -133,7 +133,7 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
                     await updateSettings.mutateAsync({ system_discovery_consent: true });
                 } catch (err) {
                     if (err instanceof GaiaApiError && err.status === 403) pcOnly();
-                    else notify({ tone: 'danger', text: t.compose((say) => say('mem.toast.settingFailed', { error: describeFailureWith(err, say) })) });
+                    else notify({ tone: 'danger', text: plainFailureText(t, 'mem.toast.settingFailed', {}, err) });
                     return;
                 }
             }
