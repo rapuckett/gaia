@@ -271,7 +271,7 @@ describe('context window too small', () => {
         } as SystemStatus });
         const { container } = render(<ConnectionBanner />);
         expect(screen.getByText(/LLM context window is too small/)).toBeInTheDocument();
-        expect(screen.getByText(/Settings → Advanced/)).toBeInTheDocument();
+        expect(screen.getByText(/Settings › Advanced/)).toBeInTheDocument();
         expect(container.querySelector('code')).toBeNull();
     });
 });
