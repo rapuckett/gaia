@@ -3266,6 +3266,20 @@ const scrollPane = (page: Page, to: 'top' | 'bottom') =>
 
 const groups = (page: Page) => page.locator('.settings-card .settings-disclosure');
 
+test('Use on a tight downloaded model asks first (en, dark)', async ({ page }) => {
+    const models = MODEL_LIST.map((m) => (m.id === 'Qwen3.6-35B-A3B-GGUF' ? { ...m, tight: true } : m));
+    await openModelPage(page, 'en', { models, theme: 'dark' });
+    const row = page.locator('.model-row', { hasText: 'Qwen3.6 35B A3B' });
+    await expect(row.locator('.model-badge.is-tight')).toBeVisible();
+    await row.getByRole('button', { name: /^Use / }).click();
+    const ask = page.getByRole('alertdialog');
+    await expect(ask).toContainText('Qwen3.6 35B A3B');
+    await expect(ask).toContainText('Your PC may slow down while it runs.');
+    await expect(ask).toHaveCSS('opacity', '1');
+    await shot(page, 'model-en-dark-use-tight-confirm');
+    expect(await audit(page)).toEqual([]);
+});
+
 for (const locale of ['ar', 'en']) {
     test.describe(`settings model page (${locale})`, () => {
         for (const noGaiacpp of [false, true]) {
