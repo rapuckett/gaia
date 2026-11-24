@@ -595,6 +595,20 @@ class TestStartingStates:
     stored".
     """
 
+    @pytest.fixture(autouse=True)
+    def _quiet_connector_logs(self):
+        # GAIA's console handler follows sys.stderr, so _run would catch the
+        # connectors' INFO diagnostics along with the command's own errors.
+        import logging
+
+        from gaia.logger import configure
+
+        console = configure().console_handler
+        level = console.level
+        console.setLevel(logging.WARNING)
+        yield
+        console.setLevel(level)
+
     @pytest.fixture(params=[NEVER_CONFIGURED, NOT_CONNECTED, CONNECTED])
     def state(self, request, monkeypatch):
         if request.param == NEVER_CONFIGURED:

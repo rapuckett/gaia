@@ -790,7 +790,9 @@ def test_the_ui_route_says_an_unreadable_sign_in_could_not_be_read(
     app = FastAPI()
     app.include_router(router_mod.router)
 
-    resp = TestClient(app).delete(f"{router_mod.router.prefix}/{provider}?all=true")
+    resp = TestClient(app, client=("127.0.0.1", 50000)).delete(
+        f"{router_mod.router.prefix}/{provider}?all=true"
+    )
 
     assert resp.status_code == 204, resp.text
     (name, payload), *_ = events
