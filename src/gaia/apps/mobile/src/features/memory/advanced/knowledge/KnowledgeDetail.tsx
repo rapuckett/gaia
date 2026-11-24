@@ -138,7 +138,7 @@ export function KnowledgeDetail({ item, edit, forget, onEdit, onChanged, onFilte
                         label={t.bare('mem.row.delete')}
                         accessibilityLabel={t('mem.row.deleteAria')}
                         icon={Trash2}
-                        variant="ghost"
+                        variant="danger"
                         onPress={() => setConfirming(true)}
                         testID="memory-knowledge-delete"
                     />

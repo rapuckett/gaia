@@ -7,16 +7,14 @@ import { usePathname, useRouter } from 'expo-router';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { queryKeys } from '@/data';
+import { queryKeys, useActiveRuns } from '@/data';
 import { ChatDrawerContent } from '@/features/chats/ChatDrawerContent';
+import { useComposerQueueStore } from '@/features/composer/composerQueue';
 import { useChatStreamStore } from '@/state/chatStreams';
 import { useTheme } from '@/ui';
 
 import { useIsPermanentDrawer } from './ScreenHeader';
 import { activeChatId, liveRunsFromTurns, openChat, openNewChat } from './navigation';
-
-// Queues are empty until the composer queue is wired to the drawer.
-const NO_QUEUES = {};
 
 export function AppDrawer({ navigation, state }: DrawerContentComponentProps) {
     const router = useRouter();
@@ -32,7 +30,9 @@ export function AppDrawer({ navigation, state }: DrawerContentComponentProps) {
         if (permanent) navigation.closeDrawer();
     }, [permanent, navigation]);
     const turns = useChatStreamStore((s) => s.turns);
-    const live = useMemo(() => liveRunsFromTurns(turns), [turns]);
+    const active = useActiveRuns().data;
+    const live = useMemo(() => liveRunsFromTurns(turns, active), [turns, active]);
+    const queues = useComposerQueueStore((s) => s.byChat);
     const { colors } = useTheme();
     // The divider faces the main pane; navigation.ts clears the navigator's own, whose colour and side ignore our theme.
     return (
@@ -43,7 +43,7 @@ export function AppDrawer({ navigation, state }: DrawerContentComponentProps) {
             <ChatDrawerContent
                 activeId={activeChatId(pathname)}
                 live={live}
-                queues={NO_QUEUES}
+                queues={queues}
                 routeNames={state.routeNames}
                 activeRoute={pathname.split('/')[1] || null}
                 onOpenRoute={(route) => {

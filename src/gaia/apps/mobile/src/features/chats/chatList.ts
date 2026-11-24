@@ -3,6 +3,7 @@
 
 import { pluralKey, type MessageKey } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
+import { placeInLine } from '@webui/utils/chatAlerts.core';
 import { MAX_SESSION_TITLE_CHARS } from '@webui/utils/constants';
 import {
     groupSessionsForList,
@@ -19,8 +20,6 @@ import { describeErrorWith, serverText } from '@/i18n/useT';
 import type { Session, SessionSearchResult } from '@/api/client.types';
 
 export type { LiveRuns, RowStatus };
-
-type Say = (key: MessageKey, params?: Record<string, string | number>) => string;
 
 export const NO_LIVE_RUNS: LiveRuns = { running: [], queued: [], awaiting: {}, prompting: [] };
 
@@ -131,16 +130,16 @@ export function statusTone(dot: RowStatus): StatusTone {
 export interface RowText {
     /** The dot's accessible text, with the place in line when queued. */
     status: string | null;
-    /** "#2 in line · 1 not sent"; null when there is nothing to say. */
+    /** "2nd in line · 1 not sent"; null when there is nothing to say. */
     note: string | null;
     noteFailed: boolean;
     aria: string;
 }
 
-export function rowText(row: ChatRow, t: Say): RowText {
-    const place = row.place > 0 ? t('row.inLine', { n: row.place }) : null;
+export function rowText(row: ChatRow, t: Translate): RowText {
+    const place = row.place > 0 ? placeInLine(t, 'row.queuePlace', row.place) : null;
     const status = row.dot ? [t(STATUS_TITLE[row.dot]), place].filter(Boolean).join(', ') : null;
-    const waiting = row.failed > 0 ? t(pluralKey('row.notSent', row.failed), { n: row.failed }) : row.unsent > 0 ? t(pluralKey('row.toSend', row.unsent), { n: row.unsent }) : null;
+    const waiting = row.failed > 0 ? t.plural('row.notSent', row.failed) : row.unsent > 0 ? t.plural('row.toSend', row.unsent) : null;
     const note = [place, waiting].filter(Boolean).join(' · ') || null;
     const aria = [row.title, status, waiting, row.unread ? t('row.unread') : null].filter(Boolean).join(', ');
     return { status, note, noteFailed: row.failed > 0, aria };

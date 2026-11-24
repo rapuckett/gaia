@@ -9,7 +9,7 @@ import type { TurnChanges as Turn } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useTurnChanges, useUndoTurn } from '@/data';
 import { describeHttpFailure, useT } from '@/i18n/useT';
-import { Button, Notice, Row, Stack, Text } from '@/ui';
+import { Button, Disclosure, Notice, Row, Stack, Text } from '@/ui';
 
 import { ChangesReview } from './ChangesReview';
 import { loadFailure, undoneText, untrackedNotice } from './changesText';
@@ -42,6 +42,14 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
     const [message, setMessage] = useState<string | null>(null);
     const [detail, setDetail] = useState<string | undefined>(undefined);
     const [reviewing, setReviewing] = useState(false);
+    const [detailsOpen, setDetailsOpen] = useState(false);
+
+    const keep = () => {
+        setPhase('idle');
+        setMessage(null);
+        setDetail(undefined);
+        setDetailsOpen(false);
+    };
 
     const count = turn.files.length;
     const undone = Boolean(turn.restored_at);
@@ -51,6 +59,7 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
         setPhase('working');
         setMessage(null);
         setDetail(undefined);
+        setDetailsOpen(false);
         try {
             const result = await undoTurn(turn.turn_id, force);
             setMessage(undoneText(result, t));
@@ -111,25 +120,25 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
                 <Notice
                     tone={phase === 'done' ? 'success' : 'danger'}
                     message={message}
-                    detail={detail}
+                    detail={phase === 'conflict' ? undefined : detail}
                     testID="turn-changes-message"
-                />
-            ) : null}
-            {phase === 'conflict' ? (
-                <Row gap="sm" wrap stack>
-                    <Button size="sm" variant="danger" label={t('chg.undoAnyway')} onPress={() => void undo(true)} testID="turn-changes-force" />
-                    <Button
-                        size="sm"
-                        variant="secondary"
-                        label={t('chg.keep')}
-                        onPress={() => {
-                            setPhase('idle');
-                            setMessage(null);
-                            setDetail(undefined);
-                        }}
-                        testID="turn-changes-keep"
-                    />
-                </Row>
+                >
+                    {phase === 'conflict' ? (
+                        <Stack gap="sm">
+                            <Row gap="sm" wrap stack>
+                                <Button size="sm" variant="danger" label={t('chg.undoAnyway')} onPress={() => void undo(true)} testID="turn-changes-force" />
+                                <Button size="sm" variant="secondary" label={t('chg.keep')} onPress={keep} testID="turn-changes-keep" />
+                            </Row>
+                            {detail ? (
+                                <Disclosure title={t('failedTurn.details')} open={detailsOpen} onToggle={() => setDetailsOpen((v) => !v)} headerTestID="turn-changes-details-toggle">
+                                    <Text role="caption" tone="muted" dir="ltr" selectable testID="turn-changes-details-text">
+                                        {detail}
+                                    </Text>
+                                </Disclosure>
+                            ) : null}
+                        </Stack>
+                    ) : null}
+                </Notice>
             ) : null}
             {reviewing ? <ChangesReview sessionId={sessionId} turn={turn} onClose={() => setReviewing(false)} /> : null}
         </Stack>
