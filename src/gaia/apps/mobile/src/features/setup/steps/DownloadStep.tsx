@@ -4,9 +4,10 @@
 import { CONFIRM_CANCEL_BYTES } from '@webui/components/setup/downloadModel';
 import { formatBytes, formatEta, formatSize, formatSpeed, ltrIn } from '@webui/components/setup/format';
 import { canCreateImages, catalogOf, isOptional, overallFromPlan } from '@webui/components/setup/selection';
+import { extrasLeft as extrasLeftIds } from '@webui/components/setup/setupExtras.core';
 import type { MessageKey } from '@webui/i18n/registry';
 import type { SetupModelProgress } from '@webui/types';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo } from 'react-native';
 
 import {
@@ -131,6 +132,16 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
             setSkipped((s) => new Set(s).add(m.id));
         });
 
+    // Stopped with only optional extras left: skip them, then check the rest.
+    const finishWithoutExtras = (ids: string[]) =>
+        act(async () => {
+            for (const id of ids) {
+                await skip.mutateAsync({ modelId: id });
+                setSkipped((s) => new Set(s).add(id));
+            }
+            await startRun();
+        });
+
     const stop = () =>
         act(async () => {
             if ((view?.bytesDone ?? 0) > CONFIRM_CANCEL_BYTES) {
@@ -157,17 +168,31 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
     const stoppedBeforeCheck = !!view && view.downloadDone && !view.componentFailed;
     const stoppedNote = stoppedBeforeCheck && run?.state === 'failed' && !run.model_failed && !run.problem;
 
-    let footer = null;
+    const isExtra = (id: string) => queued.includes(id) || !!plan?.catalog?.some((e) => e.id === id && isOptional(e));
+    const extras = view ? extrasLeftIds(view.run, view.active, isExtra).filter((id) => !skipped.has(id)) : [];
+    const extrasNote = extras.length > 0 && !view?.componentFailed;
+    const finishWithout = extrasNote ? (
+        <Button label={t('mobileApp.setup.skipExtras')} disabled={busy} onPress={() => void finishWithoutExtras(extras)} testID="download-finish-without-extras" />
+    ) : null;
+
+    let footer: ReactNode = null;
     if (lost) {
         footer = <Button label={t('setup.reconnect')} variant="primary" busy={status.isFetching} onPress={() => void status.refetch()} />;
     } else if (view?.active) {
         footer = <Button label={t('setup.progress.cancel')} disabled={busy} onPress={() => void stop()} testID="download-stop" />;
     } else if (view && view.cancelled.length > 0) {
-        footer = <Button label={t('setup.progress.resumeAll')} variant="primary" busy={start.isPending} disabled={busy} onPress={() => void act(() => startRun())} />;
+        footer = (
+            <>
+                {finishWithout}
+                <Button label={t('setup.progress.resumeAll')} variant="primary" busy={start.isPending} disabled={busy} onPress={() => void act(() => startRun())} />
+            </>
+        );
     } else if (stoppedBeforeCheck) {
         footer = <Button label={t('setup.finish')} variant="primary" busy={start.isPending} disabled={busy} onPress={() => void act(() => startRun())} />;
     } else if (stoppedEarly) {
         footer = <Button label={t('setup.tryAgain')} variant="primary" busy={start.isPending} disabled={busy} onPress={() => void act(() => startRun())} />;
+    } else if (finishWithout) {
+        footer = finishWithout;
     }
 
     const chat = plan?.chat_model ? catalogOf(plan).find((e) => e.id === (run?.chat_model ?? plan.chat_model.id)) : undefined;
@@ -287,6 +312,11 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
                 </Stack>
             ) : null}
             {stoppedBeforeCheck ? <Text role="caption" tone="secondary">{t('setup.download.finishNote')}</Text> : null}
+            {extrasNote ? (
+                <Text role="caption" tone="secondary">
+                    {t('setup.download.extrasLeftNote', { names: extras.map((id) => names[id] ?? id).join(', ') })}
+                </Text>
+            ) : null}
 
             {failure ? <Notice tone="danger" message={failure.text} detail={failure.detail} /> : null}
             {run ? <SetupLogs run={run} failed={!!view?.runFailed || rows.some((m) => m.state === 'failed')} /> : null}

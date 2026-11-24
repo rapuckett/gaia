@@ -90,6 +90,11 @@ export function ReadyStep({ ctx }: { ctx: SetupStepContext }) {
             {view.failedJobs.map((job) => (
                 <Notice key={job} tone="warning" message={t('setup.ready.extraFailed', { job: t(`setup.test.job.${job}`) })} />
             ))}
+            {view.stillFetching.length > 0 ? (
+                <Text role="caption" tone="secondary" accessibilityRole="summary" testID="ready-extra-downloading">
+                    {t('setup.ready.extraDownloading', { names: view.stillFetching.join(', ') })}
+                </Text>
+            ) : null}
             {view.notDownloaded.length > 0 ? (
                 <Notice tone="warning" message={t('setup.ready.extraNotFetched', { names: view.notDownloaded.join(', ') })} />
             ) : null}

@@ -145,15 +145,16 @@ export function DownloadContents({ plan, run, onRetry, busy }: { plan: SetupPlan
                                         <Text role="caption" tone="muted">{t('setup.contents.bundled')}</Text>
                                     ) : (
                                         <Row gap="xs" wrap>
-                                            <Text role="caption" tone="muted">{t('setup.contents.from')}</Text>
-                                            <Ltr>{c.source}</Ltr>
+                                            <Text role="caption" tone="secondary">{t('setup.contents.from')}</Text>
+                                            <Text role="caption" tone="secondary">{isolate(c.source, 'ltr')}</Text>
                                         </Row>
                                     )}
+                                    {c.size_gb == null && !c.bundled ? (
+                                        <Text role="caption" tone="secondary">{t('setup.contents.sizeOnDownload')}</Text>
+                                    ) : null}
                                 </Stack>
                                 <Stack align="end" maxWidth="40%">
-                                    {c.size_gb == null ? (
-                                        <Text tone="secondary" align="end">{t('setup.contents.sizeOnDownload')}</Text>
-                                    ) : (
+                                    {c.size_gb == null ? null : (
                                         <Text tone="secondary" numberOfLines={1}>{isolate(formatSize(c.size_gb).replace(/ /g, '\u00A0'), 'ltr')}</Text>
                                     )}
                                     <Text role="caption" tone="secondary">{stateText(c, state, t)}</Text>

@@ -28,6 +28,7 @@ import { SetupFooter, SetupFooterSlot } from './setup/SetupFooter';
 import { LanguagePicker } from './setup/LanguagePicker';
 import { AgentChoice } from './setup/AgentChoice';
 import { planAgentLabel } from './setup/jobModels.core';
+import { extrasLeft as extrasLeftIds, extrasStillFetching, modelOnDisk } from './setup/setupExtras.core';
 import { AGENT_PICK_KEY, type AgentPick } from './setup/agentPrograms';
 import { AgentDownloadRow, useAgentDownload } from './setup/AgentDownload';
 import { BackendChoice, applyTestedBackend } from './setup/BackendChoice';
@@ -1099,7 +1100,7 @@ export function SetupScreen({ onReady, onClose }: SetupScreenProps) {
     const stepFailed = (run?.state === 'failed') || !!startError || !!planError || !!hardwareError || !!lostContact || !!actionError;
     // A first run has no earlier chat to pick up, so "Check in" waits for one.
     const readyTasks = again ? firstTasks : firstTasks.filter((c) => c.skill !== 'check-in');
-    const onDisk = (m: SetupModelProgress) => m.state === 'ready' || m.state === 'skipped' || m.state === 'verifying' || m.state === 'unchecked';
+    const onDisk = modelOnDisk;
     const downloadDone = fullRun && (fullRun.state === 'failed' || fullRun.state === 'cancelled')
         && (fullRun.models ?? []).length > 0
         && (fullRun.models ?? []).every(onDisk)
@@ -1107,10 +1108,7 @@ export function SetupScreen({ onReady, onClose }: SetupScreenProps) {
     const isExtra = (id: string) => !!lastRun.current.options.extraModels?.includes(id)
         || !!plan?.catalog?.some((e) => e.id === id && isOptional(e));
     // Every model setup needs is here; only extras the user added are left.
-    const extrasLeft = fullRun && runFailed && !moving && !downloadDone
-        && (fullRun.models ?? []).every((m) => onDisk(m) || isExtra(m.id))
-        ? (fullRun.models ?? []).filter((m) => !onDisk(m)).map((m) => m.id)
-        : [];
+    const extrasLeft = extrasLeftIds(fullRun, moving, isExtra);
     // Its row in the download list says why and offers Retry, so nothing below repeats it.
     const componentFailed = !!fullRun && runFailed && !fullRun.problem
         && Object.values(fullRun.components ?? {}).includes('failed');
@@ -1309,7 +1307,7 @@ export function SetupScreen({ onReady, onClose }: SetupScreenProps) {
     // An extra already in the download list above has its own row there, with Retry or Cancel.
     const fetching = (fullRun?.models ?? []).filter((m) => m.state !== 'skipped').map((m) => m.id);
     // Extras handed off once setup was ready; chat needn't wait for them.
-    const stillFetching = installed ? (fullRun?.models ?? []).filter((m) => m.state === 'downloading' || m.state === 'queued').map((m) => m.id) : [];
+    const stillFetching = extrasStillFetching(fullRun);
     // A handed-off extra whose download failed after Ready must not just drop off the line above.
     const notDownloaded = [...new Set([...notFetched, ...(installed ? (fullRun?.models ?? []).filter((m) => m.state === 'failed').map((m) => m.id) : [])])];
     const optional = selection && !cloud ? catalog.filter((e) => isOptional(e) && !selection.ticked.has(e.id) && !e.downloaded
