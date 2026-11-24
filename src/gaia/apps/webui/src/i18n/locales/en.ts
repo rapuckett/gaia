@@ -4688,6 +4688,7 @@ export const enMessages = {
     'mobileApp.settings.spend.reached': 'You’ve reached your limit, so cloud chats are stopped until next month. Models on your PC still work.',
     'mobileApp.setup.models.fit.unknown': 'GAIA couldn’t read your PC’s memory, so it can’t tell if this fits.',
     'mobileApp.setup.models.loading': 'Reading the models on your PC…',
+    'mobileApp.setup.skipExtras': 'Skip the extras',
     'mobileApp.setup.check.title': 'Check your PC',
     'mobileApp.setup.key.foundEnv': "Found a {name} key in your PC's environment: {variable}. Test and connect to use it.",
     'mobileApp.setup.key.foundEnvUnnamed': "Found a {name} key in your PC's environment. Test and connect to use it.",

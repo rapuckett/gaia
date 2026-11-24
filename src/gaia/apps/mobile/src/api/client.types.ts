@@ -866,6 +866,8 @@ export interface GaiaClient {
     requestWarmUp(fresh: boolean, options?: RequestOptions): Promise<WarmUpStatus>;
     /** Starts a model's download on the PC (`force` downloads it again); follow it in `getSystemStatus().download_progress`. */
     downloadModel(model: string, options?: { force?: boolean; loadAfter?: boolean } & RequestOptions): Promise<{ status: string; model: string }>;
+    /** Forgets a failed download on the PC, so its warning stays gone after a reload. */
+    dismissDownloadFailure(modelName: string, options?: RequestOptions): Promise<{ status: string; model: string }>;
     /** Loads a model on the PC at the context window chat needs; 409 when a chat is answering, until `force`. */
     loadModel(modelName: string, force: boolean, options?: { ctxSize?: number } & RequestOptions): Promise<{ status: string; model: string; ctx_size: number }>;
     /** The model server's state, what it runs on and its memory; the pill and its sheet read it. */

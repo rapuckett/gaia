@@ -460,6 +460,7 @@ export interface FakeGaiaClient extends GaiaClient {
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
+    readonly dismissedDownloads: string[];
     readonly modelDownloads: { modelName: string; force: boolean; loadAfter: boolean }[];
     readonly warmUpRequests: boolean[];
     readonly modelLoads: { modelName: string; force: boolean; ctxSize?: number }[];
@@ -566,6 +567,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const modelDownloads: FakeGaiaClient['modelDownloads'] = [];
+    const dismissedDownloads: string[] = [];
     const modelLoads: FakeGaiaClient['modelLoads'] = [];
     const warmUpRequests: boolean[] = [];
     const removals: FakeGaiaClient['removals'] = [];
@@ -760,6 +762,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         uploads,
         downloads,
         modelDownloads,
+        dismissedDownloads,
         modelLoads,
         warmUpRequests,
         removals,
@@ -1893,6 +1896,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.modelDownloadError) throw data.modelDownloadError;
             modelDownloads.push({ modelName: model, force: options?.force ?? false, loadAfter: options?.loadAfter ?? false });
             return { status: 'downloading', model };
+        },
+        async dismissDownloadFailure(modelName) {
+            if (data.modelActionError) throw data.modelActionError;
+            dismissedDownloads.push(modelName);
+            if (data.status?.download_progress?.state === 'error') data.status = { ...data.status, download_progress: null };
+            return { status: 'dismissed', model: modelName };
         },
         async loadModel(modelName, force, options) {
             if (data.modelActionError) throw data.modelActionError;

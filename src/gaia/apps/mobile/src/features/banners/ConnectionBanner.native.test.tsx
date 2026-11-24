@@ -14,6 +14,7 @@ import { createFakeClient, type FakeGaiaClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { shouldRetryQuery } from '@/data/queryRetry';
 import { translator } from '@/i18n/useT';
+import { useBannerDismissedStore } from '@/state/bannerDismissed';
 import { ThemeProvider } from '@/ui';
 
 import { ConnectionBanner } from './ConnectionBanner';
@@ -121,6 +122,20 @@ describeNative('ConnectionBanner', () => {
         await render(<ConnectionBanner />, { wrapper: wrap });
         fireEvent.press(await screen.findByText(t('docs.retry')));
         await waitFor(() => expect(client.modelDownloads).toEqual([{ modelName: 'Gemma-4-E4B-it-GGUF', force: false, loadAfter: true }]));
+    });
+
+    it('closing a failed download tells the PC to forget it, and the banner stays gone after a remount', async () => {
+        const client = createFakeClient({ status: failedDownload });
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const first = await render(<ConnectionBanner />, { wrapper: wrapper(client, queryClient) });
+        fireEvent.press(await screen.findByLabelText(t('download.dismissFailed')));
+        await waitFor(() => expect(client.dismissedDownloads).toEqual(['Gemma-4-E4B-it-GGUF']));
+        expect(screen.queryByTestId('banner-download')).toBeNull();
+        first.unmount();
+        useBannerDismissedStore.setState({ dismissed: null });
+        await waitFor(() => expect(client.dismissedDownloads).toHaveLength(1));
+        await render(<ConnectionBanner />, { wrapper: wrapper(client, queryClient) });
+        expect(screen.queryByTestId('banner-download')).toBeNull();
     });
 
     describe('when the model server is down', () => {

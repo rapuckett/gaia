@@ -1,10 +1,12 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 
 import { useGaiaClient, useModelActions } from '@/data';
+import { queryKeys } from '@/data/queries';
 import { useT } from '@/i18n/useT';
 import { openChat } from '@/features/nav/navigation';
 import { reopenSetup } from '@/features/setup/reopenSetup';
@@ -61,7 +63,19 @@ export function ConnectionBanner({ hideServerDown = false }: { /** Settings carr
     useEffect(() => reconcile(picked), [picked?.id, picked?.dismissible, reconcile]); // eslint-disable-line react-hooks/exhaustive-deps
     const shown = hideServerDown && isServerDownBanner(picked) ? null : picked;
     const banner = shown && shown.id === dismissed ? null : shown;
+    const queryClient = useQueryClient();
     const recheckGate = useGateRecheck();
+    // The PC forgets the failure, so it stays closed after a reload; a refused call brings the banner back.
+    const dismissBanner = (b: NonNullable<typeof banner>) => {
+        if (b.id === 'pickLoad') return usePickLoadStore.getState().clear();
+        dismiss(b.id);
+        if (b.id !== 'download' || !b.downloadRetry || !client) return undefined;
+        client
+            .dismissDownloadFailure(b.downloadRetry)
+            .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.systemStatus }))
+            .catch(() => reconcile(null));
+        return undefined;
+    };
     const alert = useChatAlertBannerStore((s) => s.alert);
     useAnnounce([alert?.title, alert?.message, banner?.title, banner?.message].filter(Boolean).join('. '));
     if (!banner && !alert) return null;
@@ -86,7 +100,8 @@ export function ConnectionBanner({ hideServerDown = false }: { /** Settings carr
                         title={banner.title}
                         message={banner.message}
                         detail={banner.detail ?? banner.command}
-                        onDismiss={banner.dismissible ? () => (banner.id === 'pickLoad' ? usePickLoadStore.getState().clear() : dismiss(banner.id)) : undefined}
+                        dismissLabel={banner.id === 'download' ? t('download.dismissFailed') : undefined}
+                        onDismiss={banner.dismissible ? () => void dismissBanner(banner) : undefined}
                         action={
                             banner.downloadRetry
                                 ? { label: t('docs.retry'), onPress: () => void redownload.download(false) }

@@ -133,18 +133,18 @@ export function Contents({ plan, run, models }: { plan: SetupPlan; run: SetupRun
     );
 }
 
-/** "Agent: Full-featured · Change": shown only where the PC has a second agent to pick; Change opens Customize. */
+/** "Agent: Full-featured · Change": shown only where the PC has a second agent to pick; Change opens Customize at its agent picker. */
 function AgentLine({ disabled }: { disabled: boolean }) {
     const t = useT();
-    const { openModels } = usePlanOpeners();
+    const { openAgent } = usePlanOpeners();
     const { pick } = useAgentPick();
     const label = planAgentLabel(useAgentPrograms().data, pick?.id);
     if (!label) return null;
     return (
         <Row gap="sm" wrap align="center">
             <Text role="label" tone="secondary" testID="plan-agent">{t.compose((say) => say('setup.plan.agent', { name: say(label) }))}</Text>
-            {openModels ? (
-                <Button variant="ghost" size="sm" label={t('setup.plan.agentChange')} accessibilityLabel={t('setup.plan.agentChangeAria')} disabled={disabled} onPress={openModels} />
+            {openAgent ? (
+                <Button variant="ghost" size="sm" label={t('setup.plan.agentChange')} accessibilityLabel={t('setup.plan.agentChangeAria')} disabled={disabled} onPress={openAgent} testID="plan-agent-change" />
             ) : null}
         </Row>
     );

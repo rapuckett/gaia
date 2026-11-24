@@ -177,6 +177,7 @@ export const ENDPOINTS = {
     connectors: '/api/connectors',
     connectorsAgentMcps: '/api/connectors/agent-mcps',
     systemDownloadModel: '/api/system/download-model',
+    systemDismissDownload: '/api/system/download-progress/dismiss',
     systemLoadModel: '/api/system/load-model',
     connectorsEvents: '/api/connectors/events',
     deviceChanges: '/api/devices/{device_id}/changes',

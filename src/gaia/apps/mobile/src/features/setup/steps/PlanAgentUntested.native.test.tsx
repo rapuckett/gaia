@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -15,7 +15,9 @@ import { GaiaClientProvider } from '@/data';
 import { translator } from '@/i18n/useT';
 import { ThemeProvider } from '@/ui';
 
+import { SetupFooterBar, SetupFooterProvider } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
+import { focusNode, scrollNodeToTop } from '../setupScroll';
 import { ModelsScreen } from './ModelsScreen';
 import { PlanWithScreens } from './PlanScreensHost';
 import { usePlanSelection } from './planSelection';
@@ -24,6 +26,8 @@ jest.mock('react-native-safe-area-context', () => ({
     ...jest.requireActual('react-native-safe-area-context'),
     useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
+
+jest.mock('../setupScroll', () => ({ ...jest.requireActual('../setupScroll'), scrollNodeToTop: jest.fn(), focusNode: jest.fn() }));
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 const t = translator('en');
@@ -72,7 +76,11 @@ const mount = async (ui: ReactElement, data: FakeClientData) => {
 };
 const ctx = { locked: false, plan: PLAN, run: null, goTo: jest.fn(), startedRun: jest.fn() } as unknown as SetupStepContext;
 
-beforeEach(() => usePlanSelection.getState().setSelection(null));
+beforeEach(() => {
+    usePlanSelection.getState().setSelection(null);
+    (scrollNodeToTop as jest.Mock).mockClear();
+    (focusNode as jest.Mock).mockClear();
+});
 
 describeNative('the plan names the agent', () => {
     it('shows the agent in use and Change opens Customize', async () => {
@@ -80,6 +88,22 @@ describeNative('the plan names the agent', () => {
         expect(await screen.findByText(`Agent: ${t('setup.agent.gaiapy')}`)).toBeTruthy();
         fireEvent.press(screen.getByLabelText(t('setup.plan.agentChangeAria')));
         expect(await screen.findByText(t('setup.models.title'))).toBeTruthy();
+    });
+
+    it('scrolls Customize to the agent picker and focuses its heading when opened from Change', async () => {
+        await mount(<PlanWithScreens ctx={ctx} />, { agentPrograms: AGENTS('gaiapy') });
+        fireEvent.press(await screen.findByTestId('plan-agent-change'));
+        await waitFor(() => expect(scrollNodeToTop).toHaveBeenCalledTimes(1));
+        expect(focusNode).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('models-agent')).toBeTruthy();
+    });
+
+    it('does not scroll when Customize is opened from the Customize button', async () => {
+        await mount(<SetupFooterProvider><PlanWithScreens ctx={ctx} /><SetupFooterBar /></SetupFooterProvider>, { agentPrograms: AGENTS('gaiapy') });
+        fireEvent.press(await screen.findByText(t('setup.plan.customize')));
+        await screen.findByTestId('models-agent');
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        expect(scrollNodeToTop).not.toHaveBeenCalled();
     });
 
     it('names gaiacpp when that is the agent', async () => {

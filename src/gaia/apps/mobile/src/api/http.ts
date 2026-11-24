@@ -1359,6 +1359,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             );
         },
 
+        dismissDownloadFailure(modelName, options) {
+            return postJson<{ status: string; model: string }>(ENDPOINTS.systemDismissDownload, { model_name: modelName }, options?.signal);
+        },
+
         loadModel(modelName, force, options) {
             return postJson<{ status: string; model: string; ctx_size: number }>(
                 ENDPOINTS.systemLoadModel,
