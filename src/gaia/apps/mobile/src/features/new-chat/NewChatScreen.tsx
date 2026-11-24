@@ -1,9 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { withStarter } from '@webui/components/tryChips.core';
 import { bracketParts } from '@webui/i18n/registry';
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
-import { Keyboard, View, type ScrollView } from 'react-native';
+import { Keyboard, View, type ScrollView, TextInput } from 'react-native';
 
 import type { PermissionMode } from '@/api/client.types';
 import { useCreateSession, useDocuments, useGaiaClient, useMemorySettings, useStartScreen, useSystemStatus } from '@/data';
@@ -29,9 +30,11 @@ import { greetingKey } from './greeting';
 import { setupError } from './setupFailed';
 import { showWarmUp, startingReason } from './starting';
 import { TryChips } from './TryChips';
-import { withExample } from './tryExamples';
 import { useAssistantNotice, useFirstSend } from './useNewChat';
 import { shortModelName, warmUpLine, warmUpProgress } from './warmUp';
+
+// How long the starter row holds its space for the PC's tasks.
+const STARTERS_WAIT_MS = 3_000;
 
 export interface NewChatScreenProps {
     // Opens the chat once its first message is under way.
@@ -52,7 +55,14 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
     const status = useSystemStatus().data;
     const createSession = useCreateSession();
     const client = useGaiaClient();
-    const startScreen = useStartScreen().data;
+    const startQuery = useStartScreen();
+    const startScreen = startQuery.data;
+    // A start screen that never answers must not leave the starter row blank for good.
+    const [startSlow, setStartSlow] = useState(false);
+    useEffect(() => {
+        const timer = setTimeout(() => setStartSlow(true), STARTERS_WAIT_MS);
+        return () => clearTimeout(timer);
+    }, []);
     const attachments = useAttachments();
     // The chat doesn't exist yet: these are applied as it is made.
     const [isPrivate, setPrivate] = useState(false);
@@ -162,10 +172,12 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
     }, [promptId, promptText, setText]);
 
     const lastExample = useRef('');
+    const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
     const fillExample = useCallback(
         (example: string) => {
-            setText((draft) => withExample(draft, lastExample.current, example));
+            setText((draft) => withStarter(draft, lastExample.current, example));
             lastExample.current = example;
+            inputRef.current?.focus();
         },
         [setText],
     );
@@ -178,6 +190,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
         holdDocuments(indexed.map((d) => d.id));
         if (briefCard.needs_input || send(briefCard.prompt) === false) setText(briefCard.prompt);
     };
+    const briefShown = !!briefCard && indexed.length > 0 && !state.sending;
     const failedSetup = setupError(status);
     const warming = warmUpProgress(status?.warm_up);
     const [greeting, gloss] = bracketParts(t(greetingKey(new Date())));
@@ -251,6 +264,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                     <QueuedMessages items={queue.held} replying={false} onRemove={queue.remove} onRetry={queue.retry} />
                     <Composer
                         value={state.text}
+                        inputRef={inputRef}
                         onChange={setText}
                         onSend={send}
                         disabledReason={startingReason(status, t) ?? undefined}
@@ -311,7 +325,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                         onChoose={onChooseDocuments}
                     />
                 )}
-                {briefCard && indexed.length > 0 && !state.sending && (
+                {briefShown && briefCard && (
                     <DocumentBriefCard count={indexed.length} onPress={askAboutDocuments} />
                 )}
                 {warming !== null && showWarmUp(status) && (
@@ -334,7 +348,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                     </Stack>
                 )}
                 {state.error !== null && <Notice tone="danger" message={state.error} detail={state.errorDetail} />}
-                {!state.sending && startingReason(status, t) === null && <TryChips onPick={fillExample} />}
+                {!state.sending && startingReason(status, t) === null && <TryChips cards={startScreen?.cards} leave={briefShown ? ['document-brief'] : undefined} pending={startQuery.isPending && !startSlow} onPick={fillExample} />}
                 {agentProblem !== null && (
                     <View onLayout={showCard} testID="agent-recovery-slot">
                         <AgentRecovery problem={agentProblem} answeredAt={assistant.answeredAt} onRetry={assistant.retry} kept={keptForAgent} />

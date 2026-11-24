@@ -3,7 +3,6 @@
 
 import type { ConfirmationRequest, QuestionRequest } from '@/data';
 import { ConfirmationCard, confirmationProps, QuestionCard, questionCardData } from '@/features/questions';
-import { confirmationDismissed, updateTurn } from '@/state/chatStreams';
 import { Stack } from '@/ui';
 
 /**
@@ -25,7 +24,7 @@ export function ChatPrompts({
     return (
         <Stack paddingX="gutter" gap="md">
             {data ? <QuestionCard data={data} /> : null}
-            {card ? <ConfirmationCard {...card} onDismiss={() => updateTurn(sessionId, confirmationDismissed)} /> : null}
+            {card ? <ConfirmationCard {...card} /> : null}
         </Stack>
     );
 }

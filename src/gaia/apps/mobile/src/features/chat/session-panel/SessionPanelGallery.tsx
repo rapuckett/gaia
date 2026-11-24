@@ -13,6 +13,7 @@ import { FIXTURES } from '@/features/chat/messages/__fixtures__/messages';
 import { MessageListView } from '@/features/chat/messages/MessageList';
 import { Screen } from '@/ui';
 import { IDLE_TURN, writeTurn } from '@/state/chatStreams';
+import { tEn } from '@webui/i18n/translator';
 import type { AgentStep, TurnPerformance, TurnSummary } from '@webui/types';
 
 import { useSessionPanelStore } from './panelStore';
@@ -31,6 +32,7 @@ export type SessionPanelGalleryState =
     | 'ctxFilling'
     | 'ctxChat'
     | 'ctxNoTurn'
+    | 'ctxAgentOld'
     | 'envFolders'
     | 'envRemove'
     | 'envOffline'
@@ -58,7 +60,7 @@ export type SessionPanelGalleryState =
     | 'sp34Plain'
     | 'sp34Session';
 
-const CONTEXT_STATES: readonly SessionPanelGalleryState[] = ['ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn'];
+const CONTEXT_STATES: readonly SessionPanelGalleryState[] = ['ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn', 'ctxAgentOld'];
 
 const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFullWaiting', 'envFull', 'envEmpty', 'envPick', 'envPickRefused'];
 
@@ -462,6 +464,13 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
                         }
                       : undefined,
         });
+        if (state === 'ctxAgentOld') {
+            base.getContextUsage = async () => ({
+                available: false,
+                reason: tEn('ctx.reason.agent_too_old'),
+                reason_code: 'agent_too_old',
+            });
+        }
         if (state === 'ctxMeasuring') {
             base.getContextUsage = () => new Promise(() => undefined);
             base.getChatPerformance = () => new Promise(() => undefined);

@@ -4,6 +4,7 @@
 /** Which replies are connector sign-in errors, and whether the account they name is connected now. Pure, so the phone app can import it. */
 
 import type { ConnectorListEntry } from '../types';
+import { signInFixed } from './connectorAccounts';
 
 /** Match the canonical prefixes the connectors framework emits. The
  *  prefixes are stable (see ``connectors/formatting.py``); fuzzy
@@ -78,9 +79,21 @@ export function detectProvider(content: string): EmailProvider | 'all' {
     return 'microsoft';
 }
 
+/** Whether each provider's sign-in has happened since `before`; `accounts` names the account a card offered. */
+function fixedIn(connectors: ConnectorListEntry[], before: ConnectorListEntry[], accounts: Record<string, string>) {
+    return (id: string) => signInFixed(
+        connectors.find((c) => c.id === id),
+        before.find((c) => c.id === id),
+        accounts[id],
+    );
+}
+
 /**
  * Given the error message and the current connector rows, decide whether the
  * provider the message referenced is now connected. Pure + exported for tests.
+ * `before` is the list as the reply first saw it and `accounts` names the
+ * account its card offered to sign in to again, so one working account among
+ * several never counts as the fix for another.
  *
  * ``detectProvider`` returns 'google' | 'microsoft' | 'microsoft_work' | 'all'
  * (ambiguous). For an ambiguous message, any of the three connecting is
@@ -90,21 +103,22 @@ export function referencedProviderConnected(
     content: string,
     connectors: ConnectorListEntry[],
     providers: string[] = [],
+    before: ConnectorListEntry[] = [],
+    accounts: Record<string, string> = {},
 ): boolean {
-    const isConfigured = (id: string) =>
-        connectors.some((c) => c.id === id && !('error' in c) && c.configured);
+    const isFixed = fixedIn(connectors, before, accounts);
     // A Connect card names its connectors outright; no wording to read.
-    if (providers.length > 0) return providers.some(isConfigured);
+    if (providers.length > 0) return providers.some(isFixed);
     const provider = detectProvider(content);
-    if (provider === 'google') return isConfigured('google');
-    if (provider === 'microsoft') return isConfigured('microsoft');
-    if (provider === 'microsoft_work') return isConfigured('microsoft_work');
-    return isConfigured('google') || isConfigured('microsoft') || isConfigured('microsoft_work');
+    if (provider === 'google') return isFixed('google');
+    if (provider === 'microsoft') return isFixed('microsoft');
+    if (provider === 'microsoft_work') return isFixed('microsoft_work');
+    return isFixed('google') || isFixed('microsoft') || isFixed('microsoft_work');
 }
 
 /**
  * Human label for the connected provider, for the banner copy. An ambiguous
- * message resolves to whichever provider is actually configured, preferring
+ * message resolves to whichever provider is actually fixed, preferring
  * Google, then Microsoft, then Microsoft 365 (the connectors' canonical
  * display order).
  */
@@ -112,10 +126,11 @@ export function connectedProviderLabel(
     content: string,
     connectors: ConnectorListEntry[],
     providers: string[] = [],
+    before: ConnectorListEntry[] = [],
+    accounts: Record<string, string> = {},
 ): string {
-    const isConfigured = (id: string) =>
-        connectors.some((c) => c.id === id && !('error' in c) && c.configured);
-    const named = providers.find(isConfigured);
+    const isFixed = fixedIn(connectors, before, accounts);
+    const named = providers.find(isFixed);
     if (named) {
         const row = connectors.find((c) => c.id === named && !('error' in c));
         return row && !('error' in row) ? row.display_name : named;
@@ -124,8 +139,8 @@ export function connectedProviderLabel(
     if (provider === 'google') return 'Google';
     if (provider === 'microsoft') return 'Microsoft';
     if (provider === 'microsoft_work') return 'Microsoft 365';
-    if (isConfigured('google')) return 'Google';
-    if (isConfigured('microsoft')) return 'Microsoft';
-    if (isConfigured('microsoft_work')) return 'Microsoft 365';
+    if (isFixed('google')) return 'Google';
+    if (isFixed('microsoft')) return 'Microsoft';
+    if (isFixed('microsoft_work')) return 'Microsoft 365';
     return 'Google';
 }
