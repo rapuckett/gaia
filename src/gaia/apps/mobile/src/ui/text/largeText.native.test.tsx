@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -104,7 +104,10 @@ describeNative('controls at AX5', () => {
     it('caps a chip label and keeps its 44 pt target', async () => {
         await render(<Chip label="Background chats" onPress={() => {}} />, { wrapper: wrap });
         expect(screen.getByText('Background chats').props.maxFontSizeMultiplier).toBe(1.3);
-        expect(styleOf(screen.getByRole('button', { name: 'Background chats' })).minHeight).toBeGreaterThanOrEqual(44);
+        const chip = screen.getByRole('button', { name: 'Background chats' });
+        fireEvent(chip, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 160, height: 32 } } });
+        const slop = screen.getByRole('button', { name: 'Background chats' }).props.hitSlop;
+        expect(32 + slop.top + slop.bottom).toBeGreaterThanOrEqual(44);
     });
 
     it('stacks a pair of buttons, each full width', async () => {
