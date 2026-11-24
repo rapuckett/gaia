@@ -16,7 +16,7 @@ import { useChatReadAloud } from '@/features/audio/useChatReadAloud';
 import { modelMenuKeys, useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useRefreshTurnChanges, useSession } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { ModelRestoreNotice } from '@/features/model/ModelRestoreNotice';
-import { AgentChip, Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, SessionFolderChip, SpendMeter, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { AgentChip, Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, SessionFolderChip, ResearchChip, SpendMeter, useAttachments, useComposerQueue, useFollowUpEvents, useResearch } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { FileScope } from '@/features/files';
 import { describeErrorWith, describeHttpFailure, useT } from '@/i18n/useT';
@@ -49,6 +49,7 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
     const stream = useChatStream(sessionId);
     const queue = useComposerQueue(sessionId);
     const attachments = useAttachments();
+    const research = useResearch(sessionId);
     const permissionMode = usePermissionMode(sessionId);
     const queryClient = useQueryClient();
     const permission = usePermissionPrompt(sessionId);
@@ -173,9 +174,11 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
         ? t('composer.answerQuestion')
         : busy
           ? t('composer.queueNext')
-          : saved.length > 0 || tail
-            ? t('composer.reply')
-            : undefined;
+          : research.placeholder
+            ? research.placeholder
+            : saved.length > 0 || tail
+              ? t('composer.reply')
+              : undefined;
     const sessionFailure = describeHttpFailure(session.error, t);
     const disabledReason = retiredAgent ? t('chat.retiredReadOnly', { agent: retiredAgent }) : undefined;
 
@@ -228,15 +231,19 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                         onStop={stop}
                         running={busy}
                         attachments={attachments}
+                        wrap={research.wrap}
                         leftControls={
-                            <PermissionChip
-                                mode={permissionMode.mode ?? null}
-                                readFailed={permissionMode.readFailed}
-                                onChange={(mode) => permissionMode.set.mutateAsync(mode)}
-                                onReread={() => queryClient.refetchQueries({ queryKey: modelMenuKeys.permissions(sessionId) }, { throwOnError: true })}
-                                promptWaiting={!!permission}
-                                disabled={!!retiredAgent}
-                            />
+                            <>
+                                <PermissionChip
+                                    mode={permissionMode.mode ?? null}
+                                    readFailed={permissionMode.readFailed}
+                                    onChange={(mode) => permissionMode.set.mutateAsync(mode)}
+                                    onReread={() => queryClient.refetchQueries({ queryKey: modelMenuKeys.permissions(sessionId) }, { throwOnError: true })}
+                                    promptWaiting={!!permission}
+                                    disabled={!!retiredAgent}
+                                />
+                                <ResearchChip sessionId={sessionId} disabled={!!retiredAgent} />
+                            </>
                         }
                         answering={!!question}
                         placeholder={placeholder}

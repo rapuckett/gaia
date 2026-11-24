@@ -22,9 +22,11 @@ import type { Attachments } from './useAttachments';
 import { ContextMeter, ContextWarning } from './ContextMeter';
 import { ModelChip } from './ModelChip';
 import { SpendMeter } from './SpendMeter';
+import { ResearchChip, useResearch } from './ResearchChip';
+import { useResearchStore } from '@/state/research';
 
 /** Developer gallery (`/dev/composer?state=`): the context meter, spend meter, model menu and picked-model load banner in each state. */
-export const COMPOSER_MENU_STATES = ['context', 'meterLow', 'meterHigh', 'warning', 'spend', 'spendOpen', 'permissionMenu', 'permissionAsk', 'permissionFull', 'permissionFullWaiting', 'permissionChecking', 'permissionUnknown', 'private-off', 'private-on', 'private-memoryOff', 'private-menu', 'folder-own', 'folder-add', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted', 'skills', 'skillsFiltered', 'skillsLoading', 'skillsFailed'] as const;
+export const COMPOSER_MENU_STATES = ['context', 'meterLow', 'meterHigh', 'warning', 'spend', 'spendOpen', 'permissionMenu', 'permissionAsk', 'permissionFull', 'permissionFullWaiting', 'permissionChecking', 'permissionUnknown', 'private-off', 'private-on', 'private-memoryOff', 'private-menu', 'folder-own', 'folder-add', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted', 'skills', 'skillsFiltered', 'skillsLoading', 'skillsFailed', 'research-off', 'research-on', 'research-skills'] as const;
 export type ComposerMenuState = (typeof COMPOSER_MENU_STATES)[number];
 
 const USAGE: ContextUsage = {
@@ -116,6 +118,36 @@ const LOCAL_STATUS: LocalModelStatus = {
     display_name: 'Gemma 4 E4B', placement: null, ctx_size: 65536, memory: null, memory_error: null, error: null, base_url: null, owner: 'gaia', busy: false, restarting: false, restart_error: null,
 };
 
+function ResearchComposer({ state, usage }: { state: ComposerMenuState; usage: ContextUsage }) {
+    const research = useResearch('dev');
+    const [text, setText] = useState(state === 'research-skills' ? '/' : '');
+    useEffect(() => {
+        useResearchStore.getState().setResearch('dev', state !== 'research-off');
+        return () => useResearchStore.getState().setResearch('dev', false);
+    }, [state]);
+    return (
+        <Composer
+            value={text}
+            onChange={setText}
+            onSend={() => undefined}
+            wrap={research.wrap}
+            placeholder={research.placeholder}
+            leftControls={
+                <>
+                    <PermissionChip mode="ask" onChange={() => undefined} />
+                    <ResearchChip sessionId="dev" />
+                </>
+            }
+            rightControls={
+                <>
+                    <ContextMeter usage={usage} onDetails={() => undefined} />
+                    <ModelChip />
+                </>
+            }
+        />
+    );
+}
+
 export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
     const t = useT();
     const cloud = state === 'spend' || state === 'spendOpen';
@@ -161,6 +193,9 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
                                 </Stack>
                             ) : null}
                             <ContextWarning usage={state === 'warning' ? usage : null} />
+                            {state.startsWith('research-') ? (
+                                <ResearchComposer state={state} usage={usage} />
+                            ) : (
                             <Composer
                                 value={text}
                                 onChange={setText}
@@ -179,6 +214,7 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
                                     )
                                 }
                             />
+                            )}
                         </Stack>
                     </Screen>
                   </SheetScope>
