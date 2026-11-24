@@ -55,7 +55,8 @@ describeNative('notification center receipt scroll', () => {
 
     it('says the receipt is unavailable for an id that is not in the list', async () => {
         await mount('rcpt-gone');
-        expect(screen.getByText(t('activity.policy.receiptUnavailable'))).toBeTruthy();
+        expect(screen.getByTestId('ntf-receipt-missing')).toBeTruthy();
+        expect(screen.getAllByText(t('activity.policy.receiptUnavailable')).length).toBeGreaterThan(0);
         expect(scrollTo).not.toHaveBeenCalled();
     });
 });
