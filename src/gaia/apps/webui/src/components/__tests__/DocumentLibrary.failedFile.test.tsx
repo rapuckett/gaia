@@ -277,10 +277,10 @@ describe('a file the model server was too busy to embed', () => {
         render(<DocumentLibrary />);
 
         await screen.findByText('busy.md');
-        const stats = document.querySelector('.doc-stats')!;
-        expect(stats).toHaveTextContent('1 to retry');
-        expect(stats).not.toHaveTextContent('waiting for the model server');
-        expect(stats).toHaveTextContent("1 couldn't be read");
+        const stats = stripIsolates(document.querySelector('.doc-stats')!.textContent ?? '');
+        expect(stats).toContain('1 to retry');
+        expect(stats).not.toContain('waiting for the model server');
+        expect(stats).toContain("1 couldn't be read");
     });
 
     it('asks for a Retry when the add fails, instead of promising GAIA adds it later', async () => {
