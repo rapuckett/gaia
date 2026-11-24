@@ -5,7 +5,7 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
-import type { ConnectorList, ConnectorRow, GaiaClient } from '@/api/client.types';
+import type { ConnectorList, ConnectorRow, ConnectorSignInTarget, GaiaClient } from '@/api/client.types';
 import { usePinned } from '@/api/routeAccess';
 import { BROWSER_RETURN_GRACE_MS, BROWSER_SIGN_IN_HANDOFF_MS, BROWSER_SIGN_IN_TIMEOUT_MS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
@@ -180,7 +180,7 @@ class SignInSlot {
         this.publish({ state: 'idle' });
     };
 
-    async start(client: GaiaClient | null, queryClient: QueryClient, scopeKey: string): Promise<void> {
+    async start(client: GaiaClient | null, queryClient: QueryClient, scopeKey: string, target?: ConnectorSignInTarget): Promise<void> {
         this.abandon(true);
         const mine = ++this.run;
         const live = () => this.run === mine;
@@ -215,7 +215,7 @@ class SignInSlot {
 
         let flow: { flow_id: string; authorization_url: string };
         try {
-            flow = await client.startConnectorBrowserSignIn(connectorId, port, scopeKey ? scopeKey.split(' ') : [], { signal: current.watch.signal });
+            flow = await client.startConnectorBrowserSignIn(connectorId, port, scopeKey ? scopeKey.split(' ') : [], { signal: current.watch.signal, ...(target ? { target } : {}) });
         } catch (error) {
             finish(pcFailure(error, 'start'), false);
             return;
@@ -375,6 +375,8 @@ export function useBrowserSignIn(connector: ConnectorRow, scopes: string[] = dev
     const slot = slotFor(useBrowserSignInDeps(), connector.id);
     const signIn = useSyncExternalStore(slot.subscribe, slot.snapshot);
     const scopeKey = scopes.join(' ');
-    const start = useCallback(() => void slot.start(client, queryClient, scopeKey), [slot, client, queryClient, scopeKey]);
-    return { signIn, start, cancel: slot.cancel };
+    const startFor = useCallback((target?: ConnectorSignInTarget) => void slot.start(client, queryClient, scopeKey, target), [slot, client, queryClient, scopeKey]);
+    // Never forwards a press event as a target.
+    const start = useCallback(() => startFor(), [startFor]);
+    return { signIn, start, startFor, cancel: slot.cancel };
 }

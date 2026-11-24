@@ -46,7 +46,7 @@ const failed = {
 
 describeNative('the schedule card failure strip', () => {
     it('puts the PC error on its own left-to-right line, apart from the translated label', async () => {
-        await render(<ScheduleCard schedule={failed} now={new Date()} runPending={false} onOpenChat={() => {}} onRunNow={() => {}} onToggleStatus={() => {}} onDelete={() => {}} />, { wrapper: wrap });
+        await render(<ScheduleCard schedule={failed} now={new Date()} runPending={false} onOpenChat={() => {}} onRunNow={() => {}} onToggleStatus={() => {}} onDelete={() => {}} onEdit={() => {}} />, { wrapper: wrap });
         const line = screen.getByText('The step "send email" needs approval');
         expect(line.props.style).toEqual(expect.objectContaining({ writingDirection: 'ltr' }));
     });
@@ -54,7 +54,7 @@ describeNative('the schedule card failure strip', () => {
 
 describeNative('the schedule delete dialog', () => {
     const mount = (schedule: Schedule, onDelete = jest.fn()) =>
-        render(<ScheduleCard schedule={schedule} now={new Date()} runPending={false} onOpenChat={() => {}} onRunNow={() => {}} onToggleStatus={() => {}} onDelete={onDelete} />, { wrapper: wrap });
+        render(<ScheduleCard schedule={schedule} now={new Date()} runPending={false} onOpenChat={() => {}} onRunNow={() => {}} onToggleStatus={() => {}} onDelete={onDelete} onEdit={() => {}} />, { wrapper: wrap });
 
     it('says what deleting does, and deletes only on confirm', async () => {
         const onDelete = jest.fn();

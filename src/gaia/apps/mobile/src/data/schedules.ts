@@ -6,7 +6,7 @@ import { AppState } from 'react-native';
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
-import type { CreateScheduleRequest, DeleteScheduleResult, Schedule, ScheduleList, ScheduleResults } from '@/api/client.types';
+import type { CreateScheduleRequest, EditScheduleRequest, DeleteScheduleResult, Schedule, ScheduleList, ScheduleResults } from '@/api/client.types';
 import { APP_POLL_MS, SCHEDULE_RESULTS_LIMIT, SCHEDULES_POLL_MS } from '@/api/constants';
 
 import { useGaiaClient } from './GaiaClientProvider';
@@ -81,6 +81,16 @@ export function useCreateSchedule() {
     return useMutation<Schedule, Error, CreateScheduleRequest>({
         mutationFn: (request) => requireClient(client).createSchedule(request),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: scheduleKeys.list }),
+    });
+}
+
+/** Edits a schedule in place: `mutate({ name, request })`. */
+export function useEditSchedule() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<Schedule, Error, { name: string; request: EditScheduleRequest }>({
+        mutationFn: ({ name, request }) => requireClient(client).editSchedule(name, request),
+        onSuccess: (updated) => replaceSchedule(queryClient, updated),
     });
 }
 

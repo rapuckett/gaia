@@ -35,6 +35,7 @@ export * from './sessionEvents';
 export * from './sessionOutputs';
 export * from './setup';
 export * from './skills';
+export * from './images';
 export * from './speech';
 export * from './spending';
 export * from './turnChanges';

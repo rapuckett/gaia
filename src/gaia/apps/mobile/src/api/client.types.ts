@@ -14,6 +14,7 @@ import type {
     ChatPerformance,
     CloudPriceList,
     ConnectorListEntry,
+    ConnectorAccount,
     ConnectorRow,
     ContextChoice,
     ContextUsageResult,
@@ -61,6 +62,7 @@ import type { Automation, AutomationList } from '@webui/services/automationsApi'
 import type { DiscordConnectResult, DiscordStatus } from '@webui/services/messagingApi';
 import type { AgentCapabilities, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, UndoAllResult } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
+import type { ImageSettings } from '@webui/services/imageApi';
 import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
 import type { AboutYouItem, ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
 import type {
@@ -103,6 +105,7 @@ export type {
     ChatPerformance,
     CloudPriceList,
     ConnectorListEntry,
+    ConnectorAccount,
     ConnectorRow,
     ContextChoice,
     ContextUsage,
@@ -186,7 +189,14 @@ export interface DisconnectOutcome {
     revoke_supported?: boolean;
     revoked_remotely?: boolean;
     revoke_error?: string | null;
+    /** The PC held no token for this connector, so there was nothing to disconnect or revoke (#8607). */
+    nothing_stored?: boolean;
+    /** True only when a revoke request was sent; false for an empty slot, an unreadable sign-in or a provider with no revoke endpoint. */
+    revoke_attempted?: boolean;
 }
+
+/** Which account a browser sign-in is for: another one (the provider's account picker shows), or one stored account again (its id or address). */
+export type ConnectorSignInTarget = { addAccount: true } | { account: string };
 
 /** How a sign-in the PC is finishing ended, from its `connector.oauth.*` events; `error` is the PC's own message, `reason` its code (such as `superseded`). */
 export type ConnectorSignInEnd = { outcome: 'completed' } | { outcome: 'cancelled' | 'failed'; error?: string; reason?: string };
@@ -438,6 +448,13 @@ export interface CreateScheduleRequest {
     timezone?: string;
 }
 
+/** Changes when a schedule runs and what it asks; its name, chat and history stay. */
+export interface EditScheduleRequest {
+    interval: string;
+    prompt: string;
+    timezone?: string;
+}
+
 export interface ScheduleResults {
     results: ScheduleResult[];
     total: number;
@@ -478,6 +495,9 @@ export interface UploadOptions extends RequestOptions {
     onUploadProgress?: (sent: number, total: number) => void;
 }
 
+export type { ImageModel, ImageSettings } from '@webui/services/imageApi';
+/** The image settings `PUT /api/images/settings` changes; fields left out keep their value, null size or steps means automatic. */
+export type ImageSettingsUpdate = Partial<Pick<ImageSettings, 'model' | 'size' | 'steps'>>;
 export type { SpeechModel, SpeechSettings, Voice } from '@webui/services/speechApi';
 /** The read-aloud settings `PUT /api/speech/settings` changes; the rest stay as saved. */
 export type SpeechSettingsUpdate = Partial<Pick<SpeechSettings, 'voice' | 'speed' | 'auto'>>;
@@ -648,7 +668,7 @@ export interface GaiaClient {
      * Starts a browser sign-in whose redirect comes back to this phone's loopback listener on `redirectPort`; the PC
      * keeps the PKCE verifier and starts no listener of its own. Only an allowed paired device may ask.
      */
-    startConnectorBrowserSignIn(connectorId: string, redirectPort: number, scopes: string[], options?: RequestOptions): Promise<ConnectorAuthorizeResponse>;
+    startConnectorBrowserSignIn(connectorId: string, redirectPort: number, scopes: string[], options?: RequestOptions & { target?: ConnectorSignInTarget }): Promise<ConnectorAuthorizeResponse>;
     /**
      * Hands the redirect's code and state to the PC, which checks the state, exchanges the code and answers with the
      * connector as the list shows it (never a token). Only the device that started the flow may: 403 for anyone else,
@@ -671,7 +691,11 @@ export interface GaiaClient {
      * provider-side revoke, `{}` for a connector with no revoke concept, or null when the PC's
      * event stream could not be read in time.
      */
-    disconnectConnector(connectorId: string, options?: RequestOptions): Promise<DisconnectOutcome | null>;
+    disconnectConnector(connectorId: string, options?: RequestOptions & { all?: boolean }): Promise<DisconnectOutcome | null>;
+    /** Signs out of one account; the connector's other accounts and its grants stay. */
+    disconnectConnectorAccount(connectorId: string, accountId: string, options?: RequestOptions): Promise<void>;
+    /** Makes one account the one GAIA uses when nothing names an account. */
+    setDefaultConnectorAccount(connectorId: string, accountId: string, options?: RequestOptions): Promise<{ accounts: ConnectorAccount[] }>;
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     /** The agents this PC can run; a PC without the `gaia` agent can't start chats. */
@@ -743,6 +767,10 @@ export interface GaiaClient {
     updateMemoryKnowledge(knowledgeId: string, body: KnowledgeUpdateBody, options?: RequestOptions): Promise<KnowledgeSaveResult>;
     /** Forgets a memory. */
     deleteMemoryKnowledge(knowledgeId: string, options?: RequestOptions): Promise<unknown>;
+    /** The model, size and steps GAIA creates images with, and the image models on the PC. */
+    getImageSettings(options?: RequestOptions): Promise<ImageSettings>;
+    /** Saves the fields given; answers with all the settings. Shared with the terminal app. */
+    updateImageSettings(change: ImageSettingsUpdate, options?: RequestOptions): Promise<ImageSettings>;
     /** The voice and speed replies are read in, whether every reply is read, and the voices offered. */
     getSpeechSettings(options?: RequestOptions): Promise<SpeechSettings>;
     /** Saves the fields given; answers with all the settings. Shared with the terminal app. */
@@ -790,6 +818,8 @@ export interface GaiaClient {
     createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Reads a plain-words "when to run" without saving it, for the form's live preview. */
     parseSchedule(input: string, timezone: string | undefined, options?: RequestOptions): Promise<ParsedSchedule>;
+    /** Edits a schedule in place (409 while a run is in flight); answers with the schedule as it now is. */
+    editSchedule(name: string, request: EditScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Pauses or resumes a schedule; answers with the schedule as it now is. */
     updateScheduleStatus(name: string, status: 'active' | 'paused', options?: RequestOptions): Promise<Schedule>;
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
