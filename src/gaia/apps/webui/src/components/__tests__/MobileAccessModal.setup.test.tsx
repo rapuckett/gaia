@@ -32,12 +32,12 @@ describe('MobileAccessModal when ngrok is not installed', () => {
             <MobileAccessModal isOpen onClose={vi.fn()} setupCommands={['choco install ngrok']} onRetry={vi.fn()} />,
         );
         expect(screen.getByText('Needs ngrok')).toBeInTheDocument();
-        expect(screen.queryByText(tEn('mobileAccess.couldntStart'))).toBeNull();
+        expect(screen.queryByText(tEn('mobile.startFailed'))).toBeNull();
         expect(screen.queryByText(/Failed to connect|Connection failed/)).toBeNull();
         expect(container.querySelector('.tunnel-error')).toBeNull();
         expect(container.querySelector('.status-dot.is-error')).toBeNull();
-        expect(screen.queryByText(tEn('mobileAccess.stepScan'))).toBeNull();
-        expect(screen.queryByText(tEn('mobileAccess.connecting'))).toBeNull();
+        expect(screen.queryByText(tEn('mobile.stepScan'))).toBeNull();
+        expect(screen.queryByText(tEn('mobile.connecting'))).toBeNull();
     });
 
     it('says what the feature is and where to get ngrok, never a command to run', () => {
@@ -73,7 +73,7 @@ describe('MobileAccessModal when ngrok is not installed', () => {
 
     it('a genuine failure is still an error, with no setup panel or Retry', () => {
         render(<MobileAccessModal isOpen onClose={vi.fn()} error="ngrok authtoken not configured." onRetry={vi.fn()} />);
-        expect(screen.getByText(tEn('mobileAccess.couldntStart'))).toBeInTheDocument();
+        expect(screen.getByText(tEn('mobile.startFailed'))).toBeInTheDocument();
         expect(screen.getByText('ngrok authtoken not configured.')).toBeInTheDocument();
         expect(screen.queryByRole('link', { name: /Get ngrok/ })).toBeNull();
         expect(screen.queryByRole('button', { name: /Retry/ })).toBeNull();
