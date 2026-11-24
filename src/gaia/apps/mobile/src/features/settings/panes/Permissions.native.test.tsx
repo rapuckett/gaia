@@ -92,7 +92,7 @@ describeNative('Permissions pane', () => {
                 </QueryClientProvider>
             ),
         });
-        await screen.findByText('GAIA answered with an error (500).');
+        await screen.findByText("Something went wrong on your PC.");
         const detail = screen.getByText('permissions table is locked') as unknown as { props: { style: { writingDirection?: string } } };
         expect(detail.props.style.writingDirection).toBe('ltr');
         queryClient.clear();
