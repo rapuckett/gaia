@@ -91,6 +91,24 @@ describe('DevicesSettings', () => {
         expect(screen.getByRole('alert')).toHaveTextContent("Couldn't copy the link");
     });
 
+    it('a new pairing code shows Copy pairing link again', async () => {
+        vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+        render(<DevicesSettings />);
+        replies['GET /devices/status'] = { body: { ...STATUS, pairing_open: true } };
+        replies['DELETE /devices/pairing'] = { body: STATUS };
+        fireEvent.click(await screen.findByRole('button', { name: 'Pair a phone or tablet' }));
+        await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Copy pairing link' })); });
+        expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        replies['POST /devices/pairing'] = { body: { ...OFFER, invite: 'another-invitation' } };
+        fireEvent.click(await screen.findByRole('button', { name: 'Pair a phone or tablet' }));
+
+        // Checked as soon as the new code shows, before the 2 s "Copied" timer could clear it.
+        await screen.findByRole('button', { name: 'Cancel' });
+        expect(screen.getByRole('button', { name: 'Copy pairing link' })).toBeInTheDocument();
+    });
+
     it('glosses the paired-at line once in Arabic, with no nested gloss', async () => {
         useChatStore.setState({ locale: 'ar' });
         const created_at = new Date(Date.now() - 60_000).toISOString();

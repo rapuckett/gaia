@@ -123,7 +123,8 @@ export function DevicesSettings() {
     const [busy, setBusy] = useState(false);
     const [actionError, setActionError] = useState<string | null>(null);
     const [confirm, setConfirm] = useState<Confirm | null>(null);
-    const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
+    // Keyed by invitation so a new pairing code drops the old result.
+    const [copied, setCopied] = useState<{ code: string; ok: boolean } | null>(null);
 
     useEffect(() => { void refresh(); }, [refresh]);
 
@@ -143,10 +144,8 @@ export function DevicesSettings() {
         }
     }, [offer, now]);
 
-    // A copied or failed notice belongs to one code.
-    useEffect(() => setCopied(null), [offer]);
     useEffect(() => {
-        if (copied !== 'ok') return;
+        if (!copied?.ok) return;
         const timer = setTimeout(() => setCopied(null), 2000);
         return () => clearTimeout(timer);
     }, [copied]);
@@ -178,10 +177,10 @@ export function DevicesSettings() {
     });
     const copyLink = (current: DevicePairingOffer) => {
         navigator.clipboard.writeText(pairingLink(current)).then(
-            () => setCopied('ok'),
+            () => setCopied({ code: current.invite, ok: true }),
             (err: unknown) => {
                 log.ui.error('Pairing link could not be copied', err);
-                setCopied('failed');
+                setCopied({ code: current.invite, ok: false });
             },
         );
     };
@@ -189,6 +188,8 @@ export function DevicesSettings() {
         setOffer(null);
         setStatus(await closeDevicePairing());
     });
+
+    const copyResult = copied && offer && copied.code === offer.invite ? copied : null;
 
     if (!status) {
         return (
@@ -258,8 +259,8 @@ export function DevicesSettings() {
                             </p>
                             <div className="settings-row">
                                 <button type="button" className="btn-secondary" onClick={() => copyLink(offer)}>
-                                    {copied === 'ok' ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
-                                    {copied === 'ok' ? t('settings.messaging.copied') : t('settings.devices.copyLink')}
+                                    {copyResult?.ok ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+                                    {copyResult?.ok ? t('settings.messaging.copied') : t('settings.devices.copyLink')}
                                 </button>
                                 <button type="button" className="btn-secondary" disabled={busy} onClick={() => void cancelPairing()}>
                                     {t('settings.devices.cancel')}
@@ -268,7 +269,7 @@ export function DevicesSettings() {
                             <p className="settings-hint">
                                 <MarkedText text={t('settings.devices.linkHint', { time: markLtr(formatCountdown(secondsLeft(offer.exp * 1000, now))) })} />
                             </p>
-                            {copied === 'failed' && <p className="settings-error" role="alert">{t('settings.devices.copyLinkFailed')}</p>}
+                            {copyResult && !copyResult.ok && <p className="settings-error" role="alert">{t('settings.devices.copyLinkFailed')}</p>}
                         </div>
                     </div>
                 )}
