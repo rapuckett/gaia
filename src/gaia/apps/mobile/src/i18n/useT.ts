@@ -54,6 +54,11 @@ export function serverText(error: unknown): string | undefined {
     return error instanceof Error ? error.message || undefined : undefined;
 }
 
+/** For a Details disclosure: the PC's own text when it sent one, else our wording of the failure. The status never shows. */
+export function describeDetail(error: unknown, t: Translate): string {
+    return serverText(error) ?? describeError(error, t);
+}
+
 const CONNECTOR_RECONNECT_CODES: ReadonlySet<string> = new Set(['not_connected', 'reauth_required', 'connection_revoked']);
 
 /** A PC's HTTP error, pairing-auth error or failed turn as our reason-free sentence plus its raw text for `detail`; any other error reads as `describeError`. */
@@ -62,7 +67,7 @@ export function describeHttpFailure(error: unknown, t: Translate): { text: strin
     if (error instanceof GaiaApiError && error.status === 409 && CONNECTOR_RECONNECT_CODES.has(String(error.body?.error))) {
         return { text: t('mobileApp.connectors.reconnectNeeded') };
     }
-    if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.http' && error.detail) {
+    if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.httpNoDetail' && error.detail) {
         return { text: t('mobileApp.error.httpNoDetail'), detail: error.detail };
     }
     if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.auth') {

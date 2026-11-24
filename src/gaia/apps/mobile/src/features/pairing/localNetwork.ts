@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Network from 'expo-network';
 import { AppState, Platform } from 'react-native';
 
+import { GaiaTransport } from '../../../modules/gaia-transport';
 import { homeNetworkOrigin } from './homeNetwork';
 
 // What this install has seen of the local network permission; AsyncStorage goes with an uninstall, as the permission does.
@@ -71,9 +72,28 @@ async function onWifi(): Promise<boolean> {
 /**
  * Whether no answer from every home address looks like the permission being off: the phone is on Wi-Fi, and the
  * attempt failed at once, or while iOS's prompt was up. A PC that refuses the connection fails as fast, so this is a
- * best guess; only a native check of the path's unsatisfied reason would be certain.
+ * best guess, used only where the native check is missing.
  */
 export async function looksDenied({ elapsedMs, leftForeground }: { elapsedMs: number; leftForeground: boolean }): Promise<boolean> {
     if (elapsedMs >= DENIED_FAST_MS && !leftForeground) return false;
     return onWifi();
+}
+
+/**
+ * Whether iOS's local network setting stopped this pairing's home addresses, once none of them answered. The native
+ * check reads why the connection couldn't go, so a PC that refuses or never answers gets the generic message instead.
+ */
+export async function localNetworkDenied(
+    origins: readonly string[],
+    attempt: { elapsedMs: number; leftForeground: boolean; retrying: boolean },
+    os: string = Platform.OS,
+): Promise<boolean> {
+    const check = GaiaTransport.checkLocalNetwork?.bind(GaiaTransport);
+    if (asksForLocalNetwork(os) && check) {
+        const home = origins.map((o) => homeNetworkOrigin(o)).filter((o): o is string => o !== null);
+        const reasons = await Promise.all(home.map((origin) => check(origin)));
+        return reasons.includes('local_network_denied');
+    }
+    // Web and builds made before the native check can only guess, and a retry from the denied card keeps it up.
+    return attempt.retrying || looksDenied(attempt);
 }

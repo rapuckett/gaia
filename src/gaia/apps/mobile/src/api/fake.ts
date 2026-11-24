@@ -1791,7 +1791,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async browseFiles(_sessionId, path) {
             const folder = data.fileFolders?.[path ?? ''];
-            if (folder === 'denied') throw new GaiaApiError(403, 'Access denied', 'mobileApp.error.http', undefined, { status: 'os_denied', message: 'Access denied' });
+            if (folder === 'denied') throw new GaiaApiError(403, 'Access denied', undefined, undefined, { status: 'os_denied', message: 'Access denied' });
             if (!folder) throw new GaiaApiError(404, 'Directory not found');
             return folder;
         },

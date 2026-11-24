@@ -17,7 +17,7 @@ import {
     useSetupStatus,
     useStartSetupServer,
 } from '@/data';
-import { describeError, describeHttpFailure, useT } from '@/i18n/useT';
+import { describeDetail, describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, Card, Disclosure, Icon, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Text } from '@/ui';
 import { Check, Clock, ShieldQuestion, X } from '@/ui/icons';
 
@@ -211,7 +211,7 @@ export function CheckStep({ ctx }: { ctx: SetupStepContext }) {
     const rows = checkRows({ hardware, hardwareError, hardwareErrorDetail: hardwareFailure?.detail, plan: planData, serverRun, awaitingChoice }, t);
     const ticked = planData ? initialSelection(planData).ticked : new Set<string>();
     const canInstallOwn = !!planData && !planData.lemonade.reachable && !serverRun;
-    const startError = start.isError ? describeError(start.error, t) : null;
+    const startError = start.isError ? describeDetail(start.error, t) : null;
     const [errorOpen, setErrorOpen] = useState(false);
 
     const retry = (gaiaLemonade: boolean) => start.mutate({ gaiaLemonade });

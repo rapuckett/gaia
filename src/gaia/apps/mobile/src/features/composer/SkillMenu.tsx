@@ -6,7 +6,7 @@ import { useWindowDimensions, View } from 'react-native';
 import { firstSentence, isTypingSkillCommand, matchSkillCommands } from '@webui/utils/skillCommands.core';
 
 import { useSkills } from '@/data/skills';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, ltr, serverText, useT } from '@/i18n/useT';
 import { List, ListRow, Row, Spinner, Stack, Surface, Text } from '@/ui';
 
 /** The menu's tallest size, and the share of the screen it may take, so it never covers the field. */
@@ -38,6 +38,7 @@ function OpenSkillMenu({ value, onPick }: SkillMenuProps) {
 
     if (!skills.data && (skills.isError || skills.isPending)) {
         const failed = skills.isError;
+        const failureDetail = failed ? serverText(skills.error) : undefined;
         return (
             <Surface tone="card" border radius="lg" padding="md" testID="skill-menu">
                 <Row gap="sm">
@@ -46,6 +47,11 @@ function OpenSkillMenu({ value, onPick }: SkillMenuProps) {
                         {failed ? t('composer.skillsFailed', { error: describeError(skills.error, t) }) : t('composer.skillsLoading')}
                     </Text>
                 </Row>
+                {failed && failureDetail ? (
+                    <Text role="caption" tone="muted" selectable>
+                        {ltr(failureDetail)}
+                    </Text>
+                ) : null}
             </Surface>
         );
     }

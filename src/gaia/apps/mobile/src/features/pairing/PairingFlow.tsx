@@ -11,7 +11,7 @@ import { Button, Card, Icon, Notice, NumberMarker, Row, Screen, Spinner, Stack, 
 import { CircleAlert, Clock, Monitor, Smartphone, Wifi } from '@/ui/icons';
 
 import { parseInvite, type PairingInvite } from './invite';
-import { localNetworkStep, looksDenied, markAllowed, markExplained, watchForeground } from './localNetwork';
+import { localNetworkDenied, localNetworkStep, markAllowed, markExplained, watchForeground } from './localNetwork';
 import { PairingScanner } from './PairingScanner';
 import { isNetworkFailure, pollSettled } from './pollSettled';
 import { getPairingService } from './registry';
@@ -26,7 +26,7 @@ type View =
     | Confirm
     /** Before the first connection to a home address, which raises iOS's local network prompt. */
     | { at: 'localNetwork'; confirm: Confirm }
-    /** No home address answered, and it looks like the phone's local network setting stopped it. */
+    /** No home address answered, and the phone's local network setting stopped it. */
     | { at: 'localNetworkDenied'; invite: PairingInvite; replaces: boolean }
     | { at: 'waiting'; pcName: string }
     | { at: 'refused'; rateLimited: boolean }
@@ -168,7 +168,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
             if (mode !== 'plain') {
                 if (result.state !== 'unreachable') {
                     rememberAllowed();
-                } else if (mode === 'retry' || (await looksDenied({ elapsedMs: Date.now() - started, leftForeground: foreground!.left() }))) {
+                } else if (await localNetworkDenied(invite.origins, { elapsedMs: Date.now() - started, leftForeground: foreground!.left(), retrying: mode === 'retry' })) {
                     if (alive.current && !abandoned()) setView({ at: 'localNetworkDenied', invite, replaces });
                     return;
                 }

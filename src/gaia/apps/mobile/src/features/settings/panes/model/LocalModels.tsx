@@ -11,7 +11,7 @@ import {
 import type { SetupCatalogEntry, SetupModelProgress, SetupPlan } from '@webui/types';
 
 import { useRemoveSetupModel, useSaveModelChoices, useSetupPlan, useSetupStatus } from '@/data';
-import { describeErrorWith, useLocaleCode, useT } from '@/i18n/useT';
+import { describeErrorWith, serverText, useLocaleCode, useT } from '@/i18n/useT';
 import { Badge, Button, Disclosure, Notice, Row, Select, SettingsGroup, Spinner, Stack, Text } from '@/ui';
 
 import { SelectionSummary } from '../../../setup/steps/Checklist';
@@ -209,6 +209,7 @@ export function LocalModels() {
                         <Notice
                             tone="danger"
                             message={t.compose((say) => say('setup.models.listFailed', { reason: describeErrorWith(planQuery.error, say) }))}
+                            detail={serverText(planQuery.error)}
                             action={{ label: t('setup.tryAgain'), onPress: () => void planQuery.refetch() }}
                         />
                     ) : null}

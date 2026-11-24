@@ -95,10 +95,10 @@ export function SetupGate({
                             ? t('setup.upgrading.failedNoReason')
                             : t.compose((say) => say('setup.upgrading.failed', { error: describeErrorWith(gate.error, say) }))
                         : gate.error instanceof GaiaApiError
-                          ? t('mobileApp.error.setupCheckHttp', { status: gate.error.status })
+                          ? t('mobileApp.error.httpNoDetail')
                           : t.compose((say) => say('setup.unknown.failed', { error: describeErrorWith(gate.error, say) }))
                 }
-                detail={gate.upgradeFailed ? serverText(gate.error) : undefined}
+                detail={gate.upgradeFailed || gate.error instanceof GaiaApiError ? serverText(gate.error) : undefined}
                 action={{
                     label: t(gate.upgradeFailed ? 'setup.upgrading.retry' : 'setup.unknown.retry'),
                     onPress: () => void recheck(),

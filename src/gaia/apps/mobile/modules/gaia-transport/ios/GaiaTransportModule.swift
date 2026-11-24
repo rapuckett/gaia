@@ -3,6 +3,7 @@
 
 import ExpoModulesCore
 import Foundation
+import Network
 
 private let pairRoute = "/api/devices/pair"
 private let probeRoute = "/api/health"
@@ -27,6 +28,17 @@ public class GaiaTransportModule: Module {
     AsyncFunction("pair") {
       (pcId: String, origins: [String], pin: String, headers: [String: String], body: String, promise: Promise) in
       Pairing(pcId: pcId, pinHex: pin, headers: headers, body: body, promise: promise).run(origins)
+    }
+
+    // Why a home address gave no answer; it opens a bare TCP connection and sends nothing.
+    AsyncFunction("checkLocalNetwork") { (origin: String, promise: Promise) in
+      guard let home = homeNetworkOrigin(origin), let url = URL(string: home), let host = url.host,
+        let port = url.port.flatMap({ NWEndpoint.Port(rawValue: UInt16($0)) })
+      else {
+        promise.reject(transportError("invalid_origin", "\(origin) isn't a home network address, so it wasn't checked."))
+        return
+      }
+      LocalNetworkCheck(host: host, port: port).run { promise.resolve($0) }
     }
 
     AsyncFunction("start") {

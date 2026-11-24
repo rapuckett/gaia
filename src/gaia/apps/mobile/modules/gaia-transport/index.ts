@@ -28,6 +28,9 @@ export interface NativeUploadProgress {
     total: number;
 }
 
+/** Why a home address gave no answer: iOS's local network setting stopped it, the PC refused or never answered, no route, or it connected after all. */
+export type LocalNetworkReason = 'local_network_denied' | 'refused' | 'timeout' | 'unreachable' | 'reachable';
+
 export interface NativeSubscription {
     remove(): void;
 }
@@ -63,6 +66,8 @@ export interface GaiaTransportNative {
     promote(stagedId: string, pcId: string): Promise<void>;
     /** Replaces the paired PC's addresses with `origins`, JSON `[{kind, origin}]`; refuses the set if any is invalid for its kind. */
     setOrigins(pcId: string, origins: string): Promise<void>;
+    /** iOS only: a bare TCP connection to a home `origin` that sends nothing; rejects `invalid_origin` for any other. Missing from older builds and Android. */
+    checkLocalNetwork?(origin: string): Promise<LocalNetworkReason>;
     /** Builds made before upload progress never send the event. */
     addListener?(event: 'onUploadProgress', listener: (progress: NativeUploadProgress) => void): NativeSubscription;
 }
