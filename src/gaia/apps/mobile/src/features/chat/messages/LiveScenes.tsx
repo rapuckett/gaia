@@ -6,6 +6,7 @@ import { useState } from 'react';
 
 import type { AgentStep } from '@webui/types';
 
+import type { StreamEvent } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError, GaiaStreamDroppedError, GaiaTurnError, type GaiaError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
@@ -30,6 +31,7 @@ import { TurnTail } from '../TurnTail';
  * `activity-filter` (CV-48): `#tap=steps-summary` opens the seven finished calls and shows the filter.
  * `reply-server-down` (CV-14): a failed latest reply with the model-server fix under it and Try again; `reply-errors` also shows the unexpected-error "Report it on GitHub" link (CV-30, `report-github`).
  * `activity-variants` (CV-42): `#tap=steps-summary` opens a thought-first call, a failed call and a repeated one (x3); `#tap=steps-summary,step-row-1` expands the thought-first call to its thought, tool and arguments (the thought is row 0); `#tap=steps-summary,step-row-2` expands the failed one.
+ * `step-error`: a running Waiting step cut off by a closed connection, then the same step cut off by Stop; both show the interrupted icon and a frozen 13s.
  * `latest-answer` (regenerate): a short exchange; only the latest answer has Try again (`regenerate`), and its retry does nothing.
  * `activity-vision` (CV-49): the vision offer under a tool step. `many-scrolled-up` (CV-09): the many-messages list with the jump button showing.
  */
@@ -44,6 +46,7 @@ export const LIVE_SCENES = [
     'activity-vision',
     'many-scrolled-up',
     'reply-server-down',
+    'step-error',
     'latest-answer',
 ] as const;
 export type LiveScene = (typeof LIVE_SCENES)[number];
@@ -106,7 +109,21 @@ const VARIANTS: AgentStep[] = [
 
 const VISION: AgentStep[] = [step(1, { tool: 'analyze_image', narration: 'Reading photo.jpg', success: false, needsModel: 'vision', result: 'A vision model is needed.' })];
 
+const CUT_OFF_EVENTS = [{ type: 'tool_start', tool: 'sleep', detail: 'seconds: 60', narration: 'Waiting' }] as StreamEvent[];
+const ENDED_AFTER_MS = 13_000;
+
 function Body({ state }: { state: LiveScene }) {
+    const [endedAt] = useState(() => Date.now() + ENDED_AFTER_MS);
+    if (state === 'step-error') {
+        const cut: Tail = { ...TAIL, events: CUT_OFF_EVENTS };
+        return (
+            <Stack gap="md">
+                <TurnTail tail={{ ...cut, error: new GaiaStreamDroppedError(new Error('socket closed')), failedReply: true, canTryAgain: true }} line={null} endedAt={endedAt} onTryAgain={noop} onContinue={noop} />
+                <Divider />
+                <TurnTail tail={{ ...cut, stop: { state: 'stopped' }, canTryAgain: true }} line={null} endedAt={endedAt} onTryAgain={noop} onContinue={noop} />
+            </Stack>
+        );
+    }
     if (state === 'stopped') {
         return (
             <Stack gap="md">

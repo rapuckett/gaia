@@ -7,7 +7,7 @@ import type { StreamEvent } from '@/api/client.types';
 import { translator } from '@/i18n/useT';
 
 import { liveStatusLine } from '../liveStatus';
-import { stepsFromEvents } from './stepsFromEvents';
+import { endRunningSteps, stepsFromEvents } from './stepsFromEvents';
 import { TERMINAL_HARD_CAP_CHARS, terminalWindow } from './terminalText';
 
 const t = translator('en');
@@ -117,5 +117,19 @@ describe('terminal output window', () => {
         const view = terminalWindow(huge, true);
         expect(view.text.length).toBe(TERMINAL_HARD_CAP_CHARS);
         expect(view.capped).toBe(true);
+    });
+});
+
+describe('a step still running when the turn ends', () => {
+    const steps = stepsFromEvents([event({ type: 'tool_start', tool: 'sleep', narration: 'Waiting' })], t);
+
+    it('stops and keeps the time it had run', () => {
+        expect(steps[0]!.active).toBe(true);
+        const [ended] = endRunningSteps(steps, steps[0]!.timestamp + 13_000);
+        expect(ended).toMatchObject({ active: false, latencyMs: 13_000 });
+    });
+
+    it('keeps its spinner in a live turn, where nothing ends it', () => {
+        expect(consolidateSteps(steps, true)[0]).toMatchObject({ active: true });
     });
 });

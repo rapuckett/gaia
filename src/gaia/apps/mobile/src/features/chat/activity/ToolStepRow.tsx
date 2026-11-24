@@ -77,6 +77,8 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID, thoughtTe
     const line = waiting ? t('activity.waiting') : toolRowText(step, t);
     const count = step.count ?? 1;
     const notRun = (!!step.declined || !!step.timedOut || !!step.autoDeclined) && !step.active;
+    // Cut off by the end of the turn: no outcome and no longer running (the row says "didn't finish").
+    const interrupted = !step.active && step.success == null && !step.result && !notRun;
     const exitCode = step.commandOutput && step.commandOutput.returnCode !== 0 ? step.commandOutput.returnCode : null;
     // The terminal card's header already says a shell step's exit code.
     const failure =
@@ -108,6 +110,8 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID, thoughtTe
             <Spinner size="sm" />
         ) : notRun ? (
             <Icon icon={Ban} size="sm" tone="muted" />
+        ) : interrupted ? (
+            <Icon icon={CircleAlert} size="sm" tone="muted" />
         ) : step.success === false ? (
             <Icon icon={CircleAlert} size="sm" tone="danger" />
         ) : null;
