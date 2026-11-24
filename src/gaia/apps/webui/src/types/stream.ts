@@ -61,6 +61,8 @@ export interface StreamEvent {
     message?: string;
     /** Model phase on a status event: reading, loading_tools, loading_model, reasoning, tool_call, … */
     phase?: string;
+    /** On a `confirm_timeout` phase: how long the approval was waited on, in seconds. */
+    timeout_s?: number;
     /** On a `queued` phase: this turn's place in line for the model. */
     queue_position?: number;
     /** On a `model_queue` phase: where the turn stands in line for the model. */

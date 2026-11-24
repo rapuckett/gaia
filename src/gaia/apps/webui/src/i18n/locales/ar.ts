@@ -869,6 +869,7 @@ const messages: Messages = {
     'activity.thinking': 'جارٍ التفكير',
     'activity.commentary': 'تعليق',
     'activity.working': 'جارٍ العمل',
+    'activity.confirmTimedOut': 'لم تُجب في الوقت المحدد، لذلك لم يُنفّذ GAIA هذه الخطوة.',
     'activity.thought': 'فكّر',
     'activity.thoughtFor': 'فكّر لمدة {time}',
     'activity.thinkingFor': 'جارٍ التفكير · {time}',
