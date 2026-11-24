@@ -9,12 +9,14 @@ import type { DeviceChange } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
-import type { ConnectionConfig } from '@/state/connection';
+import { useConnectionStore, type ConnectionConfig } from '@/state/connection';
 import { Screen, ScreenBannerProvider, Stack, UIProvider } from '@/ui';
 
 import type { RouteOrigin } from './homeNetwork';
 import { PairedPcsScreen } from './PairedPcsScreen';
-import { LocalNetworkDenied, LocalNetworkExplainer } from './PairingFlow';
+import { createFakePairingService } from './fakePairingService';
+import { LocalNetworkDenied, LocalNetworkExplainer, PairingFlow } from './PairingFlow';
+import { PinMismatchScreen } from './PinMismatchScreen';
 import { setPairingService } from './registry';
 import { ConnectionOverride } from './routes';
 import type { PairedPc } from './service';
@@ -38,6 +40,8 @@ export interface PairingScene {
     changesAll?: boolean;
     /** Shows the pairing flow's local network explainer, or its denied card, instead. */
     localNetwork?: 'explainer' | 'denied';
+    /** "Pair again" asking the PC, finding it unreachable, or finding it no longer knows this phone (How to pair). */
+    pairAgain?: 'checking' | 'unreachable' | 'forgotten';
 }
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -91,6 +95,9 @@ export const PAIRING_SCENES: Record<string, PairingScene> = {
     },
     'local-network-explainer': { name: 'Studio PC', chosen: HOME, localNetwork: 'explainer' },
     'local-network-denied': { name: 'Studio PC', chosen: HOME, localNetwork: 'denied' },
+    'pair-again-checking': { name: 'Studio PC', chosen: HOME, pairAgain: 'checking' },
+    'pair-again-unreachable': { name: 'Studio PC', chosen: HOME, pairAgain: 'unreachable' },
+    'pair-again-forgotten': { name: 'Studio PC', chosen: HOME, pairAgain: 'forgotten' },
 };
 
 function connectionOf(scene: PairingScene): ConnectionConfig {
@@ -113,7 +120,30 @@ export function PairingSceneView({ scene }: { scene: PairingScene }) {
             </UIProvider>
         );
     }
+    if (scene.pairAgain === 'forgotten') return <ForgottenSceneView scene={scene} />;
+    if (scene.pairAgain) {
+        return (
+            <UIProvider>
+                <PinMismatchScreen onPairAgain={() => undefined} checking={scene.pairAgain === 'checking'} unreachablePc={scene.name} />
+            </UIProvider>
+        );
+    }
     return <PairedPcSceneView scene={scene} />;
+}
+
+/** How to pair after "Pair again" found the PC no longer knows this phone, with another PC still paired here. */
+function ForgottenSceneView({ scene }: { scene: PairingScene }) {
+    useState(() => {
+        const other: PairedPc = { id: 'scene-pc-2', name: 'Living room PC', connection: { baseUrl: TAILNET.origin, pcId: 'scene-pc-2', pinned: true } };
+        setPairingService(createFakePairingService({ paired: [other] }));
+        useConnectionStore.setState({ connection: null, removedFrom: null, forgottenPc: { id: 'scene-pc', name: scene.name } });
+        return null;
+    });
+    return (
+        <UIProvider>
+            <PairingFlow />
+        </UIProvider>
+    );
 }
 
 function PairedPcSceneView({ scene }: { scene: PairingScene }) {
