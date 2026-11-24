@@ -80,7 +80,7 @@ describeNative("the plan's Continue", () => {
 
     it('blocks a model that cannot run on this PC with the reason, without asking', async () => {
         const client = await show(entry({ fits: false, fit_code: 'backend' }));
-        expect(await screen.findByText(/can't run on this PC/)).toBeTruthy();
+        expect(await screen.findByText(/can't run on your PC/)).toBeTruthy();
         expect(screen.queryByTestId('confirm-ok')).toBeNull();
         expect(client.setupStarts).toHaveLength(0);
     });
