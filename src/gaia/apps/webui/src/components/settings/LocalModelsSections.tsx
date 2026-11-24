@@ -12,9 +12,9 @@ import { useModelStore } from '../../stores/modelStore';
 import type { GpuMemoryStatus, SetupCatalogEntry, SetupModelProgress, SetupPlan } from '../../types';
 import { ConfirmSheet } from '../setup/ConfirmSheet';
 import { DownloadProgress, downloadsActive } from '../setup/DownloadProgress';
-import { formatSize } from '../setup/format';
+import { driveName, formatSize } from '../setup/format';
 import { GpuMemoryPanel } from '../setup/GpuMemoryPanel';
-import { driveName, ModelChecklist, SelectionSummary, tooBigText } from '../setup/ModelChecklist';
+import { ModelChecklist, SelectionSummary, tooBigText } from '../setup/ModelChecklist';
 import {
     catalogOf, chooseChat, initialSelection, isVision, pendingDownloads, shortfall, skipChanges, toggle, tooBig,
     type Selection, onlyTight } from '../setup/selection';

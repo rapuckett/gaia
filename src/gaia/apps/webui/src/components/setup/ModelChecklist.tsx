@@ -6,7 +6,7 @@ import { AlertTriangle, HardDrive, HelpCircle, Loader2 } from 'lucide-react';
 import { useT, type Translate } from '../../i18n/useT';
 import type { Say } from '../../i18n/registry';
 import type { SetupCatalogEntry, SetupModelProgress, SetupPlan } from '../../types';
-import { formatBytes, formatFitGb, formatSize } from './format';
+import { driveName, formatBytes, formatFitGb, formatSize } from './format';
 import { useDebounced, useTweened } from './motion';
 import { Reveal } from './Reveal';
 import {
@@ -205,14 +205,6 @@ export function SelectionSummary({ plan, selection }: SummaryProps) {
             <span className="visually-hidden" aria-live="polite">{announced}</span>
         </div>
     );
-}
-
-/** "C:" from "C:\Users\me\.cache\huggingface\hub"; the folder itself elsewhere. */
-export function driveName(path: string | null): string | null {
-    if (!path) return null;
-    const win = /^([A-Za-z]:)[\\/]/.exec(path);
-    // Elsewhere the path names the user's home folder: show none, not the path.
-    return win ? win[1] : null;
 }
 
 function round1(n: number): number {

@@ -38,6 +38,7 @@ export function ChoiceList(props: ChoiceListProps) {
                 return (
                     <Pressable
                         key={o.value}
+                        testID={props.testID ? `${props.testID}-option-${o.value}` : undefined}
                         onPress={() => toggle(o.value)}
                         accessibilityRole={multiple ? 'checkbox' : 'radio'}
                         accessibilityLabel={o.description ? `${o.label}. ${o.description}` : o.label}
