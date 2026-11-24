@@ -218,6 +218,23 @@ def _surface_download_progress(
     return None
 
 
+def _lemonade_error_text(payload: Any) -> Optional[str]:
+    """The human sentence in a Lemonade error body, or ``None`` when it has none.
+
+    Reads ``{"error": {"message": ...}}``, ``{"error": "..."}``, ``{"message": ...}``
+    and ``{"detail": "..."}``.
+    """
+    if not isinstance(payload, dict):
+        return None
+    err = payload.get("error")
+    candidates = [err.get("message") if isinstance(err, dict) else err]
+    candidates += [payload.get("message"), payload.get("detail")]
+    for c in candidates:
+        if isinstance(c, str) and c.strip():
+            return c.strip()
+    return None
+
+
 def _parse_pull_event_block(block: str) -> Optional[Dict[str, Any]]:
     """Convert one ``event:/data:`` block from Lemonade's pull stream into
     ``{"event": <name>, "data": <parsed-json>}``.
@@ -380,6 +397,10 @@ async def _stream_lemonade_pull(
                 if resp.status_code != 200:
                     body = await resp.aread()
                     snippet = body.decode("utf-8", errors="replace")[:300]
+                    try:
+                        human = _lemonade_error_text(json.loads(body))
+                    except ValueError:
+                        human = None
                     _set_download_progress(
                         model_name,
                         {
@@ -391,9 +412,8 @@ async def _stream_lemonade_pull(
                             "total_files": 0,
                             "downloaded_bytes": 0,
                             "total_bytes": 0,
-                            "message": (
-                                f"Lemonade /pull returned {resp.status_code}: {snippet}"
-                            ),
+                            "message": human
+                            or f"Lemonade /pull returned {resp.status_code}: {snippet}",
                         },
                     )
                     logger.error(
@@ -484,11 +504,7 @@ async def _stream_lemonade_pull(
                                 _background_tasks.add(load_task)
                                 load_task.add_done_callback(_background_tasks.discard)
                         elif ev == "error":
-                            err_msg = (
-                                data.get("error")
-                                or data.get("message")
-                                or "Download failed"
-                            )
+                            err_msg = _lemonade_error_text(data) or "Download failed"
                             _set_download_progress(
                                 model_name,
                                 {
