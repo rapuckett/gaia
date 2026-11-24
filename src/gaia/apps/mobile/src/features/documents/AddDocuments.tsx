@@ -219,17 +219,17 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
     }
 
     const sheetActions = [
-        { label: t('docs.addPhotos'), icon: ImageIcon, disabled: busy, testID: 'docs-add-photos', onPress: () => void run(pickPhotos) },
-        { label: t('docs.addFile'), icon: FileText, disabled: busy, testID: 'docs-add-file', onPress: () => void run(pickDocuments) },
+        { label: t('mobileApp.docs.add.photos'), icon: ImageIcon, disabled: busy, testID: 'docs-add-photos', onPress: () => void run(pickPhotos) },
+        { label: t('mobileApp.docs.add.files'), icon: FileText, disabled: busy, testID: 'docs-add-file', onPress: () => void run(pickDocuments) },
         ...(onBrowse && chatId ? [{ label: t('chat.browseFiles'), icon: FolderOpen, disabled: busy, testID: 'docs-browse', onPress: () => onBrowse(chatId) }] : []),
-        ...(pcChatId ? [{ label: t('docs.pathHint'), icon: Pencil, disabled: busy, testID: 'docs-add-path', onPress: () => setPathOpen(true) }] : []),
+        ...(pcChatId ? [{ label: t('mobileApp.docs.add.path'), icon: Pencil, disabled: busy, testID: 'docs-add-path', onPress: () => setPathOpen(true) }] : []),
     ];
 
     return (
         <Stack gap="sm">
             {showButton ? <AddButton onPress={() => onMenuOpenChange(true)} /> : null}
             <ActionSheet open={menuOpen} onClose={() => onMenuOpenChange(false)} title={t('mobileApp.docs.add')} actions={sheetActions} />
-            <Sheet open={pathOpen} onClose={() => setPathOpen(false)} title={t('docs.pathHint')}>
+            <Sheet open={pathOpen} onClose={() => setPathOpen(false)} title={t('mobileApp.docs.add.path')}>
                 <Stack gap="sm">
                     <Row gap="sm" align="center">
                         <Stack flex={1}>

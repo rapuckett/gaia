@@ -70,7 +70,7 @@ describe('DocumentsScreen', () => {
         expect(screen.getByText(/^\u2066?1\u2069? document · \u2066?3 KB\u2069?$/)).toBeTruthy();
         expect(screen.getByText(/couldn't be read/)).toBeTruthy();
         expect(screen.getByText(/3 KB/)).toBeTruthy();
-        expect(screen.getByText(/go to your next new chat/)).toBeTruthy();
+        expect(screen.getByText(/Adds to your next new chat/)).toBeTruthy();
     });
 
     it('puts the chooser and adder inside the list so the whole screen scrolls', async () => {
@@ -343,8 +343,9 @@ describe('DocumentsScreen', () => {
             expect(screen.getByTestId('docs-target-value').props.children).toContain('Board prep');
             await fireEvent.press(screen.getByTestId('docs-target-change'));
             expect(await screen.findByTestId('docs-target-chat')).toBeTruthy();
+            expect(screen.getByText('A chat searches only the documents added to it.')).toBeTruthy();
             await fireEvent.press(screen.getByTestId('docs-target-next'));
-            await waitFor(() => expect(screen.getByTestId('docs-target-value').props.children).toBe('Your next new chat'));
+            await waitFor(() => expect(screen.getByTestId('docs-target-value').props.children).toBe('Adds to your next new chat'));
         });
 
         it('has no Change outside a chat', async () => {

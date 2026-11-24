@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { isolateUnit } from '@webui/i18n/registry';
 
 import { useT } from '@/i18n/useT';
-import { ActionSheet, Button, Row, Stack, Text } from '@/ui';
+import { ActionSheet, Pressable, Row, Stack, Text } from '@/ui';
 
 export type LibraryTarget = 'chat' | 'next';
 
@@ -24,7 +24,7 @@ export function TargetChooser({ chatTitle, target, onChange }: TargetChooserProp
     if (chatTitle === null) {
         return (
             <Text tone="secondary" testID="docs-target">
-                {t('docs.nextChatOnly')}
+                {t('mobileApp.docs.addsToNext')}
             </Text>
         );
     }
@@ -32,18 +32,18 @@ export function TargetChooser({ chatTitle, target, onChange }: TargetChooserProp
     return (
         <Row gap="sm" align="center" testID="docs-target">
             <Stack flex={1}>
-                <Text role="caption" tone="secondary">
-                    {t('docs.addTo')}
-                </Text>
                 <Text weight="semibold" numberOfLines={1} testID="docs-target-value">
-                    {target === 'chat' ? isolateUnit(quoted) : t('docs.nextChat')}
+                    {target === 'chat' ? t('mobileApp.docs.addsTo', { title: isolateUnit(chatTitle) }) : t('mobileApp.docs.addsToNext')}
                 </Text>
             </Stack>
-            <Button size="sm" variant="ghost" label={t('setup.plan.agentChange')} testID="docs-target-change" onPress={() => setOpen(true)} />
+            <Pressable accessibilityLabel={t('mobileApp.docs.targetChangeAria')} testID="docs-target-change" onPress={() => setOpen(true)}>
+                <Text tone="accent">{t('mobileApp.docs.targetChange')}</Text>
+            </Pressable>
             <ActionSheet
                 open={open}
                 onClose={() => setOpen(false)}
                 title={t('docs.addTo')}
+                message={t('docs.hint')}
                 actions={[
                     { label: t.bare('docs.thisChat', { chat: quoted }), testID: 'docs-target-chat', onPress: () => onChange('chat') },
                     { label: t('docs.nextChat'), testID: 'docs-target-next', onPress: () => onChange('next') },
