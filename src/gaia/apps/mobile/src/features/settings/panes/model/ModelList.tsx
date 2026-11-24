@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { Children, createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { Children, createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { isDownloading } from '@webui/components/modelMeta';
 import { distinctLabels, groupModels } from '@webui/utils/modelList.core';
@@ -11,6 +11,8 @@ import { useRemoveCustomModel, useStartModelDownload } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Button, Divider, Notice, Row, SearchField, SettingsGroup, Sheet, Spinner, Stack, Text } from '@/ui';
 
+import { useConfirmSheet } from '../../../setup/sheets/ConfirmSheet';
+import { noFitRequest } from '../../../setup/sheets/setupConfirm';
 import { AddCustomModel, SeedCheckPending, SeedCustomReport } from './AddCustomModel';
 import { ModelRow } from './ModelRow';
 import { errorText, isolate, modelLabel, refusedOnPhone, sameModelId } from './modelText';
@@ -21,6 +23,8 @@ const SEARCHABLE_FROM = 6;
 export const SeedAddedModel = createContext<string | null>(null);
 /** Dev scenes only: the text the models search field opens with. */
 export const SeedModelSearch = createContext('');
+/** Dev scenes only: the id of a tight model whose Use question opens already asked. */
+export const SeedTightUse = createContext<string | null>(null);
 
 export interface ModelListProps {
     provider: string;
@@ -75,6 +79,8 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
     const seededPending = useContext(SeedCheckPending);
     const [adding, setAdding] = useState(!!seeded || !!seededReport || !!seededPending);
     const [confirmRemove, setConfirmRemove] = useState<ProviderModel | null>(null);
+    const { ask, sheet } = useConfirmSheet();
+    const seededTight = useContext(SeedTightUse);
 
     const groups = useMemo(
         () => groupModels(models, { query, provider, showAll, activeModel }),
@@ -122,6 +128,20 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
         }
     };
 
+    const use = async (m: ProviderModel) => {
+        if (m.fits === true && m.tight) {
+            const request = noFitRequest([{ name: labels[m.id] ?? modelLabel(m), why: '', tight: true }], t);
+            if (!(await ask({ ...request, cancelLabel: t('setup.cancel') }))) return;
+        }
+        onUse(m.id);
+    };
+
+    useEffect(() => {
+        const m = seededTight ? models?.find((x) => x.id === seededTight) : undefined;
+        if (m) void use(m);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- the seed asks once, when the list first has its models
+    }, [!!models]);
+
     const renderRow = (m: ProviderModel) => (
         <ModelRow
             key={m.id}
@@ -130,7 +150,7 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
             current={sameModelId(activeModel, m.id)}
             remote={remote}
             busy={effectiveBusy}
-            onUse={() => onUse(m.id)}
+            onUse={() => void use(m)}
             onDownload={() => void startDownload(m)}
             onRemove={() => setConfirmRemove(m)}
             onNpuRecheck={onRefresh}
@@ -228,6 +248,7 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
                     <Button full label={t('settings.models.keep')} onPress={() => setConfirmRemove(null)} />
                 </Stack>
             </Sheet>
+            {sheet}
         </Stack>
     );
 }

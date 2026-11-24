@@ -19,7 +19,7 @@ import { SeedOwnServer } from '@/features/settings/panes/advanced/LemonadeTarget
 import { SeedDiscord, SeedJustPaired } from '@/features/settings/panes/Messaging';
 import { SeedAgentCompare } from '@/features/settings/panes/model/AgentChoice';
 import { SeedCheckPending, SeedCustomReport } from '@/features/settings/panes/model/AddCustomModel';
-import { SeedAddedModel, SeedModelSearch } from '@/features/settings/panes/model/ModelList';
+import { SeedAddedModel, SeedModelSearch, SeedTightUse } from '@/features/settings/panes/model/ModelList';
 import { SeedOpenDetails } from '@/features/settings/panes/model/ModelRow';
 import { SeedProviderKey } from '@/features/settings/panes/model/ProviderKey';
 import { SectionErrorBoundary } from '@/features/settings/SectionErrorBoundary';
@@ -62,7 +62,8 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                 <SeedOwnServer.Provider value={found.ownServer ?? null}>
                                 <SeedAddedModel.Provider value={found.addedModel ?? null}>
                                     <SeedModelSearch.Provider value={found.search ?? ''}>
-                                        <SeedOpenDetails.Provider value={found.openDetails ?? null}>
+                                        <SeedTightUse.Provider value={found.tightUse ?? null}>
+<SeedOpenDetails.Provider value={found.openDetails ?? null}>
                                             <SeedJustPaired.Provider value={!!found.justPaired}>
                                             <SeedDiscord.Provider value={found.discord ?? null}>
                                                 <SeedCheckPending.Provider value={found.checkPending ?? null}>
@@ -87,6 +88,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                             </SeedDiscord.Provider>
                                             </SeedJustPaired.Provider>
                                         </SeedOpenDetails.Provider>
+</SeedTightUse.Provider>
                                     </SeedModelSearch.Provider>
                                 </SeedAddedModel.Provider>
                                 </SeedOwnServer.Provider>
