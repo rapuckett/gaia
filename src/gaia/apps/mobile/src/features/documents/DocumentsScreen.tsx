@@ -181,7 +181,9 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                                 <Text tone="secondary" align="center">
                                     {t('docs.emptyHintPhone')}
                                 </Text>
-                                <AddButton onPress={() => setMenuOpen(true)} />
+                                <Row justify="center">
+                                    <AddButton onPress={() => setMenuOpen(true)} />
+                                </Row>
                             </Stack>
                         ) : null}
                     </>
