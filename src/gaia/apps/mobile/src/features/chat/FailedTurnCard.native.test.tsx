@@ -11,23 +11,27 @@ import { ThemeProvider } from '@/ui';
 import { SavedReplyErrors } from './ReplyErrors';
 
 const mockPush = jest.fn();
+let mockLocal = false;
 jest.mock('expo-router', () => ({ router: { push: (href: unknown) => mockPush(href) } }));
-jest.mock('@/data', () => ({ useSession: () => ({ data: undefined }) }));
+jest.mock('@/data', () => ({ useSession: () => ({ data: { inference_remote: !mockLocal ? undefined : false } }) }));
 
 const t = translator('en');
 const reply = (content: string) => ({ id: 1, session_id: 's1', role: 'assistant', content, failed: true }) as Message;
 
-const mount = (content: string) =>
+const mount = (content: string, latest = true) =>
     render(
         <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
             <ThemeProvider>
-                <SavedReplyErrors message={reply(content)} />
+                <SavedReplyErrors message={reply(content)} latest={latest} />
             </ThemeProvider>
         </SafeAreaProvider>,
     );
 
 describe('failed reply names its cause', () => {
-    beforeEach(() => mockPush.mockClear());
+    beforeEach(() => {
+        mockPush.mockClear();
+        mockLocal = false;
+    });
 
     it.each([
         ['modelUnavailable', "Failed to start the query run: Failed to preload model: Lemonade has no model called 'x'."],
@@ -60,5 +64,20 @@ describe('failed reply names its cause', () => {
         await mount("Failed to start the query run: Failed to preload model: Lemonade has no model called 'x'. Check Settings › Advanced › Custom model ID.");
         await fireEvent.press(screen.getByTestId('open-settings-advanced'));
         expect(mockPush).toHaveBeenCalledWith({ pathname: '/settings/[section]', params: { section: 'advanced', target: 'custom-model' } });
+    });
+
+    it('orders the card: title, body, Details, Try again, Settings, then the server log on a local model', async () => {
+        mockLocal = true;
+        const { toJSON } = await mount('Failed to start the query run: Failed to load model Gemma: llama-server exited with code 1.');
+        const ids = [...JSON.stringify(toJSON()).matchAll(/"testID":"(error-banner|failed-lead|try-again|open-settings-model|server-log)"/g)].map((m) => m[1]);
+        expect(ids).toEqual(['error-banner', 'failed-lead', 'try-again', 'open-settings-model', 'server-log']);
+        await fireEvent.press(screen.getByTestId('server-log'));
+        expect(mockPush).toHaveBeenCalledWith('/logs');
+    });
+
+    it('no server log button on a remote model, and no Try again on an older reply', async () => {
+        await mount('Failed to start the query run: Failed to load model Gemma: llama-server exited with code 1.', false);
+        expect(screen.queryByTestId('server-log')).toBeNull();
+        expect(screen.queryByTestId('try-again')).toBeNull();
     });
 });

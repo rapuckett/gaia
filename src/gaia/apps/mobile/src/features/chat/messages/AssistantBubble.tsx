@@ -89,7 +89,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             ) : null}
             {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
             {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
-            {!streaming && !cancelled ? <SavedReplyErrors message={message} fixShownBelow={fixShownBelow} /> : null}
+            {!streaming && !cancelled ? <SavedReplyErrors message={message} fixShownBelow={fixShownBelow} latest={!!context?.latest} /> : null}
             {!streaming && !cancelled && isAgentNotGranted(spoken) ? <GrantNote /> : null}
             {!streaming && !cancelled && !isAgentNotGranted(spoken) && isAuthRequiredMessage(spoken) ? <EmailConnect content={spoken} /> : null}
             {!streaming && !cancelled ? (

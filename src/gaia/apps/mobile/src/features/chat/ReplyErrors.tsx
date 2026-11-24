@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 
 import { failureRecordId } from '@webui/utils/streamErrors.core';
@@ -11,12 +12,13 @@ import { useSession } from '@/data';
 import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
 import { openPolicyReceipts } from '@/features/notifications/openPolicyReceipts';
 import { ModelServerDownNotice } from '@/features/model/ModelServerDownNotice';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, describeHttpFailure, useT } from '@/i18n/useT';
 import { openLink } from '@/platform/openLink';
 import { Button, Icon, Notice, Row, Stack, Text } from '@/ui';
-import { Archive, Info } from '@/ui/icons';
+import { Archive, Info, RotateCcw, ScrollText } from '@/ui/icons';
 
 import { FailedLead, OpenSettingsButtons, causeTitleKey, failedTurnOf } from './FailedTurnCard';
+import { useMessageActionsContext } from './messages/MessageActionsContext';
 import { chatErrorInfo, namesFailureRecord, reportTitle } from './chatErrors';
 import { phoneBugReportUrl } from './bugReport';
 import type { TurnTail } from './tailState';
@@ -61,23 +63,48 @@ function PcOnlyFailureLines({ showLog, showReport }: { showLog: boolean; showRep
 }
 
 /** What a saved reply that looks like an error needs beside it, decided as the web UI's message bubble does. */
-export function SavedReplyErrors({ message, fixShownBelow = false }: { message: Message; fixShownBelow?: boolean }) {
+export function SavedReplyErrors({ message, fixShownBelow = false, latest = false }: { message: Message; fixShownBelow?: boolean; latest?: boolean }) {
+    const t = useT();
+    const { retry, busy, readOnly } = useMessageActionsContext();
+    const [retryFailure, setRetryFailure] = useState<{ text: string; detail?: string } | null>(null);
     const isError = message.failed === true || isErrorContent(message.content);
     const local = useSession(message.session_id).data?.inference_remote === false;
     const showLog = local && isError;
     const showReport = failureRecordId(message.content) !== null;
-    const t = useT();
     const turn = useMemo(() => (isError && !fixShownBelow ? failedTurnOf(message.content) : null), [isError, fixShownBelow, message.content]);
     if (!isError && !showLog && !showReport) return null;
     const titleKey = turn ? causeTitleKey(turn) : null;
+    const tryAgain = () => {
+        setRetryFailure(null);
+        retry?.(message.id).catch((err: unknown) => setRetryFailure(describeHttpFailure(err, t)));
+    };
     return (
         <Stack gap="sm">
             {isError && !fixShownBelow ? <ErrorBanner title={titleKey ? t(titleKey) : undefined} /> : null}
             {turn?.raw ? <FailedLead turn={turn} content={message.content} /> : null}
+            {retryFailure ? <Notice tone="danger" message={retryFailure.text} detail={retryFailure.detail} testID="failed-retry-error" /> : null}
+            {ownsTryAgain(message, { fixShownBelow, latest, busy, readOnly }) ? (
+                <Row gap="sm" wrap stack>
+                    <Button size="sm" icon={RotateCcw} label={t('msg.tryAgain')} onPress={tryAgain} testID="try-again" />
+                </Row>
+            ) : null}
             {turn ? <OpenSettingsButtons turn={turn} /> : null}
-            <PcOnlyFailureLines showLog={showLog} showReport={showReport} />
+            {showLog ? (
+                <Row gap="sm" wrap stack>
+                    <Button size="sm" variant="secondary" icon={ScrollText} label={t('logs.serverLog')} onPress={() => router.push('/logs')} testID="server-log" />
+                </Row>
+            ) : null}
+            <PcOnlyFailureLines showLog={false} showReport={showReport} />
         </Stack>
     );
+}
+
+/** The newest failed reply carries its own Try again, between its cause and its Settings buttons; the tail leaves it out. */
+export function ownsTryAgain(
+    message: Message,
+    state: { fixShownBelow: boolean; latest: boolean; busy: boolean; readOnly?: boolean },
+): boolean {
+    return (message.failed === true || isErrorContent(message.content)) && !state.fixShownBelow && state.latest && !state.busy && !state.readOnly;
 }
 
 function PolicyNotice({ alert }: { alert: NonNullable<TurnTail['policyAlert']> }) {

@@ -31,7 +31,7 @@ import { PermissionPrompt } from './permission/PermissionPrompt';
 import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
-import { TailIssues } from './ReplyErrors';
+import { ownsTryAgain, TailIssues } from './ReplyErrors';
 import { registerOpenChat } from './sendToOpenChat';
 import { OfflineNotice, SessionPanel } from './session-panel';
 import { buildTail, serverDownReplyId } from './tailState';
@@ -74,6 +74,10 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
     const builtTail = buildTail(saved, stream);
     const tail = builtTail && retiredAgent ? { ...builtTail, canTryAgain: false, canContinue: false } : builtTail;
     const lastReply = saved.filter((m) => m.role !== 'system').at(-1);
+    // A failed saved reply carries its own Try again, so the tail leaves it out.
+    const replyHasTryAgain =
+        !!tail && !tail.live && tail.replyId !== null && lastReply?.id === tail.replyId &&
+        ownsTryAgain(lastReply, { fixShownBelow: serverDownReplyId(tail) === lastReply.id, latest: true, busy: hold, readOnly: !!retiredAgent });
     const connectProviders = connectCardProviders(lastReply);
     // A Connect card names its connectors outright; a reply with only its wording is read for them.
     const connectorError =
@@ -250,7 +254,7 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                             {historyNotice ? <HistoryNotice text={historyNotice} /> : null}
                             {tail ? (
                                 <TurnTail
-                                    tail={tail}
+                                    tail={replyHasTryAgain ? { ...tail, canTryAgain: false } : tail}
                                     line={line}
                                     awaitingUser={!!stream.pendingPermission || !!stream.pendingQuestion}
                                     onTryAgain={() => tryAgain(tail.replyId)}
