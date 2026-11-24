@@ -13,12 +13,16 @@ export interface SpinnerProps {
     accessibilityLabel?: string;
 }
 
+// Android speaks a live region on its own; iOS needs the announcement.
+export function useAnnounceOnIos(label?: string) {
+    useEffect(() => {
+        if (label && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(label);
+    }, [label]);
+}
+
 export function Spinner({ size = 'md', tone = 'secondary', accessibilityLabel }: SpinnerProps) {
     const { colors } = useTheme();
-    // Android speaks a live region on its own; iOS needs the announcement.
-    useEffect(() => {
-        if (accessibilityLabel && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(accessibilityLabel);
-    }, [accessibilityLabel]);
+    useAnnounceOnIos(accessibilityLabel);
     return (
         <ActivityIndicator
             size={size === 'sm' ? 'small' : 'large'}

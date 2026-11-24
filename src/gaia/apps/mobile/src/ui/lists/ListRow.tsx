@@ -18,6 +18,9 @@ export interface ListRowProps {
     subtitle?: string;
     /** `danger` for a failed state such as "1 not sent". */
     subtitleTone?: Tone;
+    /** A third caption line under the subtitle. */
+    detail?: string;
+    detailTone?: Tone;
     leading?: ReactNode;
     trailing?: ReactNode;
     onPress?: () => void;
@@ -53,6 +56,8 @@ export function ListRow({
     title,
     subtitle,
     subtitleTone = 'muted',
+    detail,
+    detailTone = 'muted',
     leading,
     trailing,
     onPress,
@@ -101,6 +106,11 @@ export function ListRow({
                 {subtitle ? (
                     <Text role="caption" tone={subtitleTone} numberOfLines={subtitleLines}>
                         {subtitle}
+                    </Text>
+                ) : null}
+                {detail ? (
+                    <Text role="caption" tone={detailTone}>
+                        {detail}
                     </Text>
                 ) : null}
             </View>
