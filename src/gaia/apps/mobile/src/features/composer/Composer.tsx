@@ -1,8 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Platform, View, type ViewStyle } from 'react-native';
+import { useCallback, useEffect, useMemo, useState, type ComponentRef, type ReactNode, type Ref } from 'react';
+import { Platform, View, type TextInput, type ViewStyle } from 'react-native';
 
 import { bracketParts } from '@webui/i18n/registry';
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
@@ -40,6 +40,8 @@ export interface ComposerProps {
     attachments?: Attachments;
     /** Opens the attach menu, with Paste image offered (developer gallery). */
     attachMenu?: { open?: boolean; paste?: boolean };
+    /** The text input, for a screen that focuses it after filling the box. */
+    inputRef?: Ref<ComponentRef<typeof TextInput>>;
     leftControls?: ReactNode;
     rightControls?: ReactNode;
 }
@@ -67,6 +69,7 @@ export function Composer({
     starting = false,
     attachments,
     attachMenu,
+    inputRef,
     leftControls,
     rightControls,
 }: ComposerProps) {
@@ -171,6 +174,7 @@ export function Composer({
                         maxLines={MAX_LINES}
                         disabled={!!disabledReason}
                         bare
+                        inputRef={inputRef}
                         maxFontSizeMultiplier={INPUT_MAX_FONT_SCALE}
                         testID="composer-input"
                     />
