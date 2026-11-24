@@ -12,6 +12,7 @@ import { log } from '../utils/logger';
 import { useT } from '../i18n/useT';
 import type { MessageKey } from '../i18n/registry';
 import { useChatStore } from '../stores/chatStore';
+import { useDeviceStore } from '../stores/deviceStore';
 import './MobileAccessModal.css';
 
 // QRCode loaded lazily via dynamic import
@@ -41,6 +42,8 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
     const [copied, setCopied] = useState(false);
     const t = useT();
     const openSettings = useChatStore((s) => s.openSettings);
+    // The pointer names Settings › Phones and tablets, so it shows only where that section does.
+    const devicesShown = useDeviceStore((s) => s.available === true);
     const needsSetup = Array.isArray(setupCommands);
     // Nothing to poll for or scan while the tunnel cannot start.
     const idle = !!awaitingStart && !!onStart;
@@ -270,7 +273,7 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                         </div>
                     )}
 
-                    {status?.active && !error && (
+                    {status?.active && !error && devicesShown && (
                         <p className="mobile-app-hint">
                             {t.bare('mobileAccess.appPairHint', { link: LINK_SLOT }).split(LINK_SLOT).flatMap((part, i, parts) => [
                                 part,

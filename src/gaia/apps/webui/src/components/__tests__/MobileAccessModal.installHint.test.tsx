@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
+import { useDeviceStore } from '../../stores/deviceStore';
 import type { TunnelStatus } from '../../types';
 import { MobileAccessModal } from '../MobileAccessModal';
 import { tEn } from '../../i18n/translator';
@@ -30,11 +31,13 @@ function setTokens() {
 describe('MobileAccessModal home-screen hint', () => {
     beforeEach(() => {
         vi.mocked(api.getTunnelStatus).mockReset();
+        useDeviceStore.setState({ available: true, loadError: null });
         setTokens();
     });
 
     afterEach(() => {
         useChatStore.setState({ locale: 'en' });
+        useDeviceStore.setState({ available: null, loadError: null });
     });
 
     it('tells the user how to add GAIA to the home screen on iPhone and Android', async () => {
@@ -94,5 +97,13 @@ describe('MobileAccessModal home-screen hint', () => {
         fireEvent.click(link);
         expect(openSettings).toHaveBeenCalledWith('devices');
         expect(onClose).toHaveBeenCalled();
+    });
+
+    it('leaves the pointer out with pairing off, where Settings has no Phones and tablets section', async () => {
+        useDeviceStore.setState({ available: false, loadError: null });
+        vi.mocked(api.getTunnelStatus).mockResolvedValue(ACTIVE);
+        render(<MobileAccessModal isOpen onClose={vi.fn()} />);
+        expect(await screen.findByText('Keep GAIA on your phone')).toBeInTheDocument();
+        expect(screen.queryByText(/Have the GAIA app\?/)).toBeNull();
     });
 });
