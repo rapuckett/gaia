@@ -43,11 +43,11 @@ export function DiffCard({ data }: { data: unknown }) {
                 ) : null}
                 {lines.length > 0 ? (
                     <HScroll dir="ltr" hint hintBackground={colors.bgCard} testID="card-diff-scroll">
-                        <View style={{ minWidth: '100%', direction: 'ltr' }} {...dirProp('ltr')}>
+                        <View style={{ direction: 'ltr' }} testID="card-diff-lines" {...dirProp('ltr')}>
                             {lines.map((line, i) => {
                                 const kind = diffLineKind(line);
                                 return (
-                                    <View key={i} testID={`diff-line-${kind}`} style={{ flexDirection: 'row', backgroundColor: fill[kind], paddingHorizontal: space.xs }}>
+                                    <View key={i} testID={`diff-line-${kind}`} style={{ flexDirection: 'row', flexShrink: 0, backgroundColor: fill[kind], paddingHorizontal: space.xs }}>
                                         <Text role="caption" mono tone={kind === 'context' ? 'primary' : kind === 'hunk' ? 'secondary' : kind === 'added' ? 'success' : 'danger'}>
                                             {kind === 'hunk' ? line : `${GUTTER[kind]} `}
                                         </Text>
