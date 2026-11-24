@@ -71,6 +71,10 @@ export function SetupGate({
                 onPairAgain={pairAgain.run}
                 checking={pairAgain.state === 'checking'}
                 unreachablePc={pairAgain.state === 'unreachable' ? pairAgain.pcName : null}
+                otherDevicePc={pairAgain.otherDevice?.name ?? null}
+                onForget={pairAgain.forget}
+                forgetting={pairAgain.forgetting}
+                forgetError={pairAgain.forgetError}
             />
         );
     }

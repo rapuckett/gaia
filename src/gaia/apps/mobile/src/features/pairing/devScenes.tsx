@@ -40,8 +40,8 @@ export interface PairingScene {
     changesAll?: boolean;
     /** Shows the pairing flow's local network explainer, or its denied card, instead. */
     localNetwork?: 'explainer' | 'denied';
-    /** "Pair again" asking the PC, finding it unreachable, or finding it no longer knows this phone (How to pair). */
-    pairAgain?: 'checking' | 'unreachable' | 'forgotten';
+    /** "Pair again" asking the PC, finding it unreachable, a different device answering, or the PC no longer knowing this phone (How to pair). */
+    pairAgain?: 'checking' | 'unreachable' | 'otherDevice' | 'forgotten';
 }
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -98,6 +98,7 @@ export const PAIRING_SCENES: Record<string, PairingScene> = {
     'pair-again-checking': { name: 'Studio PC', chosen: HOME, pairAgain: 'checking' },
     'pair-again-unreachable': { name: 'Studio PC', chosen: HOME, pairAgain: 'unreachable' },
     'pair-again-forgotten': { name: 'Studio PC', chosen: HOME, pairAgain: 'forgotten' },
+    'pair-again-other-device': { name: 'Studio PC', chosen: HOME, pairAgain: 'otherDevice' },
 };
 
 function connectionOf(scene: PairingScene): ConnectionConfig {
@@ -124,7 +125,13 @@ export function PairingSceneView({ scene }: { scene: PairingScene }) {
     if (scene.pairAgain) {
         return (
             <UIProvider>
-                <PinMismatchScreen onPairAgain={() => undefined} checking={scene.pairAgain === 'checking'} unreachablePc={scene.name} />
+                <PinMismatchScreen
+                    onPairAgain={() => undefined}
+                    checking={scene.pairAgain === 'checking'}
+                    unreachablePc={scene.pairAgain === 'unreachable' || scene.pairAgain === 'checking' ? scene.name : null}
+                    otherDevicePc={scene.pairAgain === 'otherDevice' ? scene.name : null}
+                    onForget={() => undefined}
+                />
             </UIProvider>
         );
     }

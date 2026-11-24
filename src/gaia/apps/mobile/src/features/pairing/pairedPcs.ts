@@ -73,16 +73,23 @@ export function useForgetPc() {
 /** How long "Pair again" waits for the PC; past it, nothing is decided and nothing changes. */
 export const PAIR_AGAIN_MS = 10_000;
 
-export type PairAgainState = { state: 'idle' } | { state: 'checking' } | { state: 'unreachable'; pcName: string };
+export type PairAgainState =
+    | { state: 'idle' }
+    | { state: 'checking' }
+    | { state: 'unreachable'; pcName: string }
+    | { state: 'otherDevice'; pcName: string };
 
 /**
  * After a pin mismatch: asks the PC in use, over the pin saved at pairing, whether it still knows this phone. Known:
- * `onKnown` checks again. Unknown: off to the pairing screen, which says so and only then forgets the PC. Anything
- * else, or no answer in `deadlineMs`, changes nothing and says the PC can't be reached.
+ * `onKnown` checks again. Unknown: off to the pairing screen, which says so and only then forgets the PC. A different
+ * certificate at every address: `otherDevice`, kept while Try again asks again, and the PC is forgotten only through
+ * `forget`. Anything else, or no answer in `deadlineMs`, changes nothing and says the PC can't be reached.
  */
 export function usePairAgain(onKnown: () => void, deadlineMs: number = PAIR_AGAIN_MS) {
     const queryClient = useQueryClient();
+    const forgetting = useForgetPc();
     const [state, setState] = useState<PairAgainState>({ state: 'idle' });
+    const [otherDevice, setOtherDevice] = useState<Pick<PairedPc, 'id' | 'name'> | null>(null);
     const running = useRef(false);
     const alive = useRef(true);
     useEffect(() => {
@@ -111,18 +118,30 @@ export function usePairAgain(onKnown: () => void, deadlineMs: number = PAIR_AGAI
             }
             running.current = false;
             if (!alive.current) return;
+            const stillThisPc = !!pc && isCurrentPc(pc, useConnectionStore.getState().connection);
+            setOtherDevice(answer.state === 'otherDevice' && pc ? { id: pc.id, name: pc.name } : null);
             if (answer.state === 'known') {
                 setState({ state: 'idle' });
                 // A PC that answered at another address is already being checked there, since the connection changed.
                 if (useConnectionStore.getState().connection === before) onKnown();
-            } else if (answer.state === 'unknown' && pc) {
+            } else if (answer.state === 'unknown' && pc && stillThisPc) {
                 useConnectionStore.getState().pcForgotPhone({ id: pc.id, name: pc.name });
                 dropPcData(queryClient);
+            } else if (answer.state === 'unknown') {
+                // The app moved to another PC while this one answered; that one isn't sent to pairing.
+                setState({ state: 'idle' });
+            } else if (answer.state === 'otherDevice' && pc) {
+                setState({ state: 'otherDevice', pcName: pc.name });
             } else {
                 setState({ state: 'unreachable', pcName: pc?.name ?? '' });
             }
         })();
     }, [onKnown, queryClient, deadlineMs]);
 
-    return { ...state, run };
+    /** Forgets the PC a different device answered for, local first, once the person confirmed it. */
+    const forget = useCallback(() => {
+        if (otherDevice && !running.current) forgetting.mutate(otherDevice);
+    }, [otherDevice, forgetting]);
+
+    return { ...state, otherDevice, run, forget, forgetting: forgetting.isPending, forgetError: forgetting.error };
 }

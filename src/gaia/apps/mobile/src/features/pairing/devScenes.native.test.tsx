@@ -42,6 +42,7 @@ const EXPECTED: Record<string, string> = {
     'pair-again-checking': t('mobileApp.pairing.again.busy'),
     'pair-again-unreachable': t('mobileApp.pairing.again.unreachable', { pc: 'Studio PC' }),
     'pair-again-forgotten': t('mobileApp.pairing.again.forgottenTitle', { pc: 'Studio PC' }),
+    'pair-again-other-device': t('mobileApp.pairing.again.otherDevice.title', { pc: 'Studio PC' }),
 };
 
 const hidden = { includeHiddenElements: true };
