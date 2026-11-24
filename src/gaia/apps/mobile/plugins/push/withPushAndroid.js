@@ -18,7 +18,7 @@ const POST_NOTIFICATIONS = 'android.permission.POST_NOTIFICATIONS';
 // The link a tapped notification opens, read by GaiaMessagingService; pairing links use the same scheme.
 const SCHEME_KEY = 'ai.amd.gaia.push.SCHEME';
 const STRINGS_FILE = 'gaia_push_strings.xml';
-// The status-bar icon, 24 dp in each density: the desktop tray's GAIA template, scaled smooth and made white on transparent.
+// The status-bar icon, 24 dp in each density: the robot head from the desktop's notification icon, traced white on transparent (visor and lens cut out, eyes kept).
 const ICON_FILE = 'ic_stat_gaia.png';
 const ICON_DENSITIES = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi'];
 const iconSource = (density) => path.join(__dirname, 'assets', `ic_stat_gaia-${density}.png`);
