@@ -14,7 +14,7 @@ import { requestErrorParam } from '../utils/requestErrors';
 import { formatSize } from '../utils/format';
 import { examplePath } from '../utils/platform';
 import { cleanPastedPath } from '../utils/pastedPath';
-import { INDEX_POLL_MS, REMOVE_UNDO_MS, countText, describeFolderResult, elapsed, failureHint, formatFullTimestamp, formatTimestamp, isIndexing, splitFailureReason } from '../utils/documentLibrary.core';
+import { FILTER_AFTER, INDEX_POLL_MS, REMOVE_UNDO_MS, countText, documentUsage, filterNeedle, matchesName, describeFolderResult, elapsed, failureHint, formatFullTimestamp, formatTimestamp, isIndexing, splitFailureReason } from '../utils/documentLibrary.core';
 
 export { INDEX_POLL_MS, REMOVE_UNDO_MS };
 import { UploadErrorToast } from './UnsupportedFeature';
@@ -25,9 +25,6 @@ import { IndexingProgress } from './IndexingProgress';
 import { needsRetry, serverFailureText, serverNotAddedText, waitsForServerReturn } from '../utils/documentFailure';
 import './DocumentLibrary.css';
 import { visibleName } from './CalendarApproval';
-
-/** A library longer than this gets a filter box. */
-const FILTER_AFTER = 5;
 
 interface PendingRemoval { id: string; name: string }
 
@@ -83,8 +80,8 @@ export function DocumentLibrary() {
     const targetChatName = `“${currentSession?.title || t('docs.untitledChat')}”`;
     const [notice, setNotice] = useState('');
     const [filter, setFilter] = useState('');
-    const filterText = documents.length > FILTER_AFTER ? filter.trim().toLowerCase() : '';
-    const matchesFilter = (doc: Document) => !filterText || doc.filename.toLowerCase().includes(filterText);
+    const filterText = filterNeedle(filter, documents.length);
+    const matchesFilter = (doc: Document) => matchesName(doc.filename, filterText);
     /** The document the notice is about, so removing it takes the notice with it. */
     const noticeDocId = useRef<string | null>(null);
     const closeLibrary = useCallback(() => setShowDocLibrary(false), [setShowDocLibrary]);
@@ -686,18 +683,12 @@ export function DocumentLibrary() {
 
     /** Which chats a readable document is in, from the open chat and the server's count. */
     const renderUsage = (doc: Document) => {
-        if (doc.indexing_status && doc.indexing_status !== 'complete') return null;
-        const inThisChat = !!currentSession?.document_ids?.includes(doc.id);
-        const others = Math.max((doc.sessions_using ?? 0) - (inThisChat ? 1 : 0), 0);
-        let label: string;
-        if (inThisChat) {
-            label = others > 0 ? t.plural('docs.usage.hereAndOthers', others) : t('docs.usage.here');
-        } else if (draftDocumentIds.includes(doc.id)) {
-            label = t('docs.usage.next');
-        } else {
-            label = others > 0 ? t.plural('docs.usage.chats', others) : t('docs.usage.none');
-        }
-        return <span className={`doc-usage${inThisChat ? ' is-here' : ''}`}>{label}</span>;
+        const usage = documentUsage(t, doc, {
+            inThisChat: !!currentSession?.document_ids?.includes(doc.id),
+            inNextChat: draftDocumentIds.includes(doc.id),
+        });
+        if (!usage) return null;
+        return <span className={`doc-usage${usage.here ? ' is-here' : ''}`}>{usage.label}</span>;
     };
 
     return (

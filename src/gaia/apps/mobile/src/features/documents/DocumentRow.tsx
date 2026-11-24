@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 import {
+    documentUsage,
     elapsed,
     failureHint,
     formatFullTimestamp,
@@ -31,6 +32,9 @@ interface DocumentRowProps {
     startedAt?: number;
     now: number;
     retrying: boolean;
+    /** Where the document already is: the chat the library opened from, and the next new chat. */
+    inChat?: boolean;
+    inNextChat?: boolean;
     /** Set for a complete document not yet in the target: its chat's quoted title, null for the next chat. */
     attach?: { chatName: string | null; onAttach: (docId: string) => void };
     /** Set when the document can be previewed or shared from the phone; the phone never opens anything on the PC. */
@@ -41,7 +45,7 @@ interface DocumentRowProps {
 }
 
 // Name (extension kept), then the state: size and when it was indexed, how far indexing has got, or why it failed.
-export function DocumentRow({ document: doc, progress, startedAt, now, retrying, attach, onPreview, onCancel, onRetry, onRemove }: DocumentRowProps) {
+export function DocumentRow({ document: doc, progress, startedAt, now, retrying, inChat = false, inNextChat = false, attach, onPreview, onCancel, onRetry, onRemove }: DocumentRowProps) {
     const t = useT();
     const largeText = useLargeText();
     const [reasonOpen, setReasonOpen] = useState(false);
@@ -56,6 +60,8 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
     const reason = doc.last_error ? splitFailureReason(doc.last_error) : null;
     const pct = progress ? progressPercent(progress) : null;
     const indexingText = startedAt ? t.hint(t('docs.indexingLabel'), elapsed(startedAt, now)) : t('docs.indexing');
+
+    const usage = documentUsage(t, doc, { inThisChat: inChat, inNextChat });
 
     const badge =
         status === 'failed' ? (
@@ -109,6 +115,11 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
                 testID="doc-row-main"
                 accessibilityLabel={full ? `${doc.filename}, ${size}, ${t('docs.indexedAt', { time: full })}` : doc.filename}
             />
+            {usage ? (
+                <Stack paddingX="lg" paddingY="xs">
+                    <Text role="caption" tone={usage.here ? 'accent' : 'muted'} testID="doc-usage">{usage.label}</Text>
+                </Stack>
+            ) : null}
             {badge ? (
                 <Stack paddingX="lg" paddingY="xs">
                     {badge}
@@ -125,7 +136,7 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
                         size="sm"
                         variant="secondary"
                         icon={Link2}
-                        label={attach.chatName === null ? t('docs.useNext') : t('docs.useIn', { chat: attach.chatName })}
+                        label={attach.chatName === null ? t('docs.addToNextChat') : t('docs.addToThisChat')}
                         accessibilityLabel={
                             attach.chatName === null
                                 ? t('docs.attachNextAria', { name: doc.filename })
