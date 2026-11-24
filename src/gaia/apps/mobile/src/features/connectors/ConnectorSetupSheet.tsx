@@ -8,11 +8,13 @@ import { useConfigureConnector } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { isolate } from '@webui/i18n/registry';
+import { hasConnectorGuide, showsFieldHint } from '@webui/utils/connectorGuide.core';
 import { openLinkFromPress } from '@/platform/openLink';
 import { Button, Notice, Sheet, Stack, Text, TextField } from '@/ui';
 import { Check, ExternalLink } from '@/ui/icons';
 
 import { canSaveSetup, fieldHelp, fieldLabel, setupFields, setupPayload, setupProblem, type SetupField, type SetupForm } from './connectorList';
+import { ConnectorGuide } from './ConnectorGuide';
 import { OAuthClientLine } from './OAuthClientLine';
 
 const SAVED_MS = 2200;
@@ -113,6 +115,8 @@ function SetupBody({
     }
 
     const client = connector.oauth_client;
+    // A server with keys is guided only before it is saved; first-time OAuth setup is guided whenever it shows.
+    const guided = hasConnectorGuide(connector.id) && (form === 'oauthSetup' || (form === 'mcp' && !connector.configured));
     const fields = setupFields(connector, form);
     const link = form === 'mcp' ? connector.product_url : connector.docs_url || connector.product_url;
     const saveLabel = saved
@@ -130,14 +134,15 @@ function SetupBody({
 
     return (
         <Stack gap="md">
-            {form === 'oauthSetup' ? <Text role="ui" tone="secondary">{t('settings.connectors.firstSetup')}</Text> : null}
+            {form === 'oauthSetup' && !guided ? <Text role="ui" tone="secondary">{t('settings.connectors.firstSetup')}</Text> : null}
+            {guided ? <ConnectorGuide connectorId={connector.id} setupUrl={connector.setup_url} /> : null}
             {form === 'oauthClient' ? (
                 <Stack gap="xs">
                     <OAuthClientLine connector={connector} emphasis testID="oauth-client-status" />
                     <Text role="label" tone="secondary">{t('settings.connectors.clientHelp')}</Text>
                 </Stack>
             ) : null}
-            {form === 'mcp' && connector.setup_url && !connector.configured ? (
+            {form === 'mcp' && connector.setup_url && !connector.configured && !guided ? (
                 <Stack align="start">
                     <Button
                         size="sm"
@@ -153,7 +158,7 @@ function SetupBody({
                 <SetupInput
                     key={field.key}
                     label={fieldLabel(t, connector.id, field)}
-                    help={field.help_md && (form !== 'mcp' || !connector.configured) ? fieldHelp(t, connector.id, field) : null}
+                    help={field.help_md && (form !== 'mcp' || !connector.configured) && (!guided || showsFieldHint(connector.id, field.key)) ? fieldHelp(t, connector.id, field) : null}
                     secret={form === 'mcp' || field.kind === 'secret'}
                     placeholder={placeholder(field)}
                     value={values[field.key] ?? ''}

@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import type { AgentInfo, AgentMcpServer, ConnectorKeyStore, ConnectorListEntry, ConnectorRow, GaiaClient } from '@/api/client.types';
+import type { AgentInfo, AgentMcpServer, ConnectorAccount, ConnectorKeyStore, ConnectorListEntry, ConnectorRow, GaiaClient } from '@/api/client.types';
 import type { ConnectorCheck } from '@/data';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import { GaiaApiError } from '@/api/errors';
@@ -24,7 +24,7 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * (`#tap=device-sign-in-microsoft` shows the code), `codeFailed` (the same tap, then the failure).
  * CON-02: `many` (8 connectors, so the search field shows). CON-11: `disconnected` and `revoked` open Microsoft Personal;
  * `#tap=connector-disconnect-microsoft,connector-disconnect-confirm`: `disconnected` answers that the provider has no revoke API, `revoked`
- * that the provider did not confirm the revoke (reason on the notice). CON-09: `oauthSetup` opens Google's first-time setup sheet. CON-10: `oauthClient`
+ * that the provider did not confirm the revoke (reason on the notice); `nothingStored` (the same tap) that the PC held no sign-in to remove, `accountsOne` and `accountsMany` (one expired) open Google with its accounts; `unreadable` that it could not read the stored sign-in and removed the local copy unrevoked. CON-09: `oauthSetup` opens Google's first-time setup sheet. CON-10: `oauthClient`
  * opens a connected account's OAuth client sheet. CON-12: `mcpConfigure` opens Slack's key sheet. CON-13: `checkRunning`, `checkOk`, `checkSlow`,
  * `checkFailed` and `checkLocked` (the PC's key store is locked) show a Linear server's Check line (`#tap=connector-check-linear` runs it again). CON-07: on a paired phone, `googleReady` shows Google's
  * Connect, and with `#tap=connector-connect-google`: `googleBrowser` waits on the browser, `googleFinishing` waits on the PC, `googleDone` ends
@@ -33,7 +33,7 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * CON-19: the PC's key store held back an account: `keyStoreLocked` (the locked notice with Try again), `keyStoreWaiting` (its prompt still open), and
  * `keyStoreHeldBack` (a held-back account alone, as plain text with its line).
  */
-export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed', 'checkLocked', 'googleReady', 'googleBrowser', 'googleFinishing', 'googleDone', 'googleDenied', 'googleTimeout', 'googleExpired', 'googleStateMismatch', 'googleRefused', 'googleFailed', 'googleSuperseded', 'googleCancelled', 'keyStoreLocked', 'keyStoreWaiting', 'keyStoreHeldBack'] as const;
+export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'nothingStored', 'unreadable', 'accountsOne', 'accountsMany', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed', 'checkLocked', 'googleReady', 'googleBrowser', 'googleFinishing', 'googleDone', 'googleDenied', 'googleTimeout', 'googleExpired', 'googleStateMismatch', 'googleRefused', 'googleFailed', 'googleSuperseded', 'googleCancelled', 'keyStoreLocked', 'keyStoreWaiting', 'keyStoreHeldBack'] as const;
 export type ConnectorScene = (typeof CONNECTOR_SCENES)[number];
 
 const server = (over: Partial<ConnectorRow> = {}) =>
@@ -52,6 +52,13 @@ const AGENT_MCP: AgentMcpServer = {
     agent_id: 'research', agent_name: 'Research', config_path: '/home/you/.gaia/agents/research/mcp.json', server_name: 'filesystem', command: 'npx', args: ['-y', 'server-filesystem'], disabled: false,
 };
 const DEVICE_CODE = { user_code: 'ABCD-EFGH', verification_uri: 'https://microsoft.com/devicelogin', expires_in: 900, interval: 5, message: '' };
+
+const acct = (email: string, over: Partial<ConnectorAccount> = {}): ConnectorAccount => ({ account_id: `id-${email}`, email, status: 'ok', is_default: false, ...over });
+const googleWith = (accounts: ConnectorAccount[]) =>
+    server({
+        id: 'google', display_name: 'Google', type: 'oauth_pkce', account_id: accounts.find((a) => a.is_default)?.email ?? null, accounts,
+        oauth_setup_fields: CLIENT_FIELDS, oauth_client: { source: 'keyring', client_id: 'example-client.apps.googleusercontent.com', has_secret: true },
+    } as Partial<ConnectorRow>);
 
 const GMAIL = server({ id: 'gmail', display_name: 'Gmail', type: 'oauth_pkce', account_id: 'avery@example.com' });
 
@@ -141,7 +148,27 @@ const LIST_SCENES: Partial<Record<ConnectorScene, { data: FakeClientData; expand
     },
     many: { data: { connectors: ['Slack', 'GitHub', 'Notion', 'Linear', 'Jira', 'Asana', 'Figma', 'Stripe'].map((name) => server({ id: name.toLowerCase(), display_name: name })) } },
     disconnected: { data: { connectors: [signedIn()], disconnectOutcome: { revoke_supported: false, revoked_remotely: false, revoke_error: null } }, expanded: 'microsoft' },
-    revoked: { data: { connectors: [signedIn()], disconnectOutcome: { revoke_supported: true, revoked_remotely: false, revoke_error: 'invalid_grant' } }, expanded: 'microsoft' },
+    revoked: { data: { connectors: [signedIn()], disconnectOutcome: { revoke_supported: true, revoked_remotely: false, revoke_error: 'invalid_grant', revoke_attempted: true } }, expanded: 'microsoft' },
+    unreadable: {
+        data: {
+            connectors: [signedIn()],
+            disconnectOutcome: {
+                revoke_supported: true,
+                revoked_remotely: false,
+                revoke_attempted: false,
+                revoke_error: 'GAIA could not read the stored sign-in, so it removed the local copy without revoking GAIA\'s access at Microsoft. To revoke it, remove GAIA at https://account.live.com/consent/Manage',
+            },
+        },
+        expanded: 'microsoft',
+    },
+    nothingStored: { data: { connectors: [signedIn()], disconnectOutcome: { revoke_supported: true, revoked_remotely: false, revoke_error: null, nothing_stored: true } }, expanded: 'microsoft' },
+    accountsOne: { data: { connectors: [googleWith([acct('avery@example.com', { is_default: true })])] }, expanded: 'google' },
+    accountsMany: {
+        data: {
+            connectors: [googleWith([acct('avery@example.com', { is_default: true }), acct('blake@example.com', { status: 'reauth_required' }), acct('a-very-long-address-for-the-third-account@example.com')])],
+        },
+        expanded: 'google',
+    },
     personalize: { data: { connectors: [GMAIL] }, expanded: 'gmail' },
     personalizeTile: { data: { connectors: [GMAIL] }, expanded: 'gmail' },
     personalizeFailed: {

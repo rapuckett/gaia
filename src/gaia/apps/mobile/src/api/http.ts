@@ -47,6 +47,7 @@ import type {
     ConnectorGrants,
     DeviceChangeList,
     ConnectorList,
+    ConnectorAccount,
     ConnectorRow,
     DisconnectOutcome,
     ContextUsageResult,
@@ -151,6 +152,7 @@ import {
     connectorActivationPath,
     connectorActivationsPath,
     connectorAuthorizeDevicePath,
+    connectorAccountPath,
     connectorAuthorizePath,
     connectorFlowCompletePath,
     connectorFlowPath,
@@ -966,7 +968,17 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         startConnectorBrowserSignIn(connectorId, redirectPort, scopes, options) {
-            return postJson<ConnectorAuthorizeResponse>(connectorAuthorizePath(connectorId), { scopes, redirect_port: redirectPort }, options?.signal);
+            const target = options?.target;
+            return postJson<ConnectorAuthorizeResponse>(
+                connectorAuthorizePath(connectorId),
+                {
+                    scopes,
+                    redirect_port: redirectPort,
+                    ...(target && 'addAccount' in target ? { add_account: true } : {}),
+                    ...(target && 'account' in target ? { account: target.account } : {}),
+                },
+                options?.signal,
+            );
         },
 
         completeConnectorBrowserSignIn(flowId, code, state, options) {
@@ -996,12 +1008,21 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             options?.signal?.addEventListener('abort', stop);
             try {
                 const events = await openConnectorEvents(listen.signal);
-                await request('DELETE', connectorPath(connectorId), undefined, options?.signal);
+                await request('DELETE', connectorPath(connectorId, options), undefined, options?.signal);
                 return events ? await readDisconnectOutcome(events, connectorId) : null;
             } finally {
                 options?.signal?.removeEventListener('abort', stop);
                 stop();
             }
+        },
+
+        async disconnectConnectorAccount(connectorId, accountId, options) {
+            await request('DELETE', connectorAccountPath(connectorId, accountId), undefined, options?.signal);
+        },
+
+        async setDefaultConnectorAccount(connectorId, accountId, options) {
+            const path = connectorAccountPath(connectorId, accountId);
+            return readJson<{ accounts: ConnectorAccount[] }>(await request('PATCH', path, { is_default: true }, options?.signal), path);
         },
 
         listAgentMcps(options) {
