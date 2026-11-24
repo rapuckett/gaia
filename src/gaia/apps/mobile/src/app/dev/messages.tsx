@@ -14,7 +14,7 @@ import { TURN_SCENES, TurnScenes, type TurnScene } from '@/features/chat/message
 import { LIVE_SCENES, LiveScenes, type LiveScene } from '@/features/chat/messages/LiveScenes';
 import { UIProvider } from '@/ui';
 
-const OPEN_STATES = ['actions', 'delete', 'edit', 'drop', 'guided', 'guided-sets', 'prescan-dismissing', 'prescan-done', 'images-one', 'images-four', 'images-viewer'];
+const OPEN_STATES = ['actions', 'delete', 'edit', 'drop', 'guided', 'guided-sets', 'prescan-dismissing', 'prescan-done', 'images-one', 'images-four', 'images-viewer', 'images-long'];
 const PANEL_STATES = ['loaded', 'runsOnCpp', 'empty', 'error', 'notRunning', 'ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn', 'envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty', 'chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgGitPr', 'chgPending', 'chgError', 'chgReview', 'ansFull', 'ansPending', 'ansNoLive', 'ansLocal', 'ansError', 'outItems', 'outEmpty', 'envPick', 'envPickRefused'];
 
 function isState(state?: string): state is MessagesGalleryState {

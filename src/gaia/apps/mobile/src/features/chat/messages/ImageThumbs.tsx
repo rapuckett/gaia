@@ -20,7 +20,7 @@ function Thumb({ image, onOpen }: { image: SentAttachment; onOpen: () => void })
     const state = useUploadedImage(image.url);
     return (
         <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={t('msg.imageOpen', { name: image.name })} minSize={THUMB_SIZE} testID="user-image-thumb">
-            <View style={{ width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.bgTertiary, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: radius.md, overflow: 'hidden', borderWidth: 1, borderColor: colors.borderLight, backgroundColor: colors.bgTertiary, alignItems: 'center', justifyContent: 'center' }}>
                 {state.status === 'ready' ? (
                     <Image source={{ uri: state.image.uri }} resizeMode="cover" style={{ width: THUMB_SIZE, height: THUMB_SIZE }} accessibilityIgnoresInvertColors />
                 ) : state.status === 'loading' ? (

@@ -21,8 +21,9 @@ const noop = () => undefined;
 const IDLE = { status: 'idle', liveText: '', events: [], error: null, failed: undefined, failure: undefined, policyAlert: undefined, stopState: undefined, stopError: undefined } as const;
 
 /** Developer gallery of the message list in each state; not part of the shipped screens. */
-export type MessagesGalleryState = MessagesFixture | StartOpen | 'images-one' | 'images-four' | 'images-viewer' | 'guided' | 'guided-sets' | 'prescan-dismissing' | 'prescan-done';
+export type MessagesGalleryState = MessagesFixture | StartOpen | 'images-one' | 'images-four' | 'images-viewer' | 'images-long' | 'guided' | 'guided-sets' | 'prescan-dismissing' | 'prescan-done';
 
+const LONG_NAME = 'scan-of-the-quarterly-board-report-final-version-2.png';
 const IMAGE_NAMES = ['harbor-sunrise.jpg', 'receipt-scan.png', 'whiteboard.jpg', 'plant-label.png'];
 
 // Made-up pictures: a tinted gradient with the file's first letter, so no real photo ships in the scene.
@@ -55,15 +56,15 @@ export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
             </Screen>
         );
     }
-    if (state === 'images-one' || state === 'images-four' || state === 'images-viewer') {
+    if (state === 'images-one' || state === 'images-four' || state === 'images-viewer' || state === 'images-long') {
         const message = IMAGE_MESSAGE(state === 'images-one' ? 1 : 4);
         return (
             <UploadedImageLoaderContext.Provider value={pictureFor}>
                 <Screen>
                     <UserBubble message={message} />
-                    {state === 'images-viewer' ? (
+                    {state === 'images-viewer' || state === 'images-long' ? (
                         <ImageViewer
-                            images={IMAGE_NAMES.map((name) => ({ name, url: `/api/files/uploads/${name}`, isImage: true }))}
+                            images={IMAGE_NAMES.map((name, i) => ({ name: state === 'images-long' && i === 1 ? LONG_NAME : name, url: `/api/files/uploads/${name}`, isImage: true }))}
                             index={1}
                             onIndex={noop}
                             onClose={noop}

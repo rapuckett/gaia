@@ -14,7 +14,10 @@ import { UploadedImageLoaderContext } from './uploadedImage';
 import { UserBubble } from './UserBubble';
 import type { SentAttachment } from './attachedLinks';
 
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+jest.mock('react-native-safe-area-context', () => ({
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+    SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 
 const t = translator('en');
@@ -86,6 +89,16 @@ describeNative('image strip and viewer', () => {
         await fireEvent.press(screen.getByTestId('user-image-thumb'));
         expect(screen.queryByLabelText(t('imageViewer.next'))).toBeNull();
         expect(screen.getByTestId('image-viewer-caption')).not.toHaveTextContent(/ of /);
+    });
+
+    it('cuts a long name in the middle so the count stays visible', async () => {
+        const long = `${'quarterly-board-report-final-'.repeat(2)}v2.png`;
+        await wrap(<ImageThumbs images={[image(long), image('b.jpg')]} />);
+        await fireEvent.press(screen.getAllByTestId('user-image-thumb')[0]);
+        const caption = screen.getByTestId('image-viewer-caption');
+        expect(caption).toHaveTextContent(/…/);
+        expect(caption).toHaveTextContent(/v2\.png.* · .*1 of 2/);
+        expect(caption).not.toHaveTextContent(long);
     });
 
     it('refuses a path that is not an upload', async () => {

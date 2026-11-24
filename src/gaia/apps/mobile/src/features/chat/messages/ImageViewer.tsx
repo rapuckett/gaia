@@ -3,9 +3,10 @@
 
 import { useRef } from 'react';
 import { Image, Modal, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isolate } from '@webui/i18n/registry';
+import { middleTruncate } from '@webui/utils/format';
 import { useDirection, useT } from '@/i18n/useT';
 import { IconButton, Notice, Spinner, Text, useTheme } from '@/ui';
 import { ChevronLeft, ChevronRight, X } from '@/ui/icons';
@@ -37,7 +38,17 @@ function Stage({ image, width, height }: { image: SentAttachment; width: number;
 }
 
 /** One image fitted to the screen over the chat; swipe or use the arrows to step through the message's other images. Android back closes it. */
-export function ImageViewer({ images, index, onIndex, onClose }: ImageViewerProps) {
+export function ImageViewer(props: ImageViewerProps) {
+    return (
+        <Modal visible transparent animationType="fade" onRequestClose={props.onClose} supportedOrientations={['portrait', 'landscape']}>
+            <SafeAreaProvider>
+                <ViewerBody {...props} />
+            </SafeAreaProvider>
+        </Modal>
+    );
+}
+
+function ViewerBody({ images, index, onIndex, onClose }: ImageViewerProps) {
     const t = useT();
     const rtl = useDirection() === 'rtl';
     const { colors } = useTheme();
@@ -60,7 +71,7 @@ export function ImageViewer({ images, index, onIndex, onClose }: ImageViewerProp
     const bar = { position: 'absolute', start: 0, end: 0, paddingHorizontal: 12 } as const;
 
     return (
-        <Modal visible transparent animationType="fade" onRequestClose={onClose} supportedOrientations={['portrait', 'landscape']}>
+        <>
             <View
                 style={{ flex: 1, backgroundColor: colors.bgCode }}
                 accessibilityViewIsModal
@@ -89,10 +100,10 @@ export function ImageViewer({ images, index, onIndex, onClose }: ImageViewerProp
                 ) : null}
                 <View style={{ ...bar, bottom: insets.bottom + 16, alignItems: 'center' }} pointerEvents="none">
                     <Text role="label" tone="secondary" numberOfLines={1} dir="ltr" testID="image-viewer-caption">
-                        {many ? `${isolate(image.name, 'ltr')} · ${isolate(count, 'ltr')}` : isolate(image.name, 'ltr')}
+                        {many ? `${isolate(middleTruncate(image.name), 'ltr')} · ${isolate(count, 'ltr')}` : isolate(middleTruncate(image.name), 'ltr')}
                     </Text>
                 </View>
             </View>
-        </Modal>
+        </>
     );
 }
