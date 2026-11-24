@@ -30,12 +30,13 @@ import { NewChatScreen } from './NewChatScreen';
  * `new-chat-folder-picker` (the picker open, folders only), `new-chat-folder-picked` (the picked folder, its path and a clear),
  * `new-chat-folder-refused` (the PC refused a credentials folder as the chat was made, coded `device_folder_withheld`),
  * `new-chat-folder-outside-home` (the same for a folder outside the PC's home folder, `device_folder_outside_home`).
+ * NC-16, the starter row: `new-chat-starters` (two of this PC's tasks, then one example) and `new-chat-starters-none` (three examples).
  * NC-15, the chosen gaiacpp can't start, in place of NC-13: `new-chat-agent-missing` (Download gaiacpp again and Use the
  * Python agent; `#tap=composer-send` keeps the text and says so), `new-chat-agent-invalid` (it failed its check),
  * `new-chat-agent-cant-download` (this release has none to download: the reason, no Download), `new-chat-agent-downloading`
  * (a download the PC started, followed), `new-chat-agent-pc-only` (the PC keeps both ways out to itself: Check again).
  */
-export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'new-chat-doc-brief', 'create-failed', 'skill-prompt', 'new-chat-folder-own-fixed', 'new-chat-folder-own-add', 'new-chat-folder-project-fixed', 'new-chat-folder-project-add', 'new-chat-folder-picker', 'new-chat-folder-picked', 'new-chat-folder-refused', 'new-chat-folder-outside-home', 'new-chat-agent-missing', 'new-chat-agent-invalid', 'new-chat-agent-cant-download', 'new-chat-agent-downloading', 'new-chat-agent-pc-only'] as const;
+export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'new-chat-doc-brief', 'create-failed', 'skill-prompt', 'new-chat-folder-own-fixed', 'new-chat-folder-own-add', 'new-chat-folder-project-fixed', 'new-chat-folder-project-add', 'new-chat-folder-picker', 'new-chat-folder-picked', 'new-chat-folder-refused', 'new-chat-folder-outside-home', 'new-chat-agent-missing', 'new-chat-agent-invalid', 'new-chat-agent-cant-download', 'new-chat-agent-downloading', 'new-chat-agent-pc-only', 'new-chat-starters', 'new-chat-starters-none'] as const;
 export type NewChatScene = (typeof NEW_CHAT_SCENES)[number];
 
 const READY = {
@@ -120,6 +121,14 @@ function clientFor(state: NewChatScene) {
     if (state === 'new-chat-doc-brief') {
         const card = { skill: 'document-brief', title: 'Ask about your documents', note: 'Attach your library and ask.', prompt: 'What do my documents say?', needs_input: false };
         return createFakeClient({ ...base, start: { ...START, cards: [card] }, documents: { documents: DOCUMENTS, total: 3, total_chunks: 15, total_size_bytes: 60_000 } } as Parameters<typeof createFakeClient>[0]);
+    }
+    if (state === 'new-chat-starters') {
+        const cards = [
+            { skill: 'document-brief', title: 'Ask about your documents', note: '3 indexed documents', prompt: 'Using my indexed documents, give me the key points.', needs_input: false },
+            { skill: 'research-report', title: 'Research a topic', note: 'A cited report from the web', prompt: 'Research and write a short cited report on: ', needs_input: true },
+            { skill: 'coding', title: 'Work on code', note: 'In my-project', prompt: 'Look around my-project and tell me what this project does.', needs_input: false },
+        ];
+        return createFakeClient({ ...base, start: { ...START, cards } });
     }
     if (state === 'new-chat-warmup') {
         return createFakeClient({ ...base, status: { ...READY, warm_up: { state: 'warming', elapsed_seconds: 12, model: 'Gemma-4-E4B-it-GGUF', device: 'gpu' } } as unknown as SystemStatus });
