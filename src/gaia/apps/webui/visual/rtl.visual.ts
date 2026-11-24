@@ -1341,6 +1341,34 @@ for (const locale of ['ar', 'en']) {
     });
 }
 
+const UNDO_CONFLICT_DETAIL = '3 file(s) changed after this turn: C:\\Users\\me\\Documents\\Quarterly planning\\2026-Q4\\budget-forecast-final-v7-reviewed.xlsx, C:\\Users\\me\\Documents\\Quarterly planning\\2026-Q4\\notes.txt. Undoing it would overwrite those changes. Nothing was restored.';
+
+test('undo conflict: the raw server text waits behind Details (en, dark)', async ({ page }) => {
+    await open(page, `#${ANSWER_SESSION}`, 'en', async (p) => {
+        await withFullAccessWrite(p);
+        await p.route((url) => /\/changes\/[^/]+\/undo$/.test(url.pathname), (route) =>
+            route.fulfill({ status: 409, json: { detail: { status: 'conflict', message: UNDO_CONFLICT_DETAIL } } }));
+    }, 'dark');
+    const answer = page.locator('.msg-assistant');
+    await answer.locator('.turn-changes-btn', { hasText: 'Undo this turn' }).click();
+    await answer.locator('.turn-changes-btn.is-primary').click();
+    const message = answer.locator('.turn-changes-message');
+    await expect(message.locator('.turn-changes-confirm')).toBeVisible();
+    const details = message.locator('details.turn-changes-details');
+    await expect(details.locator('.turn-changes-detail')).toBeHidden();
+    const [confirm, summary] = await Promise.all([
+        message.locator('.turn-changes-confirm').boundingBox(), details.locator('summary').boundingBox(),
+    ]);
+    expect(summary!.y, 'Details sits below the buttons').toBeGreaterThan(confirm!.y + confirm!.height - 1);
+    await shot(page, 'undo-conflict-en-dark-closed');
+    await details.locator('summary').click();
+    await expect(details.locator('.turn-changes-detail')).toBeVisible();
+    const spill = await message.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+    expect(spill, 'the raw text wraps inside the panel').toBe(false);
+    await shot(page, 'undo-conflict-en-dark-open');
+    expect(await audit(page)).toEqual([]);
+});
+
 /** The backend's English notice for a call Full access approved without asking. */
 const FULL_ACCESS_NOTICE = "Full access is on, so GAIA didn't ask first. Writing file: notes.txt";
 

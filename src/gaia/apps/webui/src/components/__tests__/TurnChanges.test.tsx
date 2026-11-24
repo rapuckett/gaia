@@ -100,7 +100,15 @@ describe('TurnChanges', () => {
         render(<TurnChanges sessionId="s1" messageId={7} />);
         fireEvent.click(await screen.findByRole('button', { name: new RegExp(tEn('mobileApp.changes.undo')) }));
         fireEvent.click(screen.getByRole('button', { name: tEn('mobileApp.changes.confirmYes') }));
-        expect(await screen.findByRole('alert')).toHaveTextContent(tEn('mobileApp.changes.undoTurnConflict'));
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent(tEn('mobileApp.changes.undoTurnConflict'));
+        const details = alert.querySelector('details') as HTMLDetailsElement;
+        expect(details).not.toHaveAttribute('open');
+        expect(details.querySelector('summary')).toHaveTextContent(tEn('failedTurn.details'));
+        expect(details.querySelector('bdi')).toHaveAttribute('dir', 'ltr');
+        expect(details.querySelector('bdi')).toHaveTextContent('Undoing it would overwrite those changes.');
+        // Order: sentence, buttons, Details.
+        expect(alert.querySelector('.turn-changes-confirm')!.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         fireEvent.click(screen.getByRole('button', { name: new RegExp(tEn('chg.undoAnyway')) }));
         await waitFor(() => expect(undo).toHaveBeenLastCalledWith('s1', 't1', true));
     });
