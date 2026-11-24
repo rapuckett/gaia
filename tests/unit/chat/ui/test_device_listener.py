@@ -50,7 +50,8 @@ class _Running:
 
 
 @pytest.fixture
-def served(tmp_path):
+def served(tmp_path, monkeypatch):
+    fake_pc(monkeypatch)
     GaiaConfig.save_key("device_pairing", True)
     app = create_app(db_path=":memory:")
     access = DeviceAccess(app, folder=tmp_path / "devices", host="127.0.0.1", port=0)
@@ -444,9 +445,10 @@ def test_port_in_use_fails_loudly(tmp_path):
     assert access.status()["listening"] is False
 
 
-def test_port_held_on_one_address_fails_loudly(tmp_path):
+def test_port_held_on_one_address_fails_loudly(tmp_path, monkeypatch):
     # macOS lets a wildcard bind share a port another program holds on one
     # address; phones dialing that address would reach it and see a pin mismatch.
+    fake_pc(monkeypatch)
     GaiaConfig.save_key("device_pairing", True)
     with socket.socket() as taken:
         taken.bind(("127.0.0.1", 0))
