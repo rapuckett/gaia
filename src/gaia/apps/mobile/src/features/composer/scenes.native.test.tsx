@@ -70,6 +70,8 @@ describeNative('composer and retry scenes', () => {
         ['permissionMenu', /Runs every tool and command without asking/],
         ['permissionAsk', 'Ask'],
         ['permissionFull', 'Full access'],
+        ['permissionChecking', 'Checking…'],
+        ['permissionUnknown', 'Unknown'],
         ['permissionFullWaiting', /The question already waiting still needs your answer/],
         ['private-off', 'Remember across chats: on'],
         ['private-on', 'Private'],
