@@ -89,7 +89,7 @@ All bodies are JSON. Errors are `{error, message?}`.
 | `409 {error: "too_many_handles"}` | The device token already has `MAX_HANDLES_PER_TOKEN` handles |
 | `413` | The body is over `MAX_BODY_BYTES`, by Content-Length or by bytes read |
 | `429 {error: "rate_limited", retry_after}` | A rate limit is hit. The `Retry-After` header is set. |
-| `500 {error: "missing_config" \| "invalid_config", message}` | A secret, `ALLOWED_APP_IDS` or the `HANDLES_LIMITER` binding needed for the call is unset or malformed. The message names it. |
+| `500 {error: "missing_config" \| "invalid_config", message}` | A secret, `ALLOWED_APP_IDS` or the `HANDLES_LIMITER` binding needed for the call is unset or malformed, or a test-only provider override is not loopback. The message names it. |
 | `502 {error: "upstream_unavailable", retry_after?}` | APNs answers 5xx or 429, FCM is unavailable, or the network fails. The relay does not retry; the caller may. |
 | `502 {error: "upstream_rejected", message}` | APNs or FCM refused the push for another reason, which the message names (e.g. `InvalidProviderToken`) |
 
@@ -143,6 +143,24 @@ A send to a platform whose secrets are unset fails with a 500 that names them.
 The relay never falls back to another provider. A relay serving only one
 platform needs only that platform's secrets.
 
+**Test-only provider overrides** (local end-to-end runs against a fake APNs or
+FCM; set them in `.dev.vars` or with `--var` on `wrangler dev`, never in
+`wrangler.toml` or on a deploy):
+
+| Name | Form | Replaces |
+|---|---|---|
+| `APNS_HOST_OVERRIDE` | `host[:port]` (means `https://`) or an origin, e.g. `http://127.0.0.1:8443`; no path | `https://api.sandbox.push.apple.com` and `https://api.push.apple.com`, for both environments |
+| `FCM_TOKEN_URL_OVERRIDE` | A URL, e.g. `http://127.0.0.1:9000/token` | `https://oauth2.googleapis.com/token`, also used as the OAuth assertion's `aud` |
+| `FCM_API_BASE_OVERRIDE` | A base URL, e.g. `http://127.0.0.1:9000`; `/v1/projects/...` is appended | `https://fcm.googleapis.com` |
+
+These requests carry the APNs provider token, the signed OAuth assertion and the
+FCM access token, so each override is honored only when its host is `127.0.0.1`,
+`localhost` or `[::1]` (`http:` or `https:`, any port). Any other value,
+including userinfo, a query or a fragment, fails the send with
+`500 invalid_config` naming the var, before any provider call or quota is spent;
+the relay never falls back to the real host. Unset or empty means the real
+hosts.
+
 ## Self-hosting
 
 You need a Cloudflare account with Workers and D1, an Apple developer account
@@ -184,4 +202,6 @@ npm run migrate:local  # then `npm run dev`, with secrets in .dev.vars
 
 The tests stub `fetch`. They check each outgoing call's host, headers and body,
 and verify the APNs and OAuth JWTs against keys generated in the test. They
-never call Apple, Google or Cloudflare.
+never call Apple, Google or Cloudflare. An end-to-end run against a local fake
+provider points the relay at it with the test-only overrides under
+[Configuration](#configuration).

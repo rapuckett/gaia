@@ -7,7 +7,7 @@
  * and local workerd cannot.
  */
 
-import { requireSecrets } from "./config";
+import { loopbackOverride, requireSecrets } from "./config";
 import { importPrivateKey, signJwt } from "./jwt";
 import type { Env, HandleRow, Message, SendOutcome } from "./types";
 import { post, retryAfterSeconds, safeReason } from "./upstream";
@@ -69,10 +69,11 @@ export function apnsPayload(d: Message): Record<string, unknown> {
   return { aps, c: d.ciphertext, n: d.nonce };
 }
 
-/** Resolves the secrets up front, so a missing one fails before any quota is spent. */
+/** Resolves the secrets and override up front, so a bad one fails before any quota is spent. */
 export function apnsSender(env: Env): (row: HandleRow, d: Message) => Promise<SendOutcome> {
   const s = requireSecrets(env, "APNS_KEY_P8", "APNS_KEY_ID", "APNS_TEAM_ID");
   const keyId = s.APNS_KEY_ID.trim();
+  const override = loopbackOverride(env, "APNS_HOST_OVERRIDE", { originOnly: true })?.origin;
   return async (row, d) => {
     const jwt = await providerToken(env.DB, s.APNS_KEY_P8, keyId, s.APNS_TEAM_ID.trim());
     const headers: Record<string, string> = {
@@ -84,7 +85,8 @@ export function apnsSender(env: Env): (row: HandleRow, d: Message) => Promise<Se
     };
     if (d.collapseId) headers["apns-collapse-id"] = d.collapseId;
 
-    const res = await post(`https://${HOSTS[row.environment]}/3/device/${encodeURIComponent(row.token)}`, {
+    const origin = override ?? `https://${HOSTS[row.environment]}`;
+    const res = await post(`${origin}/3/device/${encodeURIComponent(row.token)}`, {
       headers,
       body: JSON.stringify(apnsPayload(d)),
     });
