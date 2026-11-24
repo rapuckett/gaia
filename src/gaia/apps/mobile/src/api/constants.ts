@@ -56,6 +56,7 @@ export const ENDPOINTS = {
     memoryConversation: '/api/memory/conversations/{session_id}',
     memoryConversations: '/api/memory/conversations',
     memoryConversationsSearch: '/api/memory/conversations/search',
+    memoryEmbedder: '/api/memory/embedder',
     memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
     memoryEntities: '/api/memory/entities',
     memoryKnowledge: '/api/memory/knowledge',

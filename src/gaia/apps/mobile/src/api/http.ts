@@ -89,6 +89,7 @@ import type {
     MemoryEntity,
     MemoryKnowledgePage,
     MemoryReinitializeResult,
+    EmbedderView,
     MemorySettings,
     MemorySettingsUpdateResponse,
     MemoryStats,
@@ -1235,6 +1236,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         updateMemorySettings(settings, options) {
             return putJson<MemorySettingsUpdateResponse>(ENDPOINTS.memorySettings, settings, options?.signal);
+        },
+
+        getMemoryEmbedder(options) {
+            return getJson<EmbedderView>(ENDPOINTS.memoryEmbedder, options?.signal);
+        },
+
+        setMemoryEmbedder(device, options) {
+            return putJson<EmbedderView>(ENDPOINTS.memoryEmbedder, { device }, options?.signal);
         },
 
         clearAllMemory(options) {
