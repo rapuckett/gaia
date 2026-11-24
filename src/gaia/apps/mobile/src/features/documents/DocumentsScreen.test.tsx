@@ -243,7 +243,7 @@ describe('DocumentsScreen', () => {
             await mount(client);
             await fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
             await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS));
-            expect(await screen.findByText(/Couldn't remove notes\.txt: .*Something went wrong on your PC\./)).toBeTruthy();
+            expect(await screen.findByText("Couldn't remove notes.txt.")).toBeTruthy();
             expect(screen.queryByText(/disk is read-only/)).toBeNull();
             expect(screen.getByLabelText('Remove notes.txt')).toBeTruthy();
         });
