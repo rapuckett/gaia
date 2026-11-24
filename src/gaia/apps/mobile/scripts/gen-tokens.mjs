@@ -57,7 +57,7 @@ const COLOR_ROLE = /^--(bg|text|border|accent|danger|tint|code|switch)-?[a-z0-9-
 const COLOR_VALUE = /^(#[0-9a-fA-F]{3,8}|rgba?\([0-9., %]+\))$/;
 const SHADOW = /^--shadow-(sm|md|lg|press)$/;
 
-// Desktop window chrome, the web's hamburger offset, the cursor-blink easing and the slide-deck palette.
+// Desktop-only sizes and chrome, the cursor-blink easing, the slide-deck palette and the web's button-ink aliases.
 const IGNORED = new Map([
     ['--titlebar-h', 'desktop window chrome'],
     ['--titlebar-controls-w', 'desktop window chrome'],
@@ -73,6 +73,10 @@ const IGNORED = new Map([
     ['--slide-on-accent', 'slide-deck palette, fixed colors for generated decks'],
     ['--slide-panel', 'slide-deck palette, fixed colors for generated decks'],
     ['--slide-rule', 'slide-deck palette, fixed colors for generated decks'],
+    ['--action-fill', "the web's primary-button ink, an alias of text and canvas roles the phone already has"],
+    ['--action-fill-text', "the web's primary-button ink, an alias of text and canvas roles the phone already has"],
+    ['--action-fill-hover', "the web's primary-button ink, an alias of text and canvas roles the phone already has"],
+    ['--hit-min', "the desktop's smallest text-button height; phone controls size for touch"],
 ]);
 
 const index = stripComments(readFileSync(resolve(stylesDir, 'index.css'), 'utf8'));
