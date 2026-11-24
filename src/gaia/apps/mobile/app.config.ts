@@ -20,7 +20,6 @@ const LOCALE_CODES = ['en', 'ar'];
 // One text per permission, passed to every plugin that writes it, so plugin order can't change it.
 const CAMERA_USE = 'GAIA uses the camera to scan the pairing code on your PC.';
 const LOCAL_NETWORK_USE = 'GAIA uses your local network to connect to GAIA on your PC.';
-const FACE_ID_USE = 'GAIA uses Face ID to protect the key that connects this phone to your PC.';
 
 export function readAppEnv(value: string | undefined): AppEnv {
     if (value === 'development' || value === 'production') return value;
@@ -71,8 +70,7 @@ export default function appConfig(): ExpoConfig {
             ['expo-localization', { supportsRTL: true, supportedLocales: LOCALE_CODES }],
             ['expo-camera', { cameraPermission: CAMERA_USE, microphonePermission: false, barcodeScannerEnabled: true }],
             ['expo-audio', { microphonePermission: false, enableBackgroundPlayback: true, enableBackgroundRecording: false }],
-            ['expo-secure-store', { faceIDPermission: FACE_ID_USE }],
-            'expo-background-task',
+            'expo-secure-store',
             ['./plugins/withCleartextHosts', { hosts: dev ? DEV_HTTP_HOSTS : [] }],
             './plugins/withNinjaJobs',
         ],
