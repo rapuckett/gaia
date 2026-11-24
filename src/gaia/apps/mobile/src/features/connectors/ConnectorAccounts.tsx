@@ -8,7 +8,6 @@ import { View } from 'react-native';
 
 import type { ConnectorAccount, ConnectorRow } from '@/api/client.types';
 import { useChangeConnectorAccount } from '@/data';
-import { ChipButton } from '@/features/schedules/ChipButton';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { ActionSheet, Button, Icon, Ltr, Notice, Row, Stack, Surface, Text, useTheme } from '@/ui';
@@ -95,8 +94,9 @@ export function ConnectorAccountList({ connector }: { connector: ConnectorRow })
                                         />
                                     ) : null}
                                     {!account.is_default && account.status === 'ok' ? (
-                                        <ChipButton
-                                            label={t.bare('settings.connectors.makeDefault')}
+                                        <Button
+                                            size="sm"
+                                            label={t('settings.connectors.makeDefault')}
                                             accessibilityLabel={t('settings.connectors.makeDefaultNamed', address)}
                                             disabled={change.isPending}
                                             onPress={() => run('default', account)}

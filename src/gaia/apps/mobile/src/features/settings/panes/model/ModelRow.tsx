@@ -150,7 +150,7 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                     )}
                     {hasRemove ? (
                         <Button
-                            variant="ghost"
+                            variant="danger"
                             label={t.bare('settings.models.remove')}
                             accessibilityLabel={t('settings.models.removeAria', { name: label })}
                             onPress={onRemove}

@@ -125,7 +125,7 @@ export function GoalCard({ goal, busy, onCancel, onDelete }: GoalCardProps) {
                                     label={t.bare('mem.row.delete')}
                                     accessibilityLabel={t('mem.goals.deleteAria', { title: goal.title })}
                                     icon={Trash2}
-                                    variant="ghost"
+                                    variant="danger"
                                     disabled={busy}
                                     onPress={() => setConfirmDelete(true)}
                                     testID={`goal-delete-${goal.id}`}
