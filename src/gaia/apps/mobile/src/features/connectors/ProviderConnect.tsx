@@ -35,6 +35,8 @@ export interface ProviderConnectProps {
     testID?: string;
     /** A second button beside one for the same connector: it shares that sign-in, so the first one shows its wait and failure. */
     secondary?: boolean;
+    /** The button's single-line height, to sit in a row of small buttons; without it the label may wrap on tall padding. */
+    compact?: boolean;
 }
 
 /** One provider's Connect button: a sign-in with a code where the PC offers one, Google's in this phone's browser, else the PC-only note. */
@@ -45,22 +47,22 @@ export function ProviderConnect(props: ProviderConnectProps) {
     return <PcOnlyConnect {...props} />;
 }
 
-function PcOnlyConnect({ connectorId, label, accessibilityLabel, testID }: ProviderConnectProps) {
+function PcOnlyConnect({ connectorId, label, accessibilityLabel, testID, compact }: ProviderConnectProps) {
     const t = useT();
     const [shown, setShown] = useState(false);
     return (
         <Stack gap="sm">
             <Stack align="start">
-                <Button size="sm" variant="secondary" icon={ExternalLink} wrap label={label} accessibilityLabel={accessibilityLabel} onPress={() => setShown(true)} testID={testID ?? `connect-${connectorId}`} />
+                <Button size="sm" variant="secondary" icon={ExternalLink} wrap={!compact} label={label} accessibilityLabel={accessibilityLabel} onPress={() => setShown(true)} testID={testID ?? `connect-${connectorId}`} />
             </Stack>
             {shown ? <Notice tone="info" role="status" message={t('mobileApp.connectCard.onPc')} /> : null}
         </Stack>
     );
 }
 
-function CodeConnect({ connectorId, row, label, againLabel, scopes, onEnded, onStarted, accessibilityLabel, testID }: ProviderConnectProps & { row: ConnectorRow }) {
+function CodeConnect({ connectorId, row, label, againLabel, scopes, onEnded, onStarted, target, accessibilityLabel, testID, compact }: ProviderConnectProps & { row: ConnectorRow }) {
     const t = useT();
-    const { signIn, start, cancel } = useDeviceSignIn(row, scopes);
+    const { signIn, startFor, cancel } = useDeviceSignIn(row, scopes);
     const [tried, setTried] = useState(false);
     const why = signIn.state === 'expired' ? 'failed' : signIn.state === 'ended' ? signIn.why : null;
     useEffect(() => {
@@ -75,14 +77,14 @@ function CodeConnect({ connectorId, row, label, againLabel, scopes, onEnded, onS
                     size="sm"
                     variant="secondary"
                     icon={ExternalLink}
-                    wrap
+                    wrap={!compact}
                     label={tried && againLabel ? againLabel : label}
                     accessibilityLabel={accessibilityLabel}
                     busy={signIn.state === 'starting'}
                     onPress={() => {
                         setTried(true);
                         onStarted?.();
-                        start();
+                        startFor(target);
                     }}
                     testID={testID ?? `connect-${connectorId}`}
                 />
@@ -94,7 +96,7 @@ function CodeConnect({ connectorId, row, label, againLabel, scopes, onEnded, onS
     );
 }
 
-function BrowserConnect({ connectorId, row, label, againLabel, scopes, onEnded, onStarted, target, accessibilityLabel, testID, secondary }: ProviderConnectProps & { row: ConnectorRow }) {
+function BrowserConnect({ connectorId, row, label, againLabel, scopes, onEnded, onStarted, target, accessibilityLabel, testID, secondary, compact }: ProviderConnectProps & { row: ConnectorRow }) {
     const t = useT();
     const { signIn, startFor, cancel } = useBrowserSignIn(row, scopes);
     const [tried, setTried] = useState(false);
@@ -114,7 +116,7 @@ function BrowserConnect({ connectorId, row, label, againLabel, scopes, onEnded, 
                     size="sm"
                     variant="secondary"
                     icon={ExternalLink}
-                    wrap
+                    wrap={!compact}
                     label={tried && againLabel ? againLabel : label}
                     accessibilityLabel={accessibilityLabel}
                     busy={signIn.state === 'starting'}
