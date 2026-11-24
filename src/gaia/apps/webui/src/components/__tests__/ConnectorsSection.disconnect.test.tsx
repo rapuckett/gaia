@@ -141,7 +141,7 @@ describe('Disconnect outcome notice', () => {
         });
         const notice = await screen.findByRole('status');
         expect(notice).toHaveTextContent(
-            'Disconnected locally, but the provider did not confirm the revoke',
+            "Disconnected from GAIA, but the provider didn't confirm it removed GAIA's access",
         );
         expect(notice).toHaveTextContent(reason);
     });

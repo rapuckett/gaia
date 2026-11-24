@@ -184,6 +184,7 @@ export const ENDPOINTS = {
     systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
     systemWarmUp: '/api/system/warm-up',
+    tunnelStatus: '/api/tunnel/status',
     document: '/api/documents/{doc_id}',
     documentCancel: '/api/documents/{doc_id}/cancel',
     documentFile: '/api/documents/{doc_id}/file',

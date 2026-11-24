@@ -16,7 +16,7 @@ import { useChatReadAloud } from '@/features/audio/useChatReadAloud';
 import { modelMenuKeys, useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useRefreshTurnChanges, useSession } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { ModelRestoreNotice } from '@/features/model/ModelRestoreNotice';
-import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, SessionFolderChip, SpendMeter, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { AgentChip, Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, SessionFolderChip, SpendMeter, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { FileScope } from '@/features/files';
 import { describeErrorWith, describeHttpFailure, useT } from '@/i18n/useT';
@@ -246,6 +246,7 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                                 <SpendMeter sessionId={sessionId} busy={busy} />
                                 <ContextMeter usage={context.usage} onDetails={() => setPanelOpen(true)} />
                                 <SessionFolderChip sessionId={sessionId} live={busy} onOpen={showEnvironment} />
+                                <AgentChip />
                                 <ModelChip turnRunning={busy} initialQueued={initialQueuedModel} />
                             </>
                         }

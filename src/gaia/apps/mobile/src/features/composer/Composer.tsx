@@ -17,6 +17,7 @@ import { AttachmentChips } from './AttachmentChips';
 import { ChipFitContext } from './ChipFitContext';
 import { CHIP_GAP, collapsedChips, type RoomId } from './chipRoom';
 import { pickedFromPaste } from './pickFiles';
+import { SkillMenu } from './SkillMenu';
 import type { Attachments } from './useAttachments';
 
 export interface ComposerProps {
@@ -160,6 +161,7 @@ export function Composer({
             {refusedNames && hasContent ? (
                 <Notice tone="danger" message={t('composer.removeRefused', { names: refusedNames })} testID="composer-refused" />
             ) : null}
+            {disabledReason ? null : <SkillMenu value={text} onPick={(name) => setText(`/${name} `)} />}
             <Surface tone="card" border radius="xl" padding="sm">
                 <Stack gap="xs">
                     {attachments ? <AttachmentChips attachments={attachments} /> : null}

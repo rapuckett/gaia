@@ -270,6 +270,7 @@ describe('endpoints', () => {
         systemResources: ['GET'],
         systemStatus: ['GET'],
         systemWarmUp: ['GET', 'POST'],
+        tunnelStatus: ['GET'],
         document: ['DELETE'],
         documentCancel: ['POST'],
         documentFile: ['GET'],

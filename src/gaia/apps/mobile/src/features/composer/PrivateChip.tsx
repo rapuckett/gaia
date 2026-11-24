@@ -56,6 +56,7 @@ export function PrivateChip({ on, onChange, disabled, memoryEnabled = null, memo
                 icon={on ? EyeOff : Eye}
                 chip="private"
                 menu
+                active={on}
                 warning={false}
                 disabled={disabled}
                 onPress={() => setOpen(true)}

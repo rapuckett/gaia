@@ -356,9 +356,9 @@ const SP34_STEPS: AgentStep[] = [
         planNarrations: ['Read the permit', 'Run the scheduler tests', 'Write the summary'],
     } as AgentStep,
     STEP(2, { tool: 'read_file', success: true, result: 'ok' }),
-    SHELL(3, 'rm -rf build', { declined: true, success: false }),
+    SHELL(3, 'npm test', { success: true, commandOutput: { command: 'npm test', stdout: 'ok', stderr: '', returnCode: 0 } }),
     SHELL(4, 'git status --short', { success: false, commandOutput: { command: 'git status --short', stdout: '', stderr: 'fatal', returnCode: 128 } }),
-    SHELL(5, 'npm test', { success: true, commandOutput: { command: 'npm test', stdout: 'ok', stderr: '', returnCode: 0 } }),
+    SHELL(5, 'rm -rf build', { declined: true, success: false }),
     STEP(6, { tool: 'write_file', success: true, result: 'ok' }),
 ];
 
@@ -429,6 +429,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             providerModels: state === 'ansLocal' ? { local: { provider: 'local', models: [LOCAL_LIST_ENTRY] } } : undefined,
             activeModel: seeded ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
             localModel: seeded ? LOCAL_MODEL : undefined,
+            tunnel: seeded ? { active: false, url: null, token: null, startedAt: null, error: null } : undefined,
             contextUsage: ctx
                 ? {
                       available: true,

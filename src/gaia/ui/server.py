@@ -58,6 +58,7 @@ from .agent_loop import agent_loop
 
 # pylint: enable=unused-import
 from .database import ChatDatabase
+from .devices import push as device_push
 from .devices.access import DeviceAccess
 from .document_copies import move_library_files_out_of_shared_folder
 from .document_monitor import DocumentMonitor
@@ -785,6 +786,7 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
 
         # Shutdown
         await app.state.devices.shutdown()
+        await asyncio.to_thread(app.state.push.close)
         remove_local_work(active_turns_in_flight)
         await scheduler.shutdown()
         logger.info("Task scheduler stopped")
@@ -866,6 +868,12 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
     # Paired devices on the home network; touches no file until it is used.
     app.state.devices = DeviceAccess(app)
     redact_tunnel_token_in_access_log()
+    # Paired phones' notifications, through the relay each one names.
+    app.state.push = device_push.PushNotifier(app)
+    device_push.bind(app.state.push)
+    from gaia.connectors.store import on_keyring_refused
+
+    on_keyring_refused(device_push.key_store_locked)
 
     # Per-session locks prevent the same session from having multiple
     # concurrent requests, which would corrupt conversation state.

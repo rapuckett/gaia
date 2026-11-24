@@ -9,6 +9,7 @@ import { RetryWithMenu } from './RetryWithMenu';
 import { AnswerComparison } from './AnswerComparison';
 import { ModelServerDownNotice } from './ModelServerDownNotice';
 import { ChatAgentRecovery } from './ChatAgentRecovery';
+import { offersAgentRecovery } from '../utils/agentRecovery.core';
 import type { Comparison } from '../hooks/useAnswerComparison';
 import type { Message } from '../types';
 
@@ -88,7 +89,7 @@ export const TranscriptRow = memo(function TranscriptRow({
                 fixShownBelow={serverDown}
             />
             {serverDown && <ModelServerDownNotice />}
-            {msg.failed === true && msg.failure !== 'model_server_down' && canTryAgain && (
+            {offersAgentRecovery(msg, canTryAgain) && (
                 <ChatAgentRecovery key={msg.id} onTryAgain={() => onTryAgain(msg)} />
             )}
             {comparison && (

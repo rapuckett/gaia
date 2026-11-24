@@ -35,7 +35,7 @@ export function ContextSection({ sessionId, live }: SectionProps) {
     const reading = useContextSection(sessionId, { enabled: open, live });
     const perf = useChatPerformance(sessionId, { enabled: open, live });
     return (
-        <PanelSection id="context" title={t('sp.section.context')}>
+        <PanelSection id="context" title={t('sp.section.context')} divider={false}>
             <Stack gap="lg">
                 <WindowFill reading={reading} perf={perf.data} />
                 <UnderTheHood perf={perf.data} error={perf.error} />

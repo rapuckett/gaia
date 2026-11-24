@@ -48,6 +48,7 @@ import type {
     LemonadeTarget,
     LemonadeTargetRequest,
     LocalModelStatus,
+    TunnelStatus,
     KnowledgeCreateBody,
     KnowledgeUpdateBody,
     KnowledgeListParams,
@@ -226,6 +227,8 @@ export interface FakeClientData {
     status?: SystemStatus;
     /** What getLocalModelStatus answers; restarting it records the call. */
     localModel?: LocalModelStatus;
+    /** What getTunnelStatus answers. */
+    tunnel?: TunnelStatus;
     /** What getGpuMemory answers (the same status whatever size is asked for); an Error is thrown. */
     gpuMemory?: GpuMemoryStatus | Error;
     /** What getModelNeed answers, by job; a job not listed needs nothing. */
@@ -1904,6 +1907,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.modelActionError) throw data.modelActionError;
             modelLoads.push({ modelName, force, ctxSize: options?.ctxSize });
             return { status: 'loading', model: modelName, ctx_size: 65536 };
+        },
+        async getTunnelStatus() {
+            if (!data.tunnel) throw new GaiaApiError(503, 'This fake client was given no phone access status.');
+            return data.tunnel;
         },
         async getLocalModelStatus() {
             if (!data.localModel) throw new GaiaApiError(503, 'This fake client was given no model status.');

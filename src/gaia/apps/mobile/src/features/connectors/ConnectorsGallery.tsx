@@ -4,6 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { tEn } from '@webui/i18n/translator';
 import type { AgentInfo, AgentMcpServer, ConnectorAccount, ConnectorKeyStore, ConnectorListEntry, ConnectorRow, GaiaClient } from '@/api/client.types';
 import type { ConnectorCheck } from '@/data';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
@@ -24,7 +25,7 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * (`#tap=device-sign-in-microsoft` shows the code), `codeFailed` (the same tap, then the failure).
  * CON-02: `many` (8 connectors, so the search field shows). CON-11: `disconnected` and `revoked` open Microsoft Personal;
  * `#tap=connector-disconnect-microsoft,connector-disconnect-confirm`: `disconnected` answers that the provider has no revoke API, `revoked`
- * that the provider did not confirm the revoke (reason on the notice); `nothingStored` (the same tap) that the PC held no sign-in to remove, `accountsOne` and `accountsMany` (one expired) open Google with its accounts; `unreadable` that it could not read the stored sign-in and removed the local copy unrevoked. CON-09: `oauthSetup` opens Google's first-time setup sheet. CON-10: `oauthClient`
+ * that the provider did not confirm removing access (reason on the notice); `nothingStored` (the same tap) that the PC held no sign-in to remove, `accountsOne` and `accountsMany` (one expired) open Google with its accounts; `unreadable` that it could not read the stored sign-in and removed the local copy unrevoked. CON-09: `oauthSetup` opens Google's first-time setup sheet. CON-10: `oauthClient`
  * opens a connected account's OAuth client sheet. CON-12: `mcpConfigure` opens Slack's key sheet. CON-13: `checkRunning`, `checkOk`, `checkSlow`,
  * `checkFailed` and `checkLocked` (the PC's key store is locked) show a Linear server's Check line (`#tap=connector-check-linear` runs it again). CON-07: on a paired phone, `googleReady` shows Google's
  * Connect, and with `#tap=connector-connect-google`: `googleBrowser` waits on the browser, `googleFinishing` waits on the PC, `googleDone` ends
@@ -80,7 +81,7 @@ const GOOGLE_READY = server({
     oauth_client: { source: 'keyring', client_id: 'example-client.apps.googleusercontent.com', has_secret: true }, docs_url: 'https://amd-gaia.ai/docs/connectors/google',
 } as Partial<ConnectorRow>);
 const SLACK_SETUP = server({
-    id: 'mcp-slack', display_name: 'Slack', configured: false, mcp_env_keys: ['SLACK_MCP_XOXB_TOKEN'], setup_url: 'https://api.slack.com/apps', product_url: 'https://slack.com',
+    id: 'mcp-slack', display_name: 'Slack', description: tEn('connectors.mcp-slack.description'), configured: false, mcp_env_keys: ['SLACK_MCP_XOXB_TOKEN'], setup_url: 'https://api.slack.com/apps', product_url: 'https://slack.com',
     config_fields: [{ key: 'SLACK_MCP_XOXB_TOKEN', label: 'Slack bot token', kind: 'secret', required: true, placeholder: 'xoxb-…', help_md: '', prefix: 'xoxb-' }],
 } as Partial<ConnectorRow>);
 const LINEAR_KEYED = server({ mcp_env_keys: ['LINEAR_API_KEY'], product_url: 'https://linear.app' } as Partial<ConnectorRow>);
