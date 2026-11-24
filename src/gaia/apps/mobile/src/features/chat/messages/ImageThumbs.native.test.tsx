@@ -155,7 +155,10 @@ describeNative('image strip and viewer', () => {
         jest.spyOn(console, 'error').mockImplementation(() => undefined);
         await wrap(<ImageThumbs images={[image('bad.png'), image('a.png')]} />);
         expect(await screen.findByTestId('user-image-failed')).toBeTruthy();
-        expect(screen.getAllByTestId('user-image-thumb')).toHaveLength(2);
+        const [failed, loaded] = screen.getAllByTestId('user-image-thumb');
+        expect(failed.props.accessibilityLabel).toBe('bad.png');
+        expect(failed.props.accessibilityHint).toBe(t('mobileApp.render.imageFailed'));
+        expect(loaded.props.accessibilityLabel).toBe(t('msg.imageOpen', { name: 'a.png' }));
     });
 
     it('says the image could not load in the viewer', async () => {
