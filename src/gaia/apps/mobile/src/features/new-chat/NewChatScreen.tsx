@@ -9,7 +9,7 @@ import type { PermissionMode } from '@/api/client.types';
 import { useCreateSession, useDocuments, useGaiaClient, useMemorySettings, useStartScreen, useSystemStatus } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { ModelRestoreNotice } from '@/features/model/ModelRestoreNotice';
-import { Composer, FolderChip, ModelChip, PermissionChip, PrivateChip, useAttachments, useComposerQueue, useNextChatFolder } from '@/features/composer';
+import { AgentChip, Composer, FolderChip, ModelChip, PermissionChip, PrivateChip, useAttachments, useComposerQueue, useNextChatFolder } from '@/features/composer';
 import { useNextChatDocs } from '@/features/documents';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
@@ -266,7 +266,12 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                                 />
                             </>
                         }
-                        rightControls={<ModelChip />}
+                        rightControls={
+                            <>
+                                <AgentChip />
+                                <ModelChip />
+                            </>
+                        }
                     />
                 </View>
             }

@@ -37,6 +37,7 @@ export {
   ExternalLink,
   Eye,
   EyeOff,
+  Feather,
   File,
   FileOutput,
   FileText,
