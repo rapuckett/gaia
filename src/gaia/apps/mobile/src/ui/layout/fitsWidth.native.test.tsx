@@ -7,6 +7,8 @@ import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { translate } from '@webui/i18n/registry';
+import { translator } from '@webui/i18n/translator';
+import { placeInLine } from '@webui/utils/chatAlerts.core';
 
 import { Button, ListRow, Notice, Row, ScrollBox, Text, ThemeProvider } from '@/ui';
 
@@ -19,7 +21,7 @@ const wrap = ({ children }: { children: ReactNode }) => (
 );
 
 // "رقم 1 في الدور (#1 in line)": the Arabic UI carries the English in brackets.
-const glossed = translate('ar', 'row.inLine', { n: 1 });
+const glossed = placeInLine(translator('ar'), 'row.queuePlace', 1);
 
 describeNative('Arabic text keeps its room', () => {
     it('gives a glossed line twice its cap, so the clamp never cuts into the English', async () => {
