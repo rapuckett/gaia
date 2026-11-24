@@ -55,8 +55,8 @@ describe('collapsedChips', () => {
 
     it('gives up the agent chip right after the folder', () => {
         const all = { ...FULL, meter: 80, agent: 120 };
-        expect(collapsedChips(all, 590)).toEqual(['meter']);
-        expect(collapsedChips(all, 520)).toEqual(['meter', 'folder']);
-        expect(collapsedChips(all, 480)).toEqual(['meter', 'folder', 'agent']);
+        expect(collapsedChips(all, 660)).toEqual(['meter']);
+        expect(collapsedChips(all, 620)).toEqual(['meter', 'folder']);
+        expect(collapsedChips(all, 560)).toEqual(['meter', 'folder', 'agent']);
     });
 });
