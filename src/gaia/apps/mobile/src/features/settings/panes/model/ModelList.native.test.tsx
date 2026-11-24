@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -126,5 +126,58 @@ describeNative('Model list', () => {
         expect((await screen.findByText("Can't run here")).props.children).not.toContain('64 GB');
         expect(StyleSheet.flatten(screen.getByText('needs 64 GB').props.style)).toMatchObject({ writingDirection: 'ltr' });
         queryClient.clear();
+    });
+
+    describe('Use on a tight model', () => {
+        const mountList = async (onUse: jest.Mock) => {
+            const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+            const wrap = ({ children }: { children: ReactNode }) => (
+                <QueryClientProvider client={queryClient}>
+                    <GaiaClientProvider client={createFakeClient()}>
+                        <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                            <ThemeProvider>
+                                <SheetHost>{children}</SheetHost>
+                            </ThemeProvider>
+                        </SafeAreaProvider>
+                    </GaiaClientProvider>
+                </QueryClientProvider>
+            );
+            const models = [
+                model('Have-GGUF', { downloaded: true }),
+                model('Big-GGUF', { downloaded: true, fits: true, tight: true }),
+                model('Small-GGUF', { downloaded: true, fits: true }),
+            ];
+            await render(
+                <ModelList provider="local" remote={false} models={models} activeModel="Have-GGUF" switching={null} onUse={onUse} onRefresh={jest.fn()} />,
+                { wrapper: wrap },
+            );
+        };
+
+        it('asks first: nothing switches until Use it anyway', async () => {
+            const onUse = jest.fn();
+            await mountList(onUse);
+            await fireEvent.press(await screen.findByTestId('model-use-Big-GGUF'));
+            expect(await screen.findByText('Use it anyway')).toBeTruthy();
+            expect(onUse).not.toHaveBeenCalled();
+            await fireEvent.press(screen.getByTestId('confirm-ok'));
+            await waitFor(() => expect(onUse).toHaveBeenCalledWith('Big-GGUF'));
+        });
+
+        it('Cancel calls nothing', async () => {
+            const onUse = jest.fn();
+            await mountList(onUse);
+            await fireEvent.press(await screen.findByTestId('model-use-Big-GGUF'));
+            await fireEvent.press(await screen.findByTestId('confirm-cancel'));
+            expect(screen.getByTestId('confirm-cancel')).toHaveTextContent('Cancel');
+            expect(onUse).not.toHaveBeenCalled();
+        });
+
+        it('a model that is not tight switches at once', async () => {
+            const onUse = jest.fn();
+            await mountList(onUse);
+            await fireEvent.press(await screen.findByTestId('model-use-Small-GGUF'));
+            expect(onUse).toHaveBeenCalledWith('Small-GGUF');
+            expect(screen.queryByTestId('confirm-ok')).toBeNull();
+        });
     });
 });
