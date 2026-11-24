@@ -32,10 +32,11 @@ export type RedeemResult = Exclude<PairingStatus, { state: 'none' }>;
 
 /**
  * A paired PC asked again whether it still knows this phone, over TLS pinned to the certificate saved at pairing.
- * `known` is only ever a 2xx over that pin. `unknown`: it refused this phone's token, or every address showed another
- * certificate. `unreachable`: anything else, so nothing is decided.
+ * `known` is only ever a 2xx over that pin. `unknown`: its device gate refused this phone's token (`device_unknown`).
+ * `otherDevice`: every address showed another certificate, so nothing was sent and nothing is decided.
+ * `unreachable`: anything else, so nothing is decided.
  */
-export type PcRecheck = { state: 'known' } | { state: 'unknown' } | { state: 'unreachable' };
+export type PcRecheck = { state: 'known' } | { state: 'unknown' } | { state: 'otherDevice' } | { state: 'unreachable' };
 
 /**
  * The seam between the pairing screens and the pinned-TLS transport. Mobile's real implementation

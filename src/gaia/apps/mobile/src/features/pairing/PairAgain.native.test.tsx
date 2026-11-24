@@ -32,6 +32,10 @@ function PairAgainScreen({ onKnown, deadlineMs }: { onKnown: () => void; deadlin
             onPairAgain={pairAgain.run}
             checking={pairAgain.state === 'checking'}
             unreachablePc={pairAgain.state === 'unreachable' ? pairAgain.pcName : null}
+            otherDevicePc={pairAgain.otherDevice?.name ?? null}
+            onForget={pairAgain.forget}
+            forgetting={pairAgain.forgetting}
+            forgetError={pairAgain.forgetError}
         />
     );
 }
@@ -160,5 +164,71 @@ describeNative('"Pair again" after a certificate change', () => {
             fireEvent.press(screen.getByTestId('pairing-use-den'));
         });
         expect(useConnectionStore.getState().connection?.pcId).toBe('den');
+    });
+
+    it('keeps the PC when a different device answers at every address, and asks again on Try again', async () => {
+        const { forget, service, asked } = await show(async () => ({ state: 'otherDevice' }));
+        await act(async () => {
+            fireEvent.press(screen.getByTestId('pair-again'));
+        });
+        expect(screen.getByText(t('mobileApp.pairing.again.otherDevice.title', { pc: 'Office PC' }))).toBeTruthy();
+        expect(screen.getByText(t('mobileApp.pairing.again.otherDevice.body', { pc: 'Office PC' }))).toBeTruthy();
+        expect(screen.getByText(t('mobileApp.pairing.again.otherDevice.check', { pc: 'Office PC' }))).toBeTruthy();
+        expect(screen.getByText(t('mobileApp.pairing.again.otherDevice.resetHint'))).toBeTruthy();
+        expect(within(screen.getByTestId('pair-again')).getByText(t('mobileApp.pairing.off.retry'))).toBeTruthy();
+        expect(forget).not.toHaveBeenCalled();
+        expect(useConnectionStore.getState().connection?.pcId).toBe('office');
+        expect(useConnectionStore.getState().forgottenPc).toBeNull();
+        expect((await service.list()).map((pc) => pc.id)).toEqual(['office', 'den']);
+
+        await act(async () => {
+            fireEvent.press(screen.getByTestId('pair-again'));
+        });
+        expect(asked).toHaveBeenCalledTimes(2);
+        expect(screen.getByTestId('pair-again-other-device')).toBeTruthy();
+    });
+
+    it('forgets the PC a different device answered for only once Forget is confirmed', async () => {
+        const { forget, service } = await show(async () => ({ state: 'otherDevice' }));
+        await act(async () => {
+            fireEvent.press(screen.getByTestId('pair-again'));
+        });
+        await act(async () => {
+            fireEvent.press(screen.getByTestId('pair-again-forget'));
+        });
+        expect(screen.getByText(t('mobileApp.pairing.again.forgetConfirmTitle', { pc: 'Office PC' }))).toBeTruthy();
+        expect(screen.getByText(t('mobileApp.pairing.again.forgetConfirmBody'))).toBeTruthy();
+        await act(async () => {
+            fireEvent.press(screen.getByTestId('pair-again-forget-cancel'));
+        });
+        expect(forget).not.toHaveBeenCalled();
+        expect(useConnectionStore.getState().connection?.pcId).toBe('office');
+
+        // The closing sheet still hides the screen behind it from the accessibility tree.
+        await act(async () => {
+            fireEvent.press(screen.getByTestId('pair-again-forget', { includeHiddenElements: true }));
+        });
+        await act(async () => {
+            fireEvent.press(screen.getByTestId('pair-again-forget-confirm'));
+        });
+        expect(forget).toHaveBeenCalledTimes(1);
+        expect(forget).toHaveBeenCalledWith('office');
+        expect(useConnectionStore.getState().connection).toBeNull();
+        expect((await service.list()).map((pc) => pc.id)).toEqual(['den']);
+    });
+
+    it("doesn't send another PC to pairing when the app moved to it while this one answered", async () => {
+        let answer: (value: PcRecheck) => void = () => undefined;
+        const { forget } = await show(() => new Promise<PcRecheck>((resolve) => (answer = resolve)));
+        await act(async () => {
+            fireEvent.press(screen.getByTestId('pair-again'));
+        });
+        await act(async () => {
+            useConnectionStore.getState().setConnection(DEN.connection);
+        });
+        await act(async () => answer({ state: 'unknown' }));
+        expect(useConnectionStore.getState().forgottenPc).toBeNull();
+        expect(useConnectionStore.getState().connection?.pcId).toBe('den');
+        expect(forget).not.toHaveBeenCalled();
     });
 });
