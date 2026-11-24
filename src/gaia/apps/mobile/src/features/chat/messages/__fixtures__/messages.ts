@@ -179,6 +179,7 @@ export type MessagesFixture =
     | 'cutoff-schedule-paused'
     | 'failed-context'
     | 'failed-model-load'
+    | 'failed-model-server'
     | 'failed-agent-crash'
     | 'failed-model-unavailable'
     | 'failed-report'
@@ -307,6 +308,11 @@ export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Mes
     'failed-context': { messages: failedAfter('Failed to start the query run: Error: request (70211 tokens) exceeds the available context size (65536 tokens).') },
     'failed-agent-crash': { messages: failedAfter('The agent stopped unexpectedly. Its log is in /Users/Shared/gaia-demo/.gaia/agents/gaia/logs') },
     'failed-model-load': { messages: failedAfter("Failed to start the query run: Failed to load model Gemma-4-E4B-it-GGUF: llama-server exited with code 1.") },
+    'failed-model-server': {
+        messages: failedAfter(
+            "The model call failed at step 1, so this request is unfinished. The local model server at 127.0.0.1:13305 isn't answering, so the message never reached Fireworks AI.\n\nNothing had run yet.\n\nStart the model server, then send the message again.\n\nA problem report for this was saved on this PC as GF-20261124-144003-f8bf; nothing was sent anywhere.",
+        ),
+    },
     'failed-model-unavailable': {
         messages: failedAfter("Failed to start the query run: Failed to preload model: Lemonade has no model called 'Gemma-4-E4B-it-GGUFF'. Check Settings › Advanced › Custom model ID."),
     },

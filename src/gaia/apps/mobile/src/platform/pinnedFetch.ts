@@ -5,6 +5,7 @@ import { GaiaPinMismatchError, GaiaUploadUnsupportedError } from '@/api/errors';
 import { createUtf8Decoder } from '@/api/utf8';
 
 import { GaiaTransport, type NativeSubscription } from '../../modules/gaia-transport';
+import { isDeviceUnknown } from './deviceGate';
 import type { FetchRequestInit, FetchResponseLike } from './fetch.types';
 import { encodeBody } from './uploadBody';
 
@@ -29,10 +30,32 @@ export function reportIfNetworkFailure(err: unknown): never {
     throw err;
 }
 
-/** The listener's 401 for an unknown or revoked device token carries `WWW-Authenticate: Bearer`. */
-export function reportIfDeviceGone(pcId: string, res: FetchResponseLike): FetchResponseLike {
-    if (res.status === 401 && /^bearer\b/i.test(res.headers.get('www-authenticate') ?? '')) deviceGone?.(pcId);
-    return res;
+/**
+ * Tells the onDeviceGone handler when the PC's device gate refused this phone's token (see isDeviceUnknown).
+ * Any other 401 passes through untouched. The gate's refusal is small, so its body is read here and handed back
+ * through the response again, for a caller that reads `text()` or `body` afterwards.
+ */
+export async function reportIfDeviceGone(pcId: string, res: FetchResponseLike): Promise<FetchResponseLike> {
+    const challenge = res.headers.get('www-authenticate');
+    if (res.status !== 401 || !/^bearer\b/i.test(challenge ?? '')) return res;
+    const text = await res.text();
+    if (isDeviceUnknown(res.status, challenge, text)) {
+        console.warn(`The PC ${pcId} answered 401 device_unknown`);
+        deviceGone?.(pcId);
+    }
+    const bytes = new TextEncoder().encode(text);
+    return {
+        ok: res.ok,
+        status: res.status,
+        headers: res.headers,
+        body: new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(bytes);
+                controller.close();
+            },
+        }),
+        text: () => Promise.resolve(text),
+    };
 }
 
 /** A native rejection as an Error the app can act on, with the native `code`; a pin mismatch is GaiaPinMismatchError. */
