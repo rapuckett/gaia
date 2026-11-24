@@ -101,11 +101,11 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
     const { colors, radius, space, shadows } = useTheme();
     const { width, height } = useWindowDimensions();
     const insets = useSafeAreaInsets();
+    const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
     const keyboardHeight = useKeyboardState((k) => (k.isVisible ? k.height : 0));
     // The keyboard pads the panel upward; cap it so its header stays below the status bar and the body scrolls.
     const maxHeight = Math.min(height * 0.9, height - keyboardHeight - insets.top - space.sm);
     const reduced = useReducedMotion();
-    const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
     const content = useRef<ComponentRef<typeof View>>(null);
     const scrollHandle = useMemo<SheetScrollHandle>(
         () => ({
@@ -114,7 +114,7 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
                 if (!target || !inner) return;
                 target.measureLayout(
                     inner,
-                    (_x, y) => scroller.current?.scrollTo({ y: Math.max(0, y), animated: !reduced }),
+                    (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y), animated: !reduced }),
                     () => undefined,
                 );
             },
@@ -236,8 +236,11 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
                 >
                     {wide ? header : <GestureDetector gesture={pan}>{header}</GestureDetector>}
                     <ScrollView
-                        ref={scroller}
+                        ref={scrollRef}
                         testID={entry.scrollTestID}
+                        onContentSizeChange={() => {
+                            if (entry.scrollToEnd) scrollRef.current?.scrollToEnd({ animated: true });
+                        }}
                         keyboardShouldPersistTaps="handled"
                         style={{ flexGrow: 0 }}
                         contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.lg }}

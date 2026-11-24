@@ -123,6 +123,7 @@ describe('endpoints', () => {
         gpuMemoryPending: ['DELETE', 'POST'],
         gpuMemoryRevert: ['POST'],
         health: ['GET'],
+        imageSettings: ['GET', 'PUT'],
         cloudPrices: ['GET'],
         lemonadeDetect: ['GET'],
         lemonadeTarget: ['GET', 'POST'],

@@ -58,6 +58,11 @@ GPU_MEMORY_MAX_GB = 1024.0
 #: GAIA_DEV_BACKEND_DOWNLOADED=Qwen3.6-35B-A3B-GGUF gives a downloaded, tight
 #: Qwen3.6, so Settings > Agent & model > Use shows the sheet.
 DOWNLOADED_ENV = "GAIA_DEV_BACKEND_DOWNLOADED"
+#: Set to 1/true/yes/on to answer ``/embeddings`` so documents finish indexing
+#: (``--fake-embeddings`` overrides it). Off, every indexed document ends failed.
+FAKE_EMBEDDINGS_ENV = "GAIA_DEV_BACKEND_FAKE_EMBEDDINGS"
+#: Width of the fake vectors, EmbeddingGemma-300m's.
+FAKE_EMBEDDING_DIM = 768
 HOST = "127.0.0.1"
 READY_TIMEOUT_SECONDS = 60.0
 #: Exit code for a bad invocation, as ``gaia uninstall`` uses.
@@ -204,6 +209,35 @@ def parse_downloaded(raw: Any, source: str) -> List[str]:
     return list(dict.fromkeys(ids))
 
 
+def parse_flag(raw: Any, source: str) -> bool:
+    """*raw* as an on/off switch, or a :class:`DevBackendError` naming *source*."""
+    word = str(raw).strip().lower()
+    if word in ("1", "true", "yes", "on"):
+        return True
+    if word in ("0", "false", "no", "off"):
+        return False
+    raise DevBackendError(
+        f"{source} must be 1, true, yes, on, 0, false, no or off; got {raw!r}."
+    )
+
+
+def fake_embedding(text: str, dim: int = FAKE_EMBEDDING_DIM) -> List[float]:
+    """A unit vector of *dim* floats derived only from *text* (same text, same vector)."""
+    import hashlib
+    import math
+
+    raw = bytearray()
+    counter = 0
+    while len(raw) < dim * 4:
+        raw += hashlib.sha256(f"{counter}:{text}".encode("utf-8")).digest()
+        counter += 1
+    values = [
+        int.from_bytes(raw[i * 4 : i * 4 + 4], "big") / 2**31 - 1.0 for i in range(dim)
+    ]
+    norm = math.sqrt(sum(v * v for v in values))
+    return [v / norm for v in values]
+
+
 def fake_system_info(
     model_ids: List[str], gpu_gb: Optional[float] = None
 ) -> Dict[str, Any]:
@@ -267,12 +301,14 @@ def build_fake_llm(
     model: str,
     downloaded: Optional[List[str]] = None,
     gpu_gb: Optional[float] = None,
+    fake_embeddings: bool = False,
 ):
     """A FastAPI app speaking the slice of Lemonade's API a chat turn uses.
 
     *downloaded* names further models listed as downloaded beside *model*;
     the speech model is served only when it is among them. *gpu_gb* sizes the
-    machine's memory (:func:`fake_system_info`).
+    machine's memory (:func:`fake_system_info`). With *fake_embeddings*
+    ``/embeddings`` answers deterministic vectors, so indexing completes.
     """
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -383,6 +419,34 @@ def build_fake_llm(
             content=bytes(2 * int(1.5 * TTS_SAMPLE_RATE)),
             media_type=f"audio/l16;rate={TTS_SAMPLE_RATE}",
         )
+
+    if fake_embeddings:
+
+        @app.post("/api/v1/embeddings")
+        def embeddings(body: Dict[str, Any]):
+            texts = body.get("input")
+            if isinstance(texts, str):
+                texts = [texts]
+            if not isinstance(texts, list) or not all(
+                isinstance(t, str) for t in texts
+            ):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": {
+                            "message": "'input' must be a string or list of strings"
+                        }
+                    },
+                )
+            return {
+                "object": "list",
+                "model": body.get("model"),
+                "data": [
+                    {"object": "embedding", "index": i, "embedding": fake_embedding(t)}
+                    for i, t in enumerate(texts)
+                ],
+                "usage": {"prompt_tokens": 1, "total_tokens": 1},
+            }
 
     @app.get("/api/v1/stats")
     def stats():
@@ -609,6 +673,7 @@ def run(
     fresh: bool = False,
     gpu_gb: Optional[float] = None,
     extra_downloaded: Optional[List[str]] = None,
+    fake_embeddings: bool = False,
 ) -> int:
     llm_port = llm_port if llm_port is not None else port + 1
     if llm_port == port:
@@ -640,7 +705,7 @@ def run(
     if not fresh:
         mark_set_up()
     llm = _Server(
-        build_fake_llm(script, DEFAULT_MODEL_NAME, downloaded, gpu_gb),
+        build_fake_llm(script, DEFAULT_MODEL_NAME, downloaded, gpu_gb, fake_embeddings),
         llm_port,
         "fake-llm",
     )
@@ -702,6 +767,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         help=f"comma-separated model ids to list as already downloaded, after "
         f"the defaults (default: ${DOWNLOADED_ENV})",
     )
+    parser.add_argument(
+        "--fake-embeddings",
+        action="store_true",
+        help="answer /embeddings with deterministic vectors so documents finish "
+        f"indexing instead of failing (default: ${FAKE_EMBEDDINGS_ENV})",
+    )
     args = parser.parse_args(argv)
     try:
         home = validate_home(args.home)
@@ -716,6 +787,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             extra = parse_downloaded(args.downloaded, "--downloaded")
         elif DOWNLOADED_ENV in os.environ:
             extra = parse_downloaded(os.environ[DOWNLOADED_ENV], DOWNLOADED_ENV)
+        fake_embeddings = args.fake_embeddings
+        if not fake_embeddings and FAKE_EMBEDDINGS_ENV in os.environ:
+            fake_embeddings = parse_flag(
+                os.environ[FAKE_EMBEDDINGS_ENV], FAKE_EMBEDDINGS_ENV
+            )
         return run(
             args.port,
             home,
@@ -725,6 +801,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             args.fresh,
             gpu_gb,
             extra,
+            fake_embeddings,
         )
     except DevBackendError as e:
         print(f"Error: {e}", file=sys.stderr)

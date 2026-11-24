@@ -48,7 +48,7 @@ describeNative('the agent info section', () => {
     ])('says gaiacpp runs it, tagged Beta, %s', async (_label, tools, shown) => {
         await mount(caps('gaiacpp', tools));
         expect(await screen.findByText(shown)).toBeTruthy();
-        expect(screen.getByText(/Runs on .?gaiacpp/)).toBeTruthy();
+        expect(screen.getByText(/Runs on Fast and light \(.?gaiacpp/)).toBeTruthy();
         expect(screen.getByText(t.bare('setup.agent.beta'))).toBeTruthy();
     });
 
