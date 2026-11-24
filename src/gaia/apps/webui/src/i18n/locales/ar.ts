@@ -1966,6 +1966,7 @@ const messages: Messages = {
     'readAloud.read': "قراءة بصوت عالٍ",
     'readAloud.stop': "إيقاف القراءة",
     'readAloud.dismiss': "إغلاق",
+    'readAloud.preparing': "جارٍ تجهيز الكلام…",
     'readAloud.downloading': "جارٍ تنزيل نموذج الصوت عبر Lemonade، مرة واحدة فقط. تبدأ القراءة عند انتهائه.",
     'readAloud.error.unreachable': "تعذّرت قراءة هذا الرد: خادم النماذج لا يستجيب.",
     'readAloud.error.speech': "تعذّرت قراءة هذا الرد: لم يتمكن خادم النماذج من توليد الكلام.",

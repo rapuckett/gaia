@@ -3,10 +3,11 @@
 
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { GaiaApiError } from '@/api/errors';
+import { translator } from '@/i18n/useT';
 import { IconButton, Row, ThemeProvider } from '@/ui';
 import { Copy } from '@/ui/icons';
 
@@ -43,7 +44,7 @@ describeNative('read aloud polish', () => {
         expect(screen.queryByTestId('read-aloud-details-toggle')).toBeNull();
     });
 
-    it('keeps the row still while generating: the spinner is an overlay, not a sibling in the row', async () => {
+    it('keeps the row still while generating: the ring is an overlay, not a sibling in the row', async () => {
         const row = (c: ReadAloudControl) => (
             <Row testID="row">
                 <ReadAloudButton control={c} />
@@ -53,12 +54,28 @@ describeNative('read aloud polish', () => {
         const view = await render(row(control({})), { wrapper: wrap });
         const count = () => screen.getByTestId('row').children.length;
         const idle = count();
-        expect(screen.queryByTestId('read-aloud-spinner')).toBeNull();
+        expect(screen.queryByTestId('read-aloud-ring')).toBeNull();
         await act(async () => view.rerender(row(control({ loading: true, active: true, label: 'Stop reading' }))));
         expect(count()).toBe(idle);
-        const spinner = screen.getByTestId('read-aloud-spinner');
-        expect(StyleSheet.flatten(spinner.props.style)).toMatchObject({ position: 'absolute' });
+        const ring = screen.getByTestId('read-aloud-ring');
+        expect(ring.props.pointerEvents).toBe('none');
         expect(screen.getByLabelText('Stop reading')).toBeTruthy();
-        expect(spinner.parent?.props['aria-busy']).toBe(true);
+        expect(ring.parent?.props['aria-busy']).toBe(true);
+    });
+
+    it('announces the preparing line once when generation starts', async () => {
+        const preparing = translator('en')('readAloud.preparing');
+        const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+        const view = await render(<ReadAloudButton control={control({})} />, { wrapper: wrap });
+        announce.mockClear();
+        const loading = control({ loading: true, active: true, label: 'Stop reading' });
+        await act(async () => view.rerender(<ReadAloudButton control={loading} />));
+        await act(async () => view.rerender(<ReadAloudButton control={{ ...loading }} />));
+        if (Platform.OS === 'ios') expect(announce.mock.calls).toEqual([[preparing]]);
+        else {
+            expect(announce).not.toHaveBeenCalled();
+            expect(screen.getByLabelText(preparing).props.accessibilityLiveRegion).toBe('polite');
+        }
+        announce.mockRestore();
     });
 });

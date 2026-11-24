@@ -5,9 +5,9 @@ import { GaiaApiError, GaiaConfigError, GaiaError } from '@/api/errors';
 import { useGaiaClient } from '@/data';
 import { describeError, technicalDetail, useT, type Translate } from '@/i18n/useT';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Disclosure, IconButton, Ltr, Notice, Spinner, Text } from '@/ui';
+import { Disclosure, IconButton, Ltr, Notice, ProgressRing, Text } from '@/ui';
 import { Square, Volume2 } from '@/ui/icons';
 
 import { useReadAloudStore } from './readAloudStore';
@@ -46,8 +46,9 @@ export function useReadAloud(messageId: string, content: string): ReadAloudContr
     };
 }
 
-/** The speaker button; while the speech is being made a small spinner sits on the Stop corner, which still works, so the row never shifts. */
+/** The speaker button; while the speech is being made a ring circles the Stop square, which still works, so the row never shifts. */
 export function ReadAloudButton({ control, testID }: { control: ReadAloudControl; testID?: string }) {
+    const t = useT();
     return (
         <View aria-busy={control.loading}>
             <IconButton
@@ -59,8 +60,8 @@ export function ReadAloudButton({ control, testID }: { control: ReadAloudControl
                 testID={testID}
             />
             {control.loading ? (
-                <View pointerEvents="none" testID="read-aloud-spinner" style={{ position: 'absolute', top: 1, end: 1, transform: [{ scale: 0.75 }] }}>
-                    <Spinner size="sm" tone="accent" />
+                <View pointerEvents="none" testID="read-aloud-ring" style={StyleSheet.absoluteFill}>
+                    <ProgressRing size={36} accessibilityLabel={t('readAloud.preparing')} />
                 </View>
             ) : null}
         </View>
