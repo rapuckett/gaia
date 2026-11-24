@@ -4,7 +4,7 @@
 import { getLocales } from 'expo-localization';
 import { createContext, useContext } from 'react';
 
-import { DEFAULT_LOCALE, getLocale, isLocaleCode, isolate, setVariantPrefix, type Say } from '@webui/i18n/registry';
+import { DEFAULT_LOCALE, getLocale, isLocaleCode, isolate, setVariantPrefix, type MessageKey, type Params, type Say } from '@webui/i18n/registry';
 import { dateLocale, translator, type Translate } from '@webui/i18n/translator';
 
 import { GaiaApiError, GaiaError, GaiaNetworkError, GaiaTurnError } from '@/api/errors';
@@ -39,6 +39,12 @@ export function ltr(text: string): string {
 export function describeErrorWith(error: unknown, say: Say): string {
     if (error instanceof GaiaError) return say(error.messageKey, error.params);
     return error instanceof Error ? error.message : String(error);
+}
+
+/** A sentence that ends in `{error}`, or its `mobileApp.plain.<key>` twin when the error would only read as the generic title; the PC's own text then goes on the caller's detail line. */
+export function plainOr(t: Translate, key: string, params: Params | undefined, error: unknown, slot = 'error'): string {
+    if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.httpNoDetail') return t(`mobileApp.plain.${key}` as MessageKey, params ?? {});
+    return t.compose((say) => say(key as MessageKey, { ...(params ?? {}), [slot]: describeErrorWith(error, say) }));
 }
 
 /** Like `describeErrorWith`, but a PC's own reason (`GaiaApiError.detail`) goes in as sent. */

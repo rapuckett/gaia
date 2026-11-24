@@ -3,7 +3,7 @@
 
 import { GaiaApiError, GaiaAuthError, GaiaNetworkError, GaiaTurnError } from '@/api/errors';
 
-import { describeDetail, describeError, describeErrorWith, describeHttpFailure, serverText, technicalDetail, translator } from './useT';
+import { describeDetail, describeError, describeErrorWith, describeHttpFailure, plainOr, serverText, technicalDetail, translator } from './useT';
 
 describe('nested error messages', () => {
     const error = new GaiaNetworkError('http://127.0.0.1:4210/api/setup/check', new Error('fetch failed'));
@@ -94,5 +94,26 @@ describe('a PC HTTP error never puts its status or text in a sentence', () => {
         expect(describeDetail(error, t)).toBe('Bad gateway from the model server.');
         expect(describeDetail(new GaiaApiError(500, ''), t)).toBe("Something went wrong on your PC.");
         expect(describeDetail(new GaiaNetworkError('http://x/api', new Error('boom')), t)).toBe(describeError(new GaiaNetworkError('http://x/api', new Error('boom')), t));
+    });
+});
+
+describe('plainOr', () => {
+    it.each(['en', 'ar'])('a PC HTTP error in %s reads as the plain sentence, with no title or PC text in it', (code) => {
+        const t = translator(code);
+        const text = plainOr(t, 'docs.deleteFailed', { name: 'a.txt' }, new GaiaApiError(500, 'disk is read-only'));
+        expect(text).toBe(t('mobileApp.plain.docs.deleteFailed', { name: 'a.txt' }));
+        expect(text).not.toContain(t('mobileApp.error.httpNoDetail'));
+        expect(text).not.toContain('disk is read-only');
+    });
+
+    it('our own wording of a failure still ends the sentence', () => {
+        const t = translator('en');
+        expect(plainOr(t, 'docs.deleteFailed', { name: 'a.txt' }, new Error('PC is asleep'))).toBe("Couldn't remove a.txt: PC is asleep");
+    });
+
+    it('fills the slot a key names, such as {reason}', () => {
+        const t = translator('en');
+        expect(plainOr(t, 'setup.models.listFailed', {}, new Error('offline'), 'reason')).toBe('Couldn’t read the model list from the model server: offline');
+        expect(plainOr(t, 'setup.models.listFailed', {}, new GaiaApiError(500, 'x'), 'reason')).toBe("Couldn't read the model list from the model server.");
     });
 });
