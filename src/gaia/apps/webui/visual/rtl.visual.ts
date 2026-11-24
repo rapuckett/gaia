@@ -7647,8 +7647,8 @@ for (const locale of ['ar', 'en'] as const) {
         const waiting = page.locator('.queued-message');
         await expect(waiting).toHaveCount(1);
         await expect(waiting.locator('.queued-message-state')).toContainText(ar ? 'في قائمة الانتظار' : 'Queued. Sends when this reply ends.');
-        await expect(waiting.getByRole('button', { name: ar ? /إضافة إلى هذا الرد/ : 'Add to this reply' })).toBeVisible();
-        await expect(page.getByRole('list', { name: ar ? /رسائل بانتظار الإرسال/ : 'Messages waiting to send' })).toBeVisible();
+        await expect(waiting.getByRole('button', { name: ar ? /أضِفها إلى هذا الرد/ : 'Add to this reply' })).toBeVisible();
+        await expect(page.getByRole('list', { name: ar ? /رسائل تنتظر الإرسال/ : 'Messages waiting to send' })).toBeVisible();
         await shot(page, `reconnecting-queued-${locale}`);
         expect(await audit(page)).toEqual([]);
         if (ar) {
