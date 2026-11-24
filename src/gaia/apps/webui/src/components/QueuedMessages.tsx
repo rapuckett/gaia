@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 import { AlertCircle, Clock, CornerDownRight, RotateCw, X } from 'lucide-react';
-import { splitQueueError, type QueuedMessage } from '../utils/messageQueue';
-import { useT, type Translate } from '../i18n/useT';
+import type { QueueError, QueuedMessage } from '../utils/messageQueue';
 import { isolate, type MessageKey } from '../i18n/registry';
+import { useT, type Translate } from '../i18n/useT';
 import './QueuedMessages.css';
 
 const STATE_LABEL: Record<'sending' | 'delivered' | 'queued', MessageKey> = {
     sending: 'queue.sending',
     delivered: 'queue.delivered',
-    queued: 'queue.waiting',
+    queued: 'queue.queued',
 };
 
 interface QueuedMessagesProps {
@@ -27,9 +27,22 @@ interface QueuedMessagesProps {
 }
 
 /** What a queued message is waiting on: this reply, a busy chat, or nothing. */
-export function queuedLabel(t: Translate, replying: boolean, busyRetry: boolean): string {
+export function queuedLabel(replying: boolean, busyRetry: boolean, t: Translate): string {
     if (replying) return t(STATE_LABEL.queued);
-    return t(busyRetry ? 'queue.busy' : 'queue.sendingNext');
+    return t(busyRetry ? 'queue.busy' : 'queue.next');
+}
+
+/** The raw error under GAIA's own reason, shown as written on its own line. */
+function errorDetail(error: QueueError | undefined): string | undefined {
+    return error && typeof error !== 'string' ? error.detail : undefined;
+}
+
+/** "Not sent." and why, as one line, with GAIA's own reasons in the chosen language. */
+export function notSentText(error: QueueError | undefined, t: Translate): string {
+    if (!error) return t('queue.notSentBare');
+    return t.compose((say) => say('queue.notSent', {
+        error: typeof error === 'string' ? error : say(error.key, error.params),
+    }));
 }
 
 /** Messages typed while GAIA answers, above the composer, oldest first. */
@@ -41,7 +54,8 @@ export function QueuedMessages({ items, onRemove, onSteer, onRetry, replying = t
     return (
         <ul className="queued-messages" aria-label={t('queue.listAria')} aria-live="polite">
             {shown.map((item) => {
-                const failure = item.error ? splitQueueError(t, item.error) : undefined;
+                const detail = item.state === 'failed' ? errorDetail(item.error) : undefined;
+                const notSent = item.state === 'failed' ? notSentText(item.error, t) : undefined;
                 return (
                 <li key={item.id} className={`queued-message is-${item.state}`}>
                     {item.state === 'failed'
@@ -49,14 +63,12 @@ export function QueuedMessages({ items, onRemove, onSteer, onRetry, replying = t
                         : item.state === 'queued'
                             ? <Clock size={12} aria-hidden="true" />
                             : <CornerDownRight size={12} aria-hidden="true" />}
-                    <span className="queued-message-text" title={item.text}><bdi>{item.text}</bdi></span>
-                    <span className="queued-message-state" title={failure ? [failure.message, failure.detail && isolate(failure.detail, 'ltr')].filter(Boolean).join('\n') : undefined}>
+                    <span className="queued-message-text" dir="auto" title={item.text}>{item.text}</span>
+                    <span className="queued-message-state" title={notSent ? [notSent, detail && isolate(detail, 'ltr')].filter(Boolean).join('\n') : undefined}>
                         {item.state === 'failed'
-                            ? (failure
-                                ? <>{`${t('queue.notSentWhy')} ${failure.message}`}{failure.detail && <bdi dir="ltr" className="queued-message-detail">{failure.detail}</bdi>}</>
-                                : t('queue.notSent'))
+                            ? <>{notSent}{detail && <bdi dir="ltr" className="queued-message-detail">{detail}</bdi>}</>
                             : item.state === 'queued'
-                                ? (replying && item.note) || queuedLabel(t, replying, busyRetry)
+                                ? (replying && item.note ? t(item.note) : '') || queuedLabel(replying, busyRetry, t)
                                 : t(STATE_LABEL[item.state as keyof typeof STATE_LABEL])}
                     </span>
                     {item.state === 'failed' && (
@@ -85,7 +97,7 @@ export function QueuedMessages({ items, onRemove, onSteer, onRetry, replying = t
                             className="queued-message-remove"
                             onClick={() => onRemove(item.id)}
                             aria-label={t('queue.removeAria', { text: item.text })}
-                            title={t('docs.remove')}
+                            title={t('queue.remove')}
                         >
                             <X size={12} />
                         </button>

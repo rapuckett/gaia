@@ -66,6 +66,9 @@ const IGNORED = new Map([
     ['--browser-pane-inset', "the desktop's browser pane, which phones don't have"],
     ['--chat-min-w', "the desktop's chat and browser-pane split"],
     ['--pane-min-w', "the desktop's chat and browser-pane split"],
+    ...['', '-text', '-hover'].map(
+        (s) => [`--action-fill${s}`, "the phone keeps its own primary-button style until Design's follow-up maps them"]),
+    ['--hit-min', "the desktop's pointer target; phones keep the platforms' larger touch targets"],
     ...['paper', 'ink', 'ink-dim', 'accent', 'on-accent', 'panel', 'rule'].map(
         (n) => [`--slide-${n}`, "the desktop's slide-deck preview, which phones don't render"]),
 ]);

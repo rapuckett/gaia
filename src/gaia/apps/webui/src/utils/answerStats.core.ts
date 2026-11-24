@@ -108,6 +108,10 @@ export function exactStats(
             time: mark(say(variant('answer.duration.sec'), { n: (latencyMs / 1000).toFixed(1) })),
         })));
     }
+    if (stats?.waiting_seconds != null && stats.waiting_seconds > 0) {
+        const waited = stats.waiting_seconds * 1000;
+        lines.push(t.compose((say) => say('answer.exact.waited', { time: spokenDuration(waited, say, mark, variant) })));
+    }
     if (wroteFirstWord(stats, ended)) {
         const ms = (stats.time_to_first_token * 1000).toFixed(0);
         lines.push(t.compose((say) => say('answer.exact.firstToken', { time: mark(say(variant('answer.duration.ms'), { n: ms })) })));
@@ -122,18 +126,5 @@ export function exactStats(
     return lines;
 }
 
-/** Time from each question to the answer after it, by the answer's message id. */
-export function latencyByMessage(messages: readonly Message[]): Map<number, number> {
-    const map = new Map<number, number>();
-    let lastUserTime: number | undefined;
-    for (const msg of messages) {
-        if (msg.role === 'user' && msg.created_at) {
-            lastUserTime = new Date(msg.created_at).getTime();
-        } else if (msg.role === 'assistant' && msg.created_at && lastUserTime !== undefined) {
-            const assistTime = new Date(msg.created_at).getTime();
-            if (assistTime > lastUserTime) map.set(msg.id, assistTime - lastUserTime);
-            lastUserTime = undefined;
-        }
-    }
-    return map;
-}
+/** Time from each question to the answer after it, by the answer's message id, less any wait on the user. */
+export { answerLatencies as latencyByMessage } from './answerLatency';
