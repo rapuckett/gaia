@@ -5,7 +5,7 @@
 
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from gaia.browser.picked import MAX_ELEMENTS as _MAX_PAGE_ELEMENTS
 from gaia.browser.picked import PageElement
@@ -17,6 +17,17 @@ from .devices import (
     ListenerErrorCode,
     PairFailureReason,
 )
+
+
+class WireModel(BaseModel):
+    """Base for a model that types a route's existing dict response.
+
+    An undeclared key is passed through, not dropped or refused, so a newer
+    sidecar or producer never turns a reply into a 500.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
 
 # ── System ──────────────────────────────────────────────────────────────────
 
