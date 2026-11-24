@@ -135,3 +135,12 @@ export function stepsFromEvents(events: readonly StreamEvent[], t: Translate): A
     }
     return steps;
 }
+
+/**
+ * *steps* as they stand once the turn has ended: a step still running was cut off,
+ * so it stops and keeps the time it had run at *endedAt*. The Agent UI has no shared
+ * code for this; it labels such a step with `tool.unfinished` (agentActivity.core).
+ */
+export function endRunningSteps(steps: readonly AgentStep[], endedAt: number): AgentStep[] {
+    return steps.map((s) => (s.active ? { ...s, active: false, latencyMs: Math.max(0, endedAt - s.timestamp) } : s));
+}
