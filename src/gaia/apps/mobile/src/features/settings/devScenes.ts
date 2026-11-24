@@ -6,7 +6,7 @@ import type { SystemStatus } from '@webui/types';
 import { tEn } from '@webui/i18n/translator';
 
 import type { SkillsAddSeed } from '@/features/skills';
-import type { AgentDownload, AgentProgram, AgentPrograms, Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, GatewayFields, CustomModelReport, LocalModelStatus, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
+import type { AgentDownload, AgentProgram, AgentPrograms, Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, GatewayFields, CustomModelReport, ImageModel, ImageSettings, LocalModelStatus, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { DevicePromptKind, DevicePromptNote, DevicePromptState } from '@/features/devices/devicePrompts';
@@ -17,7 +17,7 @@ import type { SectionId } from './sections';
 
 /** A settings pane on a fake PC: which section, and the anchor it opens on. */
 export interface SettingsScene {
-    section: Extract<SectionId, 'advanced' | 'automations' | 'general' | 'messaging' | 'model' | 'permissions' | 'privacy' | 'setup' | 'skills' | 'voice'>;
+    section: Extract<SectionId, 'advanced' | 'automations' | 'general' | 'images' | 'messaging' | 'model' | 'permissions' | 'privacy' | 'setup' | 'skills' | 'voice'>;
     target?: string;
     gpuMemory: GpuMemoryStatus | Error;
     status?: FakeClientData['status'];
@@ -165,6 +165,17 @@ const SPEECH: NonNullable<FakeClientData['speechSettings']> = {
         { id: 'am_adam', name: 'Adam', accent: 'american', gender: 'male', quality: 'B' },
         { id: 'bf_emma', name: 'Emma', accent: 'british', gender: 'female', quality: 'A' },
     ],
+};
+const imageModel = (id: string, extra: Partial<ImageModel> = {}): ImageModel => ({
+    id, recipe: null, downloaded: true, downloads_on_first_use: false, size_gb: null, default_size: '1280x720', default_steps: 9,
+    sizes: ['512x512', '1024x1024', '1280x720', '720x1280'], ...extra,
+});
+const IMAGES: ImageSettings = {
+    model: 'Z-Image-Turbo', size: null, steps: null, max_steps: 50, models: [imageModel('Z-Image-Turbo')],
+    model_available: true, chat_model: CHAT_MODEL, chat_model_creates_images: true,
+};
+const CHAT_NAMES: NonNullable<FakeClientData['providerModels']> = {
+    local: { provider: 'local', models: [model(CHAT_MODEL, { display_name: 'Gemma 4 E4B (Multimodal)', downloaded: true })] },
 };
 const blockedProviders: NonNullable<FakeClientData['providers']> = {
     providers: [
@@ -616,6 +627,16 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     // SET-PERM-06: `#tap=perm-chat-menu-a,perm-chat-turn-off-full`. SET-PERM-07: `#tap=perm-grant-revoke-a-0` (grant index within the chat; Chat b's second is `perm-grant-revoke-b-1`).
     // SET-PERM-08: `#tap=perm-chat-menu-b,perm-chat-revoke-all`.
     'perm-chats': { section: 'permissions', gpuMemory: GPU, data: PERM_CHATS },
+    // SET-IMAGE-01: the normal pane; the chat model can't make images; no image model; the saved one gone (with others, and with none).
+    'images-normal': { section: 'images', gpuMemory: GPU, data: { imageSettings: IMAGES, providerModels: CHAT_NAMES } },
+    'images-chat-model-too-small': { section: 'images', gpuMemory: GPU, data: { imageSettings: { ...IMAGES, chat_model_creates_images: false }, providerModels: CHAT_NAMES } },
+    'images-no-models-only': { section: 'images', gpuMemory: GPU, data: { imageSettings: { ...IMAGES, models: [] }, providerModels: CHAT_NAMES } },
+    'images-no-models': { section: 'images', gpuMemory: GPU, data: { imageSettings: { ...IMAGES, models: [], model_available: false }, providerModels: CHAT_NAMES } },
+    'images-model-gone': {
+        section: 'images', gpuMemory: GPU,
+        data: { imageSettings: { ...IMAGES, model: 'Flux-Schnell-GGUF', model_available: false, models: [imageModel('Z-Image-Turbo'), imageModel('SDXL-Turbo', { downloaded: false, downloads_on_first_use: true, size_gb: 6.9 })] }, providerModels: CHAT_NAMES },
+    },
+    'images-unreachable': { section: 'images', gpuMemory: GPU, override: { getImageSettings: () => Promise.reject(new GaiaApiError(503, 'Lemonade is not running at http://localhost:13305')) } },
     // SET-VOICE-03: Preview; `#tap=read-aloud-preview` starts a preview that never finishes, so the button reads Stop reading beside a spinner (no audio plays).
     'voice-preview': { section: 'voice', gpuMemory: GPU, data: { speechSettings: SPEECH }, override: { speak: never } },
     // SET-VOICE-08: the PC says read aloud is unavailable; the pane shows only the notice.

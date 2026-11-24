@@ -240,6 +240,21 @@ button.copy-url-btn.copied {
     margin-bottom: 0;
 }
 
+.mobile-app-hint {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.mobile-app-hint .link-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+}
+
 .mobile-install-hint {
     padding: 14px 16px;
     border: 1px solid var(--border);
