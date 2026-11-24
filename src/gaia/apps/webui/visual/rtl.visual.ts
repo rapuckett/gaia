@@ -6697,6 +6697,8 @@ for (const locale of ['ar', 'en']) {
         await page.locator('textarea').first().fill('count the characters in my notes');
         await page.keyboard.press('Enter');
         for (const answered of [1, 2]) {
+            // A click before the card has been still for its arm wait answers nothing.
+            await expect(page.locator('.perm-card')).toHaveAttribute('data-armed', 'true');
             await page.getByRole('button', { name: /Allow once/ }).click();
             await expect(page.locator('.perm-card-hint')).toBeVisible();
             if (answered === 1) await expect(page.locator('.perm-card-hint')).toContainText(locale === 'ar' ? 'مرة واحدة' : 'once already');
