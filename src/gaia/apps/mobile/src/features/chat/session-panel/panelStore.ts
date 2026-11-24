@@ -3,7 +3,7 @@
 
 import { create } from 'zustand';
 
-export type PanelSectionId = 'answer' | 'outputs' | 'changes' | 'skills' | 'context' | 'tools';
+export type PanelSectionId = 'answer' | 'outputs' | 'changes' | 'skills' | 'context' | 'tools' | 'plan' | 'schedule' | 'commands' | 'documents' | 'session';
 
 // The web UI's defaults (stores/sessionPanelStore.ts); remembered for the app session only.
 const DEFAULT_OPEN: Record<PanelSectionId, boolean> = {
@@ -13,6 +13,11 @@ const DEFAULT_OPEN: Record<PanelSectionId, boolean> = {
     skills: true,
     context: false,
     tools: false,
+    plan: true,
+    schedule: true,
+    commands: true,
+    documents: true,
+    session: false,
 };
 
 interface PanelState {
