@@ -4,7 +4,10 @@
 import { GaiaApiError, GaiaConfigError, GaiaError } from '@/api/errors';
 import { useGaiaClient } from '@/data';
 import { describeError, technicalDetail, useT, type Translate } from '@/i18n/useT';
-import { IconButton, Notice, Row, Spinner } from '@/ui';
+import { useState } from 'react';
+import { View } from 'react-native';
+
+import { Disclosure, IconButton, Ltr, Notice, Spinner, Text } from '@/ui';
 import { Square, Volume2 } from '@/ui/icons';
 
 import { useReadAloudStore } from './readAloudStore';
@@ -43,11 +46,10 @@ export function useReadAloud(messageId: string, content: string): ReadAloudContr
     };
 }
 
-/** The speaker button; while the speech is being made it spins beside a Stop that still works. */
+/** The speaker button; while the speech is being made a small spinner sits on the Stop corner, which still works, so the row never shifts. */
 export function ReadAloudButton({ control, testID }: { control: ReadAloudControl; testID?: string }) {
     return (
-        <Row gap="xs">
-            {control.loading ? <Spinner size="sm" /> : null}
+        <View aria-busy={control.loading}>
             <IconButton
                 icon={control.active ? Square : Volume2}
                 label={control.label}
@@ -56,7 +58,12 @@ export function ReadAloudButton({ control, testID }: { control: ReadAloudControl
                 onPress={control.toggle}
                 testID={testID}
             />
-        </Row>
+            {control.loading ? (
+                <View pointerEvents="none" testID="read-aloud-spinner" style={{ position: 'absolute', top: 1, end: 1, transform: [{ scale: 0.75 }] }}>
+                    <Spinner size="sm" tone="accent" />
+                </View>
+            ) : null}
+        </View>
     );
 }
 
@@ -77,6 +84,19 @@ function detailOf(cause: unknown, t: Translate): string | undefined {
     return cause instanceof GaiaError ? describeError(cause, t) : technicalDetail(cause);
 }
 
+/** The PC's text, folded away under "Details" until asked for. */
+function ErrorDetails({ text }: { text: string }) {
+    const t = useT();
+    const [open, setOpen] = useState(false);
+    return (
+        <Disclosure title={t('failedTurn.details')} open={open} onToggle={() => setOpen((v) => !v)} headerTestID="read-aloud-details-toggle">
+            <Text role="caption" tone="muted" selectable testID="read-aloud-details-text">
+                <Ltr>{text}</Ltr>
+            </Text>
+        </Disclosure>
+    );
+}
+
 /** Why reading this reply aloud stopped, until dismissed. */
 export function ReadAloudErrorNotice({ messageId }: { messageId: string }) {
     const t = useT();
@@ -84,5 +104,10 @@ export function ReadAloudErrorNotice({ messageId }: { messageId: string }) {
     const clear = useReadAloudStore((s) => s.clearError);
     if (!error) return null;
     if (error.kind === 'unsupported') return <Notice tone="danger" title={t('mobileApp.readAloud.unsupported')} onDismiss={clear} />;
-    return <Notice tone="danger" title={t(`readAloud.error.${error.kind}`)} message={error.kind === 'unavailable' ? undefined : detailOf(error.cause, t)} onDismiss={clear} />;
+    const detail = error.kind === 'unavailable' ? undefined : detailOf(error.cause, t);
+    return (
+        <Notice tone="danger" title={t(`readAloud.error.${error.kind}`)} onDismiss={clear}>
+            {detail ? <ErrorDetails text={detail} /> : null}
+        </Notice>
+    );
 }
