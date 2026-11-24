@@ -54,7 +54,7 @@ describeNative('server text stays off the sentence in the chat area', () => {
     it('shows a failed PC error as "Not sent." with the PC reason as a left-to-right detail', async () => {
         await drawRow(failedRow(new GaiaApiError(500, 'disk full')));
         expect(screen.getByText(t('queue.notSentBare'))).toBeTruthy();
-        expect(screen.getByText(t('mobileApp.error.httpNoDetail', { status: 500 }))).toBeTruthy();
+        expect(screen.getByText(t('mobileApp.error.httpNoDetail'))).toBeTruthy();
         expect(StyleSheet.flatten(screen.getByText('disk full').props.style)).toMatchObject({ writingDirection: 'ltr' });
     });
 
@@ -75,7 +75,7 @@ describeNative('server text stays off the sentence in the chat area', () => {
             />,
             { wrapper: wrap },
         );
-        expect(screen.getByText(t('mobileApp.error.httpNoDetail', { status: 500 }))).toBeTruthy();
+        expect(screen.getByText(t('mobileApp.error.httpNoDetail'))).toBeTruthy();
         expect(StyleSheet.flatten(screen.getByText(SERVER_TEXT).props.style)).toMatchObject({ writingDirection: 'ltr' });
     });
 
@@ -91,7 +91,7 @@ describeNative('server text stays off the sentence in the chat area', () => {
             firstNotSent: '',
         });
         await flow.submit('hi', () => undefined);
-        expect(flow.getState().error).toBe(t('mobileApp.error.httpNoDetail', { status: 500 }));
+        expect(flow.getState().error).toBe(t('mobileApp.error.httpNoDetail'));
         expect(flow.getState().errorDetail).toBe(SERVER_TEXT);
     });
 

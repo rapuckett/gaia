@@ -4,7 +4,7 @@
 import { getLocales } from 'expo-localization';
 import { createContext, useContext } from 'react';
 
-import { DEFAULT_LOCALE, getLocale, isLocaleCode, isolate, setVariantPrefix, type Say } from '@webui/i18n/registry';
+import { DEFAULT_LOCALE, getLocale, isLocaleCode, isolate, setVariantPrefix, type MessageKey, type Params, type Say } from '@webui/i18n/registry';
 import { dateLocale, translator, type Translate } from '@webui/i18n/translator';
 
 import { GaiaApiError, GaiaError, GaiaNetworkError, GaiaTurnError } from '@/api/errors';
@@ -41,6 +41,12 @@ export function describeErrorWith(error: unknown, say: Say): string {
     return error instanceof Error ? error.message : String(error);
 }
 
+/** A sentence that ends in `{error}`, or its `mobileApp.plain.<key>` twin when the error would only read as the generic title; the PC's own text then goes on the caller's detail line. */
+export function plainOr(t: Translate, key: string, params: Params | undefined, error: unknown, slot = 'error'): string {
+    if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.httpNoDetail') return t(`mobileApp.plain.${key}` as MessageKey, params ?? {});
+    return t.compose((say) => say(key as MessageKey, { ...(params ?? {}), [slot]: describeErrorWith(error, say) }));
+}
+
 /** Like `describeErrorWith`, but a PC's own reason (`GaiaApiError.detail`) goes in as sent. */
 export function describeFailureWith(error: unknown, say: Say): string {
     if (error instanceof GaiaApiError) return error.detail;
@@ -54,6 +60,11 @@ export function serverText(error: unknown): string | undefined {
     return error instanceof Error ? error.message || undefined : undefined;
 }
 
+/** For a Details disclosure: the PC's own text when it sent one, else our wording of the failure. The status never shows. */
+export function describeDetail(error: unknown, t: Translate): string {
+    return serverText(error) ?? describeError(error, t);
+}
+
 const CONNECTOR_RECONNECT_CODES: ReadonlySet<string> = new Set(['not_connected', 'reauth_required', 'connection_revoked']);
 
 /** A PC's HTTP error, pairing-auth error or failed turn as our reason-free sentence plus its raw text for `detail`; any other error reads as `describeError`. */
@@ -62,8 +73,8 @@ export function describeHttpFailure(error: unknown, t: Translate): { text: strin
     if (error instanceof GaiaApiError && error.status === 409 && CONNECTOR_RECONNECT_CODES.has(String(error.body?.error))) {
         return { text: t('mobileApp.connectors.reconnectNeeded') };
     }
-    if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.http' && error.detail) {
-        return { text: t('mobileApp.error.httpNoDetail', { status: error.status }), detail: error.detail };
+    if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.httpNoDetail' && error.detail) {
+        return { text: t('mobileApp.error.httpNoDetail'), detail: error.detail };
     }
     if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.auth') {
         return { text: t('mobileApp.error.authNoDetail'), detail: error.detail || undefined };

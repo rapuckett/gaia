@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: MIT
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Linking, Platform } from 'react-native';
 
-import { GaiaPinMismatchError } from '@/api/errors';
+import { GaiaApiError, GaiaPinMismatchError } from '@/api/errors';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
 import { Button, Card, Icon, Notice, NumberMarker, Row, Screen, Spinner, Stack, Text, TextField, UpButton, useBackStep } from '@/ui';
-import { CircleAlert, Clock, Monitor, Smartphone } from '@/ui/icons';
+import { CircleAlert, Clock, Monitor, Smartphone, Wifi } from '@/ui/icons';
 
 import { parseInvite, type PairingInvite } from './invite';
+import { localNetworkDenied, localNetworkStep, markAllowed, markExplained, watchForeground } from './localNetwork';
 import { PairingScanner } from './PairingScanner';
 import { isNetworkFailure, pollSettled } from './pollSettled';
 import { getPairingService } from './registry';
@@ -18,9 +19,15 @@ import type { PairingStatus, RedeemResult } from './service';
 
 export type PairingStep = 'welcome' | 'how' | 'manual' | 'scan';
 
+type Confirm = { at: 'confirm'; invite: PairingInvite; replaces: boolean; pairedBefore: boolean; back: PairingStep };
+
 type View =
     | PairingStep
-    | { at: 'confirm'; invite: PairingInvite; replaces: boolean; back: PairingStep }
+    | Confirm
+    /** Before the first connection to a home address, which raises iOS's local network prompt. */
+    | { at: 'localNetwork'; confirm: Confirm }
+    /** No home address answered, and the phone's local network setting stopped it. */
+    | { at: 'localNetworkDenied'; invite: PairingInvite; replaces: boolean }
     | { at: 'waiting'; pcName: string }
     | { at: 'refused'; rateLimited: boolean }
     | { at: 'unreachable' };
@@ -126,7 +133,13 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
         try {
             const paired = await getPairingService().list();
             if (!alive.current) return;
-            setView({ at: 'confirm', invite, replaces: paired.some((pc) => pc.id === invite.pc_id), back: view === 'scan' ? 'scan' : 'manual' });
+            setView({
+                at: 'confirm',
+                invite,
+                replaces: paired.some((pc) => pc.id === invite.pc_id),
+                pairedBefore: paired.length > 0,
+                back: view === 'scan' ? 'scan' : 'manual',
+            });
         } catch (e) {
             if (alive.current) setError(describeHttpFailure(e, t));
         } finally {
@@ -134,11 +147,17 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
         }
     };
 
-    const redeem = async (invite: PairingInvite, replaces: boolean) => {
+    /**
+     * `watch` looks for the local network permission being off while no home address has answered on this install;
+     * `retry` is the denied card's try after the app comes back, which leaves the card up unless the PC answers.
+     */
+    const redeem = async (invite: PairingInvite, replaces: boolean, mode: 'plain' | 'watch' | 'retry' = 'plain') => {
         setError(null);
         setBusy(true);
         const attempt = ++redeeming.current;
         const abandoned = () => attempt !== redeeming.current;
+        const started = Date.now();
+        const foreground = mode === 'plain' ? null : watchForeground();
         try {
             const result = await getPairingService().redeem(invite);
             // Backed out mid-redeem: the PC already holds a request, so take it back, as Cancel does.
@@ -146,16 +165,62 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
                 if (result.state === 'pending') await getPairingService().cancel();
                 return;
             }
+            if (mode !== 'plain') {
+                if (result.state !== 'unreachable') {
+                    rememberAllowed();
+                } else if (await localNetworkDenied(invite.origins, { elapsedMs: Date.now() - started, leftForeground: foreground!.left(), retrying: mode === 'retry' })) {
+                    if (alive.current && !abandoned()) setView({ at: 'localNetworkDenied', invite, replaces });
+                    return;
+                }
+            }
             settle(result);
         } catch (e) {
+            // An HTTP answer or a certificate means a home address was reached.
+            if (mode !== 'plain' && (e instanceof GaiaApiError || e instanceof GaiaPinMismatchError)) rememberAllowed();
             if (alive.current && !abandoned()) {
                 // A first pairing never connected, so "stopped connecting" would be wrong.
                 setError(e instanceof GaiaPinMismatchError && !replaces ? { text: t('mobileApp.pairing.pinMismatch.first') } : describeHttpFailure(e, t));
             }
         } finally {
+            foreground?.stop();
             if (alive.current && !abandoned()) setBusy(false);
         }
     };
+    const redeemLatest = useRef(redeem);
+    useEffect(() => {
+        redeemLatest.current = redeem;
+    });
+
+    // The explainer goes before the first connection to a home address, since that connection raises iOS's prompt.
+    const pair = async (confirm: Confirm) => {
+        let step;
+        try {
+            step = await localNetworkStep(confirm.invite.origins, confirm.pairedBefore);
+        } catch (e) {
+            if (alive.current) setError(describeHttpFailure(e, t));
+            return;
+        }
+        if (!alive.current) return;
+        if (step === 'explain') setView({ at: 'localNetwork', confirm });
+        else void redeem(confirm.invite, confirm.replaces, step === 'watch' ? 'watch' : 'plain');
+    };
+
+    const continueToPrompt = (confirm: Confirm) => {
+        markExplained().catch((e: unknown) => console.error("Couldn't note that the local network explainer was shown; it may show again", e));
+        void redeem(confirm.invite, confirm.replaces, 'watch');
+    };
+
+    const deniedFor = typeof view === 'object' && view.at === 'localNetworkDenied' ? view : null;
+    // Back from Settings (or from iOS's prompt), try once; another failure leaves the card up, with no loop.
+    useEffect(() => {
+        if (!deniedFor) return;
+        let state = AppState.currentState;
+        const sub = AppState.addEventListener('change', (next) => {
+            if (next === 'active' && state !== 'active') void redeemLatest.current(deniedFor.invite, deniedFor.replaces, 'retry');
+            state = next;
+        });
+        return () => sub.remove();
+    }, [deniedFor]);
 
     const cancel = () => {
         void getPairingService().cancel();
@@ -171,13 +236,13 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
     useBackStep(() => {
         if (!backActive) return false;
         if (typeof view === 'object') {
-            if (view.at === 'confirm') {
+            if (view.at === 'confirm' || view.at === 'localNetwork') {
                 if (busy) {
                     redeeming.current++;
                     setBusy(false);
                 }
                 setError(null);
-                setView(view.back);
+                setView(view.at === 'confirm' ? view.back : view.confirm);
             } else if (view.at === 'waiting') {
                 cancel();
             } else {
@@ -201,7 +266,15 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
         return false;
     });
 
+    if (typeof view === 'object' && view.at === 'localNetwork') {
+        const { confirm } = view;
+        return <LocalNetworkExplainer onContinue={() => continueToPrompt(confirm)} busy={busy} error={error} />;
+    }
+    if (typeof view === 'object' && view.at === 'localNetworkDenied') {
+        return <LocalNetworkDenied onBack={retry} busy={busy} error={error} />;
+    }
     if (typeof view === 'object' && view.at === 'confirm') {
+        const confirm = view;
         const { invite, replaces, back } = view;
         const addresses = invite.origins.map((o) => o.slice('https://'.length)).join(', ');
         return (
@@ -211,7 +284,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
                 body={t('mobileApp.pairing.confirm.body')}
                 footer={
                     <>
-                        <Button variant="primary" label={t('mobileApp.pairing.confirm.pair')} onPress={() => void redeem(invite, replaces)} busy={busy} full testID="pairing-confirm" />
+                        <Button variant="primary" label={t('mobileApp.pairing.confirm.pair')} onPress={() => void pair(confirm)} busy={busy} full testID="pairing-confirm" />
                         <Button variant="secondary" label={t('mobileApp.pairing.confirm.cancel')} onPress={() => setView(back)} disabled={busy} full />
                     </>
                 }
@@ -328,8 +401,52 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
     );
 }
 
+function rememberAllowed() {
+    markAllowed().catch((e: unknown) => console.error("Couldn't note that this phone reached a PC on the local network", e));
+}
+
+type ShownError = { text: string; detail?: string } | null;
+
+/** Design's explainer before iOS's local network prompt; Continue makes the connection that raises it, so there is no skip. */
+export function LocalNetworkExplainer({ onContinue, busy, error }: { onContinue: () => void; busy?: boolean; error?: ShownError }) {
+    const t = useT();
+    return (
+        <Page
+            icon={Wifi}
+            iconSize="xl"
+            title={t('mobileApp.localNetwork.title')}
+            body={t('mobileApp.localNetwork.body')}
+            footer={<Button variant="primary" label={t('mobileApp.localNetwork.continue')} onPress={onContinue} busy={busy} full testID="local-network-continue" />}
+        >
+            <Text role="body" tone="muted" align="center">
+                {t('mobileApp.localNetwork.privacy')}
+            </Text>
+            <Text role="body" tone="muted" align="center">
+                {t('mobileApp.localNetwork.next')}
+            </Text>
+            {error ? <Notice tone="danger" message={error.text} detail={error.detail} /> : null}
+        </Page>
+    );
+}
+
+/** In place of "can't reach your PC" when the phone's local network setting looks off for GAIA; Back goes to how to pair. */
+export function LocalNetworkDenied({ onBack, busy, error }: { onBack: () => void; busy?: boolean; error?: ShownError }) {
+    const t = useT();
+    const open = () => {
+        Linking.openSettings().catch((e: unknown) => console.error("Couldn't open this app's page in the phone's Settings", e));
+    };
+    return (
+        <Page icon={CircleAlert} title={t('mobileApp.localNetwork.deniedTitle')} body={t('mobileApp.localNetwork.deniedBody')}>
+            <Button variant="primary" label={t('mobileApp.localNetwork.openSettings')} onPress={open} busy={busy} full testID="local-network-settings" />
+            <Button variant="secondary" label={t('mobileApp.pairing.manual.back')} onPress={onBack} disabled={busy} full testID="local-network-back" />
+            {error ? <Notice tone="danger" message={error.text} detail={error.detail} /> : null}
+        </Page>
+    );
+}
+
 function Page({
     icon,
+    iconSize = 'lg',
     title,
     body,
     busy,
@@ -338,6 +455,7 @@ function Page({
     children,
 }: {
     icon?: typeof Clock;
+    iconSize?: 'lg' | 'xl';
     title: string;
     body?: string;
     busy?: boolean;
@@ -365,7 +483,7 @@ function Page({
             <Stack flex={1} gap="lg" padding="xl" justify="center" width="100%" testID="pairing-page">
                 {icon ? (
                     <Stack align="center">
-                        <Icon icon={icon} size="lg" tone="accent" />
+                        <Icon icon={icon} size={iconSize} tone="accent" />
                     </Stack>
                 ) : null}
                 <Text role="title" weight="semibold" align="center">

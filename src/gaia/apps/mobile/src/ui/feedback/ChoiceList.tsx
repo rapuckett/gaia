@@ -15,6 +15,10 @@ export interface ChoiceOption {
     value: string;
     label: string;
     description?: string;
+    /** Shown but not choosable: muted, announced as disabled, and a tap does nothing. */
+    disabled?: boolean;
+    /** Why it is disabled; takes the place of `description` as the muted second line. */
+    reason?: string;
 }
 
 type Single = { multiple?: false; value?: string; onChange: (value: string) => void };
@@ -28,6 +32,7 @@ export function ChoiceList(props: ChoiceListProps) {
     const { options, multiple } = props;
     const picked = (v: string) => (props.multiple ? props.value.includes(v) : props.value === v);
     const toggle = (v: string) => {
+        if (options.find((o) => o.value === v)?.disabled) return;
         if (props.multiple) props.onChange(props.value.includes(v) ? props.value.filter((x) => x !== v) : [...props.value, v]);
         else props.onChange(v);
     };
@@ -35,13 +40,17 @@ export function ChoiceList(props: ChoiceListProps) {
         <View testID={props.testID} accessibilityLabel={props.accessibilityLabel} accessibilityRole={multiple ? undefined : 'radiogroup'} style={{ gap: space.xs }}>
             {options.map((o) => {
                 const on = picked(o.value);
+                const off = !!o.disabled;
+                const second = off && o.reason ? o.reason : o.description;
                 return (
                     <Pressable
                         key={o.value}
                         testID={props.testID ? `${props.testID}-option-${o.value}` : undefined}
                         onPress={() => toggle(o.value)}
                         accessibilityRole={multiple ? 'checkbox' : 'radio'}
-                        accessibilityLabel={o.description ? `${o.label}. ${o.description}` : o.label}
+                        accessibilityLabel={second ? `${o.label}. ${second}` : o.label}
+                        disabled={off}
+                        dimmed={false}
                         aria-checked={on}
                     >
                         <Row gap="md" align="start">
@@ -54,6 +63,7 @@ export function ChoiceList(props: ChoiceListProps) {
                                         borderWidth: 2,
                                         borderRadius: multiple ? radius.sm : radius.full,
                                         borderColor: on ? colors.accentSolid : colors.border,
+                                        opacity: off ? 0.4 : 1,
                                         backgroundColor: on && multiple ? colors.accentSolid : 'transparent',
                                         alignItems: 'center',
                                         justifyContent: 'center',
@@ -64,12 +74,12 @@ export function ChoiceList(props: ChoiceListProps) {
                                 </View>
                             </FirstLine>
                             <View style={{ flex: 1, minWidth: 0, paddingVertical: space.sm }}>
-                                <Text role="ui" weight={on ? 'semibold' : 'regular'}>
+                                <Text role="ui" tone={off ? 'muted' : undefined} weight={on ? 'semibold' : 'regular'}>
                                     {o.label}
                                 </Text>
-                                {o.description ? (
+                                {second ? (
                                     <Text role="caption" tone="muted">
-                                        {o.description}
+                                        {second}
                                     </Text>
                                 ) : null}
                             </View>

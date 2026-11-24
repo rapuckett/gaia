@@ -6,9 +6,14 @@ import { Loader2 } from 'lucide-react';
 import * as memoryApi from '../../services/memoryApi';
 import { useT } from '../../i18n/useT';
 import { isolate } from '../../i18n/registry';
-
-/** Value of the "default device" option. */
-const PROFILE = 'profile';
+import {
+    EMBEDDER_PROFILE as PROFILE,
+    embedderChoices,
+    embedderDeviceKey,
+    embedderHints,
+    embedderRequestDevice,
+    embedderSelected,
+} from '../../utils/embedderSetting.core';
 
 /** Where documents and memory are embedded, and the choice to move it. */
 export function EmbedderSetting() {
@@ -29,7 +34,7 @@ export function EmbedderSetting() {
         setError(null);
         setNotice(false);
         try {
-            const next = await memoryApi.setEmbedder(value === PROFILE ? null : (value as memoryApi.EmbedderDevice));
+            const next = await memoryApi.setEmbedder(embedderRequestDevice(value));
             setView(next);
             setNotice(next.changed !== false);
         } catch (err) {
@@ -45,8 +50,14 @@ export function EmbedderSetting() {
         if (error) return <p className="settings-error" role="alert">{error}</p>;
         return <p className="settings-hint"><Loader2 size={13} className="spin" /> {t('settings.memory.embedder.checking')}</p>;
     }
-    const current = view.options.find((o) => o.device === view.device);
-    const deviceName = (device: string) => t.bare(device === 'npu' ? 'settings.memory.embedder.npu' : 'settings.memory.embedder.gpu');
+    const { current, npuUnproven, notDownloaded } = embedderHints(view);
+    const deviceName = (device: string) => t.bare(embedderDeviceKey(device));
+    const choiceLabel = (c: ReturnType<typeof embedderChoices>[number]) => {
+        if (c.kind === 'default') return t.bare('settings.memory.embedder.default', { device: deviceName(c.device) });
+        if (c.kind === 'unavailable') return t.bare('settings.memory.embedder.unavailable', { device: deviceName(c.device) });
+        if (c.kind === 'unproven') return t.bare('settings.memory.embedder.unproven', { device: deviceName(c.device) });
+        return deviceName(c.device);
+    };
     return (
         <>
             <div className="model-in-use-field">
@@ -54,21 +65,12 @@ export function EmbedderSetting() {
                 <select
                     id="embedder-device"
                     className="settings-input"
-                    value={view.chosen ? view.device : PROFILE}
+                    value={embedderSelected(view)}
                     onChange={(e) => void apply(e.target.value)}
                     disabled={busy}
                 >
-                    <option value={PROFILE}>
-                        {t.bare('settings.memory.embedder.default', { device: deviceName(view.default_device) })}
-                    </option>
-                    {view.options.map((o) => (
-                        <option key={o.device} value={o.device} disabled={o.available === false}>
-                            {o.present === false
-                                ? t.bare('settings.memory.embedder.unavailable', { device: deviceName(o.device) })
-                                : !o.proven
-                                    ? t.bare('settings.memory.embedder.unproven', { device: deviceName(o.device) })
-                                    : deviceName(o.device)}
-                        </option>
+                    {embedderChoices(view).map((c) => (
+                        <option key={c.value} value={c.value} disabled={c.disabled}>{choiceLabel(c)}</option>
                     ))}
                 </select>
             </div>
@@ -76,10 +78,10 @@ export function EmbedderSetting() {
                 {t('settings.memory.embedder.runsOn', { name: isolate(current?.display_name ?? view.device, 'ltr'), device: deviceName(view.device) })}
                 {' '}{t('settings.memory.embedder.why')}
             </span>
-            {view.options.some((o) => o.device === 'npu' && !o.proven && o.present) && (
+            {npuUnproven && (
                 <span className="settings-hint">{t('settings.memory.embedder.npuUnproven')}</span>
             )}
-            {current?.downloaded === false && (
+            {notDownloaded && (
                 <span className="settings-hint">{t('settings.memory.embedder.notDownloaded')}</span>
             )}
             {busy && <span className="settings-hint"><Loader2 size={13} className="spin" /> {t('settings.memory.embedder.applying')}</span>}

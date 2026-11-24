@@ -14,6 +14,7 @@ import { Screen, ScreenBannerProvider, Stack, UIProvider } from '@/ui';
 
 import type { RouteOrigin } from './homeNetwork';
 import { PairedPcsScreen } from './PairedPcsScreen';
+import { LocalNetworkDenied, LocalNetworkExplainer } from './PairingFlow';
 import { setPairingService } from './registry';
 import { ConnectionOverride } from './routes';
 import type { PairedPc } from './service';
@@ -35,6 +36,8 @@ export interface PairingScene {
     changes?: DeviceChange[] | Error | 'loading';
     /** Also open the sheet with the full list. */
     changesAll?: boolean;
+    /** Shows the pairing flow's local network explainer, or its denied card, instead. */
+    localNetwork?: 'explainer' | 'denied';
 }
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -86,6 +89,8 @@ export const PAIRING_SCENES: Record<string, PairingScene> = {
         chosen: HOME,
         changes: [{ id: 'u1', kind: 'cameraEnabled', params: {}, at: ago(12) }, ...CHANGES.slice(0, 2)],
     },
+    'local-network-explainer': { name: 'Studio PC', chosen: HOME, localNetwork: 'explainer' },
+    'local-network-denied': { name: 'Studio PC', chosen: HOME, localNetwork: 'denied' },
 };
 
 function connectionOf(scene: PairingScene): ConnectionConfig {
@@ -101,6 +106,17 @@ function connectionOf(scene: PairingScene): ConnectionConfig {
 
 /** The real Your PCs screen, or the connection banner, on a fake paired PC whose chosen address is the scene's. */
 export function PairingSceneView({ scene }: { scene: PairingScene }) {
+    if (scene.localNetwork) {
+        return (
+            <UIProvider>
+                {scene.localNetwork === 'explainer' ? <LocalNetworkExplainer onContinue={() => undefined} /> : <LocalNetworkDenied onBack={() => undefined} />}
+            </UIProvider>
+        );
+    }
+    return <PairedPcSceneView scene={scene} />;
+}
+
+function PairedPcSceneView({ scene }: { scene: PairingScene }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => {
         const pc: PairedPc = {

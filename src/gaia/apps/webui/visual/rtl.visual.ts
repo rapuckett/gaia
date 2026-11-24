@@ -3881,6 +3881,7 @@ for (const locale of ['ar', 'en']) {
     if (locale === 'en') test('Mobile access points app users to Phones and tablets (en, dark)', async ({ page }) => {
         const active = { active: true, url: 'https://quiet-otter.ngrok.app', token: 'a1b2c3d4-0000-4000-8000-00000000beef', startedAt: NOW.toISOString(), error: null, reason: null, installCommands: [], device: null };
         await open(page, '', 'en', async (p) => {
+            await withDevices(p, DEVICE_STATES.empty);
             await p.route('**/api/tunnel/start', (route) => route.fulfill({ json: active }));
             await p.route('**/api/tunnel/status', (route) => route.fulfill({ json: active }));
         }, 'dark');

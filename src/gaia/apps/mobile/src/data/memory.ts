@@ -19,6 +19,8 @@ import type {
     MemoryKnowledgeItem,
     MemoryCleared,
     MemoryReinitializeResult,
+    EmbedderDevice,
+    EmbedderView,
     MemorySettings,
     MemorySettingsUpdateResponse,
     MemoryStats,
@@ -41,6 +43,7 @@ export const memoryKeys = {
     stats: ['memory', 'stats'] as const,
     settings: ['memory', 'settings'] as const,
     coverage: ['memory', 'coverage'] as const,
+    embedder: ['memory', 'embedder'] as const,
     activity: (days: number) => ['memory', 'activity', days] as const,
     tools: ['memory', 'tools'] as const,
     knowledge: (want: number) => ['memory', 'knowledge', want] as const,
@@ -78,6 +81,27 @@ export function useUpdateMemorySettings() {
     return useMutation<MemorySettingsUpdateResponse, Error, Partial<MemorySettings>>({
         mutationFn: (settings) => requireClient(client).updateMemorySettings(settings),
         onSettled: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+    });
+}
+
+/** Where documents and memory are embedded, and the devices this PC offers. */
+export function useMemoryEmbedder() {
+    const client = useGaiaClient();
+    return useQuery<EmbedderView>({
+        queryKey: memoryKeys.embedder,
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).getMemoryEmbedder({ signal }),
+    });
+}
+
+/** Moves the embedder: `mutate('gpu')`, or `mutate(null)` for the default. Keeps the answer, and re-reads the saved choice if the PC refused. */
+export function useSetMemoryEmbedder() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<EmbedderView, Error, EmbedderDevice | null>({
+        mutationFn: (device) => requireClient(client).setMemoryEmbedder(device),
+        onSuccess: (view) => queryClient.setQueryData(memoryKeys.embedder, view),
+        onError: () => queryClient.invalidateQueries({ queryKey: memoryKeys.embedder }),
     });
 }
 

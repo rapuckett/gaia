@@ -138,6 +138,8 @@ describeNative('PairingFlow', () => {
         await fireEvent.changeText(await screen.findByTestId('pairing-input'), INVITE);
         await fireEvent.press(screen.getByText(t('mobileApp.pairing.manual.submit')));
         await fireEvent.press(await screen.findByTestId('pairing-confirm'));
+        // iOS explains its local network prompt before the first connection.
+        if (Platform.OS === 'ios') await fireEvent.press(await screen.findByTestId('local-network-continue'));
         expect(await screen.findByText(t('mobileApp.pairing.pinMismatch.first'))).toBeTruthy();
         expect(screen.queryByText(t('mobileApp.pairing.pinMismatch'))).toBeNull();
     });

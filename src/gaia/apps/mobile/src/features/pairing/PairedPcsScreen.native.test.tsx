@@ -99,7 +99,7 @@ describeNative('Your PCs when listing fails', () => {
                 </QueryClientProvider>
             </SafeAreaProvider>,
         );
-        expect(await screen.findByText(t('mobileApp.error.httpNoDetail', { status: 500 }))).toBeTruthy();
+        expect(await screen.findByText(t('mobileApp.error.httpNoDetail'))).toBeTruthy();
         const detail = screen.getByText('disk full on the PC') as unknown as { props: { style: { writingDirection?: string } } };
         expect(detail.props.style.writingDirection).toBe('ltr');
     });

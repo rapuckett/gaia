@@ -3,7 +3,7 @@
 
 import { GaiaApiError, GaiaAuthError, GaiaNetworkError, GaiaTurnError } from '@/api/errors';
 
-import { describeErrorWith, describeHttpFailure, serverText, technicalDetail, translator } from './useT';
+import { describeDetail, describeError, describeErrorWith, describeHttpFailure, plainOr, serverText, technicalDetail, translator } from './useT';
 
 describe('nested error messages', () => {
     const error = new GaiaNetworkError('http://127.0.0.1:4210/api/setup/check', new Error('fetch failed'));
@@ -24,7 +24,9 @@ describe('server text stays out of the sentence', () => {
         const { text, detail } = describeHttpFailure(new GaiaApiError(500, 'The connectors service is not running.'), translator(code));
         expect(detail).toBe('The connectors service is not running.');
         expect(text).not.toContain('connectors service');
-        expect(text).toContain('500');
+        expect(text).not.toMatch(/500/);
+        expect(text).toBe(translator(code)('mobileApp.error.httpNoDetail'));
+        if (code === 'en') expect(text).toBe("Something went wrong on your PC.");
     });
 
     it.each(['en', 'ar'])('a failed turn in %s gives a reason-free sentence and the PC text as detail', (code) => {
@@ -62,5 +64,56 @@ describe('server text stays out of the sentence', () => {
 
     it('the Technical details line is the raw status and text, with no translated words around it', () => {
         expect(technicalDetail(new GaiaApiError(500, 'Connection refused'))).toBe('500 Connection refused');
+    });
+});
+
+describe('a PC HTTP error never puts its status or text in a sentence', () => {
+    const error = new GaiaApiError(502, 'Bad gateway from the model server.');
+
+    it.each(['en', 'ar'])('describeError in %s is the reason-free title', (code) => {
+        const t = translator(code);
+        const text = describeError(error, t);
+        expect(text).toBe(t('mobileApp.error.httpNoDetail'));
+        expect(text).not.toMatch(/502|gateway/);
+    });
+
+    it.each(['en', 'ar'])('describeErrorWith in %s fills a {reason} slot with the title alone', (code) => {
+        const t = translator(code);
+        const text = t.compose((say) => say('setup.unknown.failed', { error: describeErrorWith(error, say) }));
+        expect(text).not.toMatch(/502|gateway/);
+        expect(text).toContain(code === 'en' ? 'Something went wrong on your PC.' : 'حدث خطأ في الكمبيوتر لديك.');
+    });
+
+    it('a PC error with no text still reads as the title, with no status', () => {
+        const t = translator('en');
+        expect(describeError(new GaiaApiError(500, ''), t)).toBe("Something went wrong on your PC.");
+    });
+
+    it('describeDetail is the PC text for a Details line, our wording when there is none, and never the status', () => {
+        const t = translator('en');
+        expect(describeDetail(error, t)).toBe('Bad gateway from the model server.');
+        expect(describeDetail(new GaiaApiError(500, ''), t)).toBe("Something went wrong on your PC.");
+        expect(describeDetail(new GaiaNetworkError('http://x/api', new Error('boom')), t)).toBe(describeError(new GaiaNetworkError('http://x/api', new Error('boom')), t));
+    });
+});
+
+describe('plainOr', () => {
+    it.each(['en', 'ar'])('a PC HTTP error in %s reads as the plain sentence, with no title or PC text in it', (code) => {
+        const t = translator(code);
+        const text = plainOr(t, 'docs.deleteFailed', { name: 'a.txt' }, new GaiaApiError(500, 'disk is read-only'));
+        expect(text).toBe(t('mobileApp.plain.docs.deleteFailed', { name: 'a.txt' }));
+        expect(text).not.toContain(t('mobileApp.error.httpNoDetail'));
+        expect(text).not.toContain('disk is read-only');
+    });
+
+    it('our own wording of a failure still ends the sentence', () => {
+        const t = translator('en');
+        expect(plainOr(t, 'docs.deleteFailed', { name: 'a.txt' }, new Error('PC is asleep'))).toBe("Couldn't remove a.txt: PC is asleep");
+    });
+
+    it('fills the slot a key names, such as {reason}', () => {
+        const t = translator('en');
+        expect(plainOr(t, 'setup.models.listFailed', {}, new Error('offline'), 'reason')).toBe('Couldn’t read the model list from the model server: offline');
+        expect(plainOr(t, 'setup.models.listFailed', {}, new GaiaApiError(500, 'x'), 'reason')).toBe("Couldn't read the model list from the model server.");
     });
 });

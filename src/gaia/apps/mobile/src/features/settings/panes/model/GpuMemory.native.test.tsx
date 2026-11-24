@@ -50,7 +50,7 @@ describeNative('GpuMemory', () => {
                 </GaiaClientProvider>
             </QueryClientProvider>,
         );
-        expect(await screen.findByText(/^GAIA answered with an error/)).toBeTruthy();
+        expect(await screen.findByText(/^Something went wrong on your PC/)).toBeTruthy();
         expect(screen.getByText(raw)).toBeTruthy();
         queryClient.clear();
     });

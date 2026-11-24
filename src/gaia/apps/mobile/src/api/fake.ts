@@ -59,6 +59,7 @@ import type {
     MemoryKnowledgeItem,
     MemoryReinitializeResult,
     MemoryTurn,
+    EmbedderView,
     MemorySettings,
     MemoryStats,
     MemoryToolStat,
@@ -324,6 +325,7 @@ export interface FakeClientData {
     /** What getEnvironment answers, by chat; removing a folder and the internet switch change it. A chat not listed is a 404. */
     environments?: Record<string, SessionEnvironment>;
     memorySettings?: MemorySettings;
+    memoryEmbedder?: EmbedderView;
     /** What getImageSettings answers; updateImageSettings changes it. */
     imageSettings?: ImageSettings;
     /** What getSpeechSettings answers; updateSpeechSettings changes it. */
@@ -380,6 +382,8 @@ export interface FakeClientData {
     deleteSessionErrors?: Record<string, Error>;
     /** Thrown by updateMemorySettings. */
     memorySettingsError?: Error;
+    /** Thrown by setMemoryEmbedder. */
+    memoryEmbedderError?: Error;
     /** Each stats read answers the next entry (the last one repeats); an Error entry is thrown. */
     memoryStats?: (MemoryStats | Error)[];
     embeddingCoverage?: EmbeddingCoverage;
@@ -1598,6 +1602,18 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             data.memorySettings = { ...data.memorySettings, ...settings };
             return data.memorySettings;
         },
+        async getMemoryEmbedder() {
+            if (!data.memoryEmbedder) throw new GaiaApiError(503, 'This fake client was given no embedder.');
+            return data.memoryEmbedder;
+        },
+        async setMemoryEmbedder(device) {
+            if (!data.memoryEmbedder) throw new GaiaApiError(503, 'This fake client was given no embedder.');
+            if (data.memoryEmbedderError) throw data.memoryEmbedderError;
+            const next = device ?? data.memoryEmbedder.default_device;
+            const changed = next !== data.memoryEmbedder.device;
+            data.memoryEmbedder = { ...data.memoryEmbedder, device: next, chosen: device !== null };
+            return { ...data.memoryEmbedder, changed };
+        },
         async clearAllMemory(): Promise<MemoryCleared> {
             memoryWipes.clears += 1;
             const cleared = { knowledge: knowledge.length, tool_history: 0, conversations: 0 };
@@ -1775,7 +1791,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async browseFiles(_sessionId, path) {
             const folder = data.fileFolders?.[path ?? ''];
-            if (folder === 'denied') throw new GaiaApiError(403, 'Access denied', 'mobileApp.error.http', undefined, { status: 'os_denied', message: 'Access denied' });
+            if (folder === 'denied') throw new GaiaApiError(403, 'Access denied', undefined, undefined, { status: 'os_denied', message: 'Access denied' });
             if (!folder) throw new GaiaApiError(404, 'Directory not found');
             return folder;
         },

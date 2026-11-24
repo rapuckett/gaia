@@ -7,7 +7,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { a11yVisibility } from '../theme/a11y';
 import { toneColor, type Tone } from '../theme/tone';
 
-const SIZES = { sm: 16, md: 20, lg: 24 } as const;
+const SIZES = { sm: 16, md: 20, lg: 24, xl: 40 } as const;
 
 // Icons that point along the reading direction mirror in right-to-left text (as in index.css).
 const DIRECTIONAL = new Set([

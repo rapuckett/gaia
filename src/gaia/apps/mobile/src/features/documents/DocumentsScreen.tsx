@@ -8,7 +8,7 @@ import { FILTER_AFTER, filterNeedle, matchesName } from '@webui/utils/documentLi
 
 import { useAttachDocument, useCancelIndexing, useDocumentRemoval, useDocuments, useIndexingView, type IndexingSeed, useReindexDocument, useSession } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
-import { describeErrorWith, useT } from '@/i18n/useT';
+import { plainOr, useT } from '@/i18n/useT';
 import { EmptyState, ErrorState, List, ListSkeleton, Notice, Row, Screen, SearchField, Stack, Text, useTheme } from '@/ui';
 
 import { AddDocuments, type AddStart, type StartMessage } from './AddDocuments';
@@ -47,7 +47,7 @@ export interface LibraryStart {
 
 function startError(t: ReturnType<typeof useT>, error: LibraryStart['error']): string | null {
     if (!error) return null;
-    return t.compose((say) => say(error.key, { ...error.params, error: describeErrorWith(error.cause, say) }));
+    return plainOr(t, error.key, error.params, error.cause);
 }
 
 // A failed library action (remove, cancel) shows here until dismissed; only one shows at a time.
@@ -87,7 +87,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
     const addNext = useNextChatDocs((s) => s.add);
     // The open chat when documents go there, else null: the next new chat.
     const targetChat = chat && target === 'chat' ? chat : null;
-    const removal = useDocumentRemoval((r, error) => action.report(t.compose((say) => say('docs.deleteFailed', { name: r.name, error: describeErrorWith(error, say) }))));
+    const removal = useDocumentRemoval((r, error) => action.report(plainOr(t, 'docs.deleteFailed', { name: r.name }, error)));
     const startRemoving = initial?.removing;
     useEffect(() => {
         if (startRemoving) removal.remove({ id: startRemoving, name: nameOfStart(query.data?.documents, startRemoving) });
@@ -105,11 +105,11 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
     const nameOf = (id: string) => all.find((d) => d.id === id)?.filename ?? id;
     const onCancel = (id: string) => {
         action.dismiss();
-        cancel.mutate(id, { onError: (e) => action.report(t.compose((say) => say('docs.cancelFailed', { name: nameOf(id), error: describeErrorWith(e, say) }))) });
+        cancel.mutate(id, { onError: (e) => action.report(plainOr(t, 'docs.cancelFailed', { name: nameOf(id) }, e)) });
     };
     const onRetry = (id: string) => {
         action.dismiss();
-        reindex.mutate(id, { onError: (e) => action.report(t.compose((say) => say('docs.retryFailed', { name: nameOf(id), error: describeErrorWith(e, say) }))) });
+        reindex.mutate(id, { onError: (e) => action.report(plainOr(t, 'docs.retryFailed', { name: nameOf(id) }, e)) });
     };
     const onRemove = (id: string) => {
         action.dismiss();
@@ -127,7 +127,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
             { sessionId: targetChat.id, docId: id },
             {
                 onSuccess: () => setNote(t('docs.attached', { name: isolateUnit(nameOf(id)), chat: targetChat.name })),
-                onError: (e) => action.report(t.compose((say) => say('docs.attachFailed', { name: nameOf(id), chat: targetChat.name, error: describeErrorWith(e, say) }))),
+                onError: (e) => action.report(plainOr(t, 'docs.attachFailed', { name: nameOf(id), chat: targetChat.name }, e)),
             },
         );
     };

@@ -9,7 +9,7 @@ import { isolate } from '@webui/i18n/registry';
 import type { GitRepo, SessionChanges } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useChangesActions, useSessionChanges, useSessionGit } from '@/data';
-import { describeErrorWith, useT } from '@/i18n/useT';
+import { plainOr, serverText, useT } from '@/i18n/useT';
 import { Button, Notice, Row, Stack, Text } from '@/ui';
 
 import { ChatChangesReview } from '../changes/ChatChangesReview';
@@ -175,7 +175,7 @@ function GitActions({ sessionId, live }: { sessionId: string; live: boolean }) {
     const [dialog, setDialog] = useState<{ kind: GitKind; repo: GitRepo } | null>(null);
     const [done, setDone] = useState<string | null>(null);
 
-    if (error) return <Notice tone="danger" message={t.compose((say) => say('chg.gitError', { error: describeErrorWith(error, say) }))} testID="changes-git-error" />;
+    if (error) return <Notice tone="danger" message={plainOr(t, 'chg.gitError', {}, error)} detail={serverText(error)} testID="changes-git-error" />;
     if (!git || !git.available || git.repos.length === 0) return null;
 
     const open = (kind: GitKind, repo: GitRepo) => {
