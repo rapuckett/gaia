@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -74,6 +74,12 @@ describeNative('Settings > Memory > Embedding model', () => {
         await fireEvent.press(screen.getByTestId('memory-embedder'));
         await fireEvent.press(await screen.findByText(t.bare('settings.memory.embedder.unproven', { device: 'NPU' })));
         expect(puts(calls)).toEqual([]);
+        const row = screen.getByTestId('memory-embedder-option-npu');
+        expect(row.props.accessibilityState?.disabled ?? row.props['aria-disabled']).toBe(true);
+        expect(within(row).getByText(t('settings.memory.embedder.npuUnproven'))).toBeTruthy();
+        await fireEvent.press(screen.getByTestId('memory-embedder-option-gpu'));
+        await waitFor(() => expect(puts(calls)).toHaveLength(1));
+        expect(puts(calls)[0]!.body).toEqual({ device: 'gpu' });
     });
 
     it('unavailable: a device this PC lacks is named as not available', async () => {
