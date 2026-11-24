@@ -88,6 +88,26 @@ const DOWNLOAD_LOGS: SetupRunStatus = {
     },
 };
 
+const extraRow = (state: 'downloading' | 'cancelled'): NonNullable<SetupRunStatus['models']>[number] => ({
+    id: 'Whisper-Large-v3-Turbo', roles: ['speech'], state, bytes_done: 0.6e9, bytes_total: 1.6e9, speed_bps: 0, eta_s: null, error: null,
+    error_kind: null, can_retry: false, retrying_until: null, downloaded_before_gb: null,
+});
+const EXTRAS_LEFT: FakeClientData = {
+    ...DOWNLOAD_FAILED,
+    setupStatus: {
+        ...DOWNLOAD_FAILED_RUN,
+        state: 'cancelled',
+        text: 'Setup stopped',
+        components: { server: 'done', backend: 'done', agent: 'done' },
+        models: [...(READY_RUN.models ?? []), extraRow('cancelled')],
+        overall: { bytes_done: 6.9e9, bytes_total: 7.9e9, speed_bps: 0, eta_s: null, percent: 87, failed: 0 },
+    },
+};
+const READY_EXTRA_DOWNLOADING: FakeClientData = {
+    ...READY,
+    setupStatus: { ...READY_RUN, models: [...(READY_RUN.models ?? []), extraRow('downloading')] },
+};
+
 const SERVER_INSTALLING: SetupRunStatus = {
     state: 'running', server_only: true, text: 'Starting the local model server', steps: [], log_tail: [],
     components: { server: 'done', backend: 'active' }, percent: 45,
@@ -143,4 +163,6 @@ export const SETUP_SCENES_B: Record<string, SetupScene> = {
     'ready/gpu-restart': { stage: 'ready', data: { ...READY, gpuMemory: GPU_RESTART } },
     'ready/not-installed': { stage: 'ready', data: READY_NOT_INSTALLED },
     'ready/test-failed': { stage: 'ready', data: READY_TEST_FAILED },
+    'download/extras-left': { stage: 'download', data: EXTRAS_LEFT },
+    'ready/extra-downloading': { stage: 'ready', data: READY_EXTRA_DOWNLOADING },
 };

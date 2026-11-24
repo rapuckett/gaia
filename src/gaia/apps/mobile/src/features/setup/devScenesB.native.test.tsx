@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider, useSetupPlan, useSetupStatus } from '@/data';
 import { ThemeProvider } from '@/ui';
 
@@ -28,13 +29,13 @@ function Step({ stage }: { stage: keyof typeof SETUP_STEPS }) {
     return <Body ctx={ctx} />;
 }
 
-async function mount(key: string) {
+async function mount(key: string, withClient?: ReturnType<typeof createFakeClient>) {
     const found = SETUP_SCENES_B[key]!;
     if (found.screen) usePlanScreenRequest.getState().request({ screen: found.screen, from: 'check' });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrap = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={queryClient}>
-            <GaiaClientProvider client={setupSceneClient(found)}>
+            <GaiaClientProvider client={withClient ?? setupSceneClient(found)}>
                 <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
                     <ThemeProvider>{children}</ThemeProvider>
                 </SafeAreaProvider>
@@ -46,6 +47,7 @@ async function mount(key: string) {
 
 const SHOWS: Record<string, RegExp> = {
     'check/installing': /Now: /,
+    'download/extras-left': /Skip the extras/,
     'download/logs': /Having trouble\?/,
     'gpu/guided-linux': /Show me how/,
     'gpu/not-applied': /may not have applied/,
@@ -56,6 +58,7 @@ const SHOWS: Record<string, RegExp> = {
     'key/gateway': /How to get an AMD LLM Gateway key/,
     'key/gateway-down': /Check the AMD gateway again/,
     'plan/blocked': /can't run GAIA's models/,
+    'ready/extra-downloading': /Still downloading: Whisper Large v3 Turbo/,
     'ready/gpu-now': /GPU memory is now/,
     'ready/gpu-restart': /Restart your PC to use/,
     'ready/not-installed': /Not installed \(add later in Settings\)/,
@@ -74,6 +77,21 @@ describeNative('setup gallery scenes, batch B', () => {
     it.each(Object.keys(SHOWS))('renders %s', async (key) => {
         await mount(key);
         await waitFor(() => expect(screen.getAllByText(SHOWS[key]!).length).toBeGreaterThan(0));
+    });
+
+    it('finishes without the extras by skipping them and starting the run again', async () => {
+        const found = SETUP_SCENES_B['download/extras-left']!;
+        const client = setupSceneClient(found) as ReturnType<typeof createFakeClient>;
+        await mount('download/extras-left', client);
+        fireEvent.press(await screen.findByTestId('download-finish-without-extras'));
+        await waitFor(() => expect(client.setupStarts).toHaveLength(1));
+        expect(client.setupChoices).toEqual([{ kind: 'skip', modelId: 'Whisper-Large-v3-Turbo', flag: true }]);
+    });
+
+    it('offers no Finish without extras on a run that stopped on a model setup needs, or while extras download', async () => {
+        await mount('download/logs');
+        await screen.findByText(/Having trouble\?/);
+        expect(screen.queryByTestId('download-finish-without-extras')).toBeNull();
     });
 
     it('opens the numbered steps with a Copy button for the command', async () => {

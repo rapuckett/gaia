@@ -62,7 +62,7 @@ import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/typ
 import type { Automation, AutomationList } from '@webui/services/automationsApi';
 import type { DiscordConnectResult, DiscordStatus } from '@webui/services/messagingApi';
 import type { AgentCapabilities, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, UndoAllResult } from '@webui/types/sessionPanel';
-import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
+import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, EmbedderDevice, EmbedderView, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { ImageSettings } from '@webui/services/imageApi';
 import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
 import type { AboutYouItem, ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
@@ -293,7 +293,7 @@ export interface ProviderConnected {
     known_models?: boolean;
 }
 
-export type { MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse } from '@webui/services/memoryApi';
+export type { EmbedderDevice, EmbedderOption, EmbedderView, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse } from '@webui/services/memoryApi';
 /** GET /api/automations, typed as Settings > Automations on the web types it. */
 export type { Automation, AutomationKind, AutomationList } from '@webui/services/automationsApi';
 /** What `POST /api/automations/{ref}/{action}` takes from a paired phone: the desktop's buttons (ui/routers/automations.py DEVICE_ACTIONS). */
@@ -786,6 +786,10 @@ export interface GaiaClient {
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
     /** Changes the memory switches named in `settings`; answers with all of them, and what the system scan did when discovery was switched on. */
     updateMemorySettings(settings: Partial<MemorySettings>, options?: RequestOptions): Promise<MemorySettingsUpdateResponse>;
+    /** Where documents and memory are embedded, and the devices this PC offers for it. */
+    getMemoryEmbedder(options?: RequestOptions): Promise<EmbedderView>;
+    /** Moves the embedder to `device`; `null` returns to the PC's default. Refused while a reply runs on the PC. */
+    setMemoryEmbedder(device: EmbedderDevice | null, options?: RequestOptions): Promise<EmbedderView>;
     /** Deletes every memory, conversation and tool log; irreversible. Answers with the rows deleted. */
     clearAllMemory(options?: RequestOptions): Promise<MemoryCleared>;
     /** Deletes everything as clearAllMemory does, then re-collects this PC's facts; irreversible. */
@@ -866,6 +870,8 @@ export interface GaiaClient {
     requestWarmUp(fresh: boolean, options?: RequestOptions): Promise<WarmUpStatus>;
     /** Starts a model's download on the PC (`force` downloads it again); follow it in `getSystemStatus().download_progress`. */
     downloadModel(model: string, options?: { force?: boolean; loadAfter?: boolean } & RequestOptions): Promise<{ status: string; model: string }>;
+    /** Forgets a failed download on the PC, so its warning stays gone after a reload. */
+    dismissDownloadFailure(modelName: string, options?: RequestOptions): Promise<{ status: string; model: string }>;
     /** Loads a model on the PC at the context window chat needs; 409 when a chat is answering, until `force`. */
     loadModel(modelName: string, force: boolean, options?: { ctxSize?: number } & RequestOptions): Promise<{ status: string; model: string; ctx_size: number }>;
     /** The model server's state, what it runs on and its memory; the pill and its sheet read it. */

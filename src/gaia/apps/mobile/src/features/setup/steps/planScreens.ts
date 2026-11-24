@@ -11,7 +11,7 @@ import { KeyScreen } from './KeyScreen';
 export type PlanScreenName = 'models' | 'key' | 'gpu';
 
 /** A screen opened from the plan step, shown in its place; `close` goes back one screen. */
-export type PlanScreen = ComponentType<{ ctx: SetupStepContext; close: () => void }>;
+export type PlanScreen = ComponentType<{ ctx: SetupStepContext; close: () => void; /** Opened from the plan's agent line: scroll to the agent picker. */ toAgent?: boolean }>;
 
 /** One line per screen; the plan step offers an opener only for a registered screen. */
 export const PLAN_SCREENS: Partial<Record<PlanScreenName, PlanScreen>> = {

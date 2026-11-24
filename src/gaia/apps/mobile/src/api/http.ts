@@ -90,6 +90,7 @@ import type {
     MemoryEntity,
     MemoryKnowledgePage,
     MemoryReinitializeResult,
+    EmbedderView,
     MemorySettings,
     MemorySettingsUpdateResponse,
     MemoryStats,
@@ -1238,6 +1239,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return putJson<MemorySettingsUpdateResponse>(ENDPOINTS.memorySettings, settings, options?.signal);
         },
 
+        getMemoryEmbedder(options) {
+            return getJson<EmbedderView>(ENDPOINTS.memoryEmbedder, options?.signal);
+        },
+
+        setMemoryEmbedder(device, options) {
+            return putJson<EmbedderView>(ENDPOINTS.memoryEmbedder, { device }, options?.signal);
+        },
+
         clearAllMemory(options) {
             return deleteJson<MemoryCleared>(ENDPOINTS.memoryAll, options?.signal);
         },
@@ -1357,6 +1366,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 { model_name: model, force: options?.force ?? false, load_after: options?.loadAfter ?? false },
                 options?.signal,
             );
+        },
+
+        dismissDownloadFailure(modelName, options) {
+            return postJson<{ status: string; model: string }>(ENDPOINTS.systemDismissDownload, { model_name: modelName }, options?.signal);
         },
 
         loadModel(modelName, force, options) {

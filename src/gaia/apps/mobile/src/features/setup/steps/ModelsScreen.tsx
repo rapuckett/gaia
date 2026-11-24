@@ -1,7 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useMemo } from 'react';
+import { useContext, useEffect, useMemo, useRef, type ComponentRef } from 'react';
+import { View } from 'react-native';
 
 import { formatSize, ltrIn } from '@webui/components/setup/format';
 import {
@@ -27,6 +28,10 @@ import { JobModels } from './JobSections';
 import { backendView, chooseBackend } from './modelsView';
 import { usePlanOpeners } from './planOpeners';
 import { usePlanSelection } from './planSelection';
+import { SetupScrollContext, focusNode, scrollNodeToTop } from '../setupScroll';
+
+/** Lets the screen lay out before the agent picker is measured. */
+const AGENT_SETTLE_MS = 150;
 
 /** Where the chat model runs: the GPU, or a Ryzen AI NPU when this PC has one that is ready. */
 function BackendChoice({ view, onPick, disabled }: {
@@ -78,7 +83,7 @@ function BackendChoice({ view, onPick, disabled }: {
 }
 
 /** "Choose your models", opened from the plan's Customize: every choice lands in the plan step's selection. */
-export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () => void }) {
+export function ModelsScreen({ ctx, close, toAgent = false }: { ctx: SetupStepContext; close: () => void; toAgent?: boolean }) {
     const t = useT();
     const locale = useLocaleCode();
     const planQuery = useSetupPlan();
@@ -89,6 +94,19 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
     const { openGpu } = usePlanOpeners();
     const save = useSaveModelChoices();
     const { ask, sheet } = useConfirmSheet();
+    const scroll = useContext(SetupScrollContext);
+    const agentRef = useRef<ComponentRef<typeof View>>(null);
+    const headingRef = useRef<ComponentRef<typeof View>>(null);
+    const ready = !!plan?.catalog && !!selection;
+    // Opened from the plan's Change: bring the agent picker to the top and put the screen reader on its heading.
+    useEffect(() => {
+        if (!toAgent || !ready) return undefined;
+        const timer = setTimeout(() => {
+            scrollNodeToTop(scroll, agentRef.current);
+            focusNode(headingRef.current);
+        }, AGENT_SETTLE_MS);
+        return () => clearTimeout(timer);
+    }, [toAgent, ready, scroll]);
     const progress = useMemo(() => {
         const rows: Record<string, SetupModelProgress> = {};
         for (const m of ctx.run?.models ?? []) rows[m.id] = m;
@@ -158,7 +176,9 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
                 </Stack>
             ) : null}
 
-            <AgentChoice disabled={locked} pending={pick?.id ?? null} onPending={setPick} />
+            <View ref={agentRef} collapsable={false} testID="models-agent">
+                <AgentChoice disabled={locked} pending={pick?.id ?? null} onPending={setPick} headingRef={headingRef} />
+            </View>
 
             <JobModels plan={plan} selection={selection} onSelection={setSelection} disabled={locked} />
 
