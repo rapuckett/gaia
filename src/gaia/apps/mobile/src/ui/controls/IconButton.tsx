@@ -35,7 +35,7 @@ export function IconButton({
         ghost: { bg: 'transparent', tone: 'secondary' },
         filled: { bg: colors.bgTertiary, tone: 'primary' },
         outlined: { bg: colors.bgTertiary, tone: 'primary' },
-        primary: { bg: colors.accentFill, tone: 'onAccent' },
+        primary: { bg: colors.actionFill, tone: 'onAction' },
         danger: { bg: colors.dangerDim, tone: 'danger' },
         raised: { bg: colors.bgSecondary, tone: 'primary' },
     };
