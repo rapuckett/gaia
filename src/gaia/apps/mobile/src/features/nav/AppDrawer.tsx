@@ -14,6 +14,7 @@ import { useChatStreamStore } from '@/state/chatStreams';
 import { useTheme } from '@/ui';
 
 import { useIsPermanentDrawer } from './ScreenHeader';
+import { activeMenuRoute, menuRouteNames } from './routes';
 import { activeChatId, liveRunsFromTurns, openChat, openNewChat } from './navigation';
 
 export function AppDrawer({ navigation, state }: DrawerContentComponentProps) {
@@ -44,8 +45,8 @@ export function AppDrawer({ navigation, state }: DrawerContentComponentProps) {
                 activeId={activeChatId(pathname)}
                 live={live}
                 queues={queues}
-                routeNames={state.routeNames}
-                activeRoute={pathname.split('/')[1] || null}
+                routeNames={menuRouteNames(state.routeNames)}
+                activeRoute={activeMenuRoute(pathname)}
                 onOpenRoute={(route) => {
                     router.push(`/${route}`);
                     navigation.closeDrawer();
