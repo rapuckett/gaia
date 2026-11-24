@@ -4,6 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { tEn } from '@webui/i18n/translator';
 import type { AgentInfo, AgentMcpServer, ConnectorAccount, ConnectorKeyStore, ConnectorListEntry, ConnectorRow, GaiaClient } from '@/api/client.types';
 import type { ConnectorCheck } from '@/data';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
@@ -80,7 +81,7 @@ const GOOGLE_READY = server({
     oauth_client: { source: 'keyring', client_id: 'example-client.apps.googleusercontent.com', has_secret: true }, docs_url: 'https://amd-gaia.ai/docs/connectors/google',
 } as Partial<ConnectorRow>);
 const SLACK_SETUP = server({
-    id: 'mcp-slack', display_name: 'Slack', configured: false, mcp_env_keys: ['SLACK_MCP_XOXB_TOKEN'], setup_url: 'https://api.slack.com/apps', product_url: 'https://slack.com',
+    id: 'mcp-slack', display_name: 'Slack', description: tEn('connectors.mcp-slack.description'), configured: false, mcp_env_keys: ['SLACK_MCP_XOXB_TOKEN'], setup_url: 'https://api.slack.com/apps', product_url: 'https://slack.com',
     config_fields: [{ key: 'SLACK_MCP_XOXB_TOKEN', label: 'Slack bot token', kind: 'secret', required: true, placeholder: 'xoxb-…', help_md: '', prefix: 'xoxb-' }],
 } as Partial<ConnectorRow>);
 const LINEAR_KEYED = server({ mcp_env_keys: ['LINEAR_API_KEY'], product_url: 'https://linear.app' } as Partial<ConnectorRow>);
