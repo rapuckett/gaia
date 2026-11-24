@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
 import type { TurnSummary } from '@webui/types';
 import { isolate, pluralKey, type Say } from '@webui/i18n/registry';
 
-import { useFileStatus, useMessages } from '@/data';
+import { useFileStatus, useLocalModels, useMessages } from '@/data';
 import { openPcFile } from '@/features/files/openPcFile';
 import { describeFailureWith, useT } from '@/i18n/useT';
 import { Icon, Notice, Pressable, Row, Stack, Text } from '@/ui';
@@ -191,8 +191,9 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 
 function ThisTurn({ summary, stopped }: { summary: TurnSummary; stopped: boolean }) {
     const t = useT();
-    const facts = turnFacts(summary, stopped);
     const remote = !!summary.model?.remote;
+    const localModels = useLocalModels(!!summary.model && !remote).data?.models;
+    const facts = turnFacts(summary, stopped, localModels);
     return (
         <Group label={t('rail.thisTurn')}>
             <Stack gap="md">

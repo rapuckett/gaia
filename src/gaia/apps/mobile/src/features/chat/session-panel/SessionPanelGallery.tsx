@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { BrowseResponse, ChatPerformance, ContextUsage, LocalModelStatus, Message, OutputItem, Session, SessionChanges, SessionEnvironment, SessionGit } from '@/api/client.types';
+import type { BrowseResponse, ChatPerformance, ContextUsage, LocalModelStatus, Message, OutputItem, ProviderModel, Session, SessionChanges, SessionEnvironment, SessionGit } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaApiError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
@@ -47,6 +47,7 @@ export type SessionPanelGalleryState =
     | 'ansFull'
     | 'ansPending'
     | 'ansNoLive'
+    | 'ansLocal'
     | 'ansError'
     | 'outItems'
     | 'outEmpty'
@@ -112,7 +113,7 @@ const GIT: SessionGit = {
 
 const GIT_PR: SessionGit = { ...GIT, repos: [{ ...GIT.repos[0]!, branch: 'q3-summary', pr_blocked: null }] };
 
-const ANSWER_STATES: readonly SessionPanelGalleryState[] = ['ansFull', 'ansPending', 'ansNoLive', 'ansError'];
+const ANSWER_STATES: readonly SessionPanelGalleryState[] = ['ansFull', 'ansPending', 'ansNoLive', 'ansLocal', 'ansError'];
 
 const OUTPUT_STATES: readonly SessionPanelGalleryState[] = ['outItems', 'outEmpty'];
 
@@ -133,6 +134,11 @@ const SUMMARY: TurnSummary = {
     ],
     sites: ['weather.gov', 'nps.gov'],
     live_data: { attempted: 2, failed: 0 },
+};
+
+const LOCAL_LIST_ENTRY: ProviderModel = {
+    id: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', context_length: null, downloaded: true, labels: [], rank: null, note: null, evidence: null,
+    available: true, custom: false, price: null, recipe: null, size_gb: 5.97, source_url: null,
 };
 
 const utc = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString().slice(0, 19).replace('T', ' ');
@@ -347,7 +353,9 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
                     : ENVIRONMENT;
         const answerState = ANSWER_STATES.includes(state);
         const summary: TurnSummary =
-            state === 'ansNoLive'
+            state === 'ansLocal'
+                ? { cost: { kind: 'local' }, model: { name: 'Gemma-4-E4B-it-GGUF', provider: 'local', provider_name: 'Local', remote: false } }
+                : state === 'ansNoLive'
                 ? { ...SUMMARY, live_data: { attempted: 2, failed: 2 }, pages: [], sites: [] }
                 : state === 'ansError'
                   ? { cost: { kind: 'unreported' }, error: 'the PC ran out of memory' }
@@ -364,6 +372,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             environments: seeded ? { dev: environment } : undefined,
             fileFolders: env ? (state === 'envPickRefused' ? { ...BROWSE_FOLDERS, '': BROWSE_FOLDERS['/Users/avery']! } : BROWSE_FOLDERS) : undefined,
             permissions: state === 'envOffline' ? { dev: 'full_access' } : undefined,
+            providerModels: state === 'ansLocal' ? { local: { provider: 'local', models: [LOCAL_LIST_ENTRY] } } : undefined,
             activeModel: seeded ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
             localModel: seeded ? LOCAL_MODEL : undefined,
             contextUsage: ctx

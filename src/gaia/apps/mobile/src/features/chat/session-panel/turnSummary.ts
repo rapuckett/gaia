@@ -4,7 +4,7 @@
 import type { Message } from '@/api/client.types';
 import type { MessageKey, Params } from '@webui/i18n/registry';
 import type { TurnSummary } from '@webui/types';
-import { shortModelName } from '@webui/utils/modelList.core';
+import { sameModelId, shortModelName } from '@webui/utils/modelList.core';
 
 /** What "This answer" shows: the latest answer's summary, a turn in progress, or nothing. */
 export type AnswerState = { kind: 'turn'; summary: TurnSummary | null; stopped: boolean } | { kind: 'busy' } | null;
@@ -64,8 +64,18 @@ function costSay(summary: TurnSummary, stopped: boolean): Say {
     return { key: summary.model ? 'rail.costUnknownModel' : 'rail.costUnknown' };
 }
 
+export interface ModelEntry {
+    id: string;
+    display_name?: string | null;
+}
+
+/** The PC's display name for a model id from its list, else the id's short form. */
+export function modelDisplayName(id: string, models?: readonly ModelEntry[]): string {
+    return models?.find((m) => sameModelId(m.id, id))?.display_name || shortModelName(id);
+}
+
 /** Where the turn's data went, in the phone's words: your PC, a cloud provider, the web. */
-export function turnFacts(summary: TurnSummary, stopped: boolean): TurnFacts {
+export function turnFacts(summary: TurnSummary, stopped: boolean, localModels?: readonly ModelEntry[]): TurnFacts {
     const { model } = summary;
     const usedDocs = (summary.documents ?? []).length > 0;
     return {
@@ -74,7 +84,7 @@ export function turnFacts(summary: TurnSummary, stopped: boolean): TurnFacts {
             : model.remote
               ? { key: 'rail.cloudModel', params: { name: model.provider_name } }
               : { key: 'rail.thisPc' },
-        modelName: model?.name ? shortModelName(model.name) : null,
+        modelName: model?.name ? modelDisplayName(model.name, model.remote ? undefined : localModels) : null,
         documents: !usedDocs
             ? null
             : model?.remote
