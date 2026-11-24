@@ -199,6 +199,7 @@ export function ModelChecklist({ plan, selection, onToggle, onDefaultChat, disab
 
             <Select
                 label={t('setup.models.defaultChat')}
+                testID="default-chat-model"
                 value={selection.defaultChat ?? ''}
                 disabled={disabled || candidates.length === 0}
                 placeholder={t.bare('setup.models.noChat')}
