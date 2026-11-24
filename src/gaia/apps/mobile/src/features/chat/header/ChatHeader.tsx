@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { MAX_SESSION_TITLE_CHARS } from '@webui/utils/constants';
 import { isPlaceholderTitle } from '@webui/utils/sessionTitle';
@@ -11,12 +11,14 @@ import { useRenameSession, useSession, useTogglePrivate } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { exportChat } from '@/features/share/exportChat';
 import { describeHttpFailure, useT } from '@/i18n/useT';
-import { IconButton, Notice, Pressable, Row, Stack, Text, TextField } from '@/ui';
+import { IconButton, Notice, Pressable, Row, Stack, Text, TextField, useAppearance } from '@/ui';
 import { Activity, Check, Download, Eye, EyeOff, PanelRight, X } from '@/ui/icons';
 
 import { DocsBar } from './DocsBar';
 import { failureNotice } from './failureText';
 import { ResourceStrip } from './ResourceStrip';
+
+const RESOURCES_NOTE_MS = 12_000;
 
 export interface ChatHeaderProps {
     sessionId: string;
@@ -35,6 +37,13 @@ export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }:
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState('');
     const [resources, setResources] = useState(false);
+    const [closedNote, setClosedNote] = useState(false);
+    const setShowResources = useAppearance((a) => a.setShowResources);
+    useEffect(() => {
+        if (!closedNote || resources) return;
+        const timer = setTimeout(() => setClosedNote(false), RESOURCES_NOTE_MS);
+        return () => clearTimeout(timer);
+    }, [closedNote, resources]);
     const client = useGaiaClient();
     const [error, setError] = useState<{ text: string; detail?: string } | null>(null);
     const [exporting, setExporting] = useState(false);
@@ -150,7 +159,26 @@ export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }:
                     <Notice tone="danger" message={error.text} detail={error.detail} onDismiss={() => setError(null)} testID="header-error" />
                 </Stack>
             ) : null}
-            {resources ? <ResourceStrip onClose={() => setResources(false)} /> : null}
+            {resources ? (
+                <ResourceStrip
+                    onClose={() => {
+                        setResources(false);
+                        setClosedNote(true);
+                        setShowResources(false);
+                    }}
+                />
+            ) : null}
+            {!resources && closedNote ? (
+                <Stack paddingX="lg">
+                    <Notice
+                        tone="info"
+                        role="status"
+                        message={t('resources.hiddenNote')}
+                        action={{ label: t('resources.show'), onPress: () => setResources(true) }}
+                        testID="resources-hidden-note"
+                    />
+                </Stack>
+            ) : null}
             <DocsBar sessionId={sessionId} onFailed={setError} onManage={onManageDocuments} />
         </>
     );
