@@ -102,10 +102,12 @@ describeNative('controls at AX5', () => {
     });
 
     it('caps a chip label and keeps its 44 pt target', async () => {
-        await render(<Chip label="Background chats" onPress={() => {}} />, { wrapper: wrap });
+        await render(<Chip label="Background chats" onPress={() => {}} testID="chip-ax" />, { wrapper: wrap });
         expect(screen.getByText('Background chats').props.maxFontSizeMultiplier).toBe(1.3);
         const chip = screen.getByRole('button', { name: 'Background chats' });
-        fireEvent(chip, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 160, height: 32 } } });
+        const layout = { nativeEvent: { layout: { x: 0, y: 0, width: 160, height: 32 } } };
+        await fireEvent(chip, 'layout', layout);
+        if (Platform.OS === 'android') await fireEvent(screen.getByTestId('chip-ax-clip'), 'layout', layout);
         const slop = screen.getByRole('button', { name: 'Background chats' }).props.hitSlop;
         expect(32 + slop.top + slop.bottom).toBeGreaterThanOrEqual(44);
     });
