@@ -33,9 +33,9 @@ function toBase64(bytes: Uint8Array): string {
     return btoa(binary);
 }
 
-/** Reads a generated image from the paired PC, over the app's own transport so a pinned connection and its token apply. */
-export async function fetchGeneratedImage(baseUrl: string, token: string | null | undefined, name: string): Promise<LoadedImage> {
-    const url = `${baseUrl.replace(/\/+$/, '')}/api/media/image/${name}`;
+/** Reads an image of the paired PC by its path, over the app's own transport so a pinned connection and its token apply. */
+export async function fetchPcImage(baseUrl: string, token: string | null | undefined, path: string): Promise<LoadedImage> {
+    const url = `${baseUrl.replace(/\/+$/, '')}${path}`;
     const res = await platformFetch(url, { headers: { ...UI_HEADERS, ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
     if (res.status === 403) throw new GaiaApiError(403, 'The PC running GAIA refused the image to this phone');
     if (!res.ok) throw new Error(`GAIA answered ${res.status} for the image`);
@@ -63,6 +63,11 @@ export async function fetchGeneratedImage(baseUrl: string, token: string | null 
     }
     const base64 = toBase64(bytes);
     return { uri: `data:${mime};base64,${base64}`, mime, base64 };
+}
+
+/** Reads a generated image from the paired PC. */
+export function fetchGeneratedImage(baseUrl: string, token: string | null | undefined, name: string): Promise<LoadedImage> {
+    return fetchPcImage(baseUrl, token, `/api/media/image/${name}`);
 }
 
 /** The image of a validated card `src`: a data URL as given, or a generated file loaded from the paired PC. */

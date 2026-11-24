@@ -81,26 +81,28 @@ function CustomModelCard() {
     const settings = useSettings();
     const saved = settings.data?.custom_model;
     return (
-        <SettingCard
-            title={t('settings.advanced.customTitle')}
-            hint={saved ? <Ltr>{saved}</Ltr> : t('settings.advanced.customHint')}
-            open={open}
-            onToggle={() => setOpen((v) => !v)}
-            testID="advanced-custom"
-        >
-            {settings.data ? (
-                <CustomModel settings={settings.data} />
-            ) : settings.isPending ? (
-                <Spinner />
-            ) : isPcRefusal(settings.error) ? (
-                <PcOnlyNotice testID="advanced-custom-pc-only" />
-            ) : (
-                <Stack gap="sm">
-                    <Notice tone="warning" message={t('mobileApp.settings.modelActionFailed')} />
-                    <RawDetails text={technicalDetail(settings.error)} />
-                </Stack>
-            )}
-        </SettingCard>
+        <SettingsAnchor name="custom-model" onTarget={() => setOpen(true)}>
+            <SettingCard
+                title={t('settings.advanced.customTitle')}
+                hint={saved ? <Ltr>{saved}</Ltr> : t('settings.advanced.customHint')}
+                open={open}
+                onToggle={() => setOpen((v) => !v)}
+                testID="advanced-custom"
+            >
+                {settings.data ? (
+                    <CustomModel settings={settings.data} />
+                ) : settings.isPending ? (
+                    <Spinner />
+                ) : isPcRefusal(settings.error) ? (
+                    <PcOnlyNotice testID="advanced-custom-pc-only" />
+                ) : (
+                    <Stack gap="sm">
+                        <Notice tone="warning" message={t('mobileApp.settings.modelActionFailed')} />
+                        <RawDetails text={technicalDetail(settings.error)} />
+                    </Stack>
+                )}
+            </SettingCard>
+        </SettingsAnchor>
     );
 }
 
