@@ -20,7 +20,7 @@ export const DEFAULT_APPEARANCE: AppearanceState = {
     scheme: 'system',
     palette: 'default',
     custom: DEFAULT_CUSTOM,
-    showResources: true,
+    showResources: false,
 };
 
 export function resolveScheme(preference: SchemePreference, system: Scheme): Scheme {

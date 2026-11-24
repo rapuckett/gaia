@@ -11,7 +11,7 @@ import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { translator } from '@/i18n/useT';
-import { ThemeProvider } from '@/ui';
+import { ThemeProvider, useAppearance } from '@/ui';
 
 import { ChatHeader } from './ChatHeader';
 
@@ -81,6 +81,35 @@ describe('ChatHeader title', () => {
         const title = await screen.findByRole('button', { name: 'A chat' });
         expect(title).toBe(screen.getByTestId('chat-title'));
         expect(title.props.accessibilityHint).toBe('Rename');
+    });
+});
+
+describe('ChatHeader resource strip', () => {
+    afterEach(() => useAppearance.getState().reset());
+
+    it('is hidden on a fresh install', async () => {
+        await mount();
+        expect(screen.queryByTestId('resources-close')).toBeNull();
+        expect(screen.queryByTestId('resources-hidden-note')).toBeNull();
+    });
+
+    it('shows when the saved setting is on, and closing it turns the setting off with the note', async () => {
+        useAppearance.getState().setShowResources(true);
+        await mount();
+        await fireEvent.press(await screen.findByTestId('resources-close'));
+        expect(useAppearance.getState().showResources).toBe(false);
+        expect(screen.queryByTestId('resources-close')).toBeNull();
+        expect(screen.getByText(translator('en')('resources.hiddenNote'))).toBeTruthy();
+    });
+
+    it('brings the strip back from the note and from the header toggle', async () => {
+        useAppearance.getState().setShowResources(true);
+        await mount();
+        await fireEvent.press(await screen.findByTestId('resources-close'));
+        await fireEvent.press(screen.getByText(translator('en')('resources.show')));
+        expect(useAppearance.getState().showResources).toBe(true);
+        await fireEvent.press(screen.getByTestId('resources-toggle'));
+        expect(useAppearance.getState().showResources).toBe(false);
     });
 });
 

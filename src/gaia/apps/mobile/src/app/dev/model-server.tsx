@@ -7,7 +7,7 @@ import { useState } from 'react';
 
 import { GaiaClientProvider } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
-import { ResourceStrip } from '@/features/chat/header/ResourceStrip';
+import { ResourceStripSlot } from '@/features/chat/header/ResourceStripSlot';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
 import { useT } from '@/i18n/useT';
@@ -17,7 +17,7 @@ import { ModelRestoreNotice } from '@/features/model/ModelRestoreNotice';
 import { ModelServerDownNotice } from '@/features/model/ModelServerDownNotice';
 import { ModelStatusSheet } from '@/features/model/ModelStatusSheet';
 import { MODEL_SCENES, modelSceneClient, type ModelScene } from '@/features/model/devScenes';
-import { Screen, ScreenBannerProvider, Stack, Text, UIProvider } from '@/ui';
+import { Screen, ScreenBannerProvider, Stack, Text, UIProvider, useAppearance } from '@/ui';
 
 const noop = () => undefined;
 
@@ -27,6 +27,9 @@ function Boom(): never {
 
 function Body({ scene }: { scene: ModelScene }) {
     const t = useT();
+    useState(() => {
+        if (scene.view === 'resources') useAppearance.setState({ showResources: true });
+    });
     switch (scene.view) {
         case 'sheet':
             return <ModelStatusSheet open onClose={noop} onOpenSettings={noop} initial={scene.sheet} />;
@@ -51,7 +54,7 @@ function Body({ scene }: { scene: ModelScene }) {
                             {t('chat.label')}
                         </Text>
                     </Stack>
-                    <ResourceStrip onClose={noop} />
+                    <ResourceStripSlot />
                 </>
             );
         case 'agent':
