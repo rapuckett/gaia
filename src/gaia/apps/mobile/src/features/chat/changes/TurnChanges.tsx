@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
-import { Platform, View } from 'react-native';
 
 import { groupUntracked, untrackedWarning } from '@webui/utils/untrackedWork';
 
@@ -10,7 +9,7 @@ import type { TurnChanges as Turn } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useTurnChanges, useUndoTurn } from '@/data';
 import { describeHttpFailure, useT } from '@/i18n/useT';
-import { Button, Disclosure, Notice, Row, Stack, Text, useTheme } from '@/ui';
+import { Button, Disclosure, Notice, Row, Stack, Text } from '@/ui';
 
 import { ChangesReview } from './ChangesReview';
 import { loadFailure, undoneText, untrackedNotice } from './changesText';
@@ -39,9 +38,6 @@ function LoadError({ error }: { error: unknown }) {
 function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) {
     const t = useT();
     const undoTurn = useUndoTurn(sessionId);
-    const { space } = useTheme();
-    // Off Android a small button's 44 pt target is layout, 16 pt taller than the drawn 28; take it out so the gap shows as the Notice's 8.
-    const pairGap = Platform.OS === 'android' ? space.sm : space.sm - 16;
     const [phase, setPhase] = useState<Phase>('idle');
     const [message, setMessage] = useState<string | null>(null);
     const [detail, setDetail] = useState<string | undefined>(undefined);
@@ -129,12 +125,10 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
                 >
                     {phase === 'conflict' ? (
                         <Stack gap="sm">
-                            <Stack>
+                            <Row gap="sm" wrap stack>
                                 <Button size="sm" variant="danger" label={t('chg.undoAnyway')} onPress={() => void undo(true)} testID="turn-changes-force" />
-                                <View style={{ marginTop: pairGap }}>
-                                    <Button size="sm" variant="secondary" label={t('chg.keep')} onPress={keep} testID="turn-changes-keep" />
-                                </View>
-                            </Stack>
+                                <Button size="sm" variant="secondary" label={t('chg.keep')} onPress={keep} testID="turn-changes-keep" />
+                            </Row>
                             {detail ? (
                                 <Disclosure title={t('failedTurn.details')} open={detailsOpen} onToggle={() => setDetailsOpen((v) => !v)} headerTestID="turn-changes-details-toggle">
                                     <Text role="caption" tone="muted" dir="ltr" selectable testID="turn-changes-details-text">
