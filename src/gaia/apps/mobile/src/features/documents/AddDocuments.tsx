@@ -28,7 +28,7 @@ export type AddLine =
     | { kind: 'done'; message: string }
     | { kind: 'folder'; message: string; added: boolean; detail?: string }
     | { kind: 'unreadable'; message: string }
-    | { kind: 'failed'; error: UploadErrorView }
+    | { kind: 'failed'; error: UploadErrorView; detail?: string }
     | { kind: 'refused'; message: string; title?: string; detail?: string }
     | { kind: 'picker'; message: string }
     | { kind: 'unsupported'; message: string };
@@ -58,13 +58,22 @@ function resolveStart(t: Translate, start: AddStart): AddLine {
             return { kind: start.kind, message: t(start.message.key, start.message.params) };
         case 'failed': {
             const { error, ...rest } = start.upload;
-            return { kind: 'failed', error: describeUploadError(t, { ...rest, error: typeof error === 'string' ? error : t(error.key, error.params) }) };
+            return failedAdd(t, { ...rest, error: typeof error === 'string' ? error : t(error.key, error.params) }, typeof error === 'string');
         }
         case 'refused':
             return isFileRefusal(start.cause) ? refusedLine(t, start.cause) : { kind: 'refused', ...refusalFailure(t, start.cause) };
         default:
             return { kind: start.kind, message: describeError(start.cause, t) };
     }
+}
+
+// When the add failed with no reason of ours, `describeUploadError` echoes the PC's sentence as its text; it goes on the detail line instead.
+function failedAdd(t: Translate, input: UploadErrorInput, fromPc: boolean): AddLine {
+    const view = describeUploadError(t, input);
+    if (fromPc && input.error && view.detail === input.error) {
+        return { kind: 'failed', error: { ...view, detail: t('docs.indexFailedDetail') }, detail: input.error };
+    }
+    return { kind: 'failed', error: view };
 }
 
 // The PC's English reason for the first unreadable file goes in `detail`, never inside the translated sentence.
@@ -140,7 +149,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
         const kind = typeof api?.body?.status === 'string' ? api.body.status : null;
         const failure = describeHttpFailure(err, t);
         const error = kind === 'too_large' ? t('docs.tooLargeDetail', { max: String(api?.body?.max_mb) }) : failure.detail ?? failure.text;
-        return { kind: 'failed', error: describeUploadError(t, { filename, error, status: api?.status, kind }) };
+        return failedAdd(t, { filename, error, status: api?.status, kind }, kind !== 'too_large' && !!failure.detail);
     }
 
     async function addOne(file: PickedFile): Promise<AddLine> {
@@ -256,6 +265,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
                     tone={line.error.icon === 'warning' ? 'warning' : 'danger'}
                     title={line.error.title}
                     message={line.error.detail}
+                    detail={line.detail}
                     onDismiss={() => setLine(null)}
                 />
             ) : null}
