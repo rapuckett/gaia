@@ -86,7 +86,7 @@ describeNative('ConnectorsScreen OAuth account', () => {
         queryClient.clear();
     });
 
-    it('says when the provider did not confirm the revoke after a disconnect', async () => {
+    it('says when the provider did not confirm removing access after a disconnect', async () => {
         const connected = { ...microsoft, configured: true, account_id: 'me@example.com' } as ConnectorRow;
         const { queryClient, wrap } = setup([connected], { revoke_supported: true, revoked_remotely: false, revoke_error: 'timeout', revoke_attempted: true });
         await render(<ConnectorsScreen />, { wrapper: wrap });
@@ -94,7 +94,7 @@ describeNative('ConnectorsScreen OAuth account', () => {
         fireEvent.press(await screen.findByLabelText('Disconnect'));
         await screen.findByText(/^Disconnect Microsoft/);
         fireEvent.press((await screen.findAllByLabelText('Disconnect')).at(-1)!);
-        expect(await screen.findByText(/did not confirm the revoke \(timeout\)/)).toBeTruthy();
+        expect(await screen.findByText(/removed GAIA's access \(timeout\)/)).toBeTruthy();
         queryClient.clear();
     });
 
@@ -107,7 +107,7 @@ describeNative('ConnectorsScreen OAuth account', () => {
         await screen.findByText(/^Disconnect Microsoft/);
         fireEvent.press((await screen.findAllByLabelText('Disconnect')).at(-1)!);
         expect(await screen.findByText(/Nothing was stored for this connector/)).toBeTruthy();
-        expect(screen.queryByText(/did not confirm the revoke/)).toBeNull();
+        expect(screen.queryByText(/didn't confirm it removed GAIA's access/)).toBeNull();
         queryClient.clear();
     });
 });

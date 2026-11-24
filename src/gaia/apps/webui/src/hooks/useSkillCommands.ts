@@ -5,9 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import * as api from '../services/api';
 import type { SkillInfo } from '../types';
 import { rememberInstalledSkills } from '../utils/research';
-
-/** A composer that holds only `/` and a skill name being typed. */
-const TYPING_COMMAND = /^\/[a-z0-9-]*$/i;
+import { isTypingSkillCommand, matchSkillCommands } from '../utils/skillCommands.core';
 
 type Status = 'loading' | 'ready' | 'error';
 
@@ -29,7 +27,7 @@ export interface SkillCommands {
  * Read fresh each time a `/` starts, so a skill added a moment ago is offered.
  */
 export function useSkillCommands(value: string): SkillCommands {
-    const typing = TYPING_COMMAND.test(value);
+    const typing = isTypingSkillCommand(value);
     const [skills, setSkills] = useState<SkillInfo[]>([]);
     const [status, setStatus] = useState<Status>('loading');
     const [error, setError] = useState<string | null>(null);
@@ -59,8 +57,7 @@ export function useSkillCommands(value: string): SkillCommands {
 
     useEffect(() => { setSelected(0); }, [value]);
 
-    const typed = value.toLowerCase();
-    const matches = typing ? skills.filter((s) => `/${s.name}`.startsWith(typed)) : [];
+    const matches = matchSkillCommands(skills, value);
     const open = typing && dismissedAt !== value && (status !== 'ready' || matches.length > 0);
     const select = useCallback((index: number) => setSelected(index), []);
     const dismiss = useCallback(() => setDismissedAt(value), [value]);
