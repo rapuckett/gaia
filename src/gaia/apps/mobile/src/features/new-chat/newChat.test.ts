@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { SystemStatus, WarmUpStatus } from '@webui/types';
+import type { QueueError } from '@webui/utils/messageQueue';
 
 import { createFakeClient } from '@/api/fake';
 import { translator } from '@/i18n/useT';
@@ -24,7 +25,7 @@ const turn = (patch: Partial<ChatTurn>): ChatTurn => ({ ...IDLE_TURN, ...patch }
 
 function setup(overrides: { createSession?: () => Promise<{ id: string }>; deliver?: (id: string, text: string) => Promise<boolean | void> } = {}) {
     const fake = createFakeClient();
-    const queued: { id: string; items: { text: string; state: string; error?: string }[] }[] = [];
+    const queued: { id: string; items: { text: string; state: string; error?: QueueError }[] }[] = [];
     const held: string[] = [];
     const flushed: string[] = [];
     const flow = createFirstSend({

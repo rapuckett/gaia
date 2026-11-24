@@ -37,7 +37,11 @@ function stateLine(item: HeldMessage, replying: boolean, t: Translate): string {
 /** Our own wording for a failure (when it has any) and the PC's or the system's raw text. Rows saved as a plain string show it as the detail. */
 function failureLines(item: HeldMessage, t: Translate): { text?: string; detail?: string } {
     const f = item.failure;
-    if (!f) return { detail: item.error };
+    if (!f) {
+        const e = item.error;
+        if (e === undefined || typeof e === 'string') return { detail: e };
+        return { text: t(e.key, e.params), detail: e.detail };
+    }
     const error = f.status === undefined ? new GaiaError(f.messageKey, f.params) : new GaiaApiError(f.status, f.detail ?? '', f.messageKey, f.params);
     const { text, detail } = describeHttpFailure(error, t);
     return { text, detail };
