@@ -17,7 +17,7 @@ import { UnsupportedCard } from './UnsupportedCard';
 
 type Phase = 'idle' | 'loading' | 'playing' | 'paused';
 
-function CardAudio({ src, caption, path, duration_seconds }: AudioPayload) {
+function CardAudio({ src, caption, path, duration_seconds, saved_to, script_path }: AudioPayload) {
     const t = useT();
     const client = useGaiaClient();
     const [phase, setPhase] = useState<Phase>('idle');
@@ -126,6 +126,16 @@ function CardAudio({ src, caption, path, duration_seconds }: AudioPayload) {
                         <Ltr>{fileName}</Ltr>
                     </Text>
                 ) : null}
+                {saved_to ? (
+                    <Text role="caption" tone="secondary" testID="card-audio-saved-to">
+                        {t('media.savedTo')} <Ltr>{saved_to}</Ltr>
+                    </Text>
+                ) : null}
+                {script_path ? (
+                    <Text role="caption" tone="secondary" testID="card-audio-script">
+                        {t('media.listeningScript')} <Ltr>{script_path}</Ltr>
+                    </Text>
+                ) : null}
             </Stack>
         </Surface>
     );
@@ -133,5 +143,5 @@ function CardAudio({ src, caption, path, duration_seconds }: AudioPayload) {
 
 export function AudioCard({ data }: { data: unknown }) {
     if (!isAudioPayload(data)) return <UnsupportedCard variant="invalid" render="audio" data={data} />;
-    return <CardAudio src={data.src} caption={data.caption} path={data.path} duration_seconds={data.duration_seconds} />;
+    return <CardAudio {...data} />;
 }
