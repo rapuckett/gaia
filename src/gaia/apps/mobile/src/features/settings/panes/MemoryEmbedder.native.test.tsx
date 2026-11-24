@@ -118,6 +118,7 @@ describeNative('Settings > Memory > Embedding model', () => {
         await fireEvent.press(await screen.findByTestId('memory-embedder'));
         await fireEvent.press(await screen.findByText('NPU'));
         expect(await screen.findByTestId('memory-embedder-error')).toBeTruthy();
-        expect(screen.getByText(/A reply is running/)).toBeTruthy();
+        expect(screen.getByText('A reply is running. Change the embedder once it finishes.')).toBeTruthy();
+        expect(screen.queryByText(/409|answered with an error/)).toBeNull();
     });
 });

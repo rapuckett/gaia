@@ -56,6 +56,12 @@ export function serverText(error: unknown): string | undefined {
 
 const CONNECTOR_RECONNECT_CODES: ReadonlySet<string> = new Set(['not_connected', 'reauth_required', 'connection_revoked']);
 
+/** One short human sentence, not a stack trace, JSON, a bare reason phrase ("Internal Server Error") or markup. */
+function isPlainSentence(detail: string): boolean {
+    const text = detail.trim();
+    return text.length <= 200 && /^[A-Z][^\n=(){}[\]<>\\/:]*[.!?]$/.test(text) && text.includes(' ') && !/traceback|exception|errno/i.test(text);
+}
+
 /** A PC's HTTP error, pairing-auth error or failed turn as our reason-free sentence plus its raw text for `detail`; any other error reads as `describeError`. */
 export function describeHttpFailure(error: unknown, t: Translate): { text: string; detail?: string } {
     // A 409 carrying one of these codes is a connector asking to sign in again, not a failed request.
@@ -63,6 +69,8 @@ export function describeHttpFailure(error: unknown, t: Translate): { text: strin
         return { text: t('mobileApp.connectors.reconnectNeeded') };
     }
     if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.http' && error.detail) {
+        // The PC's own plain sentence is the notice; the status code only titles errors with nothing readable to say.
+        if (isPlainSentence(error.detail)) return { text: error.detail };
         return { text: t('mobileApp.error.httpNoDetail', { status: error.status }), detail: error.detail };
     }
     if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.auth') {

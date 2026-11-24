@@ -122,10 +122,10 @@ describeNative('composer and retry scenes', () => {
         expect(await screen.findByText(/Couldn't load/, opts)).toBeTruthy();
     });
 
-    it('compare-failed shows our sentence with the PC text on its own line', async () => {
+    it('compare-failed shows the PC\'s plain sentence as the text, with no status code', async () => {
         mockState = 'compare-failed';
         await mount(messagesRoute());
-        expect(await screen.findByText(translator('en')('mobileApp.error.httpNoDetail', { status: 500 }), opts)).toBeTruthy();
-        expect(screen.getByText('Not enough free memory to load the model.', opts)).toBeTruthy();
+        expect(await screen.findByText('Not enough free memory to load the model.', opts)).toBeTruthy();
+        expect(screen.queryByText(/answered with an error/, opts)).toBeNull();
     });
 });

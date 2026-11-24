@@ -21,10 +21,21 @@ describe('nested error messages', () => {
 
 describe('server text stays out of the sentence', () => {
     it.each(['en', 'ar'])('a PC HTTP error in %s gives a reason-free title and the raw text as detail', (code) => {
-        const { text, detail } = describeHttpFailure(new GaiaApiError(500, 'The connectors service is not running.'), translator(code));
-        expect(detail).toBe('The connectors service is not running.');
+        const { text, detail } = describeHttpFailure(new GaiaApiError(500, 'connectors service: connection refused'), translator(code));
+        expect(detail).toBe('connectors service: connection refused');
         expect(text).not.toContain('connectors service');
         expect(text).toContain('500');
+    });
+
+    it('a PC\'s plain sentence is the notice text, with no status code and no detail', () => {
+        const sentence = 'A reply is running. Change the embedder once it finishes.';
+        expect(describeHttpFailure(new GaiaApiError(409, sentence), translator('en'))).toEqual({ text: sentence });
+    });
+
+    it.each(['Internal Server Error', 'Traceback (most recent call last):\n  File "x.py", line 1.', '{"error":"busy"}', "HTTPConnectionPool(host='127.0.0.1', port=9): Max retries exceeded."])('keeps the generic title for %j', (raw) => {
+        const { text, detail } = describeHttpFailure(new GaiaApiError(409, raw), translator('en'));
+        expect(text).toBe('GAIA answered with an error (409).');
+        expect(detail).toBe(raw);
     });
 
     it.each(['en', 'ar'])('a failed turn in %s gives a reason-free sentence and the PC text as detail', (code) => {
