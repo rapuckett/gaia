@@ -53,7 +53,7 @@ const camel = (name) => name.replace(/^--/, '').replace(/-([a-z0-9])/g, (_, c) =
 // Colors that exist once, for both themes (a code block is its own dark canvas).
 const SHARED_COLOR =
     /^--(bg-code|bg-code-raised|border-code|text-code|text-code-dim|code-(accent|success|warning|danger))$/;
-const COLOR_ROLE = /^--(bg|text|border|accent|danger|tint|code|switch)-?[a-z0-9-]*$/;
+const COLOR_ROLE = /^--(bg|text|border|accent|danger|tint|code|switch|action)-?[a-z0-9-]*$/;
 const COLOR_VALUE = /^(#[0-9a-fA-F]{3,8}|rgba?\([0-9., %]+\))$/;
 const SHADOW = /^--shadow-(sm|md|lg|press)$/;
 
@@ -66,8 +66,6 @@ const IGNORED = new Map([
     ['--browser-pane-inset', "the desktop's browser pane, which phones don't have"],
     ['--chat-min-w', "the desktop's chat and browser-pane split"],
     ['--pane-min-w', "the desktop's chat and browser-pane split"],
-    ...['', '-text', '-hover'].map(
-        (s) => [`--action-fill${s}`, "the phone keeps its own primary-button style until Design's follow-up maps them"]),
     ['--hit-min', "the desktop's pointer target; phones keep the platforms' larger touch targets"],
     ...['paper', 'ink', 'ink-dim', 'accent', 'on-accent', 'panel', 'rule'].map(
         (n) => [`--slide-${n}`, "the desktop's slide-deck preview, which phones don't render"]),
@@ -85,6 +83,29 @@ const find = (list, selector) => {
 
 const lightDecl = declarations(find(indexBlocks, ':root').body);
 const darkDecl = declarations(find(indexBlocks, '[data-theme="dark"]').body);
+
+/** A whole-value `var(--x)` is replaced by `--x`'s value in the same scope; chains follow, and a cycle or an unknown name fails. */
+function resolveVar(name, value, scope) {
+    const seen = [name];
+    let v = value;
+    let m;
+    while ((m = v.match(/^var\((--[a-z0-9-]+)\)$/))) {
+        const ref = m[1];
+        if (seen.includes(ref)) fail(`${[...seen, ref].join(' -> ')} is a var() cycle.`);
+        if (!scope.has(ref)) fail(`${name} refers to ${ref}, which is not declared in its scope.`);
+        seen.push(ref);
+        v = scope.get(ref);
+    }
+    return v;
+}
+
+// A color alias is declared once in :root and follows each theme's and palette's own values.
+const isAlias = (name, value) => COLOR_ROLE.test(name) && /^var\(--[a-z0-9-]+\)$/.test(value);
+const aliasNames = new Set([...lightDecl].filter(([n, v]) => isAlias(n, v)).map(([n]) => n));
+const scopeOf = (...maps) => new Map(maps.flatMap((m) => [...m]));
+const lightScope = scopeOf(lightDecl);
+const darkScope = scopeOf(lightDecl, darkDecl);
+const resolved = (n, v, scope) => (COLOR_ROLE.test(n) ? resolveVar(n, v, scope) : v);
 
 const colors = { light: {}, dark: {} };
 const shadows = { light: {}, dark: {} };
@@ -164,8 +185,9 @@ function classify(name, value, theme) {
     }
 }
 
-for (const [n, v] of lightDecl) classify(n, v, 'light');
-for (const [n, v] of darkDecl) classify(n, v, 'dark');
+for (const [n, v] of lightDecl) classify(n, resolved(n, v, lightScope), 'light');
+for (const [n, v] of darkDecl) classify(n, resolved(n, v, darkScope), 'dark');
+for (const n of aliasNames) if (!darkDecl.has(n)) classify(n, resolved(n, lightDecl.get(n), darkScope), 'dark');
 
 // Light and dark must declare the same themed roles (upstream's own rule).
 for (const [n] of darkDecl) {
@@ -177,7 +199,7 @@ for (const [n] of lightDecl) {
     if (SHARED_COLOR.test(n) || IGNORED.has(n)) continue;
     if (!(COLOR_ROLE.test(n) || SHADOW.test(n))) continue;
     if (/^--(radius|font|fs|duration|ease|sidebar|content|stagger|toast)/.test(n)) continue;
-    if (!darkDecl.has(n)) fail(`${n} is declared in light but not in dark.`);
+    if (!darkDecl.has(n) && !aliasNames.has(n)) fail(`${n} is declared in light but not in dark.`);
 }
 // Shared colors apply in both themes.
 for (const [n, v] of lightDecl) if (SHARED_COLOR.test(n)) colors.dark[camel(n)] = v;
@@ -193,11 +215,14 @@ for (const b of pBlocks) {
     palettes[id] ??= {};
     if (palettes[id][theme]) fail(`palette ${id} declares ${theme} twice.`);
     const merged = { ...colors[theme] };
-    for (const [n, v] of declarations(b.body)) {
+    const overrides = declarations(b.body);
+    const scope = scopeOf(theme === 'dark' ? darkScope : lightScope, overrides);
+    for (const [n, v] of overrides) {
         const key = camel(n);
         if (!(key in colors[theme])) fail(`palette ${id} (${theme}) overrides ${n}, which the base does not declare.`);
-        merged[key] = parseColor(n, v);
+        merged[key] = parseColor(n, resolved(n, v, scope));
     }
+    for (const n of aliasNames) merged[camel(n)] = parseColor(n, resolveVar(n, scope.get(n), scope));
     palettes[id][theme] = merged;
 }
 for (const [id, p] of Object.entries(palettes)) {
