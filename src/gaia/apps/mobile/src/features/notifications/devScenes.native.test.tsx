@@ -7,6 +7,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import NotificationsGalleryRoute from '@/app/dev/notifications';
 
+import { glossParts } from '@webui/i18n/registry';
+
 import { translator } from '@/i18n/useT';
 import { useLocaleStore } from '@/state/locale';
 
@@ -88,7 +90,9 @@ describeNative('/dev/notifications', () => {
         try {
             mockState = name;
             await mount();
-            expect(await screen.findByText(translator('ar')(key, { name: task }))).toBeTruthy();
+            // The title is larger now, so its English gloss sits on its own line below the Arabic.
+            const head = glossParts(translator('ar')(key, { name: task }))!.find((part) => !part.gloss)!.text.trim();
+            expect(await screen.findByText(head, { exact: false })).toBeTruthy();
         } finally {
             useLocaleStore.getState().setLocale(null);
         }

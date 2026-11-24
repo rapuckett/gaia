@@ -3,7 +3,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { APPROVAL_ARM_MS } from '@webui/utils/permissionPrompts.core';
@@ -133,5 +133,34 @@ describeNative('the notification center accessibility', () => {
         await mount('all-read');
         expect(touchables().find((x) => x.testID === 'ntf-mark-all')?.disabled).toBe(true);
         expect(touchables().find((x) => x.testID === 'ntf-clear')?.disabled).toBe(false);
+    });
+});
+
+describeNative('the notification center layout', () => {
+    it('an unread row has a bold title and an accent dot', async () => {
+        await mount('permission-pending');
+        expect(screen.getByTestId('ntf-unread-confirm-1')).toBeTruthy();
+        expect(StyleSheet.flatten(screen.getByTestId('ntf-title-confirm-1').props.style).fontFamily).toMatch(/700/);
+    });
+
+    it('a read row has a semibold title and no dot', async () => {
+        await mount('all-read');
+        expect(screen.queryByTestId('ntf-unread-n-policy')).toBeNull();
+        expect(StyleSheet.flatten(screen.getByTestId('ntf-title-n-policy').props.style).fontFamily).not.toMatch(/700/);
+    });
+
+    it('the pinned bar has a small Mark all read that works and a danger Clear that empties the list', async () => {
+        await mount('permission-pending');
+        await fireEvent.press(screen.getByTestId('ntf-mark-all'));
+        expect(useNotificationStore.getState().items.every((n) => n.read)).toBe(true);
+        await fireEvent.press(screen.getByTestId('ntf-clear'));
+        expect(useNotificationStore.getState().items).toEqual([]);
+    });
+
+    it('the selected filter chip is the one marked selected, and the row is one scroller', async () => {
+        await mount('errors-filter');
+        const chips = touchables().filter((x) => x.role === 'tab');
+        expect(chips.map((c) => c.selected)).toEqual([false, false, false, true, false, false, false]);
+        expect(screen.getByTestId('ntf-filters').props.horizontal).toBe(true);
     });
 });

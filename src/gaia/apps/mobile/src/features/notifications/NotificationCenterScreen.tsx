@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import { useWindowDimensions, View, type AccessibilityActionEvent, type ScrollView } from 'react-native';
+import { ScrollView as RNScrollView, useWindowDimensions, View, type AccessibilityActionEvent, type ScrollView } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
+import { isolate } from '@webui/i18n/registry';
 import type { GaiaNotification, NotificationType } from '@webui/types/agent';
 
 import { useConfirmTool } from '@/data';
 import { useApprovalArm } from '@/features/chat/permission/useApprovalArm';
-import { describeHttpFailure, useLocaleCode, useT } from '@/i18n/useT';
+import { describeHttpFailure, useDirection, useLocaleCode, useT } from '@/i18n/useT';
 import { useChatStreamStore } from '@/state/chatStreams';
 import {
     clearNotifications,
@@ -24,7 +25,7 @@ import {
     useNotificationStore,
 } from '@/state/notifications';
 import { usePermissionPromptStore } from '@/state/permissionPrompts';
-import { Badge, Button, Chip, Divider, EmptyState, FirstLine, Icon, IconButton, Notice, Pressable, Row, Screen, Stack, StatusDot, Text } from '@/ui';
+import { Badge, Button, Chip, Divider, EmptyState, FirstLine, Icon, IconButton, Notice, Pressable, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { useLargeText } from '@/ui/theme/a11y';
 import { Bell, Check, CircleAlert, CircleCheck, Info, ShieldAlert, Trash2, TriangleAlert, X, type LucideIcon } from '@/ui/icons';
 
@@ -75,28 +76,16 @@ export function NotificationCenterScreen({ onBack, onOpenChat, receiptId }: { on
             }
             footer={
                 items.length > 0 ? (
-                    <Stack>
-                        <Row gap="sm" stack>
-                            <Stack flex={1}>
-                                <Button label={t.bare('notifications.markAllRead')} accessibilityLabel={t('notifications.markAllRead')} icon={Check} variant="secondary" full disabled={unread === 0} onPress={markAllNotificationsRead} testID="ntf-mark-all" />
-                            </Stack>
-                            <Stack flex={1}>
-                                <Button label={t('notifications.clear')} icon={Trash2} variant="secondary" full onPress={clearNotifications} testID="ntf-clear" />
-                            </Stack>
-                        </Row>
-                    </Stack>
+                    <Row gap="sm" justify="between">
+                        <Button label={t.bare('notifications.markAllRead')} accessibilityLabel={t('notifications.markAllRead')} icon={Check} variant="secondary" size="sm" disabled={unread === 0} onPress={markAllNotificationsRead} testID="ntf-mark-all" />
+                        <Button label={t('notifications.clear')} icon={Trash2} variant="danger" size="sm" onPress={clearNotifications} testID="ntf-clear" />
+                    </Row>
                 ) : undefined
             }
+            footerDivider
             scroll
         >
-            <Stack paddingX="gutter" paddingY="sm">
-                <Row gap="sm" wrap accessibilityRole="tablist">
-                    <Chip role="tab" label={t('notifications.filter.all')} selected={filter === null} onPress={() => setNotificationFilter(null)} />
-                    {FILTER_ORDER.map((kind) => (
-                        <Chip key={kind} role="tab" label={t(FILTER_LABELS[kind])} selected={filter === kind} onPress={() => setNotificationFilter(kind)} />
-                    ))}
-                </Row>
-            </Stack>
+            <FilterRow filter={filter} />
             {receiptId && !target ? (
                 <Stack paddingX="gutter" paddingY="sm">
                     <Notice tone="warning" message={t('activity.policy.receiptUnavailable')} testID="ntf-receipt-missing" />
@@ -119,6 +108,57 @@ export function NotificationCenterScreen({ onBack, onOpenChat, receiptId }: { on
                 ))
             )}
         </Screen>
+    );
+}
+
+const FADE_STEPS = [0.15, 0.35, 0.55, 0.75, 0.9];
+
+/** One scrolling row of filter chips: a fade marks more to the side, and the selected chip is kept in view. */
+function FilterRow({ filter }: { filter: NotificationType | null }) {
+    const t = useT();
+    const { colors, space } = useTheme();
+    const dir = useDirection();
+    const ref = useRef<ComponentRef<typeof RNScrollView>>(null);
+    const xs = useRef<Record<string, number>>({});
+    const [box, setBox] = useState({ view: 0, content: 0 });
+    const [offset, setOffset] = useState(0);
+    const key = filter ?? 'all';
+    const more = box.content > box.view + 1 && offset < box.content - box.view - 1;
+    const reveal = () => {
+        const x = xs.current[key];
+        if (x !== undefined && dir === 'ltr') ref.current?.scrollTo({ x: Math.max(0, x - space.gutter), animated: true });
+    };
+    useEffect(reveal, [key, box.content]); // eslint-disable-line react-hooks/exhaustive-deps
+    const chip = (id: string, label: string, kind: NotificationType | null) => (
+        <View key={id} onLayout={(e) => { xs.current[id] = e.nativeEvent.layout.x; if (id === key) reveal(); }}>
+            <Chip role="tab" label={label} selected={filter === kind} onPress={() => setNotificationFilter(kind)} testID={`ntf-filter-${id}`} />
+        </View>
+    );
+    return (
+        <View>
+            <RNScrollView
+                ref={ref}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                accessibilityRole="tablist"
+                contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.gutter, paddingVertical: space.sm }}
+                onLayout={(e) => setBox((b) => ({ ...b, view: e.nativeEvent.layout.width }))}
+                onContentSizeChange={(w) => setBox((b) => ({ ...b, content: w }))}
+                onScroll={(e) => setOffset(e.nativeEvent.contentOffset.x)}
+                scrollEventThrottle={64}
+                testID="ntf-filters"
+            >
+                {chip('all', t('notifications.filter.all'), null)}
+                {FILTER_ORDER.map((kind) => chip(kind, t(FILTER_LABELS[kind]), kind))}
+            </RNScrollView>
+            {more ? (
+                <View pointerEvents="none" testID="ntf-filters-fade" style={{ position: 'absolute', end: 0, top: 0, bottom: 0, flexDirection: 'row' }}>
+                    {(dir === 'ltr' ? FADE_STEPS : [...FADE_STEPS].reverse()).map((o, i) => (
+                        <View key={i} style={{ width: 6, backgroundColor: colors.bgPrimary, opacity: o }} />
+                    ))}
+                </View>
+            ) : null}
+        </View>
     );
 }
 
@@ -152,7 +192,13 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat, onLai
     const failed = confirm.isError ? describeHttpFailure(confirm.error, t) : null;
     // At large text sizes the time goes under the agent's name, which it would otherwise squeeze to nothing.
     const largeText = useLargeText();
-    const time = <Text role="caption" tone="muted">{relativeTime(n.timestamp, now, t, locale)}</Text>;
+    const { colors } = useTheme();
+    const meta = (
+        <Row gap="xs">
+            <Text role="caption" tone="muted">{relativeTime(n.timestamp, now, t, locale)}</Text>
+            {n.read ? null : <View testID={`ntf-unread-${n.id}`} accessible={false} importantForAccessibility="no" style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accentSolid }} />}
+        </Row>
+    );
 
     const answer = (approved: boolean) => {
         if (!n.sessionId) return;
@@ -197,22 +243,17 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat, onLai
             >
                 <Stack gap="xs" paddingX="lg" paddingY="md">
                     <Row gap="sm" align={largeText ? 'start' : 'center'}>
-                        {!n.read ? (
-                            <FirstLine role="label">
-                                <StatusDot tone="attention" label={t('sidebar.notificationsUnread', { n: 1 })} />
-                            </FirstLine>
-                        ) : null}
-                        <FirstLine role="label">
+                        <FirstLine role="caption">
                             <Icon icon={icon} size="sm" tone={tone} />
                         </FirstLine>
                         <Stack flex={1}>
-                            <Text role="label" weight="semibold" numberOfLines={1}>{n.agentName}</Text>
-                            {largeText ? time : null}
+                            <Text role="caption" tone="muted" numberOfLines={1}>{n.agentName}</Text>
+                            {largeText ? meta : null}
                         </Stack>
-                        {largeText ? null : time}
+                        {largeText ? null : meta}
                         <IconButton icon={X} size="sm" label={t('notifications.dismiss')} onPress={() => dismissNotification(n.id)} />
                     </Row>
-                    <Text role="ui" weight="semibold">{title}</Text>
+                    <Text role="body" weight={n.read ? 'semibold' : 'bold'} testID={`ntf-title-${n.id}`}>{title}</Text>
                     <Text role="ui" tone="secondary">{message}</Text>
                     {n.type === 'policy_alert' ? <PolicyDetails n={n} /> : null}
                     {canAnswer ? (
@@ -239,24 +280,19 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat, onLai
 function PolicyDetails({ n }: { n: GaiaNotification }) {
     const t = useT();
     const line = (label: string, value: string) => (
-        <Row gap="xs" wrap>
-            <Text role="caption" tone="muted">{label}:</Text>
-            <Text role="caption" mono>{value}</Text>
+        <Row gap="sm" wrap>
+            <Text role="caption" tone="muted">{label}</Text>
+            <Text role="caption" code>{value}</Text>
         </Row>
     );
     return (
         <Stack gap="xs">
             {n.tool ? line(t('activity.policy.tool'), n.tool) : null}
-            {n.reason ? (
-                <Stack>
-                    <Text role="caption" tone="muted">{t('notifications.reason')}:</Text>
-                    <Text role="caption" tone="muted" dir="ltr">{n.reason}</Text>
-                </Stack>
-            ) : null}
+            {n.reason ? <Text role="caption" tone="muted">{t('notifications.reason')}: {isolate(n.reason, 'ltr')}</Text> : null}
             {n.ruleIds && n.ruleIds.length > 0 ? line(t('activity.policy.rules'), n.ruleIds.join(', ')) : null}
             {n.policyVersion ? line(t('activity.policy.policy'), n.policyVersion) : null}
             {n.receiptId ? line(t('activity.policy.receipt'), n.receiptId) : (
-                <Text role="caption" tone="muted">{t('activity.policy.receipt')}: {t('activity.policy.receiptUnavailable')}</Text>
+                <Text role="caption" tone="muted">{t('activity.policy.receiptUnavailable')}</Text>
             )}
         </Stack>
     );
