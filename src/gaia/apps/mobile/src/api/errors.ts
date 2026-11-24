@@ -29,7 +29,7 @@ export class GaiaApiError extends GaiaError {
     constructor(
         status: number,
         detail: string,
-        messageKey: MessageKey = 'mobileApp.error.http',
+        messageKey: MessageKey = 'mobileApp.error.httpNoDetail',
         params?: Params,
         body: Record<string, unknown> | null = null,
         retryAfterSeconds: number | null = null,
