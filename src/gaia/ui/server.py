@@ -58,6 +58,7 @@ from .agent_loop import agent_loop
 
 # pylint: enable=unused-import
 from .database import ChatDatabase
+from .devices.access import DeviceAccess
 from .document_copies import move_library_files_out_of_shared_folder
 from .document_monitor import DocumentMonitor
 from .memory_settings import memory_enabled
@@ -68,6 +69,7 @@ from .routers import automations as automations_router_mod
 from .routers import changes as changes_router_mod
 from .routers import chat as chat_router_mod
 from .routers import connectors as connectors_router_mod
+from .routers import devices as devices_router_mod
 from .routers import documents as documents_router_mod
 from .routers import environment as environment_router_mod
 from .routers import files as files_router_mod
@@ -776,9 +778,13 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
                 e,
             )
 
+        # The listener for paired devices, if the PC left it on.
+        await app.state.devices.resume()
+
         yield
 
         # Shutdown
+        await app.state.devices.shutdown()
         remove_local_work(active_turns_in_flight)
         await scheduler.shutdown()
         logger.info("Task scheduler stopped")
@@ -858,6 +864,8 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
     tunnel = TunnelManager(port=DEFAULT_PORT)
     app.state.tunnel = tunnel
     redact_tunnel_token_in_access_log()
+    # Paired devices on the home network; touches no file until it is used.
+    app.state.devices = DeviceAccess(app)
 
     # Per-session locks prevent the same session from having multiple
     # concurrent requests, which would corrupt conversation state.
@@ -917,6 +925,7 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
     app.include_router(documents_router_mod.router)
     app.include_router(files_router_mod.router)
     app.include_router(tunnel_router_mod.router)
+    app.include_router(devices_router_mod.router)
     app.include_router(goals_router_mod.router)
     app.include_router(memory_router_mod.router)
     app.include_router(schedules_router_mod.router)
