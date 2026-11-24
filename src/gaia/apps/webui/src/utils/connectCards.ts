@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { RenderCardData } from '../types';
+import type { Message, RenderCardData } from '../types';
 
 export const CONNECT_ACCOUNT_RENDER = 'connect_account';
 
@@ -49,6 +49,17 @@ export function isConnectAccountPayload(value: unknown): value is ConnectAccount
         (v.scopes === undefined || isScopeMap(v.scopes, v.providers)) &&
         (v.account === undefined || isAccountMap(v.account, v.providers))
     );
+}
+
+/** Per provider, the account a message's Connect card offered to sign in to again. */
+export function connectCardAccounts(message: Pick<Message, 'cards'> | undefined): Record<string, string> {
+    const named: Record<string, string> = {};
+    for (const card of message?.cards ?? []) {
+        if (card.render === CONNECT_ACCOUNT_RENDER && isConnectAccountPayload(card.data)) {
+            Object.assign(named, card.data.account);
+        }
+    }
+    return named;
 }
 
 /**

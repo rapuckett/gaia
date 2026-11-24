@@ -15,6 +15,7 @@ import { ltrIn } from '../setup/format';
 import { UnsupportedCard } from './UnsupportedCard';
 import {
     CONNECT_ACCOUNT_RENDER,
+    connectCardAccounts,
     isConnectAccountPayload,
     type ConnectAccountPayload,
 } from '../../utils/connectCards';
@@ -29,7 +30,7 @@ import {
  * step. A card that names no access asks for what the agent declares.
  */
 
-export { CONNECT_ACCOUNT_RENDER, isConnectAccountPayload };
+export { CONNECT_ACCOUNT_RENDER, connectCardAccounts, isConnectAccountPayload };
 
 /**
  * What a Connect press asks for: what the call needs, plus what the connection
@@ -59,17 +60,6 @@ export function connectCardProviders(message: Pick<Message, 'cards'> | undefined
         }
     }
     return [...found];
-}
-
-/** Per provider, the account a message's Connect card offered to sign in to again. */
-export function connectCardAccounts(message: Pick<Message, 'cards'> | undefined): Record<string, string> {
-    const named: Record<string, string> = {};
-    for (const card of message?.cards ?? []) {
-        if (card.render === CONNECT_ACCOUNT_RENDER && isConnectAccountPayload(card.data)) {
-            Object.assign(named, card.data.account);
-        }
-    }
-    return named;
 }
 
 /** Whether a message carries a Connect card at all. */
