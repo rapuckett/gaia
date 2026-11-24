@@ -34,6 +34,7 @@ export function ResearchChip({ sessionId, disabled }: { sessionId: string | null
             icon={Telescope}
             chip="research"
             active={on}
+            toggle
             disabled={disabled}
             onPress={() => setResearch(sessionId, !on)}
             accessibilityLabel={t('composer.research')}
