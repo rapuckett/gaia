@@ -134,10 +134,11 @@ async function mount(data: FakeClientData, ui: (schedule: Schedule) => React.Rea
 });
 
 (Platform.OS === 'web' ? describe.skip : describe)('the card', () => {
-    it('has an Edit chip that calls onEdit, disabled while a run is going', async () => {
+    it('has an Edit action in its more-actions sheet that calls onEdit', async () => {
         const onEdit = jest.fn();
         await mount({}, (s) => <ScheduleCard schedule={s} now={new Date()} runPending={false} onOpenChat={() => {}} onRunNow={() => {}} onToggleStatus={() => {}} onDelete={() => {}} onEdit={onEdit} />);
-        await fireEvent.press(await screen.findByText(t('schedules.card.edit')));
+        await fireEvent.press(await screen.findByTestId('schedule-more-daily-summary'));
+        await fireEvent.press(await screen.findByTestId('schedule-edit-daily-summary'));
         expect(onEdit).toHaveBeenCalledTimes(1);
     });
 

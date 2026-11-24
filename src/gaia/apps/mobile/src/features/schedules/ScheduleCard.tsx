@@ -10,8 +10,8 @@ import type { Schedule } from '@/api/client.types';
 import { useScheduleResults } from '@/data';
 import { ConfirmSheet } from '@/features/setup/sheets/ConfirmSheet';
 import { describeHttpFailure, useT } from '@/i18n/useT';
-import { Button, Disclosure, Icon, Notice, Row, Stack, Surface, Text, useTheme } from '@/ui';
-import { Clock, MessageSquare, Pause, Pencil, Play, Trash2, Zap } from '@/ui/icons';
+import { ActionSheet, Button, Disclosure, Icon, IconButton, Notice, Pressable, Row, Stack, Surface, Text, useTheme, type SheetAction } from '@/ui';
+import { Clock, Ellipsis, Pause, Pencil, Play, Trash2, Zap } from '@/ui/icons';
 
 import { composeDateLocale, describeSchedule, formatNextClock, formatTime } from './scheduleText';
 
@@ -32,6 +32,11 @@ function StatusTag({ label, tone }: { label: string; tone: 'success' | 'warning'
             </Text>
         </View>
     );
+}
+
+/** The PC's pill CSS capitalizes its lowercase status keys; so do we, in the locale's own rules. */
+function capitalized(label: string, locale: string | undefined): string {
+    return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
 }
 
 /** The desktop's `.schedule-card-error`: a tinted strip with a danger hairline border. */
@@ -62,6 +67,7 @@ export interface ScheduleCardProps {
 export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, onToggleStatus, onDelete, onEdit, initialConfirmDelete = false, initialHistoryOpen = false }: ScheduleCardProps) {
     const t = useT();
     const [confirmDelete, setConfirmDelete] = useState(initialConfirmDelete);
+    const [menuOpen, setMenuOpen] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(initialHistoryOpen);
     const history = useScheduleResults(schedule.name, schedule.last_run_at, historyOpen);
     const runs = history.data?.results ?? [];
@@ -75,92 +81,97 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
 
     const nextClock = schedule.status === 'paused' ? null : formatNextClock(schedule.next_run_at, now, composeDateLocale(t.locale, t));
 
+    const menuActions: SheetAction[] = [
+        { label: t('schedules.card.edit'), icon: Pencil, disabled: running, onPress: onEdit, testID: `schedule-edit-${schedule.name}` },
+        { label: t('schedules.card.delete'), icon: Trash2, destructive: true, onPress: () => setConfirmDelete(true), testID: `schedule-delete-${schedule.name}` },
+    ];
+
     return (
         <Surface tone="secondary" radius="sm" border padding="md">
             <Stack gap="sm">
-                <Row gap="sm" justify="between">
-                    <Stack flex={1}>
-                        <Text role="ui" weight="semibold" numberOfLines={1}>
-                            {schedule.name}
+                <Pressable
+                    minSize={0}
+                    disabled={!schedule.session_id}
+                    dimmed={false}
+                    onPress={() => onOpenChat(schedule.session_id!)}
+                    testID={`schedule-card-${schedule.name}`}
+                >
+                    <Stack gap="sm">
+                        <Row gap="sm" justify="between">
+                            <Stack flex={1}>
+                                <Text role="ui" weight="semibold" numberOfLines={1}>
+                                    {schedule.name}
+                                </Text>
+                            </Stack>
+                            <StatusTag label={capitalized(t(status.label), t.locale)} tone={status.tone} />
+                        </Row>
+                        <Text role="label" tone="secondary" numberOfLines={3}>
+                            {schedule.prompt}
                         </Text>
+                        <Row gap="xs">
+                            <Icon icon={Clock} size="sm" tone="muted" />
+                            <Stack flex={1}>
+                                <Text role="label" tone="muted">
+                                    {described ?? schedule.description}
+                                </Text>
+                            </Stack>
+                        </Row>
+                        <Row gap="md" wrap>
+                            <Text role="label" tone="muted">
+                                {t('schedules.card.runs', { n: schedule.run_count })}
+                            </Text>
+                            {schedule.error_count > 0 ? (
+                                <Text role="label" tone="muted">
+                                    {t('schedules.card.errors', { n: schedule.error_count })}
+                                </Text>
+                            ) : null}
+                            <Text role="label" tone="muted">
+                                {when((say, locale) => say('schedules.card.last', { when: formatTime(schedule.last_run_at, say, now, locale) }))}
+                            </Text>
+                            <Text role="label" tone="muted">
+                                {when((say, locale) =>
+                                    say('schedules.card.next', {
+                                        when: schedule.status === 'paused' ? say('schedules.status.paused') : formatTime(schedule.next_run_at, say, now, locale),
+                                    }),
+                                )}
+                            </Text>
+                            {nextClock ? (
+                                <Text role="label" tone="muted">
+                                    {nextClock}
+                                </Text>
+                            ) : null}
+                        </Row>
+                        {schedule.last_error && !historyShowsFailure ? (
+                            <ErrorStrip>
+                                <Stack gap="xs">
+                                    <Text role="label">{t('mobileApp.schedules.card.lastFailedLabel')}</Text>
+                                    <Text role="label" dir="ltr">{schedule.last_error}</Text>
+                                </Stack>
+                            </ErrorStrip>
+                        ) : null}
                     </Stack>
-                    <StatusTag label={t(status.label)} tone={status.tone} />
-                </Row>
-                <Text role="label" tone="secondary" numberOfLines={3}>
-                    {schedule.prompt}
-                </Text>
-                <Row gap="xs">
-                    <Icon icon={Clock} size="sm" tone="muted" />
-                    <Stack flex={1}>
-                        <Text role="label" tone="muted">
-                            {described ?? schedule.description}
-                        </Text>
-                    </Stack>
-                </Row>
-                <Row gap="md" wrap>
-                    <Text role="label" tone="muted">
-                        {t('schedules.card.runs', { n: schedule.run_count })}
-                    </Text>
-                    {schedule.error_count > 0 ? (
-                        <Text role="label" tone="muted">
-                            {t('schedules.card.errors', { n: schedule.error_count })}
-                        </Text>
-                    ) : null}
-                    <Text role="label" tone="muted">
-                        {when((say, locale) => say('schedules.card.last', { when: formatTime(schedule.last_run_at, say, now, locale) }))}
-                    </Text>
-                    <Text role="label" tone="muted">
-                        {when((say, locale) =>
-                            say('schedules.card.next', {
-                                when: schedule.status === 'paused' ? say('schedules.status.paused') : formatTime(schedule.next_run_at, say, now, locale),
-                            }),
-                        )}
-                    </Text>
-                    {nextClock ? (
-                        <Text role="label" tone="muted">
-                            {nextClock}
-                        </Text>
-                    ) : null}
-                </Row>
-                {schedule.last_error && !historyShowsFailure ? (
-                    <ErrorStrip>
-                        <Stack gap="xs">
-                            <Text role="label">{t('mobileApp.schedules.card.lastFailedLabel')}</Text>
-                            <Text role="label" dir="ltr">{schedule.last_error}</Text>
-                        </Stack>
-                    </ErrorStrip>
-                ) : null}
+                </Pressable>
                 <Row gap="xs" wrap>
-                    {schedule.session_id ? (
-                        <Button size="sm"
-                            icon={MessageSquare}
-                            label={t('schedules.card.openChat')}
-                            onPress={() => onOpenChat(schedule.session_id!)}
-                        />
-                    ) : null}
                     <Button size="sm"
                         icon={Zap}
                         label={t(running ? 'schedules.card.running' : 'schedules.card.runNow')}
                         disabled={running}
                         onPress={onRunNow}
+                        testID={`schedule-run-${schedule.name}`}
                     />
                     <Button size="sm"
                         icon={schedule.status === 'active' ? Pause : Play}
                         label={t(schedule.status === 'active' ? 'schedules.card.pause' : 'schedules.card.resume')}
                         onPress={onToggleStatus}
+                        testID={`schedule-toggle-${schedule.name}`}
                     />
-                    <Button size="sm"
-                        icon={Pencil}
-                        label={t('schedules.card.edit')}
-                        accessibilityLabel={t('schedules.card.editTitle')}
-                        disabled={running}
-                        onPress={onEdit}
-                    />
-                    <Button size="sm"
-                        variant="danger"
-                        icon={Trash2}
-                        label={t('schedules.card.delete')}
-                        onPress={() => setConfirmDelete(true)}
+                    <Stack flex={1} />
+                    <IconButton
+                        icon={Ellipsis}
+                        size="sm"
+                        label={t('row.moreActions', { title: schedule.name })}
+                        onPress={() => setMenuOpen(true)}
+                        testID={`schedule-more-${schedule.name}`}
                     />
                 </Row>
                 <Disclosure title={t('schedules.history')} open={historyOpen} onToggle={() => setHistoryOpen((open) => !open)}>
@@ -187,6 +198,7 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                     </Stack>
                 </Disclosure>
             </Stack>
+            <ActionSheet open={menuOpen} onClose={() => setMenuOpen(false)} actions={menuActions} />
             <ConfirmSheet
                 open={confirmDelete}
                 title={t('schedules.delete.ask', { name: schedule.name })}
