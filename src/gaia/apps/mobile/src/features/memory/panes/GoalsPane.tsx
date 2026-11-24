@@ -8,7 +8,7 @@ import { ref, type MessageKey } from '@webui/i18n/registry';
 import type { Goal } from '@/api/client.types';
 import { useGoalAction, useGoals, useGoalStats, useGoalStoreHealth, useResetGoalStore, type GoalAction } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
-import { plainFailureText, useT } from '@/i18n/useT';
+import { plainFailureText, useLocaleCode, useT } from '@/i18n/useT';
 import { View } from 'react-native';
 
 import { Button, LoadingState, Notice, Row, Stack, Text, useTheme } from '@/ui';
@@ -27,42 +27,34 @@ const FAILURES: Record<GoalAction, MessageKey> = {
     delete: 'mem.goals.deleteFailed',
 };
 
-const PILL_MIN_WIDTH = 140;
-
-/** One of the desktop's four stat pills: a big count over its state's name, tinted by state. */
-function StatPill({ status, count }: { status: (typeof STAT_STATUSES)[number]; count: number }) {
+/** One status as an outline pill: the count in bold, the label after it, the status color on the border only. */
+export function StatPill({ status, count }: { status: (typeof STAT_STATUSES)[number]; count: number }) {
     const t = useT();
+    const locale = useLocaleCode();
     const { colors, radius, space } = useTheme();
-    const look = {
-        queued: { bg: colors.accentDim, tone: 'accent' },
-        in_progress: { bg: colors.accentYellowDim, tone: 'warning' },
-        completed: { bg: colors.accentGreenDim, tone: 'success' },
-        failed: { bg: colors.dangerDim, tone: 'danger' },
-    } as const;
-    const v = look[status];
+    const border = { queued: colors.accent, in_progress: colors.accentYellow, completed: colors.accentGreen, failed: colors.danger }[status];
+    const label = t(STATUS_KEYS[status]!);
+    const shown = label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
     return (
         <View
             accessible
-            accessibilityLabel={`${t(STATUS_KEYS[status]!)}: ${count}`}
+            accessibilityLabel={`${label}: ${count}`}
             testID={`goals-stat-${status}`}
             style={{
-                flexGrow: 1,
-                flexBasis: PILL_MIN_WIDTH,
-                paddingHorizontal: space.lg,
-                paddingVertical: space.md,
+                flexDirection: 'row',
+                alignItems: 'center',
                 gap: space.xs,
-                backgroundColor: v.bg,
+                paddingHorizontal: space.md,
+                paddingVertical: space.xs,
                 borderWidth: 1,
-                borderColor: colors.borderLight,
-                borderRadius: radius.lg,
+                borderColor: border,
+                borderRadius: radius.full,
             }}
         >
-            <Text role="title" weight="bold" tone={v.tone}>
-                {`⁦${count}⁩`}
+            <Text role="label" weight="bold">
+                {`\u2066${count}\u2069`}
             </Text>
-            <Text role="caption" weight="medium" tone={v.tone}>
-                {t(STATUS_KEYS[status]!)}
-            </Text>
+            <Text role="label">{shown}</Text>
         </View>
     );
 }
@@ -106,7 +98,7 @@ export function GoalsPane({ notify }: MemoryPaneProps) {
                     <Notice tone="warning" title={t('mem.goals.storeError')} message={health.data.error} testID="goals-store-error" />
                 )
             ) : null}
-            <Row gap="sm" wrap align="stretch" testID="goals-stats">
+            <Row gap="sm" wrap testID="goals-stats">
                 {STAT_STATUSES.map((status) => (
                     <StatPill key={status} status={status} count={stats.data?.goals[status] ?? 0} />
                 ))}

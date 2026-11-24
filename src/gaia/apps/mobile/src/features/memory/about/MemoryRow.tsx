@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
+import { View } from 'react-native';
 
 import { keepTogether, ref, type MessageKey, type Params, type Say } from '@webui/i18n/registry';
 import { dueInputValue, dueLabel, relativeDay, sourceKey, type AboutYouItem } from '@webui/utils/memoryFormat.core';
 
 import { useEditMemory } from '@/data';
 import { plainFailureText, translator, useT, type Translate } from '@/i18n/useT';
-import { Button, IconButton, Row, Stack, Text, TextField } from '@/ui';
-import { Eye, Pencil, Trash2 } from '@/ui/icons';
+import { ActionSheet, Button, IconButton, Pressable, Row, Stack, Text, TextField, type SheetAction } from '@/ui';
+import { Ellipsis, Eye, Pencil, Trash2 } from '@/ui/icons';
 
 import type { MemoryPaneProps } from '../tabs';
 import { parseWhen, whenText } from './whenInput';
@@ -43,6 +44,7 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
     const edit = useEditMemory();
     const [revealed, setRevealed] = useState(false);
     const [editing, setEditing] = useState(false);
+    const [menu, setMenu] = useState(false);
     const [draft, setDraft] = useState('');
     const [draftWhen, setDraftWhen] = useState('');
     const hidden = item.sensitive && !revealed;
@@ -81,6 +83,11 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
         );
     };
 
+    const actions: SheetAction[] = [
+        { label: t('mem.about.edit'), icon: Pencil, disabled: hidden, onPress: open, testID: `memory-about-edit-open-${item.id}` },
+        { label: t('mem.about.forget'), icon: Trash2, destructive: true, disabled: forgetting, onPress: () => onForget(item), testID: `memory-about-forget-${item.id}` },
+    ];
+
     return (
         <Stack testID={`memory-about-row-${item.id}`}>
             <Stack gap="sm" paddingX="lg" paddingY="md">
@@ -110,61 +117,52 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
                         </Row>
                     </Stack>
                 ) : (
-                    <>
-                        {hidden ? (
-                            <Row>
-                                <Button
-                                    label={t.bare('mem.about.showSensitive')}
-                                    accessibilityLabel={`${t('mem.about.showSensitive')}: ${t('mem.about.sensitiveMemory')}`}
-                                    icon={Eye}
-                                    variant="secondary"
-                                    size="sm"
-                                    onPress={() => setRevealed(true)}
-                                    testID={`memory-about-reveal-${item.id}`}
-                                />
-                            </Row>
-                        ) : (
-                            <ContentText selectable>
-                                {item.content}
-                            </ContentText>
-                        )}
-                        {due ? (
-                            <Text role="caption" tone={due.past ? 'danger' : 'muted'}>
-                                {dueText}
-                            </Text>
-                        ) : null}
-                        <Text role="caption" tone="muted">
-                            {meta}
-                        </Text>
-                        <Row gap="sm" wrap>
-                            <IconButton
-                                icon={Pencil}
-                                size="sm"
-                                variant="outlined"
-                                label={t('mem.about.editAria', { name })}
-                                disabled={hidden}
-                                onPress={open}
-                                testID={`memory-about-edit-open-${item.id}`}
-                            />
-                            <Button
-                                size="sm"
-                                variant="danger"
-                                label={t.bare('mem.about.forget')}
-                                accessibilityLabel={t('mem.about.forgetAria', { name })}
-                                icon={Trash2}
-                                disabled={forgetting}
-                                onPress={() => onForget(item)}
-                                testID={`memory-about-forget-${item.id}`}
-                            />
-                            {hidden ? (
-                                <Text role="caption" tone="muted">
-                                    {t.bare('mem.about.editHidden')}
-                                </Text>
-                            ) : null}
-                        </Row>
-                    </>
+                    <Row gap="sm" align="start">
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <Pressable accessible={false} onLongPress={() => setMenu(true)} minSize={0}>
+                                <Stack gap="sm">
+                                    {hidden ? (
+                                        <Row>
+                                            <Button
+                                                label={t.bare('mem.about.showSensitive')}
+                                                accessibilityLabel={`${t('mem.about.showSensitive')}: ${t('mem.about.sensitiveMemory')}`}
+                                                icon={Eye}
+                                                variant="secondary"
+                                                size="sm"
+                                                onPress={() => setRevealed(true)}
+                                                testID={`memory-about-reveal-${item.id}`}
+                                            />
+                                        </Row>
+                                    ) : (
+                                        <ContentText>{item.content}</ContentText>
+                                    )}
+                                    {due ? (
+                                        <Text role="caption" tone={due.past ? 'danger' : 'muted'}>
+                                            {dueText}
+                                        </Text>
+                                    ) : null}
+                                    <Text role="caption" tone="muted">
+                                        {meta}
+                                    </Text>
+                                    {hidden ? (
+                                        <Text role="caption" tone="muted">
+                                            {t.bare('mem.about.editHidden')}
+                                        </Text>
+                                    ) : null}
+                                </Stack>
+                            </Pressable>
+                        </View>
+                        <IconButton
+                            icon={Ellipsis}
+                            size="sm"
+                            label={t('row.moreActions', { title: name })}
+                            onPress={() => setMenu(true)}
+                            testID={`memory-about-more-${item.id}`}
+                        />
+                    </Row>
                 )}
             </Stack>
+            <ActionSheet open={menu} onClose={() => setMenu(false)} actions={actions} />
         </Stack>
     );
 }
