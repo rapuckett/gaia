@@ -5,6 +5,7 @@ import { connectCardProviders, hasConnectCard } from '@webui/utils/connectAccoun
 import { isAuthRequiredMessage } from '@webui/utils/connectorRetry.core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 
 import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
 import { FLAGSHIP_AGENT_ID } from '@webui/utils/newTask';
@@ -50,6 +51,7 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
     const permissionMode = usePermissionMode(sessionId);
     const queryClient = useQueryClient();
     const permission = usePermissionPrompt(sessionId);
+    const promptRearm = useRef<(() => void) | null>(null);
     const answer = useAnswerQuestion();
     const followUps = useFollowUpEvents(sessionId, stream.events);
     const stopped = useRef(false);
@@ -182,7 +184,8 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
             footerBleed
             header={<ChatHeader sessionId={sessionId} onOpenSessionPanel={() => setPanelOpen(true)} onManageDocuments={onManageDocuments} />}
             footer={
-                <>
+                // Pinned to the bottom: anything here changing height moves the approval card, so its taps wait again.
+                <View testID="chat-footer" onLayout={() => promptRearm.current?.()}>
                     <FlagshipAgentBanner />
                     <ModelRestoreNotice />
                     {actionError ? (
@@ -199,7 +202,12 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                     {connectorError ? <ConnectorRetry content={connectorError.content} providers={connectProviders} onRetry={() => tryAgain(connectorError.id)} /> : null}
                     {permission ? (
                         <Stack paddingX="gutter">
-                            <PermissionPrompt key={permission.prompt.id} {...permission} fullAccessPending={permissionMode.mode === 'full_access'} />
+                            <PermissionPrompt
+                                key={permission.prompt.id}
+                                {...permission}
+                                fullAccessPending={permissionMode.mode === 'full_access'}
+                                rearmRef={promptRearm}
+                            />
                         </Stack>
                     ) : null}
                     <QueuedMessages
@@ -239,7 +247,7 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                             </>
                         }
                     />
-                </>
+                </View>
             }
         >
             {session.isError ? (

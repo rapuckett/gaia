@@ -292,6 +292,25 @@ describe('ChatScreen', () => {
             await act(async () => hold.open());
         });
 
+        it('starts the wait again when something in the footer below the card changes height', async () => {
+            const client = permissionClient(REQUEST);
+            await mount(client);
+            await sendText('Save it');
+            await screen.findByTestId('perm-allow');
+            const still = () =>
+                act(async () => {
+                    await new Promise((resolve) => setTimeout(resolve, APPROVAL_ARM_MS + 50));
+                });
+            await still();
+            await fireEvent(screen.getByTestId('chat-footer'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 260 } } });
+            await fireEvent.press(screen.getByTestId('perm-allow'));
+            expect(client.confirmations).toEqual([]);
+            await still();
+            await fireEvent.press(screen.getByTestId('perm-allow'));
+            await waitFor(() => expect(client.confirmations).toEqual([{ session_id: CHAT, approved: true, always: false, confirm_id: 'c1' }]));
+            await act(async () => hold.open());
+        });
+
         it('notes on the waiting card that Full access starts from the next step', async () => {
             await mount(permissionClient(REQUEST));
             await sendText('Save it');

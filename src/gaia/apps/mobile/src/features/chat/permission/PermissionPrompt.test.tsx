@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { act } from 'react';
-import type { AccessibilityActionEvent } from 'react-native';
+import { Platform, type AccessibilityActionEvent } from 'react-native';
 import { KeyboardEvents } from 'react-native-keyboard-controller';
 import { createRoot } from 'test-renderer';
 
@@ -16,6 +16,7 @@ import { PermissionPrompt } from './PermissionPrompt';
 interface ButtonSeen {
     onPress: () => void;
     onAccessibilityAction?: (e: AccessibilityActionEvent) => void;
+    onAccessibilityTap?: () => void;
     accessibilityActions?: readonly { name: string }[];
     variant?: string;
 }
@@ -118,8 +119,12 @@ const settle = () =>
         jest.advanceTimersByTime(APPROVAL_ARM_MS);
     });
 const alwaysLabel = () => Object.keys(buttons).find((label) => label.startsWith('Always allow'))!;
+// VoiceOver activates through onAccessibilityTap, TalkBack through the standard activate action.
 const activate = (label: string) =>
-    act(() => buttons[label].onAccessibilityAction?.({ nativeEvent: { actionName: 'activate' } } as AccessibilityActionEvent));
+    act(() => {
+        if (Platform.OS === 'ios') buttons[label].onAccessibilityTap?.();
+        else buttons[label].onAccessibilityAction?.({ nativeEvent: { actionName: 'activate' } } as AccessibilityActionEvent);
+    });
 
 describe('PermissionPrompt entrance', () => {
     it('ignores every tap until the card has been still for the arm wait, then answers', async () => {
@@ -140,7 +145,14 @@ describe('PermissionPrompt entrance', () => {
     it('takes a screen reader activation at once, on every answer', async () => {
         const { onAnswer } = await mount(prompt({}));
         for (const label of ['Allow once', alwaysLabel(), 'Deny']) {
-            expect(buttons[label].accessibilityActions).toEqual([{ name: 'activate' }]);
+            if (Platform.OS === 'ios') {
+                // No custom action: VoiceOver would list an untranslated "activate" under Actions.
+                expect(buttons[label].accessibilityActions).toBeUndefined();
+                expect(buttons[label].onAccessibilityTap).toBeDefined();
+            } else {
+                expect(buttons[label].accessibilityActions).toEqual([{ name: 'activate' }]);
+                expect(buttons[label].onAccessibilityTap).toBeUndefined();
+            }
             activate(label);
         }
         expect(onAnswer.mock.calls).toEqual([['once'], ['always'], ['deny']]);

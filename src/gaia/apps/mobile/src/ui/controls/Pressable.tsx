@@ -41,6 +41,8 @@ export interface PressableProps {
     /** Extra screen-reader actions, e.g. what a long-press does. */
     accessibilityActions?: readonly AccessibilityActionInfo[];
     onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
+    /** iOS: VoiceOver's double tap and Full Keyboard Access's Space, in place of the simulated touch that reaches `onPress`. */
+    onAccessibilityTap?: () => void;
     /** False lets a screen reader reach the children (links) instead of reading one element. */
     accessible?: boolean;
     /** Minimum hit area in points; 48 unless a parent already guarantees it. */
@@ -75,6 +77,7 @@ export function Pressable({
     'aria-selected': ariaSelected,
     accessibilityActions,
     onAccessibilityAction,
+    onAccessibilityTap,
     accessible,
     minSize = PRESSABLE_MIN_SIZE,
     inline,
@@ -106,6 +109,7 @@ export function Pressable({
             accessible={accessible}
             accessibilityActions={accessibilityActions}
             onAccessibilityAction={onAccessibilityAction}
+            onAccessibilityTap={onAccessibilityTap}
             aria-busy={ariaBusy}
             aria-checked={ariaChecked}
             aria-disabled={!!disabled}

@@ -28,9 +28,11 @@ export interface ButtonProps {
     wrap?: boolean;
     /** What a screen reader says instead of the visible label. */
     accessibilityLabel?: string;
-    /** Screen-reader actions; an `activate` here takes the screen reader's double tap instead of `onPress`. */
+    /** Screen-reader actions; on Android an `activate` here takes TalkBack's double tap instead of `onPress`. */
     accessibilityActions?: readonly AccessibilityActionInfo[];
     onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
+    /** iOS: VoiceOver's double tap and Full Keyboard Access's Space, instead of `onPress`. */
+    onAccessibilityTap?: () => void;
     testID?: string;
 }
 
@@ -52,6 +54,7 @@ export function Button({
     accessibilityLabel,
     accessibilityActions,
     onAccessibilityAction,
+    onAccessibilityTap,
     testID,
 }: ButtonProps) {
     const { colors, radius } = useTheme();
@@ -80,6 +83,7 @@ export function Button({
                 accessibilityLabel={accessibilityLabel ?? label}
                 accessibilityActions={accessibilityActions}
                 onAccessibilityAction={onAccessibilityAction}
+                onAccessibilityTap={onAccessibilityTap}
                 aria-busy={!!busy}
                 testID={testID}
             >

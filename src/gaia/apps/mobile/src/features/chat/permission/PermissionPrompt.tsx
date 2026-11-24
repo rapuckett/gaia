@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Keyboard, useWindowDimensions, View, type AccessibilityActionEvent } from 'react-native';
+import { AccessibilityInfo, Keyboard, Platform, useWindowDimensions, View, type AccessibilityActionEvent } from 'react-native';
 import { useKeyboardState } from 'react-native-keyboard-controller';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 
@@ -65,10 +65,12 @@ export interface PermissionPromptProps {
     fullAccessPending?: boolean;
     onAnswer(choice: PermissionChoice): void;
     onExpired?(): void;
+    /** Set to the card's restart of its arm wait, for a parent whose layout can move the card (the chat's footer). */
+    rearmRef?: { current: (() => void) | null };
 }
 
-// The screen reader's double tap arrives as this action, not as a press, so it is never held back by the arm wait.
-const SCREEN_READER_ACTIVATE = [{ name: 'activate' }] as const;
+// TalkBack's double tap arrives as this action (ACTION_CLICK), not as a press, so it is never held back by the arm wait.
+const TALKBACK_ACTIVATE = [{ name: 'activate' }] as const;
 
 // Width where the buttons may sit side by side.
 const SIDE_BY_SIDE_MIN_WIDTH = 600;
@@ -401,6 +403,7 @@ export function PermissionPrompt({
     fullAccessPending = false,
     onAnswer,
     onExpired,
+    rearmRef,
 }: PermissionPromptProps) {
     const t = useT();
     const { width, height } = useWindowDimensions();
@@ -409,6 +412,13 @@ export function PermissionPrompt({
     const reduced = useReducedMotion();
     const left = useCountdown(prompt.expiresAt, prompt.timeoutSeconds);
     const arm = useApprovalArm({ keyboard: true });
+    useEffect(() => {
+        if (!rearmRef) return undefined;
+        rearmRef.current = arm.rearm;
+        return () => {
+            if (rearmRef.current === arm.rearm) rearmRef.current = null;
+        };
+    }, [rearmRef, arm.rearm]);
     const expired = left !== null && left <= 0;
 
     const expiredFired = useRef(false);
@@ -443,16 +453,28 @@ export function PermissionPrompt({
     const bodyMax = Math.max(MIN_BODY_HEIGHT, Math.round(height * BODY_HEIGHT_SHARE));
 
     // A tap that lands before the card settles was aimed at whatever was there before; it answers nothing.
-    const answerBy = (choice: PermissionChoice) => ({
-        disabled: busy,
-        onPress: () => {
-            if (!busy && arm.armed()) onAnswer(choice);
-        },
-        accessibilityActions: SCREEN_READER_ACTIVATE,
-        onAccessibilityAction: (e: AccessibilityActionEvent) => {
-            if (e.nativeEvent.actionName === 'activate' && !busy) onAnswer(choice);
-        },
-    });
+    // A screen reader's activation is aimed by focus, so it answers at once: VoiceOver (and Full Keyboard Access)
+    // through onAccessibilityTap, TalkBack through the standard activate action, which adds no custom action.
+    const answerBy = (choice: PermissionChoice) => {
+        const now = () => {
+            if (!busy) onAnswer(choice);
+        };
+        return {
+            disabled: busy,
+            onPress: () => {
+                if (arm.armed()) now();
+            },
+            ...(Platform.OS === 'ios' ? { onAccessibilityTap: now } : {}),
+            ...(Platform.OS === 'android'
+                ? {
+                      accessibilityActions: TALKBACK_ACTIVATE,
+                      onAccessibilityAction: (e: AccessibilityActionEvent) => {
+                          if (e.nativeEvent.actionName === 'activate') now();
+                      },
+                  }
+                : {}),
+        };
+    };
 
     const buttons = (
         <>
