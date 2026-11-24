@@ -188,7 +188,7 @@ describeNative('ConnectorsGallery list states', () => {
 });
 
 describeNative('ConnectorsScreen server text', () => {
-    const SENTENCE = "Your PC couldn't do that.";
+    const SENTENCE = "Something went wrong on your PC.";
     const gaia = { id: 'gaia', name: 'GAIA', namespaced_agent_id: 'gaia', description: '', source: 'builtin', conversation_starters: [], models: [], consumes_mcp_servers: true };
     const expectSplit = async (reason: string) => {
         expect((await screen.findByText(SENTENCE)).props.children).not.toContain(reason);

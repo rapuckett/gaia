@@ -26,7 +26,7 @@ describe('server text stays out of the sentence', () => {
         expect(text).not.toContain('connectors service');
         expect(text).not.toMatch(/500/);
         expect(text).toBe(translator(code)('mobileApp.error.httpNoDetail'));
-        if (code === 'en') expect(text).toBe("Your PC couldn't do that.");
+        if (code === 'en') expect(text).toBe("Something went wrong on your PC.");
     });
 
     it.each(['en', 'ar'])('a failed turn in %s gives a reason-free sentence and the PC text as detail', (code) => {
