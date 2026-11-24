@@ -49,7 +49,7 @@ function ProgramLine() {
     const t = useT();
     return (
         <Row gap="sm" align="center" wrap>
-            <Text role="caption" tone="secondary">{t('tools.program', { name: isolate('gaiacpp', 'ltr') })}</Text>
+            <Text role="caption" tone="secondary">{t('tools.program', { name: t('setup.agent.gaiacpp'), id: isolate('gaiacpp', 'ltr') })}</Text>
             <Badge label={t.bare('setup.agent.beta')} accessibilityLabel={t('setup.agent.beta')} />
         </Row>
     );

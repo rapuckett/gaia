@@ -13,6 +13,8 @@ export interface SheetEntry {
     dismissible: boolean;
     /** testID of the scrollable body, for device tests. */
     scrollTestID?: string;
+    /** While true, the body scrolls to its end whenever its content grows, so a notice added at the bottom shows above the footer. */
+    scrollToEnd?: boolean;
     /** The SheetScope that hosts it; unset for the app's own host. */
     scope?: string;
     /** The sheet whose content opened it; such a sheet shows over that one instead of waiting. */

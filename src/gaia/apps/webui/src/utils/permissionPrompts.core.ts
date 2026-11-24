@@ -15,6 +15,9 @@ export const PATH_ACCESS_TOOL = 'allow_path_access';
 /** The prompt asking whether to read a folder's CLAUDE.md, AGENTS.md and skills. Answered per folder, never "always". */
 export const PROJECT_TRUST_TOOL = 'trust_project_folder';
 
+/** How long an approval card ignores taps and clicks once it has settled, so a press meant for something else can't grant. */
+export const APPROVAL_ARM_MS = 400;
+
 function pathAccessArgs(args: unknown): { target: string | null; kind: unknown } {
   const { path, kind } = (args ?? {}) as { path?: unknown; kind?: unknown };
   return { target: typeof path === 'string' && path.trim() ? path : null, kind };

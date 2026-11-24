@@ -12,8 +12,12 @@ export function isProgressTick(event: StreamEvent): boolean {
         && (event.message ?? '').startsWith(PROGRESS_TICK_PREFIX);
 }
 
+/** Status phase for a tool approval nobody answered in time. */
+export const CONFIRM_TIMEOUT_PHASE = 'confirm_timeout';
+
 /** A status event's line for the user; the tool-list re-read is said in their language. */
 export function statusText(event: StreamEvent, t: Translate): string {
+    if (event.phase === CONFIRM_TIMEOUT_PHASE) return t('activity.confirmTimedOut');
     if (event.phase === 'loading_tools') return t('chat.loadingTools');
     if (event.phase === 'queued' && typeof event.queue_position === 'number') {
         return t('chat.status.queuedGpu', { position: isolate(String(event.queue_position), 'ltr') });
@@ -90,6 +94,8 @@ export function agentEventToStep(event: StreamEvent, stepIdRef: { current: numbe
                 label: statusText(event, t) || event.status || t('activity.working'),
                 active: event.status === 'working',
                 ...(event.status === 'warning' ? { success: false } : {}),
+                // The server's raw English line, for the Details disclosure.
+                ...(event.phase === CONFIRM_TIMEOUT_PHASE && event.message ? { detail: event.message } : {}),
                 timestamp: ts,
             };
         case 'agent_error':

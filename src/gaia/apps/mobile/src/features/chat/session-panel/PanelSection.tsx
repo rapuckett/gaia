@@ -1,9 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ComponentRef, type ReactNode } from 'react';
+import { View } from 'react-native';
 
-import { Disclosure, Text, type Tone } from '@/ui';
+import { Disclosure, Text, useSheetScroll, type Tone } from '@/ui';
 
 import { useSessionPanelStore, type PanelSectionId } from './panelStore';
 
@@ -20,7 +21,14 @@ export interface PanelSectionProps {
 export function PanelSection({ id, title, summary, summaryTone = 'muted', children }: PanelSectionProps) {
     const open = useSessionPanelStore((s) => s.sections[id]);
     const setSection = useSessionPanelStore((s) => s.setSection);
+    const request = useSessionPanelStore((s) => (s.scrollRequest?.id === id ? s.scrollRequest.seq : 0));
+    const sheet = useSheetScroll();
+    const box = useRef<ComponentRef<typeof View>>(null);
+    useEffect(() => {
+        if (request > 0) sheet?.scrollTo(box.current);
+    }, [request, sheet]);
     return (
+        <View ref={box} collapsable={false}>
         <Disclosure
             title={title}
             open={open}
@@ -37,5 +45,6 @@ export function PanelSection({ id, title, summary, summaryTone = 'muted', childr
         >
             {children}
         </Disclosure>
+        </View>
     );
 }

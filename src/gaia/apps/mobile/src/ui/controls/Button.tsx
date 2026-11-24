@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { View } from 'react-native';
+import { View, type AccessibilityActionEvent, type AccessibilityActionInfo } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Text } from '../text/Text';
 import { Icon } from './Icon';
@@ -28,6 +28,11 @@ export interface ButtonProps {
     wrap?: boolean;
     /** What a screen reader says instead of the visible label. */
     accessibilityLabel?: string;
+    /** Screen-reader actions; on Android an `activate` here takes TalkBack's double tap instead of `onPress`. */
+    accessibilityActions?: readonly AccessibilityActionInfo[];
+    onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
+    /** iOS: VoiceOver's double tap and Full Keyboard Access's Space, instead of `onPress`. */
+    onAccessibilityTap?: () => void;
     testID?: string;
 }
 
@@ -47,17 +52,20 @@ export function Button({
     shrink = true,
     wrap,
     accessibilityLabel,
+    accessibilityActions,
+    onAccessibilityAction,
+    onAccessibilityTap,
     testID,
 }: ButtonProps) {
     const { colors, radius } = useTheme();
     const largeText = useLargeText();
     const look: Record<NonNullable<ButtonProps['variant']>, { bg: string; border: string; tone: Tone }> = {
-        primary: { bg: colors.accentFill, border: colors.accentSolid, tone: 'onAccent' },
+        primary: { bg: colors.actionFill, border: colors.actionFill, tone: 'onAction' },
         secondary: { bg: colors.bgTertiary, border: size === 'sm' ? colors.border : colors.borderLight, tone: 'primary' },
         ghost: { bg: 'transparent', border: colors.border, tone: 'accent' },
         danger: { bg: colors.dangerDim, border: 'transparent', tone: 'danger' },
     };
-    const pressedBg = { primary: colors.accentSolid, secondary: colors.bgActive, ghost: colors.bgTertiary, danger: colors.dangerDim };
+    const pressedBg = { primary: colors.actionFillHover, secondary: colors.bgActive, ghost: colors.bgTertiary, danger: colors.dangerDim };
     const v = look[variant];
     return (
         <View
@@ -73,6 +81,9 @@ export function Button({
                 minSize={size === 'sm' ? 44 : undefined}
                 shape={size === 'sm' ? { radius: radius.sm } : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
+                accessibilityActions={accessibilityActions}
+                onAccessibilityAction={onAccessibilityAction}
+                onAccessibilityTap={onAccessibilityTap}
                 aria-busy={!!busy}
                 testID={testID}
             >
@@ -83,7 +94,7 @@ export function Button({
                         paddingHorizontal: size === 'sm' ? 10 : 16,
                         borderRadius: size === 'sm' ? radius.sm : radius.md,
                         borderWidth: 1,
-                        borderColor: v.border,
+                        borderColor: highlight && variant === 'primary' ? colors.actionFillHover : v.border,
                         backgroundColor: highlight ? pressedBg[variant] : v.bg,
                         alignItems: 'center',
                         justifyContent: 'center',

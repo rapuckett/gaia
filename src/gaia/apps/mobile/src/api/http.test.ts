@@ -249,6 +249,24 @@ describe('createHttpClient requests', () => {
             JSON_HEADERS,
             { scopes: ['gmail.readonly'], redirect_port: 50123 },
         ],
+        [
+            'startConnectorBrowserSignIn, adding another account',
+            (c) => c.startConnectorBrowserSignIn('google', 50123, ['gmail.readonly'], { target: { addAccount: true } }),
+            'POST',
+            '/api/connectors/google/authorize',
+            JSON_HEADERS,
+            { scopes: ['gmail.readonly'], redirect_port: 50123, add_account: true },
+        ],
+        [
+            'startConnectorBrowserSignIn, reconnecting one account',
+            (c) => c.startConnectorBrowserSignIn('google', 50123, ['gmail.readonly'], { target: { account: 'a@example.com' } }),
+            'POST',
+            '/api/connectors/google/authorize',
+            JSON_HEADERS,
+            { scopes: ['gmail.readonly'], redirect_port: 50123, account: 'a@example.com' },
+        ],
+        ['setDefaultConnectorAccount, an address encoded in the path', (c) => c.setDefaultConnectorAccount('google', 'a+b@example.com'), 'PATCH', '/api/connectors/google/accounts/a%2Bb%40example.com', JSON_HEADERS, { is_default: true }],
+        ['disconnectConnectorAccount, with no body', (c) => c.disconnectConnectorAccount('google', 'a+b@example.com'), 'DELETE', '/api/connectors/google/accounts/a%2Bb%40example.com', UI_HEADERS, undefined],
         ['completeConnectorBrowserSignIn', (c) => c.completeConnectorBrowserSignIn('f1', 'c', 's'), 'POST', '/api/connectors/flows/f1/complete', JSON_HEADERS, { code: 'c', state: 's' }],
         ['cancelConnectorFlow', (c) => c.cancelConnectorFlow('f1'), 'DELETE', '/api/connectors/_flows/f1', UI_HEADERS, undefined],
         ['connectProvider, keeping the PC\'s key', (c) => c.connectProvider('fireworks'), 'POST', '/api/providers/fireworks/connect', JSON_HEADERS, {}],
@@ -284,6 +302,12 @@ describe('createHttpClient requests', () => {
             ['DELETE', `${BASE}/api/connectors/google`],
         ]);
         expect(outcome).toEqual(event.payload);
+    });
+
+    it('disconnectConnector with all: deletes with ?all=true', async () => {
+        const { fetch, calls } = createRecordingFetch((call) => (call.method === 'DELETE' ? textResponse('', 204) : streamResponse([])));
+        await createHttpClient({ baseUrl: BASE, fetch }).disconnectConnector('google', { all: true });
+        expect(calls.filter((c) => c.method === 'DELETE').map((c) => c.url)).toEqual([`${BASE}/api/connectors/google?all=true`]);
     });
 
     it('watchConnectorSignIn with a flow: skips another flow\'s failure and reports this one replaced', async () => {

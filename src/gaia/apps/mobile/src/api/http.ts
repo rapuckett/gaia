@@ -47,6 +47,7 @@ import type {
     ConnectorGrants,
     DeviceChangeList,
     ConnectorList,
+    ConnectorAccount,
     ConnectorRow,
     DisconnectOutcome,
     ContextUsageResult,
@@ -131,6 +132,7 @@ import type {
     Settings,
     SkillList,
     SpeechModel,
+    ImageSettings,
     SpeechSettings,
     SpendingReport,
     ChatSpending,
@@ -150,6 +152,7 @@ import {
     connectorActivationPath,
     connectorActivationsPath,
     connectorAuthorizeDevicePath,
+    connectorAccountPath,
     connectorAuthorizePath,
     connectorFlowCompletePath,
     connectorFlowPath,
@@ -430,8 +433,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         return readJson<T>(await request('POST', path, body, signal), path);
     }
 
-    async function patchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-        return readJson<T>(await request('PATCH', path, undefined, signal), path);
+    async function patchJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+        return readJson<T>(await request('PATCH', path, body, signal), path);
     }
 
     async function deleteJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -803,7 +806,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         toggleSessionPrivate(sessionId, options) {
-            return patchJson<Session>(sessionPrivatePath(sessionId), options?.signal);
+            return patchJson<Session>(sessionPrivatePath(sessionId), undefined, options?.signal);
         },
 
         async detachDocument(sessionId, docId, options) {
@@ -965,7 +968,17 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         startConnectorBrowserSignIn(connectorId, redirectPort, scopes, options) {
-            return postJson<ConnectorAuthorizeResponse>(connectorAuthorizePath(connectorId), { scopes, redirect_port: redirectPort }, options?.signal);
+            const target = options?.target;
+            return postJson<ConnectorAuthorizeResponse>(
+                connectorAuthorizePath(connectorId),
+                {
+                    scopes,
+                    redirect_port: redirectPort,
+                    ...(target && 'addAccount' in target ? { add_account: true } : {}),
+                    ...(target && 'account' in target ? { account: target.account } : {}),
+                },
+                options?.signal,
+            );
         },
 
         completeConnectorBrowserSignIn(flowId, code, state, options) {
@@ -995,12 +1008,21 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             options?.signal?.addEventListener('abort', stop);
             try {
                 const events = await openConnectorEvents(listen.signal);
-                await request('DELETE', connectorPath(connectorId), undefined, options?.signal);
+                await request('DELETE', connectorPath(connectorId, options), undefined, options?.signal);
                 return events ? await readDisconnectOutcome(events, connectorId) : null;
             } finally {
                 options?.signal?.removeEventListener('abort', stop);
                 stop();
             }
+        },
+
+        async disconnectConnectorAccount(connectorId, accountId, options) {
+            await request('DELETE', connectorAccountPath(connectorId, accountId), undefined, options?.signal);
+        },
+
+        async setDefaultConnectorAccount(connectorId, accountId, options) {
+            const path = connectorAccountPath(connectorId, accountId);
+            return readJson<{ accounts: ConnectorAccount[] }>(await request('PATCH', path, { is_default: true }, options?.signal), path);
         },
 
         listAgentMcps(options) {
@@ -1061,6 +1083,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         parseSchedule(input, timezone, options) {
             return postJson<ParsedSchedule>(ENDPOINTS.scheduleParse, { input, timezone }, options?.signal);
+        },
+
+        editSchedule(name, request, options) {
+            return patchJson<Schedule>(schedulePath(name), request, options?.signal);
         },
 
         updateScheduleStatus(name, status, options) {
@@ -1158,6 +1184,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getMemoryStats(options) {
             return getJson<MemoryStats>(ENDPOINTS.memoryStats, options?.signal);
+        },
+
+        getImageSettings(options) {
+            return getJson<ImageSettings>(ENDPOINTS.imageSettings, options?.signal);
+        },
+
+        updateImageSettings(change, options) {
+            return putJson<ImageSettings>(ENDPOINTS.imageSettings, change, options?.signal);
         },
 
         getSpeechSettings(options) {

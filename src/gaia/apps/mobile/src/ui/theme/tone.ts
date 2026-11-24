@@ -4,7 +4,7 @@
 import type { Theme } from './ThemeProvider';
 
 export type Tone =
-    'primary' | 'secondary' | 'muted' | 'inverse' | 'accent' | 'danger' | 'success' | 'warning' | 'onAccent';
+    'primary' | 'secondary' | 'muted' | 'inverse' | 'accent' | 'danger' | 'success' | 'warning' | 'onAccent' | 'onAction';
 
 export function toneColor(colors: Theme['colors'], tone: Tone): string {
     switch (tone) {
@@ -26,5 +26,7 @@ export function toneColor(colors: Theme['colors'], tone: Tone): string {
             return colors.accentYellow;
         case 'onAccent':
             return colors.accentFillText;
+        case 'onAction':
+            return colors.actionFillText;
     }
 }

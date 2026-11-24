@@ -8,6 +8,8 @@ import path from 'node:path';
 
 import { expect, type Page, test } from '@playwright/test';
 
+import { APPROVAL_ARM_MS } from '../../webui/src/utils/permissionPrompts.core';
+
 import { type Backend, OUT_DIR, type ScriptEntry, startBackend } from './harness';
 
 let backend: Backend | null = null;
@@ -21,6 +23,12 @@ const writeCall = (file: string): ScriptEntry => ({ tool_call: { name: 'write_fi
 
 // The new-chat screen stays mounted under the open chat, so each composer test id matches twice.
 const visible = (page: Page, testId: string) => page.getByTestId(testId).locator('visible=true');
+
+// The approval card ignores taps until it has been still this long.
+async function settled(page: Page, button: ReturnType<Page['getByRole']>) {
+    await expect(button).toBeVisible();
+    await page.waitForTimeout(APPROVAL_ARM_MS);
+}
 
 async function send(page: Page, text: string) {
     await visible(page, 'composer-input').fill(text);
@@ -42,7 +50,9 @@ for (const answer of ['Allow once', 'Deny'] as const) {
         backend = await startBackend([writeCall(target), 'The write is settled.', 'Extra reply.']);
         await page.goto('/new');
         await send(page, 'Write the file');
-        await page.getByRole('button', { name: answer }).click();
+        const button = page.getByRole('button', { name: answer });
+        await settled(page, button);
+        await button.click();
         await expect(page.getByText('The write is settled.')).toBeVisible();
         await expect(visible(page, 'composer-stop')).toHaveCount(0);
         if (answer === 'Allow once') expect(fs.readFileSync(target, 'utf8')).toBe('hello');
@@ -61,6 +71,7 @@ test('a message sent during a reply goes out after it', async ({ page }) => {
     await expect(allow).toBeVisible();
     await send(page, 'Second message');
     await expect(page.getByText('Second reply done.')).toHaveCount(0);
+    await settled(page, allow);
     await allow.click();
     await expect(page.getByText('First reply done.')).toBeVisible();
     await expect(page.getByText('Second reply done.')).toBeVisible();

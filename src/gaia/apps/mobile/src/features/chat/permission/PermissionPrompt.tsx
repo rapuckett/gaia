@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Keyboard, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Keyboard, Platform, useWindowDimensions, View, type AccessibilityActionEvent } from 'react-native';
 import { useKeyboardState } from 'react-native-keyboard-controller';
-import Animated, { FadeInDown, FadeOut, FadeOutDown, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 
 import { cmdReading, decodedPowerShell } from '@webui/components/shownText';
 import { isolate, pluralKey, type Say } from '@webui/i18n/registry';
@@ -50,6 +50,7 @@ import { dirProp } from '@/platform/dirProp';
 import { Button, Disclosure, HScroll, Icon, Notice, Pressable, Row, ScrollBox, Stack, Surface, Text, useTheme } from '@/ui';
 import { ShieldQuestion } from '@/ui/icons';
 
+import { useApprovalArm } from './useApprovalArm';
 import { useCountdown } from './useCountdown';
 
 export type PermissionChoice = 'once' | 'always' | 'deny';
@@ -64,7 +65,12 @@ export interface PermissionPromptProps {
     fullAccessPending?: boolean;
     onAnswer(choice: PermissionChoice): void;
     onExpired?(): void;
+    /** Set to the card's restart of its arm wait, for a parent whose layout can move the card (the chat's footer). */
+    rearmRef?: { current: (() => void) | null };
 }
+
+// TalkBack's double tap arrives as this action (ACTION_CLICK), not as a press, so it is never held back by the arm wait.
+const TALKBACK_ACTIVATE = [{ name: 'activate' }] as const;
 
 // Width where the buttons may sit side by side.
 const SIDE_BY_SIDE_MIN_WIDTH = 600;
@@ -385,7 +391,8 @@ function CallDetails({ facts, question }: { facts: CallFacts; question: string }
 /**
  * GAIA's permission question, inline above the composer. It is not dismissible and the
  * back gesture never answers it: only a button here does, and `busy` disables all of them.
- * The caller keys it by `prompt.id`, because the deadline is fixed when it mounts.
+ * A tap counts only once the card has sat still for APPROVAL_ARM_MS; a screen reader's activation counts at once.
+ * The caller keys it by `prompt.id`, because the deadline and the arm wait are fixed when it mounts.
  */
 export function PermissionPrompt({
     prompt,
@@ -396,6 +403,7 @@ export function PermissionPrompt({
     fullAccessPending = false,
     onAnswer,
     onExpired,
+    rearmRef,
 }: PermissionPromptProps) {
     const t = useT();
     const { width, height } = useWindowDimensions();
@@ -403,6 +411,14 @@ export function PermissionPrompt({
     const typing = useKeyboardState((k) => k.isVisible);
     const reduced = useReducedMotion();
     const left = useCountdown(prompt.expiresAt, prompt.timeoutSeconds);
+    const arm = useApprovalArm({ keyboard: true });
+    useEffect(() => {
+        if (!rearmRef) return undefined;
+        rearmRef.current = arm.rearm;
+        return () => {
+            if (rearmRef.current === arm.rearm) rearmRef.current = null;
+        };
+    }, [rearmRef, arm.rearm]);
     const expired = left !== null && left <= 0;
 
     const expiredFired = useRef(false);
@@ -436,35 +452,60 @@ export function PermissionPrompt({
     const wide = width >= SIDE_BY_SIDE_MIN_WIDTH;
     const bodyMax = Math.max(MIN_BODY_HEIGHT, Math.round(height * BODY_HEIGHT_SHARE));
 
+    // A tap that lands before the card settles was aimed at whatever was there before; it answers nothing.
+    // A screen reader's activation is aimed by focus, so it answers at once: VoiceOver (and Full Keyboard Access)
+    // through onAccessibilityTap, TalkBack through the standard activate action, which adds no custom action.
+    const answerBy = (choice: PermissionChoice) => {
+        const now = () => {
+            if (!busy) onAnswer(choice);
+        };
+        return {
+            disabled: busy,
+            onPress: () => {
+                if (arm.armed()) now();
+            },
+            ...(Platform.OS === 'ios' ? { onAccessibilityTap: now } : {}),
+            ...(Platform.OS === 'android'
+                ? {
+                      accessibilityActions: TALKBACK_ACTIVATE,
+                      onAccessibilityAction: (e: AccessibilityActionEvent) => {
+                          if (e.nativeEvent.actionName === 'activate') now();
+                      },
+                  }
+                : {}),
+        };
+    };
+
     const buttons = (
         <>
             <Button
                 label={allowLabel}
-                variant={suggestAlways ? 'secondary' : 'primary'}
+                variant="primary"
                 full={!wide}
                 wrap
-                disabled={busy}
-                onPress={() => onAnswer('once')}
+                {...answerBy('once')}
                 testID="perm-allow"
             />
             {scope ? (
                 <Button
                     label={t.compose((say) => say('prompt.alwaysAllow', { scope: shortScope(scopeIn(say)) }))}
-                    variant={suggestAlways ? 'primary' : 'secondary'}
+                    // A lasting grant stays outlined even when suggested, as on the desktop: only the hint suggests it.
+                    variant="secondary"
                     full={!wide}
                     wrap
-                    disabled={busy}
-                    onPress={() => onAnswer('always')}
+                    {...answerBy('always')}
                     testID="perm-always"
                 />
             ) : null}
-            <Button label={t('prompt.deny')} variant="secondary" full={!wide} wrap disabled={busy} onPress={() => onAnswer('deny')} testID="perm-deny" />
+            <Button label={t('prompt.deny')} variant="secondary" full={!wide} wrap {...answerBy('deny')} testID="perm-deny" />
         </>
     );
 
-    // No entering under reduced motion: its single frame can be dropped on Android (Reanimated 4.7.1), leaving the view at opacity 0.
+    // Fade only, so the buttons sit where they land from the first frame. No entering under reduced motion: its single
+    // frame can be dropped on Android (Reanimated 4.7.1), leaving the view at opacity 0. The footer is pinned to the
+    // bottom, so the card changing size (an error below the buttons, a rotation) moves them: that starts the wait again.
     return (
-        <Animated.View entering={reduced ? undefined : FadeInDown} exiting={reduced ? FadeOut : FadeOutDown}>
+        <Animated.View entering={reduced ? undefined : FadeIn} exiting={FadeOut} onLayout={arm.rearm}>
             <Surface tone="card" radius="lg" padding="lg" border="accent" role="alertdialog" accessibilityLabel={heading} testID="perm-card">
                 <Stack gap="md">
                     <Row gap="sm" align="start">

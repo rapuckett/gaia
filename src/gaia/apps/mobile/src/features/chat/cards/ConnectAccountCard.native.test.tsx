@@ -118,6 +118,33 @@ describeNative('Google in the chat on a paired phone', () => {
         expect(screen.queryByText(/Connect your account on your PC/)).toBeNull();
     });
 
+    it('offers to reconnect the account that failed, and another account beside it, each with its own target', async () => {
+        const accounts = [
+            { account_id: 'id-a', email: 'avery@example.com', status: 'ok' as const, is_default: true },
+            { account_id: 'id-b', email: 'blake@example.com', status: 'reauth_required' as const, is_default: false },
+        ];
+        const { client, wrapper } = setup({ connectors: [{ ...google, configured: true, accounts } as ConnectorRow], browserSignInState: state }, loopbackDeps(listener));
+        const card = { kind: 'connect_account', providers: ['google'], reconnect: ['google'], account: { google: 'id-b' } };
+        await render(<ConnectAccountCard data={card} />, { wrapper });
+        expect(screen.queryByText(/Connect Google|Google is connected/)).toBeNull();
+        expect(await screen.findByText('Use a different account')).toBeTruthy();
+        await fireEvent.press(await screen.findByText(/Reconnect .*blake@example.com/));
+        expect(await screen.findByTestId('browser-sign-in-block')).toBeTruthy();
+        expect(client.browserSignIns.at(-1)?.target).toEqual({ account: 'id-b' });
+    });
+
+    it('adds another account from the card with the provider picker', async () => {
+        const accounts = [
+            { account_id: 'id-a', email: 'avery@example.com', status: 'ok' as const, is_default: true },
+            { account_id: 'id-b', email: 'blake@example.com', status: 'ok' as const, is_default: false },
+        ];
+        const { client, wrapper } = setup({ connectors: [{ ...google, configured: true, accounts } as ConnectorRow], browserSignInState: state }, loopbackDeps(listener));
+        await render(<ConnectAccountCard data={{ kind: 'connect_account', providers: ['google'] }} />, { wrapper });
+        await fireEvent.press(await screen.findByText('Use a different account'));
+        expect(await screen.findByTestId('browser-sign-in-block')).toBeTruthy();
+        expect(client.browserSignIns.at(-1)?.target).toEqual({ addAccount: true });
+    });
+
     it('signs in with the phone browser from the email block', async () => {
         const { client, wrapper } = setup({ connectors: [google], browserSignInState: state }, loopbackDeps(listener));
         await render(<EmailConnect content="NOT_CONNECTED: google is not currently connected." />, { wrapper });
