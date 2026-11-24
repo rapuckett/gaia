@@ -24,6 +24,7 @@ export type SettingsSection =
     | 'skills'
     | 'connectors'
     | 'messaging'
+    | 'devices'
     | 'automations'
     | 'memory'
     | 'privacy'

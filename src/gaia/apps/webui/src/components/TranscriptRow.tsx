@@ -59,6 +59,7 @@ export const TranscriptRow = memo(function TranscriptRow({
         && !msg.stopState && !msg.failed && !isErrorContent(msg.content);
     const canChange = !busy && !unsent && msg.role === 'user' && !readOnly;
     const model = msg.stats?.model ?? answeredBy;
+    const serverDown = msg.failure === 'model_server_down' && isLast && !busy;
     return (
         <div className={className} data-message-id={msg.id} data-role={msg.role}>
             {notice && <HistoryNotice text={notice} />}
@@ -85,8 +86,9 @@ export const TranscriptRow = memo(function TranscriptRow({
                 onContinue={canTryAgain && stopped ? onContinue : undefined}
                 latest={msg.role === 'assistant' && isLast}
                 latencyMs={latencyMs}
+                fixShownBelow={serverDown}
             />
-            {msg.failure === 'model_server_down' && isLast && !busy && <ModelServerDownNotice />}
+            {serverDown && <ModelServerDownNotice />}
             {msg.failed === true && msg.failure !== 'model_server_down' && canTryAgain && (
                 <ChatAgentRecovery key={msg.id} onTryAgain={() => onTryAgain(msg)} />
             )}

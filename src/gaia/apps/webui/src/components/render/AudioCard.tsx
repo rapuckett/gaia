@@ -4,45 +4,11 @@
 import { useState } from 'react';
 import { useT } from '../../i18n/useT';
 import { UnsupportedCard } from './UnsupportedCard';
-import { isOptionalString } from './primitiveShared';
 import { resolveMediaSrc } from './mediaSrc';
+import { formatDuration, isAudioPayload } from '../../utils/renderCards.core';
 import { visibleName } from '../CalendarApproval';
 
-/** Audio GAIA generated, played from `/api/media/audio/<name>` only. */
-interface AudioPayload {
-    src: string;
-    caption?: string;
-    path?: string;
-    duration_seconds?: number;
-    /** Where the user's own copy went; shown as text, never opened from here. */
-    saved_to?: string;
-    /** The listening script a dictation was read from. */
-    script_path?: string;
-}
-
-function isAudioPayload(value: unknown): value is AudioPayload {
-    if (!value || typeof value !== 'object') return false;
-    const v = value as Record<string, unknown>;
-    return (
-        typeof v.src === 'string' &&
-        resolveMediaSrc('audio', v.src) !== null &&
-        isOptionalString(v.caption) &&
-        isOptionalString(v.path) &&
-        isOptionalString(v.saved_to) &&
-        isOptionalString(v.script_path) &&
-        (v.duration_seconds === undefined ||
-            (typeof v.duration_seconds === 'number' &&
-                Number.isFinite(v.duration_seconds) &&
-                v.duration_seconds >= 0))
-    );
-}
-
-export function formatDuration(seconds: number): string {
-    const total = Math.round(seconds);
-    const m = Math.floor(total / 60);
-    const s = total % 60;
-    return `${m}:${String(s).padStart(2, '0')}`;
-}
+export { formatDuration } from '../../utils/renderCards.core';
 
 export function AudioCard({ data }: { data: unknown }) {
     const t = useT();

@@ -3,8 +3,8 @@
 
 import { enMessages } from '../i18n/locales/en';
 import { ref, type MessageKey, type Param } from '../i18n/registry';
-import type { Translate } from '../i18n/useT';
-import { placeInLine } from './chatAlerts';
+import type { Translate } from '../i18n/translator';
+import { placeInLine } from './chatAlerts.core';
 
 let toolActions: Map<string, MessageKey> | null = null;
 

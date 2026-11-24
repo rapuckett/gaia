@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Translate } from '../i18n/useT';
+import type { Translate } from '../i18n/translator';
 
 /**
  * Why a document failed when the model server, not the file, was the problem,

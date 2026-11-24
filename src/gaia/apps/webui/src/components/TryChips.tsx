@@ -4,7 +4,7 @@
 import { ArrowUpRight, ChefHat, Code, FileText, History, ListChecks, Mail, Receipt, ScrollText, Search } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import './StartCards.css';
-import { cardText } from './StartCards';
+import { cardText } from './startCardText';
 import { useT } from '../i18n/useT';
 import type { MessageKey } from '../i18n/registry';
 import type { StartCard } from '../types';

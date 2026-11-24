@@ -70,7 +70,7 @@ import { isPlaceholderTitle, shownTitle } from '../utils/sessionTitle';
 import { laterTurns, lastSentMessage } from '../utils/editLast';
 import { addDroppedFiles, showAddedDocuments } from '../utils/chatDocuments';
 import { requestErrorParam } from '../utils/requestErrors';
-import { MAX_SESSION_TITLE_CHARS, STARTING_REASON } from '../utils/constants';
+import { MAX_SESSION_TITLE_CHARS, RECONNECTING_PHASE, STARTING_REASON } from '../utils/constants';
 import { scrollBehavior } from '../utils/motion';
 import { setVisibleInterval } from '../utils/visibleInterval';
 import { useChatDraft } from '../hooks/useSavedDraft';
@@ -78,15 +78,14 @@ import { followSlideEvent, settleSlideDraft, SLIDE_PREVIEW_ENABLED } from '../st
 import { chatDraftKey, clearSavedDraft } from '../utils/savedDraft';
 import { useOpeningMessage } from '../hooks/useOpeningMessage';
 import { getT, useT } from '../i18n/useT';
+import { STOP_GRACE_MS } from '../utils/turnEnding.core';
 
 /** Events that only come after the agent got past a permission prompt. */
 const RESOLVES_PROMPTS = new Set(['tool_start', 'tool_end', 'tool_result']);
-const RECONNECTING_PREFIX = 'Connection lost. Reconnecting';
 /** Same as ANSWER_CHECK_PHASE in sse_handler.py: a check's reply replaces the draft answer. */
 const ANSWER_CHECK_PHASE = 'answer_check';
 
-/** How long Stop waits for the server's closing `done` before the client closes the turn itself. */
-export const STOP_GRACE_MS = 15_000;
+export { STOP_GRACE_MS };
 /** How long Try again waits on the status before saying GAIA is still starting. */
 export const RESEND_STATUS_LIMIT_MS = 10_000;
 
@@ -607,7 +606,10 @@ export function ChatView({ sessionId }: ChatViewProps) {
         stepIdRef.current = 0;
         toolOccurredRef.current = false;
         if (reconnect) {
-            useChatStore.getState().setLiveStatus(`${RECONNECTING_PREFIX} (attempt ${reconnect} of ${MAX_STREAM_RECONNECTS})…`);
+            useChatStore.getState().setLiveStatus(
+                getT()('live.reconnectingStream', { attempt: reconnect, max: MAX_STREAM_RECONNECTS }),
+                RECONNECTING_PHASE,
+            );
         }
 
         log.stream.info('Starting agent stream...');
@@ -702,7 +704,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
             onConnected: () => {
                 if (isStale()) return;
                 const store = useChatStore.getState();
-                if (store.liveStatus === api.SEND_WAITING_NOTICE_TEXT || store.liveStatus?.startsWith(RECONNECTING_PREFIX)) {
+                if (store.liveStatus === api.SEND_WAITING_NOTICE_TEXT || store.livePhase === RECONNECTING_PHASE) {
                     store.setLiveStatus(null);
                 }
             },
@@ -1046,6 +1048,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
                         stopState,
                         historyNotice,
                         libraryNotices: event.library_notices,
+                        failed: event.failed === true || undefined,
                         failure: event.failed ? event.failure : undefined,
                     };
                     if (historyNotice) historyNotices.set(assistantMsg.id, historyNotice);
@@ -1154,7 +1157,10 @@ export function ChatView({ sessionId }: ChatViewProps) {
                     const attempt = ++reconnectsRef.current;
                     const delay = RECONNECT_DELAYS_MS[attempt - 1] ?? 0;
                     log.chat.warn(`Stream for session=${sessionId} lost (${err.name}); reconnecting in ${delay}ms (${attempt}/${MAX_STREAM_RECONNECTS})`);
-                    useChatStore.getState().setLiveStatus(`${RECONNECTING_PREFIX} (attempt ${attempt} of ${MAX_STREAM_RECONNECTS})…`);
+                    useChatStore.getState().setLiveStatus(
+                        getT()('live.reconnectingStream', { attempt, max: MAX_STREAM_RECONNECTS }),
+                        RECONNECTING_PHASE,
+                    );
                     const reattach = () => {
                         reconnectTimerRef.current = null;
                         if (!mountedRef.current || isStale() || stopRequestedRef.current) return;
@@ -1196,7 +1202,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
                         agentSteps: steps.length > 0 ? steps : undefined,
                         cards: cardsSnapshot.length > 0 ? cardsSnapshot : undefined,
                         stopState: 'stopped',
-                        stopError: err.message || 'Unknown error',
+                        stopError: err.message || getT()('chat.unknownError'),
                     });
                     // The server persisted its own row for this turn; don't let the poll swap ours out.
                     lastMsgCountRef.current = useChatStore.getState().messages.length;
@@ -1632,7 +1638,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
     const latencyByMsgId = useMemo(() => answerLatencies(messages), [messages]);
 
     const composerBlocked = retiredAgent
-        ? `This chat used the retired "${retiredAgent}" agent and is read-only. Start a new chat.`
+        ? t('chat.retiredReadOnly', { agent: retiredAgent })
         : isStarting(systemStatus)
             ? STARTING_REASON
             : null;
@@ -1644,7 +1650,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            aria-label={shownTitle(session?.title) || 'Chat'}
+            aria-label={shownTitle(session?.title) || t('chat.label')}
         >
             <TurnAnnouncer busy={busy} />
             <header className="task-header">
@@ -1662,7 +1668,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
                             }}
                             {...CLAIMS_ESCAPE}
                             autoFocus
-                            aria-label="Chat title"
+                            aria-label={t('chat.titleLabel')}
                             dir="auto"
                         />
                     ) : (

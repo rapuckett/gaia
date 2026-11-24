@@ -27,6 +27,7 @@ import { useChatStore } from './stores/chatStore';
 import { useUiAuthStore } from './stores/uiAuthStore';
 import { useModelStore } from './stores/modelStore';
 import { useNotificationStore } from './stores/notificationStore';
+import { handleDeviceEvent, useDeviceStore } from './stores/deviceStore';
 import { useScheduleStore } from './stores/scheduleStore';
 import { useGoalHealthStore } from './stores/goalHealthStore';
 import { useTrayBridge } from './hooks/useTrayBridge';
@@ -45,6 +46,8 @@ import { getSessionHash } from './utils/format';
 import { lastSessionTarget, readUrlTarget, rememberLastSession, resolveUrlNavTarget } from './utils/sessionNav';
 import { NEW_CHAT_DRAFT_KEY, chatDraftKey, clearSavedDraft, readSavedDraft, writeSavedDraft } from './utils/savedDraft';
 import { getApiBase } from './utils/apiBase';
+import { NEW_CHAT_TITLE } from './utils/constants';
+import { requestErrorParam } from './utils/requestErrors';
 import { followBackendLifecycle, resyncBackend, useBackendStore } from './stores/backendStore';
 import { cleanupAbandonedDraft, isAbandonedDraft } from './utils/sessionCleanup';
 import { FLAGSHIP_AGENT_ID, FlagshipMissing, hasFlagshipAgent, isFlagshipMissingError } from './utils/newTask';
@@ -404,7 +407,7 @@ function App() {
             slowCount.current = 0;
             slowSince.current = null;
             setBackendSlow(false);
-            setBackendError(`HTTP ${outcome.httpStatus}: ${outcome.message}`);
+            setBackendError(getT()('banner.httpError', { status: outcome.httpStatus, message: outcome.message }));
             setBackendConnected(true);
             return;
         }
@@ -548,6 +551,9 @@ function App() {
         };
     }, [setCurrentSession, setMessages]);
 
+    // Whether paired devices exist for this window: their section and indicator show only on the PC with pairing on.
+    useEffect(() => { void useDeviceStore.getState().refresh(); }, []);
+
     // Another client (MCP bridge) can ask this window to show a chat.
     useEffect(() => {
         let es: EventSource | null = null;
@@ -566,6 +572,7 @@ function App() {
                     log.api.warn('Malformed session event', err);
                     return;
                 }
+                if (handleDeviceEvent(data)) return;
                 if (data.type === 'set_active_session' && data.session_id
                     && data.session_id !== useChatStore.getState().currentSessionId) {
                     setCurrentSession(data.session_id);
@@ -610,7 +617,7 @@ function App() {
         let session;
         try {
             session = await api.createSession({
-                title: 'New chat',
+                title: NEW_CHAT_TITLE,
                 agent_type: FLAGSHIP_AGENT_ID,
                 document_ids: store.draftDocumentIds,
                 private: store.draftPrivate,
@@ -655,10 +662,7 @@ function App() {
         setMessages([]);
         setDraftText('');
         if (modeError) {
-            setCreateError(
-                `The chat was created, but its permission mode could not be set, so your message was not sent${
-                    session.private ? '' : " — it is in the chat's box"}: ${modeError instanceof Error ? modeError.message : modeError}`,
-            );
+            setCreateError(getT()(session.private ? 'newChat.modeFailed' : 'newChat.modeFailedKept', { error: requestErrorParam(modeError) }));
             return false;
         }
         store.resetDraftPermissionMode();
@@ -844,7 +848,7 @@ function App() {
             else setTunnelActive(true);
         } catch (err) {
             setTunnelSetup(null);
-            setTunnelError(err instanceof Error ? err.message : 'Could not start mobile access');
+            setTunnelError(err instanceof Error ? err.message : getT()('mobile.startFailed'));
         }
     }, [tunnelActive]);
 
@@ -854,7 +858,7 @@ function App() {
             setTunnelActive(false);
             setShowMobileAccess(false);
         } catch (err) {
-            setTunnelError(err instanceof Error ? err.message : 'Could not stop mobile access');
+            setTunnelError(err instanceof Error ? err.message : getT()('mobile.stopFailed'));
         }
     }, []);
 
