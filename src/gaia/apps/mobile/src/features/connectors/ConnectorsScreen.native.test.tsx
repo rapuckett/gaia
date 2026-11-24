@@ -88,7 +88,7 @@ describeNative('ConnectorsScreen OAuth account', () => {
 
     it('says when the provider did not confirm the revoke after a disconnect', async () => {
         const connected = { ...microsoft, configured: true, account_id: 'me@example.com' } as ConnectorRow;
-        const { queryClient, wrap } = setup([connected], { revoke_supported: true, revoked_remotely: false, revoke_error: 'timeout' });
+        const { queryClient, wrap } = setup([connected], { revoke_supported: true, revoked_remotely: false, revoke_error: 'timeout', revoke_attempted: true });
         await render(<ConnectorsScreen />, { wrapper: wrap });
         fireEvent.press(await screen.findByLabelText('Microsoft'));
         fireEvent.press(await screen.findByLabelText('Disconnect'));

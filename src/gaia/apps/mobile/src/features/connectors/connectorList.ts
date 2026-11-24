@@ -176,11 +176,8 @@ export function disconnectNotice(outcome: DisconnectOutcome | null, connector: C
     if (outcome === null) return connector.type === 'oauth_pkce' ? t('mobileApp.connectors.revokeUnreported') : null;
     if (outcome.nothing_stored) return t('settings.connectors.nothingStored');
     if (!('revoke_supported' in outcome)) return null;
-    if (outcome.revoke_supported) {
-        return outcome.revoked_remotely
-            ? null
-            : t('settings.connectors.notRevoked', { reason: String(outcome.revoke_error ?? t('settings.advanced.unknown')) });
-    }
+    if (outcome.revoke_supported && outcome.revoked_remotely) return null;
+    if (outcome.revoke_attempted) return t('settings.connectors.notRevoked', { reason: String(outcome.revoke_error ?? t('settings.advanced.unknown')) });
     if (outcome.revoke_error) return t('settings.connectors.localOnly', { reason: String(outcome.revoke_error) });
     return t('settings.connectors.noRevokeApi');
 }

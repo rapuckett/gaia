@@ -89,8 +89,13 @@ describe('disconnectNotice', () => {
         const stored = { revoke_supported: true, revoked_remotely: false, nothing_stored: true };
         expect(disconnectNotice(stored, connector, t)).toBe(t('settings.connectors.nothingStored'));
     });
+    it('says an unreadable sign-in was removed locally, not that nothing was stored', () => {
+        const unreadable = { revoke_supported: true, revoked_remotely: false, revoke_attempted: false, revoke_error: 'To revoke it, remove GAIA at https://myaccount.google.com/permissions' };
+        expect(disconnectNotice(unreadable, connector, t)).toBe(t('settings.connectors.localOnly', { reason: unreadable.revoke_error }));
+        expect(disconnectNotice(unreadable, connector, t)).not.toBe(t('settings.connectors.nothingStored'));
+    });
     it('keeps a failed revoke on its own wording', () => {
-        const failed = { revoke_supported: true, revoked_remotely: false, revoke_error: 'invalid_grant' };
+        const failed = { revoke_supported: true, revoked_remotely: false, revoke_error: 'invalid_grant', revoke_attempted: true };
         expect(disconnectNotice(failed, connector, t)).toBe(t('settings.connectors.notRevoked', { reason: 'invalid_grant' }));
         expect(disconnectNotice(failed, connector, t)).not.toBe(t('settings.connectors.nothingStored'));
     });

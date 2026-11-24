@@ -24,7 +24,7 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * (`#tap=device-sign-in-microsoft` shows the code), `codeFailed` (the same tap, then the failure).
  * CON-02: `many` (8 connectors, so the search field shows). CON-11: `disconnected` and `revoked` open Microsoft Personal;
  * `#tap=connector-disconnect-microsoft,connector-disconnect-confirm`: `disconnected` answers that the provider has no revoke API, `revoked`
- * that the provider did not confirm the revoke (reason on the notice); `nothingStored` (the same tap) that the PC held no sign-in to remove. CON-09: `oauthSetup` opens Google's first-time setup sheet. CON-10: `oauthClient`
+ * that the provider did not confirm the revoke (reason on the notice); `nothingStored` (the same tap) that the PC held no sign-in to remove, `unreadable` that it could not read the stored sign-in and removed the local copy unrevoked. CON-09: `oauthSetup` opens Google's first-time setup sheet. CON-10: `oauthClient`
  * opens a connected account's OAuth client sheet. CON-12: `mcpConfigure` opens Slack's key sheet. CON-13: `checkRunning`, `checkOk`, `checkSlow`,
  * `checkFailed` and `checkLocked` (the PC's key store is locked) show a Linear server's Check line (`#tap=connector-check-linear` runs it again). CON-07: on a paired phone, `googleReady` shows Google's
  * Connect, and with `#tap=connector-connect-google`: `googleBrowser` waits on the browser, `googleFinishing` waits on the PC, `googleDone` ends
@@ -33,7 +33,7 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * CON-19: the PC's key store held back an account: `keyStoreLocked` (the locked notice with Try again), `keyStoreWaiting` (its prompt still open), and
  * `keyStoreHeldBack` (a held-back account alone, as plain text with its line).
  */
-export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'nothingStored', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed', 'checkLocked', 'googleReady', 'googleBrowser', 'googleFinishing', 'googleDone', 'googleDenied', 'googleTimeout', 'googleExpired', 'googleStateMismatch', 'googleRefused', 'googleFailed', 'googleSuperseded', 'googleCancelled', 'keyStoreLocked', 'keyStoreWaiting', 'keyStoreHeldBack'] as const;
+export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'nothingStored', 'unreadable', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed', 'checkLocked', 'googleReady', 'googleBrowser', 'googleFinishing', 'googleDone', 'googleDenied', 'googleTimeout', 'googleExpired', 'googleStateMismatch', 'googleRefused', 'googleFailed', 'googleSuperseded', 'googleCancelled', 'keyStoreLocked', 'keyStoreWaiting', 'keyStoreHeldBack'] as const;
 export type ConnectorScene = (typeof CONNECTOR_SCENES)[number];
 
 const server = (over: Partial<ConnectorRow> = {}) =>
@@ -141,7 +141,19 @@ const LIST_SCENES: Partial<Record<ConnectorScene, { data: FakeClientData; expand
     },
     many: { data: { connectors: ['Slack', 'GitHub', 'Notion', 'Linear', 'Jira', 'Asana', 'Figma', 'Stripe'].map((name) => server({ id: name.toLowerCase(), display_name: name })) } },
     disconnected: { data: { connectors: [signedIn()], disconnectOutcome: { revoke_supported: false, revoked_remotely: false, revoke_error: null } }, expanded: 'microsoft' },
-    revoked: { data: { connectors: [signedIn()], disconnectOutcome: { revoke_supported: true, revoked_remotely: false, revoke_error: 'invalid_grant' } }, expanded: 'microsoft' },
+    revoked: { data: { connectors: [signedIn()], disconnectOutcome: { revoke_supported: true, revoked_remotely: false, revoke_error: 'invalid_grant', revoke_attempted: true } }, expanded: 'microsoft' },
+    unreadable: {
+        data: {
+            connectors: [signedIn()],
+            disconnectOutcome: {
+                revoke_supported: true,
+                revoked_remotely: false,
+                revoke_attempted: false,
+                revoke_error: 'GAIA could not read the stored sign-in, so it removed the local copy without revoking GAIA\'s access at Microsoft. To revoke it, remove GAIA at https://account.live.com/consent/Manage',
+            },
+        },
+        expanded: 'microsoft',
+    },
     nothingStored: { data: { connectors: [signedIn()], disconnectOutcome: { revoke_supported: true, revoked_remotely: false, revoke_error: null, nothing_stored: true } }, expanded: 'microsoft' },
     personalize: { data: { connectors: [GMAIL] }, expanded: 'gmail' },
     personalizeTile: { data: { connectors: [GMAIL] }, expanded: 'gmail' },
