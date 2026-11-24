@@ -14,6 +14,7 @@ import { PermissionModeChip } from './PermissionModeChip';
 import { PrivateChip } from './PrivateChip';
 import { ResearchChip } from './ResearchChip';
 import { TryChips } from './TryChips';
+import { withStarter } from './tryChips.core';
 import { useAttachments } from '../hooks/useAttachments';
 import { useWarmUp, type WarmUpProgress } from '../hooks/useWarmUp';
 import * as api from '../services/api';
@@ -353,9 +354,8 @@ export function NewChat({ onSend, initialText = '', focusRequest = 0, agentMissi
     const lastExample = useRef('');
     const fillPrompt = useCallback((prompt: string) => {
         const prev = lastExample.current;
-        const draft = (prev && text.endsWith(prev) ? text.slice(0, -prev.length) : text).trimEnd();
         lastExample.current = prompt;
-        setText(draft ? `${draft}\n\n${prompt}` : prompt);
+        setText(withStarter(text, prev, prompt));
         inputRef.current?.focus();
     }, [text, setText]);
 

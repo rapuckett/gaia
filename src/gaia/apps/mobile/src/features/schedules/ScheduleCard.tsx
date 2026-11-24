@@ -10,10 +10,9 @@ import type { Schedule } from '@/api/client.types';
 import { useScheduleResults } from '@/data';
 import { ConfirmSheet } from '@/features/setup/sheets/ConfirmSheet';
 import { describeHttpFailure, useT } from '@/i18n/useT';
-import { Disclosure, Icon, Notice, Row, Stack, Surface, Text, useTheme } from '@/ui';
+import { Button, Disclosure, Icon, Notice, Row, Stack, Surface, Text, useTheme } from '@/ui';
 import { Clock, MessageSquare, Pause, Pencil, Play, Trash2, Zap } from '@/ui/icons';
 
-import { ChipButton } from './ChipButton';
 import { composeDateLocale, describeSchedule, formatNextClock, formatTime } from './scheduleText';
 
 const STATUS: Record<Schedule['status'], { label: MessageKey; tone: 'success' | 'warning' | 'muted' }> = {
@@ -133,31 +132,31 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                 ) : null}
                 <Row gap="xs" wrap>
                     {schedule.session_id ? (
-                        <ChipButton
+                        <Button size="sm"
                             icon={MessageSquare}
                             label={t('schedules.card.openChat')}
                             onPress={() => onOpenChat(schedule.session_id!)}
                         />
                     ) : null}
-                    <ChipButton
+                    <Button size="sm"
                         icon={Zap}
                         label={t(running ? 'schedules.card.running' : 'schedules.card.runNow')}
                         disabled={running}
                         onPress={onRunNow}
                     />
-                    <ChipButton
+                    <Button size="sm"
                         icon={schedule.status === 'active' ? Pause : Play}
                         label={t(schedule.status === 'active' ? 'schedules.card.pause' : 'schedules.card.resume')}
                         onPress={onToggleStatus}
                     />
-                    <ChipButton
+                    <Button size="sm"
                         icon={Pencil}
                         label={t('schedules.card.edit')}
                         accessibilityLabel={t('schedules.card.editTitle')}
                         disabled={running}
                         onPress={onEdit}
                     />
-                    <ChipButton
+                    <Button size="sm"
                         variant="danger"
                         icon={Trash2}
                         label={t('schedules.card.delete')}
