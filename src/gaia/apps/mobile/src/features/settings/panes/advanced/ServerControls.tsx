@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import { useState, type ReactNode } from 'react';
+import { View } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
+import { middleTruncate } from '@webui/utils/format';
 
 import { useMcpStatus, useSettings, useUpdateSettings } from '@/data';
 import { technicalDetail, useT } from '@/i18n/useT';
@@ -84,7 +86,7 @@ function CustomModelCard() {
         <SettingsAnchor name="custom-model" onTarget={() => setOpen(true)}>
             <SettingCard
                 title={t('settings.advanced.customTitle')}
-                hint={saved ? <Ltr>{saved}</Ltr> : t('settings.advanced.customHint')}
+                hint={saved ? <View accessible accessibilityLabel={saved}><Ltr>{middleTruncate(saved, 64)}</Ltr></View> : t('settings.advanced.customHint')}
                 open={open}
                 onToggle={() => setOpen((v) => !v)}
                 testID="advanced-custom"

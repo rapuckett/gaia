@@ -4,19 +4,21 @@
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
 
+import { isolate } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
 
 import type { Settings } from '@/api/client.types';
 import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { useDeviceRefused } from '@/api/routeAccess';
-import { useActiveModel, useSessions, useSetNetworkPolicy, useSettings, useSystemStatus } from '@/data';
+import { useActiveModel, useLocalModels, useSessions, useSetNetworkPolicy, useSettings, useSystemStatus } from '@/data';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Card, Disclosure, IconButton, Ltr, Notice, Row, Stack, Switch, Text } from '@/ui';
 import { Archive, Check, Copy } from '@/ui/icons';
 
 import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
 import { PcOnlyNotice } from '../PcOnlyNotice';
+import { modelLabel } from './model/modelText';
 import { SettingsAnchor } from '../targets';
 import { DeleteChats } from './DeleteChats';
 import { PrivacyUndo } from './PrivacyUndo';
@@ -24,13 +26,16 @@ import { PrivacyUndo } from './PrivacyUndo';
 type PolicyNotices = NonNullable<Settings['policy_notices']>;
 
 /** The sentence the PC's policy notices add up to, and the raw urls and reasons they carry, kept for Details. */
-function policyText(t: Translate, notices: PolicyNotices, on: boolean): { text: string; details: string[] } {
+export function policyText(t: Translate, notices: PolicyNotices, on: boolean, nameOf: (id: string) => string = (id) => modelLabel({ id })): { text: string; details: string[] } {
     if (!notices.length) return { text: t(on ? 'settings.privacy.localOnlyOn' : 'settings.privacy.localOnlyOff'), details: [] };
     const details = notices.flatMap((n) => [n.url, n.reason].filter((x): x is string => !!x));
     const text = notices
         .map((notice) => {
             if (notice.code === 'users_server_keeps_keys') return t('mobileApp.settings.privacy.usersServerKeepsKeys');
             if (notice.code === 'runtime_keys_not_dropped') return t('mobileApp.settings.privacy.runtimeKeysNotDropped');
+            if (notice.code === 'saved_models_not_checked' && notice.cause === 'model_server_down' && notice.models?.length) {
+                return t.plural('settings.privacy.savedModelNotCheckedServerDown', notice.models.length, { models: notice.models.map((m) => isolate(nameOf(m), 'ltr')).join(', ') });
+            }
             if (notice.code === 'saved_models_not_checked') return t('mobileApp.settings.privacy.savedModelsNotChecked');
             return t('settings.privacy.policyNoticeUnknown');
         })
@@ -42,6 +47,8 @@ function LocalOnly() {
     const t = useT();
     const settings = useSettings();
     const set = useSetNetworkPolicy();
+    const localModels = useLocalModels(true);
+    const nameOf = (id: string) => modelLabel({ id, display_name: localModels.data?.models.find((m) => m.id === id)?.display_name });
     const [result, setResult] = useState<{ tone: 'success' | 'warning'; text: string; details: string[] } | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
     // Local only is a PUT of the settings; the PC lets an allowed device make it and answers 403 to the rest.
@@ -59,7 +66,7 @@ function LocalOnly() {
                 setDetailsOpen(false);
                 setResult({
                     tone: notices.some((n) => n.severity === 'warning') ? 'warning' : 'success',
-                    ...policyText(t, notices, saved.network_policy === 'local_ai_only'),
+                    ...policyText(t, notices, saved.network_policy === 'local_ai_only', nameOf),
                 });
             },
         });
