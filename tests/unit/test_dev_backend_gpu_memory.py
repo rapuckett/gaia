@@ -20,6 +20,15 @@ from gaia.testing import dev_backend
 TIGHT_GPU_GB = 32.0
 
 
+@pytest.fixture(autouse=True)
+def _main_never_serves(monkeypatch):
+    # A parser that wrongly accepts a value must fail here, not start servers and block.
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("main() reached run(); it would serve until killed")
+
+    monkeypatch.setattr(dev_backend, "run", refuse)
+
+
 def _fit(model_id, gpu_gb):
     info = dev_backend.fake_system_info([DEFAULT_MODEL_NAME], gpu_gb)
     size = find_model_requirement(model_id).size_gb
