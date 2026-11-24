@@ -78,7 +78,7 @@ describe('GoBackOffer', () => {
         const offer = details;
         expect(offer).toHaveTextContent('Your chats, memory and settings stay as they are.');
         expect(offer).toHaveTextContent('GAIA 0.26.0-rc.13 stays available');
-        expect(offer).toHaveTextContent('Settings → General → Updates');
+        expect(offer).toHaveTextContent('Settings › General › Updates');
     });
 
     it('goes back only when asked', async () => {
