@@ -5,8 +5,8 @@ import { useState } from 'react';
 
 import type { PermissionMode } from '@/api/client.types';
 import { describeErrorWith, describeHttpFailure, useT } from '@/i18n/useT';
-import { Button, Icon, ListRow, Notice, Sheet, Stack } from '@/ui';
-import { Check, ShieldAlert, ShieldCheck } from '@/ui/icons';
+import { Button, ListRow, Notice, Sheet, Stack } from '@/ui';
+import { ShieldAlert, ShieldCheck } from '@/ui/icons';
 
 import { ControlChip } from './ControlChip';
 
@@ -83,7 +83,7 @@ export function PermissionChip({ mode, onChange, onReread, promptWaiting, disabl
                             title={m.label}
                             subtitle={m.note}
                             subtitleLines={3}
-                            leading={m.mode === mode ? <Icon icon={Check} size="sm" tone="accent" /> : undefined}
+                            checked={m.mode === mode}
                             selected={m.mode === mode}
                             onPress={() => void apply(m.mode)}
                             testID={`permission-${m.mode}`}

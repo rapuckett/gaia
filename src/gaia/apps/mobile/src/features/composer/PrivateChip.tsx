@@ -1,9 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useT } from '@/i18n/useT';
+import { Button, ListRow, Sheet, Stack } from '@/ui';
 import { Eye, EyeOff } from '@/ui/icons';
 
 import { ControlChip } from './ControlChip';
@@ -16,11 +17,14 @@ export interface PrivateChipProps {
     memoryEnabled?: boolean | null;
     /** The memory setting couldn't be read. */
     memoryUnreadable?: boolean;
+    /** Starts with the menu open (developer gallery). */
+    initialOpen?: boolean;
 }
 
-/** New-chat toggle: the chat is created private, so not even its first message is remembered. */
-export function PrivateChip({ on, onChange, disabled, memoryEnabled = null, memoryUnreadable = false }: PrivateChipProps) {
+/** New-chat memory choice: remember the chat, or create it private so not even its first message is remembered. */
+export function PrivateChip({ on, onChange, disabled, memoryEnabled = null, memoryUnreadable = false, initialOpen = false }: PrivateChipProps) {
     const t = useT();
+    const [open, setOpen] = useState(initialOpen);
     // A hidden Private choice would make the next chat private for good, unseen.
     useEffect(() => {
         if (memoryEnabled === false && on) onChange(false);
@@ -40,17 +44,44 @@ export function PrivateChip({ on, onChange, disabled, memoryEnabled = null, memo
             />
         );
     }
+    const state = on ? 'composer.private' : memoryUnreadable ? 'composer.memoryUnknown' : 'composer.memoryOn';
+    const options = [
+        { priv: false, label: t('composer.remember'), note: memoryUnreadable ? t('composer.memoryUnknownTitle') : t('composer.rememberNote') },
+        { priv: true, label: t('composer.privateChat'), note: t('composer.privateChatNote') },
+    ];
     return (
-        <ControlChip
-            label={t.bare(on ? 'composer.private' : memoryUnreadable ? 'composer.memoryUnknown' : 'composer.memoryOn')}
-            icon={on ? EyeOff : Eye}
-            chip="private"
-            warning={false}
-            disabled={disabled}
-            onPress={() => onChange(!on)}
-            accessibilityLabel={on ? t('composer.privateOff') : t('composer.privateOn')}
-            accessibilityHint={on ? t('chat.privateOffTitle') : memoryUnreadable ? t('composer.memoryUnknownTitle') : t('composer.privateOnTitle')}
-            testID="private-chip"
-        />
+        <>
+            <ControlChip
+                label={t.bare(state)}
+                icon={on ? EyeOff : Eye}
+                chip="private"
+                menu
+                warning={false}
+                disabled={disabled}
+                onPress={() => setOpen(true)}
+                accessibilityLabel={t('composer.memoryChipAria', { state: t.bare(state) })}
+                testID="private-chip"
+            />
+            <Sheet open={open} onClose={() => setOpen(false)} title={t('composer.memoryMenu')}>
+                <Stack gap="sm">
+                    {options.map((o) => (
+                        <ListRow
+                            key={String(o.priv)}
+                            title={o.label}
+                            subtitle={o.note}
+                            subtitleLines={3}
+                            checked={o.priv === on}
+                            selected={o.priv === on}
+                            onPress={() => {
+                                onChange(o.priv);
+                                setOpen(false);
+                            }}
+                            testID={o.priv ? 'private-choice-private' : 'private-choice-remember'}
+                        />
+                    ))}
+                    <Button variant="secondary" label={t('modelMenu.cancel')} onPress={() => setOpen(false)} />
+                </Stack>
+            </Sheet>
+        </>
     );
 }
