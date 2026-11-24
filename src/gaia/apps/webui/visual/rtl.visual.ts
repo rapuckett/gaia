@@ -3632,6 +3632,8 @@ for (const locale of ['ar', 'en']) {
         await open(page, '', 'en', async (p) => {
             await p.route('**/api/tunnel/start', (route) => route.fulfill({ json: active }));
             await p.route('**/api/tunnel/status', (route) => route.fulfill({ json: active }));
+            // The pointer shows only where Settings has Phones and tablets: pairing on.
+            await withDevices(p, DEVICE_STATES.empty);
         }, 'dark');
         await page.locator('.sb-icon-btn').filter({ has: page.locator('.lucide-smartphone') }).click();
         const hint = page.locator('.mobile-modal .mobile-app-hint');
