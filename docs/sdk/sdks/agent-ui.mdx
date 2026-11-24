@@ -1930,7 +1930,12 @@ How a device pairs:
 
 1. The PC turns the listener on and opens a pairing window. It shows the
    window's `DevicePairingOffer` as a QR code, in compact JSON. The window
-   closes after 10 minutes, or at the first pairing.
+   closes after 10 minutes, or at the first pairing. For a device that can't
+   scan the code, **Copy pairing link** in Settings › Phones and tablets copies
+   the same offer as `ai.amd.gaia.mobile://pair?offer=<offer>`, where `<offer>`
+   is that JSON, UTF-8 encoded, as unpadded base64url. The GAIA app reads it
+   from its "Paste the pairing link or code" screen, and it works only as long
+   as the window is open.
 2. The device connects to one of `origins` and, during the TLS handshake and
    before it sends anything, checks that the SHA-256 of the certificate it was
    served equals `pin`. Nothing else is checked: no CA, hostname or date. A

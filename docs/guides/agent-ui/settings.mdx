@@ -75,6 +75,17 @@ Your accounts and services. See [Connectors](/guides/agent-ui/extend#connectors)
 
 Discord. See [Discord](/guides/agent-ui/extend#discord).
 
+### Phones and tablets
+
+Pair the GAIA app on your phone or tablet with this PC. The tab is still in development and shows only while `device_pairing` is on in `~/.gaia/config.json` ([configuration](/reference/cli#configuration)).
+
+- Turn on **Allow paired devices to connect**, then press **Pair a phone or tablet** and scan the code in the GAIA app within 10 minutes. **Copy pairing link** copies the same code as a link to paste into the app instead.
+- A newly paired device can't reach your chats or this PC until you **Allow** it here. GAIA also tells you in its notifications, where **Deny** unpairs it.
+- **Remove** unpairs one device. **Reset pairing** removes every device and gives this PC a new security certificate, so each one has to pair again.
+- If GAIA can't read the list of devices, the tab says why and offers **Try again**.
+
+How pairing works and what a paired device may call: [Paired devices](/sdk/sdks/agent-ui#paired-devices).
+
 ### Automations
 
 Reminders, summaries, alerts and triggers. See [Automations](/guides/agent-ui/extend#automations).
