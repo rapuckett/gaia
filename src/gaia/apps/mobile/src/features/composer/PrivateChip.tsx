@@ -4,8 +4,8 @@
 import { useEffect, useState } from 'react';
 
 import { useT } from '@/i18n/useT';
-import { Button, Icon, ListRow, Sheet, Stack } from '@/ui';
-import { Check, Eye, EyeOff } from '@/ui/icons';
+import { Button, ListRow, Sheet, Stack } from '@/ui';
+import { Eye, EyeOff } from '@/ui/icons';
 
 import { ControlChip } from './ControlChip';
 
@@ -70,7 +70,7 @@ export function PrivateChip({ on, onChange, disabled, memoryEnabled = null, memo
                             title={o.label}
                             subtitle={o.note}
                             subtitleLines={3}
-                            leading={o.priv === on ? <Icon icon={Check} size="sm" tone="accent" /> : undefined}
+                            checked={o.priv === on}
                             selected={o.priv === on}
                             onPress={() => {
                                 onChange(o.priv);
