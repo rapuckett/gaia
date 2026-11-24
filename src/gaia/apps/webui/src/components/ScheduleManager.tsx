@@ -9,6 +9,7 @@ import { log } from '../utils/logger';
 import type { Schedule, ScheduleResult, ParsedSchedule } from '../types';
 import { ApiError } from '../services/api';
 import { parseScheduleInput } from '../services/scheduleApi';
+import { WHEN_PRESETS, scheduleInputText } from '../utils/scheduleForm.core';
 import { stripIsolates, type MessageKey, type Say } from '../i18n/registry';
 import { dateLocale, translator, useT } from '../i18n/useT';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
@@ -37,26 +38,7 @@ function formatDays(days: number[], say: Say): string {
     return days.map((d) => say(`schedules.day.${d}` as MessageKey)).join(say('schedules.days.join'));
 }
 
-/** Quick picks for "When to run"; the value is what the schedule parser reads. */
-const WHEN_PRESETS: Array<{ label: MessageKey; value: string }> = [
-    { label: 'schedules.preset.morning', value: 'daily at 8am' },
-    { label: 'schedules.preset.weekdays', value: 'weekdays at 9am' },
-    { label: 'schedules.preset.hourly', value: 'every 1h' },
-];
-
-/** What the user typed when the schedule was made, so Edit starts from their own words. */
-export function scheduleInputText(schedule: Schedule): string {
-    if (schedule.schedule_config) {
-        try {
-            const raw = (JSON.parse(schedule.schedule_config) as { raw_input?: unknown }).raw_input;
-            if (typeof raw === 'string' && raw.trim()) return raw;
-        } catch (err) {
-            log.ui.warn(`Schedule "${schedule.name}" has an unreadable schedule_config`, err);
-        }
-    }
-    // Rows saved before the input was kept: the description reads back for most shapes, and the preview says if not.
-    return schedule.description;
-}
+export { scheduleInputText };
 
 function ScheduleCard({ schedule, onEdit }: { schedule: Schedule; onEdit: (schedule: Schedule) => void }) {
     const t = useT();

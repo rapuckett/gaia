@@ -52,7 +52,8 @@ describeNative('schedules gallery route', () => {
         mockState = 'new-valid';
         await render(<SchedulesGalleryRoute />);
         await waitFor(() => expect(screen.getAllByText(/Weekdays/, hidden).length).toBeGreaterThan(1));
-        expect(screen.queryByText('Every hour', hidden)).toBeNull();
+        // The one 'Every hour' left is the preset chip, not the preview.
+        expect(screen.queryAllByText('Every hour', hidden)).toHaveLength(1);
     });
 
     it('names the scenes when the state is unknown', async () => {
