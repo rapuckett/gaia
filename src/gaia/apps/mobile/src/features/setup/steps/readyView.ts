@@ -3,6 +3,7 @@
 
 import { gpuGbAtSetting } from '@webui/components/setup/gpuMemory';
 import { isEmbedding, isNpu, isVision, resolveVision } from '@webui/components/setup/selection';
+import { extrasStillFetching } from '@webui/components/setup/setupExtras.core';
 import type { GpuMemoryStatus, SetupPlan, SetupRunStatus, SetupTest, StartCard } from '@webui/types';
 
 export interface ReadyView {
@@ -13,6 +14,8 @@ export interface ReadyView {
     failedJobs: SetupTest['job'][];
     /** Models the run left on the server's list, not downloaded. */
     notDownloaded: string[];
+    /** Extras still downloading now that setup is ready; chat needn't wait for them. */
+    stillFetching: string[];
 }
 
 export function readyView(run: SetupRunStatus | null, plan: SetupPlan | undefined): ReadyView {
@@ -21,6 +24,7 @@ export function readyView(run: SetupRunStatus | null, plan: SetupPlan | undefine
         answering: run?.chat_model ?? (plan && !plan.decided_after_server ? plan.chat_model.id : null),
         cloud: !!run?.skip_chat_model,
         failedJobs: (run?.tests ?? []).filter((r) => r.state === 'failed').map((r) => r.job),
+        stillFetching: extrasStillFetching(run).map((id) => names.get(id) ?? id),
         notDownloaded: (run?.models ?? []).filter((m) => m.state === 'skipped').map((m) => names.get(m.id) ?? m.id),
     };
 }
