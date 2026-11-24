@@ -7,6 +7,7 @@ import { agentEventToStep, isProgressTick, statusText } from '@webui/utils/strea
 import { toolResultUpdates } from '@webui/utils/toolEvents.core';
 
 import type { Translate } from '@/i18n/useT';
+import { arrivalOf } from '@/state/eventArrival';
 
 /** Same as SPEECH_MODEL_DOWNLOADED_PHASE in audio_tools.py. */
 const SPEECH_MODEL_DOWNLOADED = 'speech_model_downloaded';
@@ -45,8 +46,12 @@ function beforeRunningCall(steps: AgentStep[], step: AgentStep): AgentStep[] {
 export function stepsFromEvents(events: readonly StreamEvent[], t: Translate): AgentStep[] {
     const ids = { current: 0 };
     let steps: AgentStep[] = [];
-    const add = (step: AgentStep | null) => {
-        if (!step) return;
+    // A step starts when its event reached the phone, not when the steps are rebuilt.
+    let arrived: number | undefined;
+    const stamped = (step: AgentStep): AgentStep => (arrived == null ? step : { ...step, timestamp: arrived });
+    const add = (input: AgentStep | null) => {
+        if (!input) return;
+        const step = stamped(input);
         // A status or thought arriving mid-call doesn't end a running tool; its tool_end does.
         steps = [
             ...steps.map((s) => (s.active && s.type === 'tool' && step.type !== 'tool' && s.success == null && !s.result ? s : { ...s, active: false })),
@@ -65,6 +70,7 @@ export function stepsFromEvents(events: readonly StreamEvent[], t: Translate): A
     };
 
     for (const [i, event] of events.entries()) {
+        arrived = arrivalOf(event);
         if (event.type === 'status' && isRetryNotice(events, i)) continue;
         switch (event.type) {
             case 'tool_end':
@@ -80,8 +86,9 @@ export function stepsFromEvents(events: readonly StreamEvent[], t: Translate): A
                 break;
             }
             case 'skill_use': {
-                const step = event.how === 'model' ? null : agentEventToStep(event, ids, t);
-                if (!step) break;
+                const made = event.how === 'model' ? null : agentEventToStep(event, ids, t);
+                if (!made) break;
+                const step = stamped(made);
                 // The pickup sits before the call it belongs to while that call runs.
                 let at = steps.length;
                 for (let i = steps.length - 1; i >= 0; i--) {
@@ -108,9 +115,9 @@ export function stepsFromEvents(events: readonly StreamEvent[], t: Translate): A
                 }
                 if (event.phase === SPEECH_MODEL_DOWNLOADED && event.message) {
                     // A download the user waited on stays in the turn's steps, above the call it finished inside.
-                    const done: AgentStep = {
+                    const done: AgentStep = stamped({
                         id: ++ids.current, type: 'status', label: event.message, active: false, success: true, kept: true, timestamp: Date.now(),
-                    };
+                    });
                     const last = steps[steps.length - 1];
                     if (last?.type === 'status' && last.active) updateLast({ ...done, id: last.id, detail: undefined });
                     else steps = beforeRunningCall(steps, done);

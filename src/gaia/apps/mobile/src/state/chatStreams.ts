@@ -11,6 +11,8 @@ import { agentEventToStep } from '@webui/utils/streamSteps.core';
 import { AGENT_EVENT_TYPES, RESOLVES_PROMPTS } from '@/api/constants';
 import { GaiaTurnError, type GaiaError } from '@/api/errors';
 
+import { arrivalOf, stampArrival } from './eventArrival';
+
 /**
  * - `idle`: no turn is running in this chat on this phone.
  * - `connecting`: a message was sent and GAIA has not started answering it.
@@ -84,9 +86,10 @@ function withoutPrompts(turn: ChatTurn): ChatTurn {
 function appendEvent(events: readonly StreamEvent[], event: StreamEvent): readonly StreamEvent[] {
     const last = events[events.length - 1];
     if (event.type === 'thinking' && last?.type === 'thinking') {
-        return [...events.slice(0, -1), { ...last, content: (last.content ?? '') + (event.content ?? '') }];
+        const merged = { ...last, content: (last.content ?? '') + (event.content ?? '') };
+        return [...events.slice(0, -1), stampArrival(merged, arrivalOf(last))];
     }
-    return [...events, event];
+    return [...events, stampArrival(event)];
 }
 
 function applyAgentEvent(turn: ChatTurn, event: StreamEvent): ChatTurn {

@@ -10,6 +10,7 @@ import type { StreamEvent } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError, GaiaStreamDroppedError, GaiaTurnError, type GaiaError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
+import { stampArrival } from '@/state/eventArrival';
 import { Divider, Screen, Stack, UIProvider } from '@/ui';
 
 import { ActivityTimeline } from '../activity/ActivityTimeline';
@@ -114,8 +115,9 @@ const ENDED_AFTER_MS = 13_000;
 
 function Body({ state }: { state: LiveScene }) {
     const [endedAt] = useState(() => Date.now() + ENDED_AFTER_MS);
+    const [cutEvents] = useState(() => CUT_OFF_EVENTS.map((e) => stampArrival({ ...e }, endedAt - ENDED_AFTER_MS)));
     if (state === 'step-error') {
-        const cut: Tail = { ...TAIL, events: CUT_OFF_EVENTS };
+        const cut: Tail = { ...TAIL, events: cutEvents };
         return (
             <Stack gap="md">
                 <TurnTail tail={{ ...cut, error: new GaiaStreamDroppedError(new Error('socket closed')), failedReply: true, canTryAgain: true }} line={null} endedAt={endedAt} onTryAgain={noop} onContinue={noop} />
