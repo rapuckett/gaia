@@ -66,8 +66,8 @@ describeNative('Try again on the latest answer', () => {
         expect(screen.queryByLabelText(t('msg.tryAgain'))).toBeNull();
     });
 
-    it('is left to the turn tail on a failed reply, so only one Try again shows', async () => {
+    it('belongs to the failed reply card on a failed reply, so only one Try again shows', async () => {
         await show(reply({ failed: true, content: 'Error: model not found' }));
-        expect(screen.queryByLabelText(t('msg.tryAgain'))).toBeNull();
+        expect(screen.queryAllByLabelText(t('msg.tryAgain'))).toHaveLength(1);
     });
 });

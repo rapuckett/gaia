@@ -66,6 +66,15 @@ describe('failed reply names its cause', () => {
         expect(mockPush).toHaveBeenCalledWith({ pathname: '/settings/[section]', params: { section: 'advanced', target: 'custom-model' } });
     });
 
+    it('an agent crash offers the agent log, opened on the agent source, not the server log', async () => {
+        mockLocal = true;
+        await mount('The agent stopped unexpectedly. Its log is in /Users/alex/.gaia/agents/gaia/logs');
+        expect(screen.queryByTestId('server-log')).toBeNull();
+        expect(screen.getByText(t('logs.agentLog'))).toBeTruthy();
+        await fireEvent.press(screen.getByTestId('agent-log'));
+        expect(mockPush).toHaveBeenCalledWith({ pathname: '/logs', params: { source: 'agent' } });
+    });
+
     it('orders the card: title, body, Details, Try again, Settings, then the server log on a local model', async () => {
         mockLocal = true;
         const { toJSON } = await mount('Failed to start the query run: Failed to load model Gemma: llama-server exited with code 1.');

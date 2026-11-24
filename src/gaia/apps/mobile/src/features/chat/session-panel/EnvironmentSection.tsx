@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState, type ReactNode } from 'react';
+import { View } from 'react-native';
 
 import type { ActiveModel, LocalModelStatus, PermissionMode, ScopeEntry, Session, SessionEnvironment } from '@/api/client.types';
 import { sessionEnvironmentPath } from '@/api/constants';
@@ -37,7 +38,7 @@ function baseName(path: string): string {
     return parts[parts.length - 1] ?? path;
 }
 
-export function EnvironmentSection({ sessionId, live }: SectionProps) {
+export function EnvironmentSection({ sessionId, live, promptWaiting }: SectionProps) {
     const t = useT();
     const { data: env, error } = useSessionEnvironment(sessionId, { enabled: true, live });
     return (
@@ -46,7 +47,7 @@ export function EnvironmentSection({ sessionId, live }: SectionProps) {
                 {t('env.title')}
             </Text>
             <Folders sessionId={sessionId} env={env} error={error} />
-            <Permission sessionId={sessionId} />
+            <Permission sessionId={sessionId} promptWaiting={promptWaiting} />
             <Internet sessionId={sessionId} env={env} />
             <RunsOn sessionId={sessionId} />
         </Stack>
@@ -254,7 +255,7 @@ const MODE_NOTE: Record<PermissionMode, MessageKey> = {
 };
 
 /** The chat's permission mode, shared with the composer's chip through the same query. */
-function Permission({ sessionId }: { sessionId: string }) {
+function Permission({ sessionId, promptWaiting }: { sessionId: string; promptWaiting?: boolean }) {
     const t = useT();
     const { mode, set } = usePermissionMode(sessionId);
     const confirming = useSessionPanelStore((s) => s.envConfirm?.kind === 'full');
@@ -278,6 +279,11 @@ function Permission({ sessionId }: { sessionId: string }) {
                         onChange={(v) => choose(v === 'full_access' ? 'full_access' : 'ask')}
                     />
                     <Text role="caption" tone="muted">{t(MODE_NOTE[mode])}</Text>
+                    {mode === 'full_access' && promptWaiting ? (
+                        <View accessibilityLiveRegion="polite" testID="environment-full-pending">
+                            <Text role="caption" tone="muted">{t('perm.fullPendingNote')}</Text>
+                        </View>
+                    ) : null}
                 </>
             ) : set.error ? null : (
                 <Text tone="muted">{t('sp.checking')}</Text>

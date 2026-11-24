@@ -23,7 +23,7 @@ import { requestErrorParam } from '../utils/requestErrors';
 import { log } from '../utils/logger';
 import { plainAnswerText } from '../utils/plainText';
 import { AnswerStats } from './AnswerStats';
-import { dropErrorsEchoedInAnswer, isErrorContent } from '../utils/answerErrors.core';
+import { dropErrorsEchoedInAnswer, isErrorContent, namesAgentLog } from '../utils/answerErrors.core';
 import { SERVER_CANCELLED_TEXT, splitCutOff, turnEnding } from '../utils/turnEnding.core';
 
 export { dropErrorsEchoedInAnswer, isErrorContent, splitCutOff, turnEnding };
@@ -152,13 +152,6 @@ function useElapsedSeconds(active: boolean, key?: string): number {
         return () => clearInterval(t);
     }, [active, key]);
     return elapsed;
-}
-
-/** The agent's own crash or start failure, which ends by naming its log folder (relay `stream_ended_text`). */
-const AGENT_LOG_DIR_RE = /[\\/]agents[\\/][^\\/\s]+[\\/]logs\b/;
-
-export function namesAgentLog(content: string): boolean {
-    return AGENT_LOG_DIR_RE.test(content);
 }
 
 const CHAT_REPORT_CLASSES: ReportClasses = {
