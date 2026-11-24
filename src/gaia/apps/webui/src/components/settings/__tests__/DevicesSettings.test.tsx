@@ -68,12 +68,13 @@ describe('DevicesSettings', () => {
         render(<DevicesSettings />);
         replies['GET /devices/status'] = { body: { ...STATUS, pairing_open: true } };
         fireEvent.click(await screen.findByRole('button', { name: 'Pair a phone or tablet' }));
-        fireEvent.click(await screen.findByRole('button', { name: 'Copy pairing link' }));
-        expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+        const copy = await screen.findByRole('button', { name: 'Copy pairing link' });
+        await act(async () => { fireEvent.click(copy); });
+        expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
         expect(writeText).toHaveBeenCalledWith(pairingLink(OFFER));
 
-        fireEvent.click(screen.getByRole('button', { name: 'Copied' }));
-        expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't copy the link");
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copied' })); });
+        expect(screen.getByRole('alert')).toHaveTextContent("Couldn't copy the link");
     });
 
     it('glosses the paired-at line once in Arabic, with no nested gloss', async () => {
