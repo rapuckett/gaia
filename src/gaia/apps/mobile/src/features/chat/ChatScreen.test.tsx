@@ -104,7 +104,8 @@ describe('ChatScreen', () => {
         expect(await screen.findByText(t('msg.stopped'))).toBeTruthy();
         await fireEvent.press(screen.getByTestId('continue'));
         await waitFor(() => expect(client.sent.map((s) => s.message)).toEqual(['Tell a story', t('msg.continuePrompt')]));
-    });
+        // A full stream, Stop and Continue; under a loaded parallel run it can pass jest's 5 s default.
+    }, 20_000);
 
     it('sends the typed text as a /research turn while the Research chip is on', async () => {
         const client = createFakeClient({
