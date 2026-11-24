@@ -7,6 +7,7 @@ import { useChatStore } from '../stores/chatStore';
 import { getT } from '../i18n/useT';
 import type { StreamEvent } from '../types';
 import { RECONNECTING_PHASE } from './constants';
+import { CONFIRM_TIMEOUT_PHASE } from './streamSteps.core';
 import { agentEventToStep, isProgressTick, statusText } from './streamSteps';
 
 /** Same as SPEECH_MODEL_DOWNLOADED_PHASE in audio_tools.py. */
@@ -72,6 +73,6 @@ export function applyStatusEvent(event: StreamEvent, stepIdRef: { current: numbe
         store.updateLastAgentStep({ label: msg || getT()('activity.thinking') });
         return;
     }
-    const step = agentEventToStep({ ...event, message: msg }, stepIdRef);
+    const step = agentEventToStep(event.phase === CONFIRM_TIMEOUT_PHASE ? event : { ...event, message: msg }, stepIdRef);
     if (step) store.addAgentStep(step);
 }

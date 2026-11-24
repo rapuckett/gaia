@@ -868,6 +868,7 @@ export const enMessages = {
     'activity.thinking': 'Thinking',
     'activity.commentary': 'Commentary',
     'activity.working': 'Working',
+    'activity.confirmTimedOut': "You didn't answer in time, so GAIA didn't do this step.",
     'activity.thought': 'Thought',
     'activity.thoughtFor': 'Thought for {time}',
     'activity.thinkingFor': 'Thinking · {time}',

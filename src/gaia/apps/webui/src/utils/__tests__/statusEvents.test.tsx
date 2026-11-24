@@ -37,6 +37,23 @@ it('does not write a warning over the progress row before it', () => {
     expect(screen.getByText(notice)).toBeVisible();
 });
 
+it('says an unanswered approval in the user language and keeps the raw line under Details', () => {
+    const ids = { current: 0 };
+    const raw = "Confirmation for 'write_file' timed out (600 s). Execution denied.";
+    applyStatusEvent({
+        type: 'status', status: 'warning', message: raw,
+        phase: 'confirm_timeout', tool: 'write_file', timeout_s: 600,
+    } as StreamEvent, ids);
+
+    const [step] = useChatStore.getState().agentSteps;
+    expect(step.label).toBe("You didn't answer in time, so GAIA didn't do this step.");
+    expect(step.detail).toBe(raw);
+    expect(step.success).toBe(false);
+    render(<AgentActivity steps={useChatStore.getState().agentSteps} isActive />);
+    expect(screen.getByText(step.label)).toBeVisible();
+    expect(screen.getByText(raw)).toBeInTheDocument();
+});
+
 const downloading = 'Downloading the speech model, one time — 37% of 1.6 GB';
 
 function runningTranscription(ids: { current: number }) {
