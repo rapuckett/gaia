@@ -5,6 +5,7 @@ import { consolidateSteps, matchesStepFilter, stepsSummary, toolRowText } from '
 
 import type { StreamEvent } from '@/api/client.types';
 import { translator } from '@/i18n/useT';
+import { stampArrival } from '@/state/eventArrival';
 
 import { liveStatusLine } from '../liveStatus';
 import { endRunningSteps, stepsFromEvents } from './stepsFromEvents';
@@ -131,5 +132,21 @@ describe('a step still running when the turn ends', () => {
 
     it('keeps its spinner in a live turn, where nothing ends it', () => {
         expect(consolidateSteps(steps, true)[0]).toMatchObject({ active: true });
+    });
+});
+
+describe('a step\'s time comes from when its event arrived', () => {
+    const start = stampArrival(event({ type: 'tool_start', tool: 'sleep', narration: 'Waiting' }), 50_000);
+
+    it('freezes at the real duration even when the steps are rebuilt later', () => {
+        const rebuilt = stepsFromEvents([start, stampArrival(event({ type: 'agent_error', content: 'Connection lost' }), 62_000)], t);
+        const [ended] = endRunningSteps(rebuilt, 62_000);
+        expect(ended).toMatchObject({ active: false, latencyMs: 12_000 });
+    });
+
+    it('does not move a live step when a later event arrives', () => {
+        const later = stampArrival(event({ type: 'status', status: 'working', message: 'Still going' }), 58_000);
+        expect(stepsFromEvents([start], t)[0]!.timestamp).toBe(50_000);
+        expect(stepsFromEvents([start, later], t).find((s) => s.type === 'tool')!.timestamp).toBe(50_000);
     });
 });
