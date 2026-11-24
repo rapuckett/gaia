@@ -147,7 +147,7 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
         <View>
             {wide ? null : (
                 <View style={{ alignItems: 'center', paddingTop: space.sm, paddingBottom: space.xs }}>
-                    <View style={{ width: 40, height: 4, borderRadius: radius.full, backgroundColor: colors.border }} />
+                    <View testID="sheet-handle" style={{ width: 40, height: 4, borderRadius: radius.full, backgroundColor: colors.border }} />
                 </View>
             )}
             {entry.title || (wide && entry.dismissible) ? (
