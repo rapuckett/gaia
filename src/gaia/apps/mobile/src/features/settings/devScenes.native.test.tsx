@@ -300,6 +300,13 @@ describeNative('/dev/settings', () => {
         expect(await screen.findByTestId('confirm-ok')).toBeTruthy();
     });
 
+    it('model-tight-use-confirm opens with the tight question up', async () => {
+        mockState = 'model-tight-use-confirm';
+        await mount();
+        expect(await screen.findByText('Use it anyway')).toBeTruthy();
+        expect(screen.getByTestId('confirm-cancel')).toHaveTextContent('Cancel');
+    });
+
     it('model-custom hides Remove for the model in use', async () => {
         mockState = 'model-custom';
         await mount();

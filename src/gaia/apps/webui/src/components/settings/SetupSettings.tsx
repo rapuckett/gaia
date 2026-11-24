@@ -116,7 +116,7 @@ export function SetupSettings() {
                         const text = (
                             <span>
                                 <span className="settings-setup-row-label">{r.label}</span>
-                                {r.value && <bdi className="settings-hint settings-setup-row-value">{r.value}</bdi>}
+                                {r.value && <span className="settings-hint settings-setup-row-value"><bdi>{r.value}</bdi></span>}
                             </span>
                         );
                         const to = r.section;

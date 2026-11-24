@@ -62,3 +62,38 @@ export function requireSecrets<K extends SecretName>(env: Env, ...names: K[]): R
   }
   return Object.fromEntries(names.map((n) => [n, env[n] as string])) as Record<K, string>;
 }
+
+type OverrideName = "APNS_HOST_OVERRIDE" | "FCM_TOKEN_URL_OVERRIDE" | "FCM_API_BASE_OVERRIDE";
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+/**
+ * A provider endpoint override for local end-to-end tests, or undefined when
+ * unset or empty. Only loopback is honored: anything else is a 500, never the
+ * real host and never the bad value, since these requests carry credentials.
+ * A value without a scheme means https.
+ */
+export function loopbackOverride(env: Env, name: OverrideName, opts: { originOnly?: boolean } = {}): URL | undefined {
+  const raw = env[name]?.trim();
+  if (!raw) return undefined;
+  const notLoopback = () =>
+    new HttpError(
+      500,
+      "invalid_config",
+      `${name} is loopback-only (127.0.0.1, localhost or [::1], with an optional port) and is for local ` +
+        "end-to-end tests; unset it on a deployed relay (see the push-relay README)."
+    );
+  let url: URL;
+  try {
+    url = new URL(raw.includes("://") ? raw : `https://${raw}`);
+  } catch {
+    throw notLoopback();
+  }
+  const web = url.protocol === "http:" || url.protocol === "https:";
+  if (!web || !LOOPBACK_HOSTS.has(url.hostname) || url.username || url.password) throw notLoopback();
+  if (url.search || url.hash || (opts.originOnly && url.pathname !== "/")) {
+    const form = opts.originOnly ? "host[:port] or an origin such as http://127.0.0.1:8443, with no path," : "a URL with no";
+    throw new HttpError(500, "invalid_config", `${name} must be ${form} query or fragment (see the push-relay README).`);
+  }
+  return url;
+}

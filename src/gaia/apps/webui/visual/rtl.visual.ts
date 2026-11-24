@@ -5184,6 +5184,34 @@ for (const locale of ['ar', 'en'] as const) {
     }
 }
 
+test('a failed model download names the model and puts the server error on its own line (en, dark)', async ({ page }) => {
+    const id = 'Qwen3.6-35B-A3B-GGUF';
+    const error = `Lemonade /pull returned 404: model '${id}' was not found in the registry`;
+    await open(page, '', 'en', async (p) => {
+        await p.route('**/api/system/status', (route) => route.fulfill({
+            json: {
+                ...SYSTEM_STATUS,
+                download_progress: { state: 'error', model_name: id, percent: 0, file: null, file_index: 0, total_files: 0, downloaded_bytes: 0, total_bytes: 0, message: error },
+            },
+        }));
+        await p.route('**/api/providers/local/models', (route) => route.fulfill({
+            json: { provider: 'local', models: [{ id, name: id, display_name: 'Qwen 3.6 35B A3B', downloaded: false, loaded: false, size_gb: 23.3 }] },
+        }));
+    }, 'dark');
+    const banner = page.locator('.connection-banner--error');
+    await expect(banner).toContainText('Download of Qwen 3.6 35B A3B failed.');
+    await expect(banner.locator('.connection-banner__text')).not.toHaveText(/^Download of Qwen3/);
+    const detail = banner.locator('.connection-banner__detail');
+    await expect(detail).toHaveText(error);
+    const [sentence, line] = await Promise.all([
+        banner.locator('.connection-banner__text').boundingBox(),
+        detail.boundingBox(),
+    ]);
+    expect(line!.y).toBeGreaterThan(sentence!.y + 8);
+    await shot(page, 'download-failed-banner-en-dark');
+    expect(await audit(page)).toEqual([]);
+});
+
 const MODEL_SERVER_STATES = [
     { name: 'hung', status: { lemonade_error: 'Lemonade did not answer in time' }, hint: { ar: 'فأعد تشغيله', en: 'restart it:' } },
     { name: 'stopped', status: { lemonade_error: null }, hint: { ar: 'لتشغيله يدويًا', en: 'To start it by hand' } },

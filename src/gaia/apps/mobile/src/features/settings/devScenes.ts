@@ -37,6 +37,8 @@ export interface SettingsScene {
     search?: string;
     /** Opens this model's Details section expanded. */
     openDetails?: string;
+    /** Opens with this tight model's Use question already asked. */
+    tightUse?: string;
     /** Opens Add a model from Hugging Face with this link typed and its check still running. */
     checkPending?: string;
     /** Opens Add a model from Hugging Face with this link already checked. */
@@ -446,6 +448,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     },
     // SET-MODEL-20: eight models, so the search field shows (`model-search`); the same with a miss typed into it.
     'model-tight': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE, { ...WANT, downloaded: true, tight: true }]) },
+    // The Use question for a tight model: "Use it anyway" and Cancel under the one-line body.
+    'model-tight-use-confirm': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, tightUse: WANT.id, data: local([HAVE, { ...WANT, downloaded: true, tight: true }]) },
     'model-many': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local(MANY) },
     'model-search-miss': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, search: 'zzz-no-such-model', data: local(MANY) },
     // SET-MODEL-24: a model row with its Details section expanded.
