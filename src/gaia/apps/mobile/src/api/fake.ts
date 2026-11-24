@@ -100,6 +100,7 @@ import type {
     Settings,
     SkillList,
     SpeechModel,
+    ImageSettings,
     SpeechSettings,
     FeaturedLibraries,
     LinkAddResult,
@@ -318,6 +319,8 @@ export interface FakeClientData {
     /** What getEnvironment answers, by chat; removing a folder and the internet switch change it. A chat not listed is a 404. */
     environments?: Record<string, SessionEnvironment>;
     memorySettings?: MemorySettings;
+    /** What getImageSettings answers; updateImageSettings changes it. */
+    imageSettings?: ImageSettings;
     /** What getSpeechSettings answers; updateSpeechSettings changes it. */
     speechSettings?: SpeechSettings;
     /** What getSpeechModel answers; defaults to downloaded. */
@@ -1496,6 +1499,15 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.undoSettings) throw new GaiaApiError(503, 'This fake client was given no undo settings.');
             data.undoSettings = { ...data.undoSettings, retention_days: retentionDays, max_mb: maxMb };
             return data.undoSettings;
+        },
+        async getImageSettings() {
+            if (!data.imageSettings) throw new GaiaApiError(503, 'This fake client was given no image settings.');
+            return data.imageSettings;
+        },
+        async updateImageSettings(change) {
+            if (!data.imageSettings) throw new GaiaApiError(503, 'This fake client was given no image settings.');
+            data.imageSettings = { ...data.imageSettings, ...change };
+            return data.imageSettings;
         },
         async getSpeechSettings() {
             if (!data.speechSettings) throw new GaiaApiError(503, 'This fake client was given no speech settings.');

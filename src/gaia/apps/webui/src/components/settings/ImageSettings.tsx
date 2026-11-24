@@ -8,9 +8,7 @@ import * as api from '../../services/imageApi';
 import { useChatStore } from '../../stores/chatStore';
 import { displayModelName, useLocalModelNames } from '../../stores/modelStore';
 import { useT } from '../../i18n/useT';
-
-/** Step counts offered beside a model's own; capped by the server's maximum. */
-const STEP_CHOICES = [4, 8, 12, 20, 30, 50];
+import { stepChoices } from '../../utils/imageSettings.core';
 
 /** Text inside <option> can't hold <bdi>, so isolate marks keep "1024x768" in order. */
 const ltr = (text: string) => `⁦${text}⁩`;
@@ -69,11 +67,7 @@ export function ImageSettings() {
     }
 
     const current = settings.models.find((m) => m.id === settings.model);
-    const steps = current
-        ? [...new Set([...STEP_CHOICES, current.default_steps, ...(settings.steps ? [settings.steps] : [])])]
-            .filter((n) => n <= settings.max_steps)
-            .sort((a, b) => a - b)
-        : [];
+    const steps = current ? stepChoices(current, settings) : [];
 
     return (
         <div className="settings-pane">

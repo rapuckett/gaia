@@ -131,6 +131,7 @@ import type {
     Settings,
     SkillList,
     SpeechModel,
+    ImageSettings,
     SpeechSettings,
     SpendingReport,
     ChatSpending,
@@ -1162,6 +1163,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getMemoryStats(options) {
             return getJson<MemoryStats>(ENDPOINTS.memoryStats, options?.signal);
+        },
+
+        getImageSettings(options) {
+            return getJson<ImageSettings>(ENDPOINTS.imageSettings, options?.signal);
+        },
+
+        updateImageSettings(change, options) {
+            return putJson<ImageSettings>(ENDPOINTS.imageSettings, change, options?.signal);
         },
 
         getSpeechSettings(options) {

@@ -4,13 +4,14 @@
 import type { ComponentType } from 'react';
 
 import type { LucideIcon } from '@/ui/icons';
-import { Bell, Brain, Clock, Cpu, Info, ListChecks, Lock, MessageSquare, Plug, ShieldQuestion, SlidersHorizontal, Sparkles, Volume2, Wrench } from '@/ui/icons';
+import { Bell, Brain, Clock, Cpu, Image, Info, ListChecks, Lock, MessageSquare, Plug, ShieldQuestion, SlidersHorizontal, Sparkles, Volume2, Wrench } from '@/ui/icons';
 
 import About from './panes/About';
 import Advanced from './panes/Advanced';
 import Automations from './panes/Automations';
 import Connectors from './panes/Connectors';
 import General from './panes/General';
+import Images from './panes/Images';
 import Memory from './panes/Memory';
 import Messaging from './panes/Messaging';
 import Model from './panes/Model';
@@ -26,6 +27,7 @@ export type SectionId =
     | 'general'
     | 'setup'
     | 'model'
+    | 'images'
     | 'permissions'
     | 'skills'
     | 'connectors'
@@ -49,6 +51,7 @@ export const SETTINGS_SECTIONS: Record<SectionId, SettingsSectionEntry> = {
     general: { titleKey: 'settings.section.general', icon: SlidersHorizontal, pane: General },
     setup: { titleKey: 'settings.section.setup', icon: ListChecks, pane: Setup },
     model: { titleKey: 'settings.section.model', icon: Cpu, pane: Model },
+    images: { titleKey: 'settings.section.images', icon: Image, pane: Images },
     permissions: { titleKey: 'settings.section.permissions', icon: ShieldQuestion, pane: Permissions },
     skills: { titleKey: 'settings.section.skills', icon: Sparkles, pane: Skills },
     connectors: { titleKey: 'settings.section.connectors', icon: Plug, pane: Connectors },

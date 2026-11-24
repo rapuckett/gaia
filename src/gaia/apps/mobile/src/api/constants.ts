@@ -34,6 +34,7 @@ export const ENDPOINTS = {
     gpuMemoryPending: '/api/gpu-memory/pending',
     gpuMemoryRevert: '/api/gpu-memory/revert',
     health: '/api/health',
+    imageSettings: '/api/images/settings',
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
     lemonadeTarget: '/api/lemonade/target',
