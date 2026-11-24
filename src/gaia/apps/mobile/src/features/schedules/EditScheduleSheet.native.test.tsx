@@ -3,7 +3,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Platform } from 'react-native';
+import { AccessibilityInfo, Platform, ScrollView } from 'react-native';
 
 import type { Schedule } from '@/api/client.types';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
@@ -72,6 +72,19 @@ async function mount(data: FakeClientData, ui: (schedule: Schedule) => React.Rea
         expect(screen.getByDisplayValue('every 1h')).toBeTruthy();
     });
 
+    it('marks the preset chip picked only while the field equals its value', async () => {
+        await mount({}, (s) => <NewScheduleSheet open editing={s} onClose={() => {}} />);
+        // The task was made with "daily at 8am", which is the morning preset's value.
+        expect(await screen.findByLabelText(t('schedules.preset.morning'))).toBeSelected();
+        expect(screen.getByLabelText(t('schedules.preset.hourly'))).not.toBeSelected();
+        await fireEvent.press(screen.getByLabelText(t('schedules.preset.hourly')));
+        expect(screen.getByLabelText(t('schedules.preset.hourly'))).toBeSelected();
+        expect(screen.getByLabelText(t('schedules.preset.morning'))).not.toBeSelected();
+        await fireEvent.press(screen.getByLabelText(t('schedules.preset.morning')));
+        await fireEvent.changeText(screen.getByDisplayValue('daily at 8am'), 'daily at 9am');
+        expect(screen.getByLabelText(t('schedules.preset.morning'))).not.toBeSelected();
+    });
+
     it('saves with a PATCH body of interval, prompt and time zone, then closes', async () => {
         const onClose = jest.fn();
         const { client } = await mount({}, (s) => <NewScheduleSheet open editing={s} onClose={onClose} />);
@@ -90,6 +103,24 @@ async function mount(data: FakeClientData, ui: (schedule: Schedule) => React.Rea
         await mount({ editScheduleError: 'saving' }, (s) => <NewScheduleSheet open editing={s} onClose={() => {}} />);
         await fireEvent.press(await screen.findByText(t('schedules.save')));
         expect(await screen.findByText(t('schedules.saving'))).toBeTruthy();
+    });
+
+    it('scrolls the sheet to its end when the failure notice appears', async () => {
+        const scroll = jest.spyOn(ScrollView.prototype, 'scrollToEnd');
+        await mount({ editScheduleError: new Error('lock timeout') }, (s) => <NewScheduleSheet open editing={s} onClose={() => {}} />);
+        await fireEvent.press(await screen.findByText(t('schedules.save')));
+        await screen.findByText(t('schedules.editFailed'));
+        await act(async () => fireEvent(screen.getByTestId('schedule-form-scroll'), 'contentSizeChange', 300, 900));
+        expect(scroll).toHaveBeenCalled();
+    });
+
+    it('tells a screen reader the save failed', async () => {
+        const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+        await mount({ editScheduleError: new Error('lock timeout') }, (s) => <NewScheduleSheet open editing={s} onClose={() => {}} />);
+        await fireEvent.press(await screen.findByText(t('schedules.save')));
+        await screen.findByText(t('schedules.editFailed'));
+        if (Platform.OS === 'ios') expect(announce).toHaveBeenCalledWith(t('schedules.editFailed'));
+        else expect(screen.getByText(t('schedules.editFailed')).parent?.parent?.props.accessibilityLiveRegion ?? 'assertive').toBe('assertive');
     });
 
     it('says the save failed and puts the PC text on its own line', async () => {

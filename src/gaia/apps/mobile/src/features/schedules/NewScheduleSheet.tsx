@@ -7,12 +7,12 @@ import type { ParsedSchedule, Schedule } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useCreateSchedule, useEditSchedule, useGaiaClient } from '@/data';
 import { describeHttpFailure, useT } from '@/i18n/useT';
+import { useAnnounce } from '@/platform/useAnnounce';
 import { isolateUnit } from '@webui/i18n/registry';
 import { WHEN_PRESETS, scheduleInputText } from '@webui/utils/scheduleForm.core';
 
-import { Button, Notice, Row, Sheet, Stack, Text, TextField } from '@/ui';
+import { Button, Chip, Notice, Row, Sheet, Stack, Text, TextField } from '@/ui';
 
-import { ChipButton } from './ChipButton';
 import { composeDateLocale, describeSchedule, formatNextClock, formatTime } from './scheduleText';
 
 const PARSE_DEBOUNCE_MS = 400;
@@ -68,6 +68,7 @@ export function NewScheduleSheet({ open, onClose, initial, editing }: NewSchedul
     const nextClock = parsed?.valid ? formatNextClock(parsed.next_run_at, new Date(), composeDateLocale(t.locale, t)) : null;
     const nameTaken = !editing && create.error instanceof GaiaApiError && create.error.status === 409;
     const formError = create.isError && !nameTaken ? describeHttpFailure(create.error, t) : null;
+    useAnnounce(formError ? (editing ? t('schedules.editFailed') : formError.text) : null);
     // The backend validates on create, so only a parse that says no blocks it.
     const canCreate = when.trim() !== '' && name.trim() !== '' && prompt.trim() !== '' && !rejected && !create.isPending;
 
@@ -97,6 +98,8 @@ export function NewScheduleSheet({ open, onClose, initial, editing }: NewSchedul
         <Sheet
             open={open}
             onClose={close}
+            scrollToEnd={formError !== null}
+            scrollTestID="schedule-form-scroll"
             title={editing ? t('schedules.editingTitle', { name: isolateUnit(editing.name) }) : t('schedules.new')}
             footer={
                 <Row gap="sm" justify="end" stack>
@@ -113,26 +116,26 @@ export function NewScheduleSheet({ open, onClose, initial, editing }: NewSchedul
             }
         >
             <Stack gap="md">
-                <Row gap="xs" wrap>
-                    {WHEN_PRESETS.map((preset) => (
-                        <ChipButton
-                            key={preset.value}
-                            label={t(preset.label)}
-                            variant={when.trim() === preset.value ? 'accent' : 'default'}
-                            onPress={() => setWhen(preset.value)}
-                        />
-                    ))}
-                </Row>
-                <TextField
-                    label={t('schedules.when')}
-                    value={when}
-                    onChangeText={setWhen}
-                    placeholder={t.bare('schedules.whenPlaceholder')}
-                    hint={t('schedules.whenHint')}
-                    multiline
-                    maxLines={3}
-                    autoFocus={!editing}
-                />
+                <Stack gap="xs">
+                    <Text role="label" weight="medium" tone="secondary">
+                        {t('schedules.when')}
+                    </Text>
+                    <Row gap="xs" wrap>
+                        {WHEN_PRESETS.map((preset) => (
+                            <Chip key={preset.value} label={t(preset.label)} selected={when.trim() === preset.value} onPress={() => setWhen(preset.value)} />
+                        ))}
+                    </Row>
+                    <TextField
+                        accessibilityLabel={t('schedules.when')}
+                        value={when}
+                        onChangeText={setWhen}
+                        placeholder={t.bare('schedules.whenPlaceholder')}
+                        hint={t('schedules.whenHint')}
+                        multiline
+                        maxLines={3}
+                        autoFocus={!editing}
+                    />
+                </Stack>
                 {preview.status === 'parsing' ? <Text role="caption" tone="muted">{t('schedules.parsing')}</Text> : null}
                 {parsed?.valid ? (
                     <Stack gap="xs">
