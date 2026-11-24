@@ -6,6 +6,7 @@ import { Feather } from 'lucide-react';
 import { useT } from '../i18n/useT';
 import { useActiveAgentStore } from '../stores/activeAgentStore';
 import { useChatStore } from '../stores/chatStore';
+import { isFastAgent } from '../utils/agentRecovery.core';
 
 /** Says so while the Fast and light agent answers; the default agent shows nothing. */
 export function AgentChip() {
@@ -20,7 +21,7 @@ export function AgentChip() {
         if (!settingsOpen) void refresh();
     }, [settingsOpen, refresh]);
 
-    if (current !== 'gaiacpp') return null;
+    if (!isFastAgent(current)) return null;
     return (
         <button
             type="button"
