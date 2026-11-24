@@ -3,7 +3,7 @@
 
 import type { AgentStep, StreamEvent } from '@webui/types';
 import { isEchoOfFailedTool } from '@webui/utils/chatStream';
-import { agentEventToStep, isProgressTick, statusText } from '@webui/utils/streamSteps.core';
+import { agentEventToStep, CONFIRM_TIMEOUT_PHASE, isProgressTick, statusText } from '@webui/utils/streamSteps.core';
 import { toolResultUpdates } from '@webui/utils/toolEvents.core';
 
 import type { Translate } from '@/i18n/useT';
@@ -128,7 +128,7 @@ export function stepsFromEvents(events: readonly StreamEvent[], t: Translate): A
                 const last = steps[steps.length - 1];
                 if (last?.type === 'status' && last.active && event.status !== 'warning') updateLast({ label: text || t('activity.working'), detail: text });
                 else if (last?.type === 'thinking' && last.active) updateLast({ label: text || t('activity.thinking') });
-                else add(agentEventToStep({ ...event, message: text }, ids, t));
+                else add(agentEventToStep(event.phase === CONFIRM_TIMEOUT_PHASE ? event : { ...event, message: text }, ids, t));
                 break;
             }
             case 'step':
