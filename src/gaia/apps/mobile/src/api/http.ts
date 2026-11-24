@@ -82,6 +82,7 @@ import type {
     LinkAddResult,
     LinkPreview,
     LocalModelStatus,
+    TunnelStatus,
     KnowledgeSaveResult,
     MemoryActivityDay,
     MemoryCleared,
@@ -89,6 +90,7 @@ import type {
     MemoryEntity,
     MemoryKnowledgePage,
     MemoryReinitializeResult,
+    EmbedderView,
     MemorySettings,
     MemorySettingsUpdateResponse,
     MemoryStats,
@@ -1237,6 +1239,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return putJson<MemorySettingsUpdateResponse>(ENDPOINTS.memorySettings, settings, options?.signal);
         },
 
+        getMemoryEmbedder(options) {
+            return getJson<EmbedderView>(ENDPOINTS.memoryEmbedder, options?.signal);
+        },
+
+        setMemoryEmbedder(device, options) {
+            return putJson<EmbedderView>(ENDPOINTS.memoryEmbedder, { device }, options?.signal);
+        },
+
         clearAllMemory(options) {
             return deleteJson<MemoryCleared>(ENDPOINTS.memoryAll, options?.signal);
         },
@@ -1358,6 +1368,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             );
         },
 
+        dismissDownloadFailure(modelName, options) {
+            return postJson<{ status: string; model: string }>(ENDPOINTS.systemDismissDownload, { model_name: modelName }, options?.signal);
+        },
+
         loadModel(modelName, force, options) {
             return postJson<{ status: string; model: string; ctx_size: number }>(
                 ENDPOINTS.systemLoadModel,
@@ -1366,6 +1380,9 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             );
         },
 
+        getTunnelStatus(options) {
+            return getJson<TunnelStatus>(ENDPOINTS.tunnelStatus, options?.signal);
+        },
         getLocalModelStatus(options) {
             return getJson<LocalModelStatus>(ENDPOINTS.localModelStatus, options?.signal);
         },

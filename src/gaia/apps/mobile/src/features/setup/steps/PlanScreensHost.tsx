@@ -21,13 +21,20 @@ export function PlanWithScreens({ ctx }: { ctx: SetupStepContext }) {
     const [asked] = useState(() => usePlanScreenRequest.getState().pending);
     const [stack, setStack] = useState<PlanScreenName[]>(() => (asked && PLAN_SCREENS[asked.screen] ? [asked.screen] : []));
     useEffect(() => usePlanScreenRequest.getState().clear(), []);
+    const [toAgent, setToAgent] = useState(false);
     const { ask, sheet } = useConfirmSheet();
 
     const openers = useMemo<PlanOpeners>(() => {
-        const opener = (name: PlanScreenName) =>
-            PLAN_SCREENS[name] ? () => setStack((s) => (s[s.length - 1] === name ? s : [...s, name])) : undefined;
+        const opener = (name: PlanScreenName, agent = false) =>
+            PLAN_SCREENS[name]
+                ? () => {
+                      setToAgent(agent);
+                      setStack((s) => (s[s.length - 1] === name ? s : [...s, name]));
+                  }
+                : undefined;
         return {
             openModels: opener('models'),
+            openAgent: opener('models', true),
             openKey: opener('key'),
             openGpu: opener('gpu'),
             confirmNoFit: (request, proceed) => {
@@ -58,7 +65,7 @@ export function PlanWithScreens({ ctx }: { ctx: SetupStepContext }) {
                     <PlanStep ctx={ctx} />
                 </SetupFooterMuted>
             </View>
-            {Screen ? <Screen key={top} ctx={ctx} close={close} /> : null}
+            {Screen ? <Screen key={top} ctx={ctx} close={close} toAgent={toAgent} /> : null}
             {sheet}
         </PlanOpenersContext.Provider>
     );

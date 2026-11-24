@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
 
 import { failureRecordId } from '@webui/utils/streamErrors.core';
+import { offersAgentRecovery } from '@webui/utils/agentRecovery.core';
 import { isErrorContent, namesAgentLog } from '@webui/utils/answerErrors.core';
 
 import type { Message } from '@/api/client.types';
@@ -18,6 +19,7 @@ import { Button, Icon, Notice, Row, Stack, Text } from '@/ui';
 import { Archive, Info, RotateCcw, ScrollText } from '@/ui/icons';
 
 import { savedActivity } from './activity/savedActivity';
+import { ChatAgentRecovery } from './ChatAgentRecovery';
 import { FailedLead, OpenSettingsButtons, causeTitleKey, failedTurnOf } from './FailedTurnCard';
 import { useMessageActionsContext } from './messages/MessageActionsContext';
 import { chatErrorInfo, namesFailureRecord, reportTitle } from './chatErrors';
@@ -87,13 +89,14 @@ export function SavedReplyErrors({ message, fixShownBelow = false, latest = fals
         setRetryFailure(null);
         retry?.(message.id).catch((err: unknown) => setRetryFailure(describeHttpFailure(err, t)));
     };
+    const ownsRetry = ownsTryAgain(message, { fixShownBelow, latest, busy, readOnly });
     return (
         <Stack gap="sm">
             {isError && !fixShownBelow ? <ErrorBanner title={titleKey ? t(titleKey) : undefined} /> : null}
             {turn?.raw ? <FailedLead turn={turn} content={message.content} /> : null}
             {body}
             {retryFailure ? <Notice tone="danger" message={retryFailure.text} detail={retryFailure.detail} testID="failed-retry-error" /> : null}
-            {ownsTryAgain(message, { fixShownBelow, latest, busy, readOnly }) ? (
+            {ownsRetry ? (
                 <Row gap="sm" wrap stack>
                     <Button size="sm" icon={RotateCcw} label={t('msg.tryAgain')} onPress={tryAgain} testID="try-again" />
                 </Row>
@@ -110,6 +113,7 @@ export function SavedReplyErrors({ message, fixShownBelow = false, latest = fals
                 </Row>
             ) : null}
             <PcOnlyFailureLines showLog={false} showReport={showReport} />
+            {offersAgentRecovery(message, ownsRetry) ? <ChatAgentRecovery onTryAgain={tryAgain} /> : null}
         </Stack>
     );
 }

@@ -9,11 +9,12 @@ import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys, requireClient } from './queries';
 
 /** The skills GAIA can load, and the skill folders it skipped. */
-export function useSkills() {
+export function useSkills({ fresh = false, enabled = true }: { fresh?: boolean; enabled?: boolean } = {}) {
     const client = useGaiaClient();
     return useQuery<SkillList>({
         queryKey: queryKeys.skills,
-        enabled: client !== null,
+        enabled: enabled && client !== null,
+        refetchOnMount: fresh ? 'always' : true,
         queryFn: ({ signal }) => requireClient(client).listSkills({ signal }),
     });
 }

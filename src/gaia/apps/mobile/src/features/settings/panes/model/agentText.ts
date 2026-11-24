@@ -18,7 +18,7 @@ export interface AgentLine {
 
 /** Our own words for a failure, for an `{error}` slot; the PC's text never goes inside the sentence. */
 export function reasonFreeWith(err: unknown, say: Say): string {
-    if (err instanceof GaiaApiError && err.messageKey === 'mobileApp.error.http') return say('mobileApp.error.httpNoDetail', { status: err.status });
+    if (err instanceof GaiaApiError && err.messageKey === 'mobileApp.error.http') return say('mobileApp.error.httpNoDetail');
     if (err instanceof GaiaApiError && err.messageKey === 'mobileApp.error.auth') return say('mobileApp.error.authNoDetail');
     if (err instanceof GaiaError) return say(err.messageKey, err.params);
     return say('msg.error');

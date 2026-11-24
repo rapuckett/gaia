@@ -9,6 +9,7 @@ import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Card, Notice, SmallButton, Stack, Switch, Text } from '@/ui';
 
 import { SettingsAnchor } from '../targets';
+import MemoryEmbedder from './MemoryEmbedder';
 
 /** Memory on or off, and the way into the Memory screen. */
 export default function Memory() {
@@ -46,6 +47,11 @@ export default function Memory() {
                             <SmallButton variant="plain" label={t.bare('settings.memory.dashboard')} accessibilityLabel={t('settings.memory.dashboard')} onPress={() => router.push('/memory')} testID="memory-open-dashboard" />
                         </Stack>
                     </Stack>
+                </Card>
+            </SettingsAnchor>
+            <SettingsAnchor name="embedder">
+                <Card>
+                    <MemoryEmbedder />
                 </Card>
             </SettingsAnchor>
         </Stack>

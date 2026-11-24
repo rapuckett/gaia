@@ -88,6 +88,7 @@ from . import followups
 from . import permissions as session_permissions
 from . import spending
 from .database import PLACEHOLDER_TITLES, SESSION_DEFAULT_MODEL, ChatDatabase
+from .devices import push
 from .generated_media import media_card
 from .models import ChatRequest
 from .session_environment import apply_environment, folders_refusal, held_internet_off
@@ -3170,6 +3171,7 @@ def _dispatch_sidecar_query(
         sse_handler._emit(
             {"type": "agent_error", "content": _missing_local_model_text(init_body)}
         )
+        push.needs_you(push.NEEDS_YOU_SETUP)
         return
     elif status_code != 200:
         hint = (init_body or {}).get("hint")
@@ -4313,10 +4315,13 @@ def _preflight_load(
         raise
     except (ModelInUseError, LemonadeModelUnavailableError) as exc:
         logger.error("Pre-flight model load refused: %s", exc)
+        if isinstance(exc, LemonadeModelUnavailableError):
+            push.needs_you(push.NEEDS_YOU_SETUP)
         raise
     except (GaiaLemonadeStartError, LemonadeServerDownError) as exc:
         # Already worded; "send the message again" would repeat a failed start.
         logger.error("Pre-flight could not bring GAIA's Lemonade back: %s", exc)
+        push.needs_you(push.NEEDS_YOU_MODEL_SERVER)
         raise
     except LeaseWaitCancelled:
         logger.info("Pre-flight model load stopped with the turn")
@@ -6239,6 +6244,7 @@ def _record_run_outcome(db: ChatDatabase, session_id: str, status: str) -> None:
             session_id[:8],
             exc,
         )
+    push.run_ended(session_id, status)
 
 
 async def _run_chat_lifecycle(
@@ -6264,6 +6270,7 @@ async def _run_chat_lifecycle(
         outcome.observe(data)
         journal.observe(data)
         run.emit(data)
+        push.observe_run_frame(session_id, data)
 
     def _announce_place(position: int) -> None:
         # From when this wait began: a turn back from the user counts afresh.
@@ -6350,27 +6357,39 @@ async def _run_chat_lifecycle(
 
 
 def _hide_pc_paths(frame: str) -> str:
-    """*frame* with each ``documents_added`` path shown home-relative.
+    """*frame* with each PC path shown home-relative.
 
-    One run buffer feeds every subscriber, so the PC form is built once and a
-    caller away from the PC gets this rewrite at send time. A frame that can't
-    be rewritten is sent with the PC's folders named, never as it is.
+    Covers ``documents_added`` filepaths and an image or audio card's ``path``,
+    ``saved_to`` and ``script_path``. One run buffer feeds every subscriber, so
+    the PC form is built once and a caller away from the PC gets this rewrite
+    at send time. A frame that can't be rewritten is sent with the PC's
+    folders named, never as it is.
     """
-    if '"documents_added"' not in frame:
+    if '"documents_added"' not in frame and '"render"' not in frame:
         return frame
     from .run_manager import _padded
-    from .security import device_display_path, hide_pc_folders
+    from .security import (
+        MEDIA_CARD_KINDS,
+        device_display_path,
+        device_media_data,
+        hide_pc_folders,
+    )
 
     start = frame.find("data: ")
     # Each buffered item is one event: the producer yields one, _record keeps
     # one line, and padding is a trailing SSE comment.
     body = frame[start + len("data: ") :].split("\n\n", 1)[0] if start >= 0 else ""
+    changed = False
     try:
         event = json.loads(body)
         documents = event.get("documents_added") if isinstance(event, dict) else None
         if documents is not None:
             for doc in documents:
                 doc["filepath"] = device_display_path(doc.get("filepath") or "")
+            changed = True
+        if isinstance(event, dict) and event.get("render") in MEDIA_CARD_KINDS:
+            event["data"] = device_media_data(event.get("data"))
+            changed = True
     except (ValueError, TypeError, AttributeError) as e:
         kind = _re.search(r'"type": ?"(\w+)"', frame)
         logger.error(
@@ -6380,7 +6399,7 @@ def _hide_pc_paths(frame: str) -> str:
             type(e).__name__,
         )
         return hide_pc_folders(frame)
-    if documents is None:
+    if not changed:
         return frame
     return _padded(_sse(event))
 

@@ -20,6 +20,8 @@ import { SeedOpenDetails } from './ModelRow';
 
 // The web project's renderer can't mount react-native-web's DOM or the sheet host.
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
+// The confirm sheet animates in; under a full parallel run it can take past findBy's 1 s default.
+const SHEET_WAIT = { timeout: 5000 };
 
 const model = (id: string, extra: Partial<ProviderModel>): ProviderModel => ({
     id,
@@ -157,7 +159,7 @@ describeNative('Model list', () => {
             const onUse = jest.fn();
             await mountList(onUse);
             await fireEvent.press(await screen.findByTestId('model-use-Big-GGUF'));
-            expect(await screen.findByText('Use it anyway')).toBeTruthy();
+            expect(await screen.findByText('Use it anyway', {}, SHEET_WAIT)).toBeTruthy();
             expect(onUse).not.toHaveBeenCalled();
             await fireEvent.press(screen.getByTestId('confirm-ok'));
             await waitFor(() => expect(onUse).toHaveBeenCalledWith('Big-GGUF'));
@@ -167,7 +169,7 @@ describeNative('Model list', () => {
             const onUse = jest.fn();
             await mountList(onUse);
             await fireEvent.press(await screen.findByTestId('model-use-Big-GGUF'));
-            await fireEvent.press(await screen.findByTestId('confirm-cancel'));
+            await fireEvent.press(await screen.findByTestId('confirm-cancel', {}, SHEET_WAIT));
             expect(screen.getByTestId('confirm-cancel')).toHaveTextContent('Cancel');
             expect(onUse).not.toHaveBeenCalled();
         });

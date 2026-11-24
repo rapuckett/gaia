@@ -1,7 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ComponentRef, type ReactNode, type Ref } from 'react';
+import { View } from 'react-native';
 
 import {
     AGENT_OPTIONS, agentInstalled, agentNeedsDownload, agentOff, type AgentOption, type AgentPick,
@@ -28,6 +29,8 @@ export interface AgentChoiceProps {
     /** Setup: the agent picked here, held until Continue; null keeps the one in use. */
     pending?: FlagshipAgent | null;
     onPending?: (pick: AgentPick | null) => void;
+    /** Setup: the heading's node, so "Change" can move screen-reader focus here. */
+    headingRef?: Ref<ComponentRef<typeof View>>;
 }
 
 interface RowProps {
@@ -96,7 +99,7 @@ function Line({ line, tone = 'secondary' }: { line: AgentLine; tone?: 'secondary
 }
 
 /** Which program runs the GAIA agent on the PC: the Python one or the native C++ one. */
-export function AgentChoice({ inSettings = false, disabled = false, pending = null, onPending }: AgentChoiceProps) {
+export function AgentChoice({ inSettings = false, disabled = false, pending = null, onPending, headingRef }: AgentChoiceProps) {
     const t = useT();
     const refused = useAgentProgramsRefused();
     const programs = useAgentPrograms();
@@ -131,7 +134,13 @@ export function AgentChoice({ inSettings = false, disabled = false, pending = nu
 
     const title = (
         <Row gap="sm" align="center">
-            <Text role="ui" weight="semibold" accessibilityRole="header">{t('setup.agent.title')}</Text>
+            {headingRef ? (
+                <View ref={headingRef} accessible accessibilityRole="header" collapsable={false}>
+                    <Text role="ui" weight="semibold">{t('setup.agent.title')}</Text>
+                </View>
+            ) : (
+                <Text role="ui" weight="semibold" accessibilityRole="header">{t('setup.agent.title')}</Text>
+            )}
             {save.isPending || (!listing && programs.isFetching) ? <Spinner size="sm" /> : null}
         </Row>
     );

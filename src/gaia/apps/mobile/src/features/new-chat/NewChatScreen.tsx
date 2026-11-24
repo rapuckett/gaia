@@ -10,13 +10,14 @@ import type { PermissionMode } from '@/api/client.types';
 import { useCreateSession, useDocuments, useGaiaClient, useMemorySettings, useStartScreen, useSystemStatus } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { ModelRestoreNotice } from '@/features/model/ModelRestoreNotice';
-import { Composer, FolderChip, ModelChip, PermissionChip, PrivateChip, useAttachments, useComposerQueue, useNextChatFolder } from '@/features/composer';
+import { AgentChip, Composer, FolderChip, ModelChip, PermissionChip, PrivateChip, ResearchChip, useAttachments, useComposerQueue, useNextChatFolder, useResearch } from '@/features/composer';
 import { useNextChatDocs } from '@/features/documents';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
 import { useLastChatStore } from '@/state/lastChat';
+import { useResearchStore } from '@/state/research';
 import { readNewChatDraft, writeNewChatDraft } from '@/state/newChatDraft';
 import { useRouteNoticeStore } from '@/state/routeNotice';
 import { Disclosure, IconButton, Notice, ProgressLine, Row, Screen, Stack, Surface, Text } from '@/ui';
@@ -64,6 +65,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
         return () => clearTimeout(timer);
     }, []);
     const attachments = useAttachments();
+    const research = useResearch(null);
     // The chat doesn't exist yet: these are applied as it is made.
     const [isPrivate, setPrivate] = useState(false);
     const memory = useMemorySettings();
@@ -83,7 +85,10 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                 if (mode !== 'ask') await client?.setPermissionMode(session.id, mode);
                 return session;
             },
-            deliver: queue.deliver,
+            deliver: (sessionId, text) => {
+                useResearchStore.getState().adoptDraft(sessionId, text);
+                return queue.deliver(sessionId, text);
+            },
             flush: queue.flush,
             queueHeld: queue.queueHeld,
             takeHeld: () => queue.takeHeld().map((item) => item.text),
@@ -269,6 +274,8 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                         onSend={send}
                         disabledReason={startingReason(status, t) ?? undefined}
                         attachments={attachments}
+                        wrap={research.wrap}
+                        placeholder={research.placeholder}
                         leftControls={
                             <>
                                 <PermissionChip mode={mode} onChange={setMode} />
@@ -278,6 +285,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                                     memoryEnabled={memory.isError ? null : (memory.data?.memory_enabled ?? null)}
                                     memoryUnreadable={memory.isError}
                                 />
+                                <ResearchChip sessionId={null} />
                             </>
                         }
                         rightControls={<ModelChip />}
@@ -310,7 +318,12 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                         detail={failedSetup}
                     />
                 )}
-                {!state.sending && <FolderChip folder={startScreen?.working_folder} initialPicking={initialPicking} />}
+                {!state.sending && (
+                    <Row gap="sm" wrap align="start">
+                        <FolderChip folder={startScreen?.working_folder} initialPicking={initialPicking} />
+                        <AgentChip line />
+                    </Row>
+                )}
                 {documents && !state.sending && (
                     <LibraryDocuments
                         documents={documents}

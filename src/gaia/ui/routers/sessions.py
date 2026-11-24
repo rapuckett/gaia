@@ -42,7 +42,7 @@ from ..database import (
     resolved_default_model,
 )
 from ..dependencies import get_db
-from ..devices import DEVICE_PROMPT_EVENT, DEVICE_PROMPT_STATES
+from ..devices import DEVICE_PROMPT_EVENT, DEVICE_PROMPT_STATES, push
 from ..devices.changes import record_folder_added
 from ..models import (
     AttachDocumentRequest,
@@ -62,6 +62,7 @@ from ..security import (
     detail_for,
     flagship_only,
     is_local_pc,
+    steps_for_device,
 )
 from ..shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_opened
 from ..utils import UPLOAD_LINK_RE, message_to_response, session_to_response
@@ -439,8 +440,12 @@ async def session_events(request: Request):
     async def generate():
         q = await _system_emitter.subscribe()
         stream_opened()
+        if device_id:
+            push.stream_opened(device_id)
         try:
             yield ": keepalive\n\n"
+            if device_id:
+                push.stream_wrote(device_id)
             while True:
                 try:
                     event = await get_or_shutdown(q, timeout=30.0)
@@ -456,8 +461,12 @@ async def session_events(request: Request):
                     yield f"data: {json.dumps(event)}\n\n"
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"  # prevent proxy timeout
+                if device_id:
+                    push.stream_wrote(device_id)
         finally:
             stream_closed()
+            if device_id:
+                push.stream_closed(device_id)
             await _system_emitter.unsubscribe(q)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -725,6 +734,7 @@ async def mark_session_read(session_id: str, db: ChatDatabase = Depends(get_db))
     """Clear a chat's unread mark; the UI calls this when the chat is opened (#5221)."""
     if not db.mark_session_read(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    push.session_read(session_id)
     return await _session_response(db, db.get_session(session_id))
 
 
@@ -733,6 +743,7 @@ async def mark_session_read(session_id: str, db: ChatDatabase = Depends(get_db))
 
 @router.get("/api/sessions/{session_id}/messages", response_model=MessageListResponse)
 async def get_messages(
+    http_request: Request,
     session_id: str,
     limit: int = 100,
     offset: int = Query(0, le=SQLITE_INT_MAX),
@@ -745,11 +756,12 @@ async def get_messages(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    away = not is_local_pc(http_request)
     messages = db.get_messages(session_id, limit=limit, offset=offset)
     total = db.count_messages(session_id)
 
     return MessageListResponse(
-        messages=[message_to_response(m) for m in messages],
+        messages=[message_to_response(m, away=away) for m in messages],
         total=total,
     )
 
@@ -828,6 +840,7 @@ def _plain_attachments(content: str) -> str:
     response_model_exclude_unset=True,
 )
 async def export_session(
+    http_request: Request,
     session_id: str,
     format: str = "markdown",  # noqa: A002
     db: ChatDatabase = Depends(get_db),
@@ -875,6 +888,11 @@ async def export_session(
 
         content = "\n".join(lines)
         return {"content": content, "format": "markdown"}
+    if not is_local_pc(http_request):
+        messages = [
+            {**m, "agent_steps": steps_for_device(m.get("agent_steps"))}
+            for m in messages
+        ]
     return {
         "session": {**session, "effective_model": effective_model},
         "messages": messages,

@@ -13,9 +13,13 @@ import { AudioCard } from '../cards/AudioCard';
 import { GuideCard } from '../cards/GuideCard';
 import { GUIDE_WORKOUT } from './__fixtures__/messages';
 import { ConnectorRetry } from '../ConnectorRetry';
+import { ToolStepRow } from '../activity/ToolStepRow';
+import { stepsFromEvents } from '../activity/stepsFromEvents';
+import { translator } from '@/i18n/useT';
+import type { StreamEvent } from '@/api/client.types';
 
 /** Developer gallery (`/dev/messages?state=`): the audio card, the retry banner shown once a connector is signed in, and the guide card's unit switch (RC-12) and one-time tip (RC-18). */
-export const CARD_SCENES = ['audio', 'audio-failed', 'connector-retry', 'guide-units', 'guide-tip'] as const;
+export const CARD_SCENES = ['audio', 'audio-failed', 'connector-retry', 'guide-units', 'guide-tip', 'audio-music', 'audio-dictation', 'dictate-step'] as const;
 export type CardScene = (typeof CARD_SCENES)[number];
 
 const AUDIO = {
@@ -24,6 +28,22 @@ const AUDIO = {
     path: '/Users/avery/.gaia/media/audio/piano-theme.wav',
     duration_seconds: 83,
 };
+
+const MUSIC = { ...AUDIO, saved_to: '/Users/avery/Music/GAIA/piano-theme.wav' };
+
+const DICTATION = {
+    src: '/api/media/audio/quarterly-report.wav',
+    caption: 'Quarterly report, read aloud.',
+    path: '/Users/avery/.gaia/media/audio/quarterly-report.wav',
+    duration_seconds: 412,
+    saved_to: '/Users/avery/Documents/quarterly-report.wav',
+    script_path: '/Users/avery/Documents/quarterly-report.listen.txt',
+};
+
+const DICTATE_STEP = stepsFromEvents(
+    [{ type: 'tool_start', tool: 'dictate_document', detail: 'path: quarterly-report.docx' } as StreamEvent],
+    translator('en'),
+)[0]!;
 
 const RECIPE = {
     kind: 'guide',
@@ -62,6 +82,12 @@ export function CardScenes({ state }: { state: CardScene }) {
                                 <GuideCard data={GUIDE_WORKOUT} />
                             ) : state === 'connector-retry' ? (
                                 <ConnectorRetry content="NOT_CONNECTED: Google is not currently connected." providers={['google']} onRetry={() => undefined} />
+                            ) : state === 'audio-music' ? (
+                                <AudioCard data={MUSIC} />
+                            ) : state === 'audio-dictation' ? (
+                                <AudioCard data={DICTATION} />
+                            ) : state === 'dictate-step' ? (
+                                <ToolStepRow step={DICTATE_STEP} now={DICTATE_STEP.timestamp + 4000} testID="dictate-step" />
                             ) : (
                                 <AudioCard data={AUDIO} />
                             )}

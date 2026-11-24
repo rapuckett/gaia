@@ -17,6 +17,7 @@ import { AttachmentChips } from './AttachmentChips';
 import { ChipFitContext } from './ChipFitContext';
 import { CHIP_GAP, collapsedChips, type RoomId } from './chipRoom';
 import { pickedFromPaste } from './pickFiles';
+import { SkillMenu } from './SkillMenu';
 import type { Attachments } from './useAttachments';
 
 export interface ComposerProps {
@@ -42,6 +43,8 @@ export interface ComposerProps {
     attachMenu?: { open?: boolean; paste?: boolean };
     /** The text input, for a screen that focuses it after filling the box. */
     inputRef?: Ref<ComponentRef<typeof TextInput>>;
+    /** Turns the typed text into the message to send (research mode's `/research` prefix); attachments' links are added after. */
+    wrap?(text: string): string;
     leftControls?: ReactNode;
     rightControls?: ReactNode;
 }
@@ -70,6 +73,7 @@ export function Composer({
     attachments,
     attachMenu,
     inputRef,
+    wrap,
     leftControls,
     rightControls,
 }: ComposerProps) {
@@ -114,7 +118,9 @@ export function Composer({
 
     const message = text.trim();
     // What goes out is the text plus a link for each uploaded file.
-    const sent = attachments ? attachments.compose(message) : message;
+    // An answer to a waiting question is a reply, never a research topic.
+    const outgoing = wrap && !answering ? wrap(message) : message;
+    const sent = attachments ? attachments.compose(outgoing) : outgoing;
     const tooLong = sent.length > MAX_MESSAGE_CHARS;
     const hasContent = message.length > 0 || !!attachments?.hasUploaded;
     const refused = attachments?.items.filter((a) => a.error) ?? [];
@@ -160,6 +166,7 @@ export function Composer({
             {refusedNames && hasContent ? (
                 <Notice tone="danger" message={t('composer.removeRefused', { names: refusedNames })} testID="composer-refused" />
             ) : null}
+            {disabledReason ? null : <SkillMenu value={text} onPick={(name) => setText(`/${name} `)} />}
             <Surface tone="card" border radius="xl" padding="sm">
                 <Stack gap="xs">
                     {attachments ? <AttachmentChips attachments={attachments} /> : null}

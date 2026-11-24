@@ -9,6 +9,8 @@ import { createContext, useContext } from 'react';
 export interface PlanOpeners {
     /** Customize: the models screen. */
     openModels?: () => void;
+    /** The plan's agent line, Change: Customize, scrolled to its agent picker. */
+    openAgent?: () => void;
     /** Cloud, Continue: the provider and key screen. */
     openKey?: () => void;
     /** "Change how memory is split": the GPU memory screen. */

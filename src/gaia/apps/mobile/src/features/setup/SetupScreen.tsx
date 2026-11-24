@@ -1,7 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentRef, type ReactNode } from 'react';
+import type { ScrollView } from 'react-native';
 
 import type { SetupPlan, SetupRunStatus } from '@/api/client.types';
 import { useSetupPlan, useSetupStatus } from '@/data';
@@ -18,6 +19,7 @@ import { LanguagePicker } from './LanguagePicker';
 import { Reveal } from './Reveal';
 import { SetupFooterBar, SetupFooterProvider } from './SetupFooter';
 import { SetupRail } from './SetupRail';
+import { SetupScrollContext } from './setupScroll';
 import { SETUP_STEPS } from './steps';
 
 /** What a step's body is given: where setup is, and the way to move it. */
@@ -59,6 +61,7 @@ export function SetupScreen({ onReady, onClose, renderStep, initialViewing }: Se
     const plan = useSetupPlan();
     const again = onClose != null;
 
+    const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
     const [phase, setPhase] = useState<Phase>('check');
     const [viewing, setViewing] = useState<SetupStage | null>(initialViewing ?? null);
     const [visited, setVisited] = useState<ReadonlySet<SetupStage>>(() => new Set<SetupStage>(['check']));
@@ -130,7 +133,8 @@ export function SetupScreen({ onReady, onClose, renderStep, initialViewing }: Se
 
     return (
         <SetupFooterProvider>
-            <Screen width="flow" scroll footer={<SetupFooterBar />} footerDivider>
+          <SetupScrollContext.Provider value={scrollRef}>
+            <Screen width="flow" scroll scrollRef={scrollRef} footer={<SetupFooterBar />} footerDivider>
                 <Stack gap="lg" padding="lg">
                     <DirectionNotice />
                     <SetupRail steps={steps} onOpen={goTo} />
@@ -180,6 +184,7 @@ export function SetupScreen({ onReady, onClose, renderStep, initialViewing }: Se
                     ) : null}
                 </Stack>
             </Screen>
+          </SetupScrollContext.Provider>
         </SetupFooterProvider>
     );
 }

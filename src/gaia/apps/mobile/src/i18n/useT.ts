@@ -63,7 +63,7 @@ export function describeHttpFailure(error: unknown, t: Translate): { text: strin
         return { text: t('mobileApp.connectors.reconnectNeeded') };
     }
     if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.http' && error.detail) {
-        return { text: t('mobileApp.error.httpNoDetail', { status: error.status }), detail: error.detail };
+        return { text: t('mobileApp.error.httpNoDetail'), detail: error.detail };
     }
     if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.auth') {
         return { text: t('mobileApp.error.authNoDetail'), detail: error.detail || undefined };

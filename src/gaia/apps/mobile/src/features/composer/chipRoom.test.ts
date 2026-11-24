@@ -52,4 +52,19 @@ describe('collapsedChips', () => {
         expect(collapsedChips({ private: 100, model: 300 }, 50)).toEqual(['private']);
         expect(collapsedChips(FULL, 0)).toEqual([]);
     });
+
+    it('gives up the agent chip right after the folder', () => {
+        const all = { ...FULL, meter: 80, agent: 120 };
+        expect(collapsedChips(all, 660)).toEqual(['meter']);
+        expect(collapsedChips(all, 620)).toEqual(['meter', 'folder']);
+        expect(collapsedChips(all, 560)).toEqual(['meter', 'folder', 'agent']);
+    });
+
+    it('drops the Research label before anything else, at 390 px and with the meter present', () => {
+        const row = { research: 70, permission: 70, private: 100, model: 132 };
+        expect(collapsedChips(row, 400)).toEqual([]);
+        expect(collapsedChips(row, 227)).toEqual(['research', 'private', 'permission']);
+        expect(collapsedChips({ ...row, folder: 90, meter: 80 }, 480)).toEqual(['research', 'meter', 'folder']);
+        expect(collapsedChips(row, 380)).toEqual(['research']);
+    });
 });

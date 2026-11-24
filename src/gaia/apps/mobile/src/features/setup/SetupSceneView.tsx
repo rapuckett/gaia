@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import type { ScrollView } from 'react-native';
 
 import { GaiaClientProvider, useSetupPlan, useSetupStatus } from '@/data';
 import { useT } from '@/i18n/useT';
@@ -18,6 +19,7 @@ import { SeedAgentCompare } from '@/features/settings/panes/model/AgentChoice';
 import { AgentWait } from './steps/AgentWait';
 import type { useAgentFirst } from './steps/useAgentFirst';
 import { SetupFooterBar, SetupFooterProvider } from './SetupFooter';
+import { SetupScrollContext } from './setupScroll';
 import { SetupScreen, type SetupStepContext } from './SetupScreen';
 import { SETUP_STEPS } from './steps';
 import { SeedOffer } from './steps/CheckOffer';
@@ -91,6 +93,7 @@ function ConfirmOpen({ kind }: { kind: ConfirmScene }) {
 
 /** One setup scene on a fake PC: a step body, or the whole setup screen, with a sheet or the chip when the scene has one. */
 export function SetupSceneView({ found }: { found: SetupScene }) {
+    const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => {
         // The plan step opens this screen on arrival, as it does when another step asks for it.
@@ -109,7 +112,8 @@ export function SetupSceneView({ found }: { found: SetupScene }) {
                             <SetupScreen onReady={noop} onClose={found.shell.again ? noop : undefined} initialViewing={found.shell.viewing} />
                         ) : (
                             <SetupFooterProvider>
-                                <Screen width="flow" scroll footer={<SetupFooterBar />}>
+                              <SetupScrollContext.Provider value={scrollRef}>
+                                <Screen width="flow" scroll scrollRef={scrollRef} footer={<SetupFooterBar />}>
                                     <Stack gap="lg" padding="lg">
                                         {found.chip ? <DownloadChip onPress={noop} /> : null}
                                         <SeedOffer.Provider value={found.offer ?? null}>
@@ -120,6 +124,7 @@ export function SetupSceneView({ found }: { found: SetupScene }) {
                                         {found.confirm ? <ConfirmOpen kind={found.confirm} /> : null}
                                     </Stack>
                                 </Screen>
+                              </SetupScrollContext.Provider>
                             </SetupFooterProvider>
                         )}
                     </ScreenBannerProvider>
