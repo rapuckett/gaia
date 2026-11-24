@@ -1,0 +1,64 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+import { fireEvent, render, screen } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import type { Message } from '@/api/client.types';
+import { translator } from '@/i18n/useT';
+import { ThemeProvider } from '@/ui';
+
+import { SavedReplyErrors } from './ReplyErrors';
+
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({ router: { push: (href: unknown) => mockPush(href) } }));
+jest.mock('@/data', () => ({ useSession: () => ({ data: undefined }) }));
+
+const t = translator('en');
+const reply = (content: string) => ({ id: 1, session_id: 's1', role: 'assistant', content, failed: true }) as Message;
+
+const mount = (content: string) =>
+    render(
+        <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+            <ThemeProvider>
+                <SavedReplyErrors message={reply(content)} />
+            </ThemeProvider>
+        </SafeAreaProvider>,
+    );
+
+describe('failed reply names its cause', () => {
+    beforeEach(() => mockPush.mockClear());
+
+    it.each([
+        ['modelUnavailable', "Failed to start the query run: Failed to preload model: Lemonade has no model called 'x'."],
+        ['modelLoad', 'Failed to start the query run: Failed to load model Gemma: llama-server exited with code 1.'],
+        ['context', 'Failed to start the query run: Error: request exceeds the available context size.'],
+    ] as const)('%s: title and body', async (kind, content) => {
+        await mount(content);
+        expect(screen.getByText(t(`failedTurn.${kind}.title`))).toBeTruthy();
+        expect(screen.getByText(t(`failedTurn.${kind}.body`))).toBeTruthy();
+        expect(screen.queryByText(t('msg.error'))).toBeNull();
+    });
+
+    it('unknown keeps "Something went wrong", with the plain body and the raw text under Details', async () => {
+        await mount('Failed to start the query run: Error: upstream reset');
+        expect(screen.getByText(t('msg.error'))).toBeTruthy();
+        expect(screen.getByText(t('failedTurn.unknown.body'))).toBeTruthy();
+        expect(screen.queryByText(/upstream reset/)).toBeNull();
+        await fireEvent.press(screen.getByTestId('failed-details-toggle'));
+        expect(screen.getByText(/Error: upstream reset/)).toBeTruthy();
+        expect(screen.queryByTestId('open-settings-model')).toBeNull();
+    });
+
+    it('Open Settings opens Agent & model for a model failure', async () => {
+        await mount('Failed to start the query run: Failed to load model Gemma: llama-server exited with code 1.');
+        await fireEvent.press(screen.getByTestId('open-settings-model'));
+        expect(mockPush).toHaveBeenCalledWith({ pathname: '/settings/[section]', params: { section: 'model' } });
+    });
+
+    it('a remedy naming Advanced › Custom model ID lands on that card', async () => {
+        await mount("Failed to start the query run: Failed to preload model: Lemonade has no model called 'x'. Check Settings › Advanced › Custom model ID.");
+        await fireEvent.press(screen.getByTestId('open-settings-advanced'));
+        expect(mockPush).toHaveBeenCalledWith({ pathname: '/settings/[section]', params: { section: 'advanced', target: 'custom-model' } });
+    });
+});

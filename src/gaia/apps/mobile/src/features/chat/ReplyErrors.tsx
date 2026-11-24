@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { failureRecordId } from '@webui/utils/streamErrors.core';
 import { isErrorContent } from '@webui/utils/answerErrors.core';
@@ -16,14 +16,15 @@ import { openLink } from '@/platform/openLink';
 import { Button, Icon, Notice, Row, Stack, Text } from '@/ui';
 import { Archive, Info } from '@/ui/icons';
 
+import { FailedLead, OpenSettingsButtons, causeTitleKey, failedTurnOf } from './FailedTurnCard';
 import { chatErrorInfo, namesFailureRecord, reportTitle } from './chatErrors';
 import { phoneBugReportUrl } from './bugReport';
 import type { TurnTail } from './tailState';
 
 /** "Something went wrong", the web UI's banner on a failed reply. */
-export function ErrorBanner() {
+export function ErrorBanner({ title }: { title?: string }) {
     const t = useT();
-    return <Notice tone="danger" title={t('msg.error')} testID="error-banner" />;
+    return <Notice tone="danger" title={title ?? t('msg.error')} testID="error-banner" />;
 }
 
 /** What only the PC running GAIA can do: one plain line, never a control that would fail. */
@@ -65,10 +66,15 @@ export function SavedReplyErrors({ message, fixShownBelow = false }: { message: 
     const local = useSession(message.session_id).data?.inference_remote === false;
     const showLog = local && isError;
     const showReport = failureRecordId(message.content) !== null;
+    const t = useT();
+    const turn = useMemo(() => (isError && !fixShownBelow ? failedTurnOf(message.content) : null), [isError, fixShownBelow, message.content]);
     if (!isError && !showLog && !showReport) return null;
+    const titleKey = turn ? causeTitleKey(turn) : null;
     return (
         <Stack gap="sm">
-            {isError && !fixShownBelow ? <ErrorBanner /> : null}
+            {isError && !fixShownBelow ? <ErrorBanner title={titleKey ? t(titleKey) : undefined} /> : null}
+            {turn?.raw ? <FailedLead turn={turn} content={message.content} /> : null}
+            {turn ? <OpenSettingsButtons turn={turn} /> : null}
             <PcOnlyFailureLines showLog={showLog} showReport={showReport} />
         </Stack>
     );
@@ -139,3 +145,7 @@ export function TailIssues({ tail, local }: { tail: TurnTail; local: boolean }) 
         </Stack>
     );
 }
+
+/** A failed saved reply whose text is the server's error: the card shows the cause and Details instead of it. */
+export const showsFailedLead = (message: Message, fixShownBelow: boolean): boolean =>
+    !fixShownBelow && (message.failed === true || isErrorContent(message.content)) && failedTurnOf(message.content).raw;

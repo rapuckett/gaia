@@ -26,7 +26,7 @@ import { LibraryNotices, libraryNoticesOf } from '../LibraryNotices';
 import { GrantNote, isAgentNotGranted } from '../GrantNote';
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
-import { SavedReplyErrors } from '../ReplyErrors';
+import { SavedReplyErrors, showsFailedLead } from '../ReplyErrors';
 import { AnswerComparison } from '../compare/AnswerComparison';
 import { useAnswerComparison } from '../compare/useAnswerComparison';
 import { useMessageActions, type MessageContext } from './useMessageActions';
@@ -81,7 +81,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
                 minSize={0}
                 {...(cancelled ? {} : actions.a11y)}
             >
-                {text ? <Markdown text={text} streaming={streaming} /> : null}
+                {text && !(!streaming && showsFailedLead(message, fixShownBelow)) ? <Markdown text={text} streaming={streaming} /> : null}
             </Pressable>
             {!streaming && !cancelled ? <AnswerFooter latencyMs={latencyMs} stats={message.stats} ended={activity.ended} /> : null}
             {sessionId && !streaming && !cancelled && message.id > 0 ? (
