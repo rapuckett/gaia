@@ -199,7 +199,7 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                     {connectorError ? <ConnectorRetry content={connectorError.content} providers={connectProviders} onRetry={() => tryAgain(connectorError.id)} /> : null}
                     {permission ? (
                         <Stack paddingX="gutter">
-                            <PermissionPrompt key={permission.prompt.id} {...permission} />
+                            <PermissionPrompt key={permission.prompt.id} {...permission} fullAccessPending={permissionMode.mode === 'full_access'} />
                         </Stack>
                     ) : null}
                     <QueuedMessages
