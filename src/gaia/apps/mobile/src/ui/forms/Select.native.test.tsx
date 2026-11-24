@@ -3,7 +3,7 @@
 
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ThemeProvider } from '@/ui';
@@ -44,6 +44,18 @@ describeNative('Select', () => {
             expect(row.props.accessibilityState?.disabled ?? row.props['aria-disabled']).toBe(true);
             expect(screen.getByText('Not ready yet')).toBeTruthy();
             expect(screen.getByTestId('sel-option-a').props['aria-disabled']).toBeFalsy();
+        });
+
+        it('draws the label and the reason in the same muted color as an enabled description', async () => {
+            await render(
+                <Select label="Pick" value="a" options={[{ value: 'a', label: 'Alpha', description: 'Plain note' }, ...options]} onChange={() => undefined} testID="sel" />,
+                { wrapper: wrap },
+            );
+            await fireEvent.press(screen.getByTestId('sel'));
+            await screen.findByTestId('sel-option-b');
+            const color = (text: string) => StyleSheet.flatten(screen.getByText(text).props.style).color;
+            expect(color('Not ready yet')).toBe(color('Plain note'));
+            expect(color('Beta')).toBe(color('Plain note'));
         });
 
         it('does not call onChange when pressed, while an enabled option still does', async () => {
