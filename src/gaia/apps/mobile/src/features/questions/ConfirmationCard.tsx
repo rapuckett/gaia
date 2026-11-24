@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
+import { View } from 'react-native';
 
 import { isMessageKey, isolateUnit } from '@webui/i18n/registry';
 
 import type { StreamEvent } from '@/api/client.types';
 import { useT, type Translate } from '@/i18n/useT';
-import { Button, Row, Stack, Surface, Text } from '@/ui';
+import { Badge, Button, Row, Stack, Surface, Text, useTheme } from '@/ui';
 
 export interface ConfirmationCardProps {
     /** The machine tool name; shown as a step name. */
@@ -35,25 +36,33 @@ export function stepName(action: string, t: Translate): string {
 export function ConfirmationCard({ action, summary, onDismiss }: ConfirmationCardProps) {
     const t = useT();
     const [dismissed, setDismissed] = useState(false);
+    const { colors, radius } = useTheme();
     const step = stepName(action, t);
 
     if (dismissed) {
         return (
-            <Surface tone="secondary" radius="md" padding="md" border>
+            <View
+                style={{
+                    borderWidth: 1,
+                    borderStyle: 'dashed',
+                    borderColor: colors.accentLight,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.bgSecondary,
+                    padding: 12,
+                }}
+            >
                 <Text role="caption" tone="muted">
                     {t('confirmCard.dismissed', { step })}
                 </Text>
-            </Surface>
+            </View>
         );
     }
 
     return (
-        <Surface tone="card" radius="md" padding="md" border>
+        <Surface tone="card" radius="md" padding="md" border="accent">
             <Stack gap="md">
                 <Row gap="sm" wrap>
-                    <Text role="caption" weight="semibold" tone="warning">
-                        {t('confirmCard.badge')}
-                    </Text>
+                    <Badge label={t('confirmCard.badge').toLocaleUpperCase()} tone="accent" accessibilityLabel={t('confirmCard.badge')} />
                     <Text role="label" weight="semibold">
                         {step}
                     </Text>
@@ -69,7 +78,7 @@ export function ConfirmationCard({ action, summary, onDismiss }: ConfirmationCar
                 <Row justify="end">
                     <Button
                         label={t('confirmCard.dismiss')}
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
                         onPress={() => {
                             setDismissed(true);

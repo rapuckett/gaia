@@ -14,7 +14,7 @@ describeNative('ConfirmationCard', () => {
     it('says the step did not run, with Dismiss and no Approve or Deny', async () => {
         const props = confirmationProps({ type: 'needs_confirmation', action: 'write_file', summary: 'notes.txt' })!;
         await render(<ConfirmationCard {...props} />, { wrapper: ThemeProvider });
-        expect(screen.getByText('Not run')).toBeTruthy();
+        expect(screen.getByText('NOT RUN')).toBeTruthy();
         expect(screen.getByText('Writing file')).toBeTruthy();
         expect(screen.getByText('notes.txt')).toBeTruthy();
         expect(screen.getByText(/too old to ask for it here/)).toBeTruthy();
