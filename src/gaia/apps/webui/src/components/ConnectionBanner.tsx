@@ -13,7 +13,7 @@ import { MIN_CONTEXT_SIZE, DEFAULT_MODEL_NAME, GB_UNIT } from '../utils/constant
 import { ref } from '../i18n/registry';
 import { useModelActions } from '../hooks/useModelActions';
 import { isStarting, modelServerHealth } from '../services/statusPoll';
-import { displayModelName, useModelNames, useModelStore } from '../stores/modelStore';
+import { displayModelName, useLocalModelNames, useModelStore } from '../stores/modelStore';
 import './ConnectionBanner.css';
 
 /**
@@ -112,7 +112,7 @@ export function ConnectionBanner({ onRetry, backendSlow = false, backendError = 
     const pickLoad = useModelStore((s) => s.pickLoad);
     const retryPickLoad = useModelStore((s) => s.retryPickLoad);
     const dismissPickLoad = useModelStore((s) => s.dismissPickLoad);
-    useModelNames();
+    useLocalModelNames();
 
     // Track previous warning-worthy states so the banner reappears when
     // a new issue is detected after being dismissed.
@@ -197,9 +197,11 @@ export function ConnectionBanner({ onRetry, backendSlow = false, backendError = 
                 <div className="connection-banner__text" dir="auto">
                     {isError ? (
                         <>
-                            {t('banner.download.failed', { name: shownName })}{' '}
+                            {t('banner.download.failed', { name: shownName })}
                             {(downloadError ?? activeProgress?.message) && (
-                                <span className="connection-banner__hint">{downloadError ?? activeProgress?.message}</span>
+                                <span className="connection-banner__hint connection-banner__detail" dir="auto">
+                                    {downloadError ?? activeProgress?.message}
+                                </span>
                             )}
                         </>
                     ) : (

@@ -4,6 +4,7 @@
 /** The model new turns run on, and where it runs (this PC or a cloud provider). */
 
 import { forgetModelChecks } from './modelNeededStore';
+import { useEffect } from 'react';
 import { create } from 'zustand';
 import * as api from '../services/api';
 import { useChatStore } from './chatStore';
@@ -255,6 +256,17 @@ useChatStore.subscribe((state, prev) => {
 /** Re-render when friendly names arrive; pair with displayModelName in render. */
 export function useModelNames(): Record<string, string> {
     return useModelStore((s) => s.names);
+}
+
+/** useModelNames, plus a one-time read of the local names for a surface that can open before the model chip. */
+export function useLocalModelNames(): Record<string, string> {
+    const names = useModelNames();
+    useEffect(() => {
+        if (namesRequested) return;
+        namesRequested = true;
+        void loadLocalNames(useModelStore.getState().rememberNames);
+    }, []);
+    return names;
 }
 
 /** The friendly name the backend gave a model, else its short id. */
