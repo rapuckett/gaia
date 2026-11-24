@@ -616,7 +616,6 @@ def test_tunnel_started_log_carries_no_part_of_the_token(monkeypatch, caplog):
     async def _url(self):
         return "https://abc.ngrok-free.app"
 
-    monkeypatch.setattr(TunnelManager, "_fetch_public_ip", _noop)
     monkeypatch.setattr(TunnelManager, "_kill_stale_ngrok", _noop)
     monkeypatch.setattr(TunnelManager, "_poll_ngrok_api", _url)
     monkeypatch.setattr(TunnelManager, "_start_output_readers", lambda self: None)
