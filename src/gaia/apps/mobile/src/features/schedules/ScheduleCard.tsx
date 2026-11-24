@@ -1,14 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 
 import type { MessageKey, Say } from '@webui/i18n/registry';
 
 import type { Schedule } from '@/api/client.types';
-import { CONFIRM_DELETE_MS } from '@/api/constants';
 import { useScheduleResults } from '@/data';
+import { ConfirmSheet } from '@/features/setup/sheets/ConfirmSheet';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Disclosure, Icon, Notice, Row, Stack, Surface, Text, useTheme } from '@/ui';
 import { Clock, MessageSquare, Pause, Play, Trash2, Zap } from '@/ui/icons';
@@ -66,11 +66,6 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
     const history = useScheduleResults(schedule.name, schedule.last_run_at, historyOpen);
     const runs = history.data?.results ?? [];
     const historyShowsFailure = historyOpen && runs.some((r) => r.error);
-    useEffect(() => {
-        if (!confirmDelete || initialConfirmDelete) return; // a gallery-seeded confirm stays up for the shot
-        const timer = setTimeout(() => setConfirmDelete(false), CONFIRM_DELETE_MS);
-        return () => clearTimeout(timer);
-    }, [confirmDelete, initialConfirmDelete]);
 
     const described = describeSchedule(schedule.description_parts, t);
     const running = schedule.running === true || runPending;
@@ -157,8 +152,8 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                     <ChipButton
                         variant="danger"
                         icon={Trash2}
-                        label={t(confirmDelete ? 'mobileApp.schedules.card.confirmDelete' : 'schedules.card.delete')}
-                        onPress={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
+                        label={t('schedules.card.delete')}
+                        onPress={() => setConfirmDelete(true)}
                     />
                 </Row>
                 <Disclosure title={t('schedules.history')} open={historyOpen} onToggle={() => setHistoryOpen((open) => !open)}>
@@ -185,6 +180,23 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                     </Stack>
                 </Disclosure>
             </Stack>
+            <ConfirmSheet
+                open={confirmDelete}
+                title={t('schedules.delete.ask', { name: schedule.name })}
+                body={[
+                    t('schedules.delete.what'),
+                    ...(schedule.session_id ? [t('schedules.delete.chatStays')] : []),
+                    ...(schedule.running ? [t('schedules.delete.runStops')] : []),
+                ]}
+                confirmLabel={t('schedules.delete.confirm')}
+                cancelLabel={t('schedules.delete.cancel')}
+                danger
+                onConfirm={() => {
+                    setConfirmDelete(false);
+                    onDelete();
+                }}
+                onCancel={() => setConfirmDelete(false)}
+            />
         </Surface>
     );
 }
