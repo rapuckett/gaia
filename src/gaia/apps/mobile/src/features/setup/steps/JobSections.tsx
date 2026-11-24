@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import { useState, type ReactNode } from 'react';
+import { View } from 'react-native';
 
 import { formatSize, ltrIn } from '@webui/components/setup/format';
+import { chatRows } from '@webui/components/setup/jobModels.core';
 import {
     canCreateImages, catalogOf, isEmbedding, isNpu, isOptional, isVision, pickChat, pickVision, resolveVision, toggle,
     VISION_NONE, type Selection,
@@ -11,7 +13,7 @@ import {
 import type { SetupCatalogEntry, SetupPlan } from '@webui/types';
 
 import { useLocaleCode, useT } from '@/i18n/useT';
-import { Badge, Card, Pressable, Row, Stack, Text } from '@/ui';
+import { Badge, Card, Disclosure, Pressable, Row, Stack, Text } from '@/ui';
 
 import { MarkedRow, ModelRadio, SupportBadge, Warn } from './ModelRows';
 
@@ -68,12 +70,10 @@ export function JobModels({ plan, selection, onSelection, disabled }: {
     const locale = useLocaleCode();
     const catalog = catalogOf(plan);
     const [showVision, setShowVision] = useState(false);
+    const [showUntested, setShowUntested] = useState(false);
     const chat = catalog.find((e) => e.id === selection.defaultChat);
     const onNpu = !!chat && isNpu(chat);
-    const chatRows = catalog.filter((e) => e.chat_choice && !isEmbedding(e) && (e.gaia_model || e.downloaded) && isNpu(e) === onNpu
-        && (e.setup_offer || e.id === selection.defaultChat));
-    const verified = chatRows.filter((e) => e.support === 'verified');
-    const untested = chatRows.filter((e) => e.support !== 'verified');
+    const { verified, untested, untestedPicked } = chatRows(catalog, selection.defaultChat);
     const visionPick = resolveVision(catalog, selection);
     const builtIn = !!chat?.reads_images;
     const visionRows = catalog.filter((e) => isVision(e) && e.id !== chat?.id);
@@ -100,14 +100,23 @@ export function JobModels({ plan, selection, onSelection, disabled }: {
                     <ModelRadio key={e.id} entry={e} checked={e.id === selection.defaultChat} recommended={e.id === plan.recommended_model} disabled={disabled} onPick={() => chooseChat(e.id)} />
                 ))}
                 {untested.length > 0 ? (
-                    <>
-                        <Hint>{t('setup.job.untestedNote')}</Hint>
-                        {untested.map((e) => (
-                            <ModelRadio key={e.id} entry={e} checked={e.id === selection.defaultChat} recommended={false} disabled={disabled} onPick={() => chooseChat(e.id)} />
-                        ))}
-                    </>
+                    <Disclosure
+                        title={t('setup.job.showUntested', { n: String(untested.length) })}
+                        open={showUntested || untestedPicked}
+                        onToggle={() => setShowUntested(!(showUntested || untestedPicked))}
+                        testID="untested-fold"
+                    >
+                        <Stack gap="sm">
+                            <Hint>{t('setup.job.untestedNote')}</Hint>
+                            <View accessibilityRole="radiogroup" accessibilityLabel={t('setup.job.untestedLabel')} style={{ gap: 8 }}>
+                                {untested.map((e) => (
+                                    <ModelRadio key={e.id} entry={e} checked={e.id === selection.defaultChat} recommended={false} disabled={disabled} onPick={() => chooseChat(e.id)} />
+                                ))}
+                            </View>
+                        </Stack>
+                    </Disclosure>
                 ) : null}
-                {chat?.support === 'untested' ? <Warn message={t('setup.job.untestedPicked')} /> : null}
+                {untestedPicked ? <Warn message={t('setup.job.untestedPicked')} /> : null}
             </Job>
 
             <Job title={t('setup.job.vision')}>

@@ -52,4 +52,11 @@ describe('collapsedChips', () => {
         expect(collapsedChips({ private: 100, model: 300 }, 50)).toEqual(['private']);
         expect(collapsedChips(FULL, 0)).toEqual([]);
     });
+
+    it('gives up the agent chip right after the folder', () => {
+        const all = { ...FULL, meter: 80, agent: 120 };
+        expect(collapsedChips(all, 660)).toEqual(['meter']);
+        expect(collapsedChips(all, 620)).toEqual(['meter', 'folder']);
+        expect(collapsedChips(all, 560)).toEqual(['meter', 'folder', 'agent']);
+    });
 });

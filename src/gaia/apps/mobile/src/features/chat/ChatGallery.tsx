@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
-import type { ActiveModel, LocalModelStatus, Session, StreamEvent } from '@/api/client.types';
+import type { ActiveModel, AgentPrograms, LocalModelStatus, Session, Settings, StartScreen, StreamEvent } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
@@ -24,11 +24,12 @@ import { FIXTURES } from './messages/__fixtures__/messages';
  * `permission-scrolled`: a tool approval card is pinned and the transcript is scrolled up, so the jump button rides above the card. `permission-room`: a short card with room above it, so the button shows. `permission-tall`: a card so tall the list is too short for the button, which hides. `permission-tall-mid` / `-end`: the tall card's details box scrolled to the middle or the end (web only).
  * `queue` (CMP-12, CMP-13): a queued text with Add to this reply, a failed one with Send again.
  * `env-offline` (SP-17): the chat's internet is off and the session panel is closed, so the offline notice shows above the composer.
+ * `agent-fast`, `agent-recovery` (CMP-32): gaiacpp is the agent, so the box shows Fast and light; the second adds a failed reply whose agent can't start, with the two fixes under it.
  * `queue-stop` (CMP-15): the same queue; `#tap=composer-stop` ends the turn and the queued texts return to the box.
  * `?queued=<model id>`: the chip shows a model switch waiting for the turn to end ("name → id").
  * `?model=none`: the PC reports no model, so the chip shows its fallback name. Otherwise it shows Gemma 4 E4B, running on the PC.
  */
-export const CHAT_STATES = ['running-empty', 'running-status', 'question', 'question-answered', 'question-answer-failed', 'approval', 'permission-scrolled', 'permission-room', 'permission-tall', 'permission-tall-mid', 'permission-tall-end', 'queue', 'queue-stop', 'env-offline'] as const;
+export const CHAT_STATES = ['running-empty', 'running-status', 'question', 'question-answered', 'question-answer-failed', 'approval', 'permission-scrolled', 'permission-room', 'permission-tall', 'permission-tall-mid', 'permission-tall-end', 'queue', 'queue-stop', 'env-offline', 'agent-fast', 'agent-recovery'] as const;
 export type ChatGalleryState = (typeof CHAT_STATES)[number];
 
 const SESSION = {
@@ -111,6 +112,26 @@ const ROOM_PERMISSION = {
     timeout_seconds: 600,
 } as StreamEvent;
 const MANY_MESSAGES = FIXTURES.many.messages;
+const FAST_SETTINGS = {
+    custom_model: null, model_status: null, context_size: null, dynamic_tools: false, dynamic_tools_locked: false,
+    agent_mode: 'manual', network_policy: 'cloud_allowed', flagship_agent: 'gaiacpp', gaiacpp_available: false,
+} as Settings;
+const FAST_PROGRAMS: AgentPrograms = {
+    current: 'gaiacpp',
+    programs: [
+        { id: 'gaiapy', installed: true, size_bytes: null, can_download: false, unavailable_reason: null },
+        { id: 'gaiacpp', installed: false, size_bytes: 9_400_000, can_download: true, unavailable_reason: null },
+    ],
+    download: { state: 'idle', bytes_done: 0, bytes_total: null, error: null },
+};
+const FAST_START: StartScreen = {
+    cards: [],
+    working_folder: { path: '/Users/Shared', name: 'Shared', gaia_folder: false, choosable: false },
+    agent_problem: { code: 'gaiacpp_missing', detail: 'gaiacpp is chosen as the agent but it is not installed on this PC.' },
+};
+const FAILED_REPLY = {
+    ...FIXTURES.short.messages[0]!, id: 9101, role: 'assistant' as const, content: 'Error: the agent did not start', failed: true,
+};
 
 const STATUS: StreamEvent = { type: 'status', phase: 'reading', message: 'Reading your request' };
 
@@ -122,7 +143,8 @@ function seedScene(state: ChatGalleryState) {
             status: 'streaming',
             pendingPermission: (state === 'permission-room' ? ROOM_PERMISSION : state.startsWith('permission-tall') ? TALL_PERMISSION : PERMISSION) as typeof IDLE_TURN.pendingPermission,
         });
-    } else if (state === 'approval') writeTurn('dev', { ...IDLE_TURN, pendingConfirmation: CONFIRMATION as typeof IDLE_TURN.pendingConfirmation });
+    } else if (state.startsWith('agent-')) writeTurn('dev', { ...IDLE_TURN });
+    else if (state === 'approval') writeTurn('dev', { ...IDLE_TURN, pendingConfirmation: CONFIRMATION as typeof IDLE_TURN.pendingConfirmation });
     else {
         writeTurn('dev', {
             ...IDLE_TURN,
@@ -142,7 +164,8 @@ export function ChatGallery({ state, queued, model }: { state: ChatGalleryState;
             sessions: [SESSION],
             activeModel: model === 'none' ? undefined : ACTIVE_MODEL,
             localModel: model === 'none' ? undefined : LOCAL_MODEL,
-            messages: { dev: state.startsWith('permission-') ? [...MANY_MESSAGES] : [FIXTURES.short.messages[0]!] },
+            messages: { dev: state.startsWith('permission-') ? [...MANY_MESSAGES] : state === 'agent-recovery' ? [FIXTURES.short.messages[0]!, FAILED_REPLY] : [FIXTURES.short.messages[0]!] },
+            ...(state.startsWith('agent-') ? { settings: FAST_SETTINGS, agentPrograms: FAST_PROGRAMS, ...(state === 'agent-recovery' ? { start: FAST_START } : {}) } : {}),
             environments: state === 'env-offline' ? { dev: { session_id: 'dev', folders: [], removed: [], internet: false, enforced: true, internet_enforced: true } } : undefined,
         });
         if (state === 'env-offline') return base;
