@@ -3,14 +3,16 @@
 
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform, StyleSheet, processColor } from 'react-native';
+import { Platform, StyleSheet, Text, processColor } from 'react-native';
 
+import { Chip } from '../feedback/Chip';
 import { colors } from '../tokens/generated';
 import { withDerivedColors } from '../theme/appearance';
 import { useAppearance } from '../theme/appearanceStore';
 import { ThemeProvider } from '../theme/ThemeProvider';
 import { Button } from './Button';
 import { IconButton } from './IconButton';
+import { Pressable } from './Pressable';
 import { SmallButton } from './SmallButton';
 
 const wrap = ({ children }: { children: ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
@@ -73,5 +75,32 @@ describeNative('press feedback', () => {
         if (android) {
             expect(screen.getByTestId('start').props.nativeForegroundAndroid).toMatchObject({ color: processColor(withDerivedColors(colors.dark).ripple) });
         }
+    });
+
+    it('keeps a clipped shape at its own height with hugHeight and takes its slop from the shape alone', async () => {
+        await render(
+            <Pressable inline hugHeight shape={{ radius: 16, hug: true }} testID="pill">
+                <Text>Pill</Text>
+            </Pressable>,
+            { wrapper: wrap },
+        );
+        if (!android) {
+            expect(screen.queryByTestId('pill-clip')).toBeNull();
+            expect(StyleSheet.flatten(screen.getByTestId('pill').props.style).minHeight).toBeUndefined();
+            return;
+        }
+        expect(StyleSheet.flatten(screen.getByTestId('pill-target').props.style).minHeight).toBeUndefined();
+        await fireEvent(screen.getByTestId('pill'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 60, height: 32 } } });
+        await fireEvent(screen.getByTestId('pill-clip'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 60, height: 32 } } });
+        expect(screen.getByTestId('pill-clip').props.hitSlop).toEqual({ left: 0, right: 0, top: 8, bottom: 8 });
+        expect(screen.getByTestId('pill').props.hitSlop).toEqual({ left: 0, right: 0, top: 8, bottom: 8 });
+    });
+
+    it('lets a long chip label shrink inside its row', async () => {
+        await render(<Chip label="This conversation is longer than the model can read at once" testID="long" />, { wrapper: wrap });
+        const label = screen.getByText('This conversation is longer than the model can read at once');
+        expect(label.props.numberOfLines).toBe(1);
+        const outer = android ? screen.getByTestId('long-target') : screen.getByTestId('long');
+        expect(StyleSheet.flatten(outer.props.style).maxWidth).toBe('100%');
     });
 });
