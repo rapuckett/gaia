@@ -6,7 +6,7 @@ import { useState } from 'react';
 
 import type { AgentStep } from '@webui/types';
 
-import type { StreamEvent } from '@/api/client.types';
+import type { Session, StreamEvent } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError, GaiaStreamDroppedError, GaiaTurnError, type GaiaError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
@@ -32,6 +32,7 @@ import { TurnTail } from '../TurnTail';
  * `activity-filter` (CV-48): `#tap=steps-summary` opens the seven finished calls and shows the filter.
  * `reply-server-down` (CV-14): a failed latest reply with the model-server fix under it and Try again; `reply-errors` also shows the unexpected-error "Report it on GitHub" link (CV-30, `report-github`).
  * `activity-variants` (CV-42): `#tap=steps-summary` opens a thought-first call, a failed call and a repeated one (x3); `#tap=steps-summary,step-row-1` expands the thought-first call to its thought, tool and arguments (the thought is row 0); `#tap=steps-summary,step-row-2` expands the failed one.
+ * `failed-local`: a failed reply on a local model, with Try again, Open Settings and Model server log in the desktop's order.
  * `step-error`: a running Waiting step cut off by a closed connection, then the same step cut off by Stop; both show the interrupted icon and a frozen 13s.
  * `latest-answer` (regenerate): a short exchange; only the latest answer has Try again (`regenerate`), and its retry does nothing.
  * `activity-vision` (CV-49): the vision offer under a tool step. `many-scrolled-up` (CV-09): the many-messages list with the jump button showing.
@@ -47,12 +48,13 @@ export const LIVE_SCENES = [
     'activity-vision',
     'many-scrolled-up',
     'reply-server-down',
+    'failed-local',
     'step-error',
     'latest-answer',
 ] as const;
 export type LiveScene = (typeof LIVE_SCENES)[number];
 
-const LISTS: readonly LiveScene[] = ['many-scrolled-up', 'reply-server-down', 'latest-answer'];
+const LISTS: readonly LiveScene[] = ['many-scrolled-up', 'reply-server-down', 'latest-answer', 'failed-local'];
 const noop = () => undefined;
 const LATEST_ANSWER_ACTIONS = { send: () => false, retry: () => Promise.resolve(true), busy: false };
 const step = (id: number, extra: Partial<AgentStep>): AgentStep => ({ id, type: 'tool', label: 'Using tool', active: false, success: true, timestamp: id, ...extra });
@@ -172,6 +174,9 @@ function Body({ state }: { state: LiveScene }) {
             />
         );
     }
+    if (state === 'failed-local') {
+        return <MessageListView messages={FIXTURES['failed-model-load'].messages} loading={false} />;
+    }
     if (state === 'latest-answer') {
         return (
             <MessageActionsContext.Provider value={LATEST_ANSWER_ACTIONS}>
@@ -202,7 +207,7 @@ function Body({ state }: { state: LiveScene }) {
 
 export function LiveScenes({ state }: { state: LiveScene }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
-    const [client] = useState(() => createFakeClient({}));
+    const [client] = useState(() => createFakeClient({ sessions: [{ id: 'dev', title: 'Quarterly reports', created_at: '2026-11-14T10:00:00Z', updated_at: '2026-11-14T10:00:00Z', message_count: 2, document_ids: [], agent_type: 'gaia', inference_remote: false, model: 'Gemma-4-E4B-it-GGUF', system_prompt: null } as Session] }));
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
