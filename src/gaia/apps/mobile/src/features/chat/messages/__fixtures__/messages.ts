@@ -177,7 +177,11 @@ export type MessagesFixture =
     | 'activity'
     | 'cutoff-schedule-deleted'
     | 'cutoff-schedule-paused'
+    | 'failed-context'
+    | 'failed-model-load'
+    | 'failed-model-unavailable'
     | 'failed-report'
+    | 'failed-unknown'
     | 'badCards'
     | 'cards'
     | 'guide'
@@ -276,6 +280,11 @@ const FAILED_WITH_REPORT: Message[] = [
     { ...msg('assistant', 'The model stopped while answering. GAIA saved a problem report: GF-20261116-101500-ab12', 3), failed: true } as Message,
 ];
 
+const failedAfter = (reply: string): Message[] => [
+    msg('user', 'Summarize the quarterly report.', 0),
+    { ...msg('assistant', reply, 1), failed: true } as Message,
+];
+
 const LIBRARY_NOTICES = [
     msg('user', 'Add these to my documents: notes.md, run.exe and budget.xlsx.', 0),
     {
@@ -294,7 +303,13 @@ export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Mes
     cards: { messages: CARDS },
     'cutoff-schedule-deleted': { messages: CUT_OFF(CUT_OFF_NOTICE_TEXT.scheduleDeleted) },
     'cutoff-schedule-paused': { messages: CUT_OFF(CUT_OFF_NOTICE_TEXT.schedulePaused) },
+    'failed-context': { messages: failedAfter('Failed to start the query run: Error: request (70211 tokens) exceeds the available context size (65536 tokens).') },
+    'failed-model-load': { messages: failedAfter("Failed to start the query run: Failed to load model Gemma-4-E4B-it-GGUF: llama-server exited with code 1.") },
+    'failed-model-unavailable': {
+        messages: failedAfter("Failed to start the query run: Failed to preload model: Lemonade has no model called 'Gemma-4-E4B-it-GGUFF'. Check Settings › Advanced › Custom model ID."),
+    },
     'failed-report': { messages: FAILED_WITH_REPORT },
+    'failed-unknown': { messages: failedAfter('Failed to start the query run: Error: upstream connection reset by peer') },
     guide: { messages: GUIDE },
     loading: { messages: [] },
     'library-notices': { messages: LIBRARY_NOTICES },
