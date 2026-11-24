@@ -18,6 +18,8 @@ export interface ContextReading {
     usage: ContextUsage | null;
     /** Why there is no reading yet, from the PC. */
     unavailable: string | null;
+    /** The PC's code for that reason, when it sent one. */
+    unavailableCode?: string;
 }
 
 /**
@@ -61,7 +63,9 @@ export function useContextSection(sessionId: string, { enabled, live }: { enable
         retry: false,
     });
     if (!data) return { usage: null, unavailable: null, error };
-    return data.available ? { usage: data, unavailable: null, error } : { usage: null, unavailable: data.reason, error };
+    return data.available
+        ? { usage: data, unavailable: null, error }
+        : { usage: null, unavailable: data.reason, unavailableCode: data.reason_code, error };
 }
 
 /** Where each answer's time and tokens went; read only while `enabled`, and again once a turn ends. */

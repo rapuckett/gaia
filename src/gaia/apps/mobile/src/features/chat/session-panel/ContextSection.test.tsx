@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { ThemeProvider } from '@/ui';
+import { tEn } from '@webui/i18n/translator';
 
 import { ContextSection } from './ContextSection';
 import { useSessionPanelStore } from './panelStore';
@@ -40,5 +41,35 @@ describe('the under-the-hood numbers', () => {
         const total = screen.getByLabelText('96400 ms');
         await fireEvent.press(total);
         expect(screen.getByText(/96400 ms/)).toBeTruthy();
+    });
+});
+
+describe('a context reading with no figure', () => {
+    async function show(contextUsage: { available: false; reason: string; reason_code?: string }) {
+        useSessionPanelStore.getState().setSection('context', true);
+        const client = createFakeClient({ contextUsage });
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        await render(
+            <QueryClientProvider client={queryClient}>
+                <GaiaClientProvider client={client}>
+                    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                        <ThemeProvider>
+                            <ContextSection sessionId="s1" live={false} />
+                        </ThemeProvider>
+                    </SafeAreaProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>,
+        );
+    }
+
+    it.each(['agent_too_old', 'remeasure_next_turn', 'not_answered_yet'] as const)('says %s in the interface language', async (code) => {
+        const sentence = tEn(`ctx.reason.${code}`);
+        await show({ available: false, reason: sentence, reason_code: code });
+        expect(await screen.findByText(sentence)).toBeTruthy();
+    });
+
+    it('shows an unknown reason as the PC sent it', async () => {
+        await show({ available: false, reason: 'The agent crashed.', reason_code: 'something_new' });
+        expect(await screen.findByText('The agent crashed.')).toBeTruthy();
     });
 });
