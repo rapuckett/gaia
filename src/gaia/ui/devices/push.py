@@ -387,6 +387,8 @@ class _Event:
     reason: Optional[str] = None
     params: Dict[str, str] = field(default_factory=dict)
     ended: Optional[str] = None
+    #: Clock time the PC stops waiting for this prompt's answer; None = never.
+    expires_at: Optional[float] = None
 
 
 _STOP = object()
@@ -484,7 +486,9 @@ class PushNotifier:
         summary: Optional[str] = None,
         label: Optional[str] = None,
         tool: Optional[str] = None,
+        ttl_s: Optional[float] = None,
     ) -> None:
+        """*ttl_s* is the seconds the PC will still wait for the answer, if bounded."""
         params = {"ask": ask}
         if summary:
             params["summary"] = summary
@@ -492,15 +496,32 @@ class PushNotifier:
             params["label"] = label
         if tool:
             params["tool"] = tool
-        self._put(_Event(KIND_APPROVAL, session_id, approval_id, params=params))
+        expires_at = self._clock() + ttl_s if ttl_s is not None else None
+        self._put(
+            _Event(
+                KIND_APPROVAL,
+                session_id,
+                approval_id,
+                params=params,
+                expires_at=expires_at,
+            )
+        )
+
+    def approval_resolved(self, approval_id: str) -> None:
+        """An approval or question was answered or timed out: clear it on the phones."""
+        self._put(_Event(KIND_BADGE, approval_id=approval_id, ended="resolved"))
 
     def run_ended(self, session_id: str, status: str) -> None:
-        """A turn ended: ``done`` and ``failed`` notify, ``stopped`` only moves the badge."""
-        kind = {"done": KIND_FINISHED, "failed": KIND_FAILED}.get(status)
-        if kind is None:
-            self.badge_changed()
-            return
-        self._put(_Event(kind, session_id))
+        """A turn ended: ``done`` and ``failed`` notify; any other end is
+        ``finished`` with ``outcome`` ``stopped`` or ``ended``."""
+        if status == "done":
+            event = _Event(KIND_FINISHED, session_id)
+        elif status == "failed":
+            event = _Event(KIND_FAILED, session_id)
+        else:
+            outcome = "stopped" if status == "stopped" else "ended"
+            event = _Event(KIND_FINISHED, session_id, params={"outcome": outcome})
+        self._put(event)
 
     def needs_you(self, reason: str) -> None:
         if reason not in NEEDS_YOU_REASONS:
@@ -591,6 +612,9 @@ class PushNotifier:
         if not targets:
             return
         badge = self._badge()
+        if event.ended == "resolved":
+            self._send_resolved(targets, event.approval_id or "", badge)
+            return
         if event.kind == KIND_BADGE:
             for device, _ in targets:
                 self._schedule_badge(device.id, badge)
@@ -608,6 +632,11 @@ class PushNotifier:
             return
         state = self._device(device.id)
         now = self._clock()
+        ttl_s: Optional[int] = None
+        if event.expires_at is not None:
+            ttl_s = int(event.expires_at - now)
+            if ttl_s <= 0:
+                return
         if event.kind == KIND_APPROVAL:
             dedupe = (KIND_APPROVAL, event.approval_id or "")
             subject = f"a:{event.approval_id}"
@@ -657,6 +686,8 @@ class PushNotifier:
                 payload["params"]["chat_title"] = title
         if event.approval_id:
             payload["approval_id"] = event.approval_id
+        if ttl_s is not None:
+            payload["params"]["ttl_s"] = ttl_s
         if self._send(device, record, payload, subject, DELIVERY_ALERT):
             state.badge_sent = badge
 
@@ -687,19 +718,8 @@ class PushNotifier:
                 continue
             if state.badge_sent == badge:
                 continue
-            day = int(now // 86400)
-            if state.silent_day != day:
-                state.silent_day, state.silent_count = day, 0
-            if state.silent_count >= PUSH_SILENT_PER_DAY:
-                logger.warning(
-                    "Badge update for device %s dropped: %d silent pushes today",
-                    device_id,
-                    PUSH_SILENT_PER_DAY,
-                )
+            if not self._silent_allowed(device_id, state, now):
                 continue
-            if now < state.blocked_until:
-                continue
-            state.silent_count += 1
             state.badge_at = now
             device, record = targets[device_id]
             payload = {"v": PUSH_VERSION, "kind": KIND_BADGE, "badge": badge}
@@ -708,6 +728,50 @@ class PushNotifier:
                     state.badge_sent = badge
             except Exception as e:  # pylint: disable=broad-except
                 _log_device_failure(device_id, record, e)
+
+    def _silent_allowed(self, device_id: str, state: _DeviceState, now: float) -> bool:
+        """Count one silent push against the device's daily cap and relay hold."""
+        day = int(now // 86400)
+        if state.silent_day != day:
+            state.silent_day, state.silent_count = day, 0
+        if state.silent_count >= PUSH_SILENT_PER_DAY:
+            logger.warning(
+                "Badge update for device %s dropped: %d silent pushes today",
+                device_id,
+                PUSH_SILENT_PER_DAY,
+            )
+            return False
+        if now < state.blocked_until:
+            return False
+        state.silent_count += 1
+        return True
+
+    def _send_resolved(
+        self,
+        targets: List[Tuple[Device, PushRecord]],
+        approval_id: str,
+        badge: int,
+    ) -> None:
+        """One silent badge push per device that was sent *approval_id*."""
+        for device, record in targets:
+            state = self._device(device.id)
+            if state.sent.pop((KIND_APPROVAL, approval_id), None) is None:
+                continue
+            if self.watching(device.id):
+                continue
+            if not self._silent_allowed(device.id, state, self._clock()):
+                continue
+            payload = {
+                "v": PUSH_VERSION,
+                "kind": KIND_BADGE,
+                "params": {"resolved": [approval_id]},
+                "badge": badge,
+            }
+            try:
+                if self._send(device, record, payload, "b", DELIVERY_SILENT):
+                    state.badge_sent = badge
+            except Exception as e:  # pylint: disable=broad-except
+                _log_device_failure(device.id, record, e)
 
     def _send(
         self,
@@ -999,20 +1063,27 @@ def observe_run_frame(session_id: str, data: str) -> None:
     etype = event.get("type")
     if etype == "permission_request" and event.get("confirm_id"):
         label, tool = event.get("tool_label"), event.get("tool")
+        expires_at = event.get("expires_at")
         notifier.approval(
             session_id,
             str(event["confirm_id"]),
             ASK_APPROVAL,
             label=label if isinstance(label, str) else None,
             tool=tool if isinstance(tool, str) else None,
+            ttl_s=(
+                max(0.0, expires_at - time.time())
+                if isinstance(expires_at, (int, float))
+                else None
+            ),
         )
     elif etype == "user_input_request" and event.get("request_id"):
-        message = event.get("message")
+        message, wait = event.get("message"), event.get("timeout_seconds")
         notifier.approval(
             session_id,
             str(event["request_id"]),
             ASK_QUESTION,
             summary=message if isinstance(message, str) else None,
+            ttl_s=wait if isinstance(wait, (int, float)) else None,
         )
 
 
@@ -1023,6 +1094,11 @@ def key_store_locked() -> None:
 def run_ended(session_id: str, status: str) -> None:
     if _notifier is not None:
         _notifier.run_ended(session_id, status)
+
+
+def approval_resolved(approval_id: Optional[str]) -> None:
+    if _notifier is not None and approval_id:
+        _notifier.approval_resolved(approval_id)
 
 
 def needs_you(reason: str) -> None:

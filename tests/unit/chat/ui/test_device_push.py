@@ -17,6 +17,8 @@ import json
 import logging
 import os
 import socket
+import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -422,9 +424,114 @@ def test_a_run_end_notifies_with_the_chats_collapse_id(sender, status, kind):
     assert call.body["collapse_id"] == _collapse(sender.key, f"s:{sender.session_id}")
 
 
-def test_a_stopped_run_does_not_notify(sender):
+@pytest.mark.parametrize(
+    "status, outcome", [("stopped", "stopped"), ("cancelled", "ended"), ("", "ended")]
+)
+def test_a_run_that_did_not_finish_sends_finished_with_its_outcome(
+    sender, status, outcome
+):
+    sender.notifier.run_ended(sender.session_id, status)
+    (call,) = sender.relay.calls
+    assert call.body[PUSH_DELIVERY_FIELD] == "alert"
+    assert call.body["collapse_id"] == _collapse(sender.key, f"s:{sender.session_id}")
+    payload = _opened(sender, call)
+    assert payload["kind"] == "finished"
+    assert payload["params"] == {"outcome": outcome, "chat_title": "Quarterly report"}
+
+
+def test_a_stopped_run_is_not_sent_while_the_phone_watches(sender):
+    sender.notifier.stream_opened(sender.phone.device_id)
     sender.notifier.run_ended(sender.session_id, "stopped")
     assert not sender.relay.calls
+
+
+def test_done_and_failed_carry_no_outcome(sender):
+    sender.notifier.run_ended(sender.session_id, "done")
+    assert "outcome" not in _opened(sender, sender.relay.calls[0])["params"]
+
+
+def test_an_approval_carries_the_seconds_left_to_answer(sender):
+    sender.notifier.approval(sender.session_id, "c-1", "approval", ttl_s=300)
+    assert _opened(sender, sender.relay.calls[0])["params"]["ttl_s"] == 300
+
+
+def test_the_ttl_counts_down_until_the_push_is_sent(sender):
+    push.observe_run_frame(
+        sender.session_id,
+        'data: {"type": "permission_request", "confirm_id": "c-2", '
+        f'"expires_at": {time.time() + 120}}}\n\n',
+    )
+    ttl = _opened(sender, sender.relay.calls[0])["params"]["ttl_s"]
+    assert 118 <= ttl <= 120
+
+
+def test_a_question_takes_its_ttl_from_its_timeout(sender):
+    push.observe_run_frame(
+        sender.session_id,
+        'data: {"type": "user_input_request", "request_id": "q-3", '
+        '"message": "Which?", "timeout_seconds": 45}\n\n',
+    )
+    assert _opened(sender, sender.relay.calls[0])["params"]["ttl_s"] == 45
+
+
+def test_a_prompt_that_waits_forever_has_no_ttl(sender):
+    push.observe_run_frame(
+        sender.session_id,
+        'data: {"type": "permission_request", "confirm_id": "c-4"}\n\n',
+    )
+    assert "ttl_s" not in _opened(sender, sender.relay.calls[0])["params"]
+
+
+def test_a_prompt_already_expired_is_not_pushed(sender):
+    sender.notifier.approval(sender.session_id, "c-5", "approval", ttl_s=0)
+    assert not sender.relay.calls
+
+
+def test_an_answered_approval_clears_the_phone_that_was_sent_it(sender):
+    sender.notifier.approval(sender.session_id, "c-6", "approval", ttl_s=60)
+    sender.notifier.approval_resolved("c-6")
+    alert, silent = sender.relay.calls
+    assert silent.body[PUSH_DELIVERY_FIELD] == "silent"
+    assert silent.body["collapse_id"] == _collapse(sender.key, "b")
+    _opened(sender, alert)
+    payload = _opened(sender, silent)
+    assert payload["kind"] == "badge"
+    assert payload["params"] == {"resolved": ["c-6"]}
+    sender.notifier.approval_resolved("c-6")
+    assert len(sender.relay.calls) == 2, "one clearing push per approval"
+
+
+def test_an_approval_nobody_was_sent_clears_nothing(sender):
+    sender.notifier.approval_resolved("never-sent")
+    assert not sender.relay.calls
+
+
+def test_a_clearing_push_skips_a_watching_phone(sender):
+    sender.notifier.stream_opened(sender.phone.device_id)
+    sender.notifier.approval(sender.session_id, "c-7", "approval")
+    sender.notifier.approval_resolved("c-7")
+    assert not sender.relay.calls
+
+
+def test_answering_and_expiring_a_prompt_both_clear_the_phone(sender):
+    from gaia.ui.sse_handler import SSEOutputHandler
+
+    handler = SSEOutputHandler()
+    handler.confirm_timeout_seconds = 10
+    for confirm_id in ("c-8", "c-9"):
+        sender.notifier.approval(sender.session_id, confirm_id, "approval")
+    handler._confirm_id = "c-8"
+    handler._confirm_event = threading.Event()
+    assert handler.resolve_tool_confirmation(True, confirm_id="c-8")
+    handler.set_relay_confirmation("c-9")
+    handler.active_relay_run_id = "run"
+    handler.active_relay_proxy = SimpleNamespace(tool_decision=lambda *a: None)
+    handler._expire_relay_confirmation("c-9")
+    handler.set_relay_confirmation(None)
+    cleared = [
+        _opened(sender, c)["params"]["resolved"] for c in sender.relay.calls[2:]
+    ]
+    assert cleared == [["c-8"], ["c-9"]]
 
 
 @pytest.mark.parametrize("reason", ["model_server", "key_store", "setup"])
