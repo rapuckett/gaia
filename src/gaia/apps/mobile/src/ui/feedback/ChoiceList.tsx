@@ -63,6 +63,7 @@ export function ChoiceList(props: ChoiceListProps) {
                                         borderWidth: 2,
                                         borderRadius: multiple ? radius.sm : radius.full,
                                         borderColor: on ? colors.accentSolid : colors.border,
+                                        opacity: off ? 0.4 : 1,
                                         backgroundColor: on && multiple ? colors.accentSolid : 'transparent',
                                         alignItems: 'center',
                                         justifyContent: 'center',
