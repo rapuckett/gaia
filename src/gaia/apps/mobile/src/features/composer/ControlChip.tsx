@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 import type { LucideIcon } from 'lucide-react-native';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { isolate, isolateUnit } from '@webui/i18n/registry';
 
-import { Icon, Pressable, Row, Text } from '@/ui';
+import { Icon, Pressable, Row, Text, useTheme } from '@/ui';
 import { ChevronDown } from '@/ui/icons';
 import { a11yVisibility } from '@/ui/theme/a11y';
 
@@ -21,6 +21,8 @@ export interface ControlChipProps {
     /** A chevron after the label marks a chip that opens a menu. */
     menu?: boolean;
     warning?: boolean;
+    /** A setting that is on: the accent-dim fill and accent glyph of the desktop's `is-on` chip. */
+    active?: boolean;
     /** Which chip this is, so the row can drop its label when space runs out; the model's never goes. */
     chip: ChipId;
     /** The label is a value, not UI copy: a model id stays `ltr`, a folder name follows its own script (`auto`). */
@@ -36,7 +38,9 @@ export interface ControlChipProps {
 const MODEL_CHIP_MIN = 44;
 
 /** A flat control in the message box's bottom row, as the desktop's composer chips: an icon, a short label and a chevron. */
-export function ControlChip({ label, icon, onPress, menu, warning, chip, disabled, place, accessibilityLabel, accessibilityHint, testID, value }: ControlChipProps) {
+export function ControlChip({ label, icon, onPress, menu, warning, active, chip, disabled, place, accessibilityLabel, accessibilityHint, testID, value }: ControlChipProps) {
+    const { colors, radius } = useTheme();
+    const tone = warning ? 'warning' : active ? 'accent' : 'secondary';
     const collapsed = useChipCollapsed(chip);
     const placeHidden = useChipCollapsed('place');
     const [modelWidth, setModelWidth] = useState<number | null>(null);
@@ -45,14 +49,20 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
     const iconOnly = collapsed || belowFloor;
     // One line, so an ellipsis cuts the place before the name; each stays one island in Arabic.
     const text = (placed: boolean) => (placed && place ? [value === 'ltr' ? isolate(label, 'ltr') : label, isolateUnit(place)].join(' · ') : label);
+    const faceOf = (face: ReactNode) =>
+        active ? (
+            <View style={{ backgroundColor: colors.accentDim, borderRadius: radius.md, paddingHorizontal: 6, marginHorizontal: -6, paddingVertical: 4 }}>{face}</View>
+        ) : (
+            face
+        );
     const content = (compact: boolean, placed = false) => (
         <Row gap="xs">
             <View style={{ flexShrink: 0 }}>
-                <Icon icon={icon} size="sm" tone={warning ? 'warning' : 'secondary'} />
+                <Icon icon={icon} size="sm" tone={tone} />
             </View>
             {compact ? null : (
                 <View style={{ flexShrink: chip === 'model' ? 1 : 0 }}>
-                    <Text role="label" tone={warning ? 'warning' : 'secondary'} numberOfLines={1} compact dir={placed && place ? undefined : value}>
+                    <Text role="label" tone={tone} numberOfLines={1} compact dir={placed && place ? undefined : value}>
                         {text(placed)}
                     </Text>
                 </View>
@@ -92,11 +102,13 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
                 inline={collapsed}
                 testID={testID}
             >
-                {collapsed ? (
-                    // Narrower than its touch target, which hit slop keeps at 44: the room goes to the model's name.
-                    <View style={{ width: ICON_ONLY_WIDTH, alignItems: 'center' }}>{content(true)}</View>
-                ) : (
-                    content(iconOnly, !placeHidden)
+                {faceOf(
+                    collapsed ? (
+                        // Narrower than its touch target, which hit slop keeps at 44: the room goes to the model's name.
+                        <View style={{ width: ICON_ONLY_WIDTH, alignItems: 'center' }}>{content(true)}</View>
+                    ) : (
+                        content(iconOnly, !placeHidden)
+                    ),
                 )}
             </Pressable>
         </View>
