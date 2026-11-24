@@ -398,6 +398,16 @@ describe('PermissionPrompt shows what code and commands really do', () => {
         expect(shown()).not.toContain('perm-hidden-note');
     });
 
+    it("shows the PC's risk note on its own left-to-right line", async () => {
+        const note = 'Reads the repository; changes nothing.';
+        const { shown } = await mount(prompt({ tool: 'run_command', toolLabel: undefined, alwaysScope: undefined, toolArgs: { command: 'git status', _risk_note: note } }));
+        const json = JSON.parse(shown());
+        const find = (n: any): any => (n && typeof n === 'object' ? (n.props?.testID === 'perm-risk-note' ? n : (n.children ?? []).map(find).find(Boolean)) : null);
+        const node = find({ children: Array.isArray(json) ? json : [json] });
+        expect(node.props).toMatchObject({ dir: 'ltr', align: 'ltr' });
+        expect(JSON.stringify(node)).toContain(note);
+    });
+
     it('pins the code-risk note outside the scrolling body of a long code card', async () => {
         const code = Array.from({ length: 30 }, (_, i) => `print(${i})`).join('\n');
         const { shown, scrolled } = await mount(prompt({ tool: 'run_python', toolLabel: undefined, alwaysScope: undefined, toolArgs: { code } }));
