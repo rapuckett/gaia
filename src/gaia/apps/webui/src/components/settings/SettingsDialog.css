@@ -985,7 +985,6 @@
 
 .settings-setup-row-value {
     display: block;
-    text-align: match-parent;
 }
 
 [dir='rtl'] .settings-setup-chevron {
