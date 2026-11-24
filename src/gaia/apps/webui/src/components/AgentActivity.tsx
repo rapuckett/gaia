@@ -357,6 +357,12 @@ function FlowWarning({ step }: { step: AgentStep }) {
         <div className="flow-warning" role="status">
             <AlertCircle size={13} />
             <span>{localizeLiveStatus(t, step.label)}</span>
+            {step.detail && (
+                <details className="flow-warning-details">
+                    <summary>{t('failedTurn.details')}</summary>
+                    <div>{step.detail}</div>
+                </details>
+            )}
         </div>
     );
 }
