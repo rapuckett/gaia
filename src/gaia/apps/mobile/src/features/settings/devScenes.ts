@@ -739,6 +739,17 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
         section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE]),
         override: { getSetupPlan: () => Promise.reject(new GaiaApiError(500, 'lemond is not responding: connection refused')) },
     },
+    // Six chats the PC refuses to delete: `#tap=privacy-delete-all,privacy-delete-confirm` shows the plain sentence over five "title: reason" lines and "+1 more".
+    'privacy-delete-failed': {
+        section: 'privacy', gpuMemory: GPU,
+        data: {
+            settings: SETTINGS,
+            sessions: ['a', 'b', 'c', 'd', 'e', 'f'].map(chat),
+            deleteSessionErrors: Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f'].map((id) => [id, new GaiaApiError(500, `chat ${id} is open on the PC`)])),
+        },
+    },
+    // The read-aloud settings read fails with the PC's own text, kept on the detail line.
+    'read-aloud-load-failed': { section: 'voice', gpuMemory: GPU, override: { getSpeechSettings: () => Promise.reject(new GaiaApiError(500, 'speech service is not running')) } },
 };
 
 export function settingsSceneClient(scene: SettingsScene): GaiaClient {

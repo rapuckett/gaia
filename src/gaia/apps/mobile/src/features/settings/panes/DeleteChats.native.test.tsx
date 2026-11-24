@@ -8,7 +8,7 @@ import { Platform } from 'react-native';
 import type { Session } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
-import { translator } from '@/i18n/useT';
+import { ltr, translator } from '@/i18n/useT';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
 import { sheetStore } from '@/ui/overlays/sheetStore';
@@ -44,7 +44,34 @@ afterEach(() => act(() => sheetStore.reset()));
         expect(client.deletedSessions).toEqual([]);
 
         await fireEvent.press(screen.getByTestId('privacy-delete-confirm'));
-        await screen.findByText(t('settings.privacy.deleteFailed', { n: 1, reason: 'Chat b: locked' }));
+        await screen.findByText(t('mobileApp.plain.settings.privacy.deleteFailed', { n: 1 }));
+        expect(screen.getByText(`Chat b: ${ltr('locked')}`)).toBeTruthy();
         expect(client.deletedSessions).toEqual(['a', 'c']);
+    });
+
+    it('lists at most five failed chats on the detail line, then how many more', async () => {
+        const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+        const client = createFakeClient({
+            sessions: ids.map(chat),
+            deleteSessionErrors: Object.fromEntries(ids.map((id) => [id, new Error(`locked ${id}`)])),
+        });
+        await render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <GaiaClientProvider client={client}>
+                    <ThemeProvider>
+                        <SheetHost>
+                            <DeleteChats />
+                        </SheetHost>
+                    </ThemeProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>,
+        );
+
+        await screen.findByText(t('settings.privacy.deleteWarning'));
+        await fireEvent.press(screen.getByTestId('privacy-delete-all'));
+        await fireEvent.press(await screen.findByTestId('privacy-delete-confirm'));
+        await screen.findByText(t('mobileApp.plain.settings.privacy.deleteFailed', { n: 6 }));
+        const lines = ids.slice(0, 5).map((id) => `Chat ${id}: ${ltr(`locked ${id}`)}`);
+        expect(screen.getByText([...lines, t('newChat.docs.hidden', { n: 1 })].join('\n'))).toBeTruthy();
     });
 });

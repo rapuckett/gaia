@@ -4,9 +4,17 @@
 import { useState } from 'react';
 
 import { useDeleteAllChats, useSessions } from '@/data';
-import { describeFailureWith, describeHttpFailure, useT } from '@/i18n/useT';
+import { describeDetail, describeHttpFailure, ltr, useT, type Translate } from '@/i18n/useT';
 import { Button, Card, Notice, Sheet, Stack, Text } from '@/ui';
 
+const DETAIL_LINES = 5;
+
+/** The chats that failed, as "title: reason" lines with the PC's reason kept left to right, capped with a "+ N more" line. */
+export function failedChatsDetail(t: Translate, failed: readonly { title: string; error: unknown }[]): string {
+    const lines = failed.slice(0, DETAIL_LINES).map((f) => `${f.title}: ${ltr(describeDetail(f.error, t))}`);
+    if (failed.length > DETAIL_LINES) lines.push(t('newChat.docs.hidden', { n: failed.length - DETAIL_LINES }));
+    return lines.join('\n');
+}
 
 /** Deletes every chat after a confirmation sheet; one failing chat doesn't stop the rest. */
 export function DeleteChats() {
@@ -24,7 +32,7 @@ export function DeleteChats() {
             const { failed } = await deleteAll.mutateAsync(sessions.map((s) => ({ id: s.id, title: s.title })));
             setResult(
                 failed.length
-                    ? { ok: false, text: t.compose((say) => say('settings.privacy.deleteFailed', { n: failed.length, reason: failed.map((f) => `${f.title}: ${describeFailureWith(f.error, say)}`).join('; ') })) }
+                    ? { ok: false, text: t('mobileApp.plain.settings.privacy.deleteFailed', { n: failed.length }), detail: failedChatsDetail(t, failed) }
                     : { ok: true, text: t('settings.privacy.deleted') },
             );
         } catch (error) {

@@ -1,9 +1,11 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { ref } from '@webui/i18n/registry';
+
 import { GaiaApiError, GaiaAuthError, GaiaNetworkError, GaiaTurnError } from '@/api/errors';
 
-import { describeDetail, describeError, describeErrorWith, describeHttpFailure, plainOr, serverText, technicalDetail, translator } from './useT';
+import { describeDetail, describeError, describeErrorWith, describeHttpFailure, plainFailure, plainFailureText, plainOr, serverText, technicalDetail, translator } from './useT';
 
 describe('nested error messages', () => {
     const error = new GaiaNetworkError('http://127.0.0.1:4210/api/setup/check', new Error('fetch failed'));
@@ -115,5 +117,32 @@ describe('plainOr', () => {
         const t = translator('en');
         expect(plainOr(t, 'setup.models.listFailed', {}, new Error('offline'), 'reason')).toBe('Couldn’t read the model list from the model server: offline');
         expect(plainOr(t, 'setup.models.listFailed', {}, new GaiaApiError(500, 'x'), 'reason')).toBe("Couldn't read the model list from the model server.");
+    });
+});
+
+describe('plainFailure', () => {
+    it.each(['en', 'ar'])('a PC HTTP error in %s gives the plain sentence and the raw text as detail', (code) => {
+        const t = translator(code);
+        const { text, detail } = plainFailure(t, 'mem.about.loadFailed', {}, new GaiaApiError(500, 'db is locked'));
+        expect(text).toBe(t('mobileApp.plain.mem.about.loadFailed'));
+        expect(text).not.toContain('db is locked');
+        expect(detail).toBe('db is locked');
+    });
+
+    it('a PC error with no text has no detail', () => {
+        const t = translator('en');
+        expect(plainFailure(t, 'docs.loadFailed', {}, new GaiaApiError(500, ''))).toEqual({ text: "Couldn't load your documents.", detail: undefined });
+    });
+
+    it('our own wording of a failure still ends the sentence, with no detail', () => {
+        const t = translator('en');
+        expect(plainFailure(t, 'session.copyFailed', {}, new Error('no clipboard'))).toEqual({ text: "Couldn't copy the chat ID: no clipboard" });
+    });
+
+    it('fills the slot a key names and passes message refs through', () => {
+        const t = translator('en');
+        expect(plainFailure(t, 'settings.price.loadFailed', {}, new Error('offline'), 'reason').text).toBe('Prices could not be loaded: offline');
+        const what = ref('mem.goals.createFailed');
+        expect(plainFailureText(t, 'mem.goals.failed', { what }, new GaiaApiError(500, 'x'))).toBe(`${t('mem.goals.createFailed')}.`);
     });
 });
