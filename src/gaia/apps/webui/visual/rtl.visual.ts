@@ -379,9 +379,19 @@ const audit = async (page: Page): Promise<string[]> => {
             const icon = button.querySelector(':scope > svg');
             if (!icon || !shown(button) || !button.textContent?.trim()) continue;
             const iconBox = icon.getBoundingClientRect();
-            const range = document.createRange();
-            range.selectNodeContents(button);
-            const gaps = [...range.getClientRects()]
+            // An element child counts by its own box, so text its overflow clips never reaches the icon.
+            const boxes: DOMRect[] = [];
+            for (const node of button.childNodes) {
+                if (node === icon || node instanceof SVGElement || !node.textContent?.trim()) continue;
+                if (node instanceof Element) {
+                    if (shown(node)) boxes.push(...node.getClientRects());
+                    continue;
+                }
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                boxes.push(...range.getClientRects());
+            }
+            const gaps = boxes
                 .filter((r) => r.left >= iconBox.right - 1 || r.right <= iconBox.left + 1)
                 .map((r) => Math.max(r.left - iconBox.right, iconBox.left - r.right));
             if (gaps.length && Math.min(...gaps) < 3) problems.push(`icon touches its label: ${label(button)}`);
