@@ -123,11 +123,20 @@ export async function runSetupCheck(client: GaiaClient, options: SetupCheckOptio
     }
 }
 
-/** The first-run gate: checks at launch, and again on `recheck`. `open` reopens setup from Settings. */
-export function useSetupGate() {
+/**
+ * The first-run gate: checks at launch, and again on `recheck`. `open` reopens setup from Settings. `pcId` is the paired
+ * PC the client talks to: when it changes, what the last PC answered is no longer shown.
+ */
+export function useSetupGate(pcId?: string | null) {
     const client = useGaiaClient();
     const [gate, setGate] = useState<SetupGateState>({ state: 'checking' });
     const latest = useRef(0);
+    const [gatePc, setGatePc] = useState(pcId);
+    if (gatePc !== pcId) {
+        setGatePc(pcId);
+        if (gate.state !== 'ready' && gate.state !== 'checking') setGate({ state: 'checking' });
+    }
+    const checkedPc = useRef<{ id: string | null | undefined } | null>(null);
 
     const recheck = useCallback(
         async (opts: { quiet?: boolean; waitForStart?: boolean } = {}) => {
@@ -148,10 +157,13 @@ export function useSetupGate() {
     // The gate starts as `checking`, so the launch check sets nothing until it has an answer.
     useEffect(() => {
         if (!client) return undefined;
+        // Only the launch, or the same PC at another address, waits for a PC that is still starting; a different PC gets one plain check.
+        const waitForStart = checkedPc.current === null || checkedPc.current.id === pcId;
+        checkedPc.current = { id: pcId };
         const ticket = ++latest.current;
         let current = true;
         void runSetupCheck(client, {
-            waitForStart: true,
+            waitForStart,
             onUpgrading: () => {
                 if (current && ticket === latest.current) setGate({ state: 'upgrading' });
             },
@@ -161,7 +173,7 @@ export function useSetupGate() {
         return () => {
             current = false;
         };
-    }, [client]);
+    }, [client, pcId]);
 
     // The PC answered its status after the check could not: read now what the launch check could not,
     // as webui's `onBackendBack`. Not after a failed update, which must not start another unasked.

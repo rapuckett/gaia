@@ -8,7 +8,7 @@ import { PAIRING_SCENES, PairingSceneView } from '@/features/pairing/devScenes';
 import { PairingFlow } from '@/features/pairing';
 import { UIProvider } from '@/ui';
 
-/** The pairing screens on a fake PC; `route-home|route-tailnet|route-tailnet-long-name|two-pcs-same-host|unreachable-away` show Your PCs and the connection banner, `local-network-explainer|local-network-denied` the local network screens. */
+/** The pairing screens on a fake PC; `route-home|route-tailnet|route-tailnet-long-name|two-pcs-same-host|unreachable-away` show Your PCs and the connection banner, `local-network-explainer|local-network-denied` the local network screens, `pair-again-checking|pair-again-unreachable|pair-again-forgotten` the pair-again states. */
 export default function PairingGalleryRoute() {
     const { state = 'default' } = useLocalSearchParams<{ state?: string }>();
     if (!devGalleryEnabled()) return <Redirect href="/" />;

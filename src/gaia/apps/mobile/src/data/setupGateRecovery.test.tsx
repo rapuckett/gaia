@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
-import { GaiaNetworkError } from "@/api/errors";
+import { GaiaNetworkError, GaiaPinMismatchError } from "@/api/errors";
 import type { GaiaClient, SetupCheck, SystemStatus } from "@/api/client.types";
 
 import { GaiaClientProvider } from "./GaiaClientProvider";
@@ -54,5 +54,51 @@ describe("the setup gate after the PC comes back", () => {
     up = true;
     await advance(10_000);
     expect(result.current.state).toBe("ready");
+  });
+});
+
+describe("the setup gate when another PC becomes the one in use", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it("drops the last PC's answer at once, and asks the new PC once instead of waiting a minute for it", async () => {
+    const refused = () =>
+      Promise.reject(new GaiaNetworkError("http://pc-b", new Error("refused")));
+    const pcA = {
+      checkSetup: () => Promise.reject(new GaiaPinMismatchError()),
+      getSystemStatus: refused,
+    } as unknown as GaiaClient;
+    let refuseB = () => {};
+    const askedB = jest.fn(
+      () =>
+        new Promise((_, reject) => {
+          refuseB = () => reject(new GaiaNetworkError("http://pc-b", new Error("refused")));
+        }),
+    );
+    const pcB = { checkSetup: askedB, getSystemStatus: refused } as unknown as GaiaClient;
+    let client = pcA;
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <GaiaClientProvider client={client}>{children}</GaiaClientProvider>
+      </QueryClientProvider>
+    );
+    const { result, rerender } = await renderHook(
+      ({ pcId }: { pcId: string }) => useSetupGate(pcId).gate,
+      { wrapper, initialProps: { pcId: "a" } },
+    );
+    await advance(1_000);
+    expect(result.current.state).toBe("unknown");
+    expect((result.current as { error?: unknown }).error).toBeInstanceOf(GaiaPinMismatchError);
+
+    client = pcB;
+    await rerender({ pcId: "b" });
+    expect(result.current.state).toBe("checking");
+    refuseB();
+    await advance(1_000);
+    expect(result.current.state).toBe("unknown");
+    expect((result.current as { error?: unknown }).error).toBeInstanceOf(GaiaNetworkError);
+    await advance(5_000);
+    expect(askedB).toHaveBeenCalledTimes(1);
   });
 });
