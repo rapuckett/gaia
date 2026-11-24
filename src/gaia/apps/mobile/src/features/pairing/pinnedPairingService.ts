@@ -95,6 +95,25 @@ function deviceName(): string {
 
 const NO_ANSWER = new Set(['unreachable', 'not_home_network', 'network']);
 
+/** The `code` of a JSON error answer; undefined for any other body. */
+function errorCode(text: string): unknown {
+    try {
+        return (JSON.parse(text) as { code?: unknown } | null)?.code;
+    } catch {
+        return undefined;
+    }
+}
+
+/** A native failure's code, for a log line that never carries the secret's contents. */
+function failureCode(err: unknown): string {
+    return String((err as { code?: unknown } | null)?.code ?? (err instanceof Error ? err.name : typeof err));
+}
+
+/** Whether the secret under this PC's own id belongs to a pairing still in use: one listed, or one being redeemed. */
+function ownsOwnId(state: Saved, pcId: string): boolean {
+    return state.pcs.some((p) => p.id === pcId) || state.pending?.id === pcId;
+}
+
 /** The PairingService of an iOS build: everything over TLS pinned to the PC, the token kept natively. */
 export interface PinnedPairingService extends PairingService {
     restore(): Promise<ConnectionConfig | null>;
@@ -212,9 +231,10 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
     async function askAt(pc: SavedPc, origin: string, signal?: AbortSignal): Promise<'known' | 'unknown' | 'mismatch' | 'none'> {
         try {
             const res = await pinnedFetch(pc.id, `${origin}${ENDPOINTS.health}`, { headers: { ...UI_HEADERS }, signal });
-            await res.text();
+            const text = await res.text();
             if (res.ok) return 'known';
-            if (res.status === 401 && /^bearer\b/i.test(res.headers.get('www-authenticate') ?? '')) return 'unknown';
+            // Only the device gate's own refusal says the PC dropped this phone; other layers send Bearer 401s too.
+            if (res.status === 401 && /^bearer\b/i.test(res.headers.get('www-authenticate') ?? '') && errorCode(text) === 'device_unknown') return 'unknown';
             console.warn(`${pc.name} answered ${res.status} at ${origin} when asked whether it still knows this phone`);
             return 'none';
         } catch (err) {
@@ -229,7 +249,7 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
         const vaultId = leavingId(pc);
         try {
             // After a kill the secret can still be under the PC's own id; a PC paired again since keeps its new one.
-            if (!GaiaTransport.isPaired(vaultId) && GaiaTransport.isPaired(pc.id) && !(await load()).pcs.some((p) => p.id === pc.id)) {
+            if (!GaiaTransport.isPaired(vaultId) && GaiaTransport.isPaired(pc.id) && !ownsOwnId(await load(), pc.id)) {
                 await GaiaTransport.promote(pc.id, vaultId);
             }
             // The PC drops its push record when it forgets the phone, so push only deletes at the relay (sweepStale retries).
@@ -244,7 +264,11 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
                 await GaiaTransport.drop(vaultId);
             }
             const latest = await load();
-            await save({ ...latest, leaving: latest.leaving.filter((p) => leavingId(p) !== vaultId) });
+            const rest = { ...latest, leaving: latest.leaving.filter((p) => leavingId(p) !== vaultId) };
+            await save(rest);
+            // A kill inside the native move leaves a copy under the PC's own id. No await between the check and the
+            // drop, so a pairing of this PC listed, redeeming or still leaving keeps its secret.
+            if (GaiaTransport.isPaired(pc.id) && !ownsOwnId(rest, pc.id) && !rest.leaving.some((p) => p.id === pc.id)) await GaiaTransport.drop(pc.id);
         } catch (err) {
             console.error(`Finishing forgetting ${pc.name} failed; it is tried again at the next start`, err);
         }
@@ -391,10 +415,15 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
                 currentId: state.currentId === pcId ? null : state.currentId,
                 leaving: [...state.leaving.filter((p) => leavingId(p) !== leavingId(pc)), pc],
             });
-            if (GaiaTransport.isPaired(pcId)) await GaiaTransport.promote(pcId, leavingId(pc));
-            // No other PC is made current: the person picks one.
+            // Off the PC before its secret moves, so a failed move can't leave the app talking to it. No other PC is made current.
             const connection = useConnectionStore.getState();
             if (connection.connection?.pcId === pcId) connection.clearConnection();
+            try {
+                if (GaiaTransport.isPaired(pcId)) await GaiaTransport.promote(pcId, leavingId(pc));
+            } catch (err) {
+                // Its leaving entry is saved, so finishing (now, or at the next start) moves the secret again.
+                console.error(`Moving the forgotten PC ${pcId}'s key aside failed (${failureCode(err)}); it is tried again.`);
+            }
             void finishLeaving(pc);
         },
 
@@ -402,8 +431,8 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
             const pc = (await load()).pcs.find((p) => p.id === pcId);
             if (!pc) throw new Error(`This phone isn't paired with a PC whose id is ${pcId}.`);
             const origins = [pc.origin, ...pc.origins.map((o) => o.origin).filter((o) => o !== pc.origin)];
-            // A 2xx or a refused token settles it at once; a changed certificate settles it only at every address.
-            const answer = await new Promise<{ state: 'known'; origin: string } | { state: 'unknown' } | { state: 'unreachable' }>((resolve) => {
+            // A 2xx or the device gate's refusal settles it at once; a changed certificate settles it only at every address.
+            const answer = await new Promise<{ state: 'known'; origin: string } | Exclude<PcRecheck, { state: 'known' }>>((resolve) => {
                 let left = origins.length;
                 let mismatched = 0;
                 for (const origin of origins) {
@@ -411,11 +440,13 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
                         if (kind === 'known') resolve({ state: 'known', origin });
                         else if (kind === 'unknown') resolve({ state: 'unknown' });
                         else if (kind === 'mismatch') mismatched += 1;
-                        if (--left === 0) resolve(mismatched === origins.length ? { state: 'unknown' } : { state: 'unreachable' });
+                        if (--left === 0) resolve(mismatched === origins.length ? { state: 'otherDevice' } : { state: 'unreachable' });
                     });
                 }
             });
             if (answer.state !== 'known') return answer;
+            // The caller gave up, and said so on screen: a late answer changes nothing.
+            if (signal?.aborted) return { state: 'unreachable' };
             if (answer.origin !== pc.origin) await updatePc(pcId, (p) => ({ ...p, origin: answer.origin }));
             return { state: 'known' };
         },
