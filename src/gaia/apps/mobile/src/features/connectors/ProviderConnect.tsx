@@ -58,9 +58,9 @@ function PcOnlyConnect({ connectorId, label, accessibilityLabel, testID }: Provi
     );
 }
 
-function CodeConnect({ connectorId, row, label, againLabel, scopes, onEnded, onStarted, accessibilityLabel, testID }: ProviderConnectProps & { row: ConnectorRow }) {
+function CodeConnect({ connectorId, row, label, againLabel, scopes, onEnded, onStarted, target, accessibilityLabel, testID }: ProviderConnectProps & { row: ConnectorRow }) {
     const t = useT();
-    const { signIn, start, cancel } = useDeviceSignIn(row, scopes);
+    const { signIn, startFor, cancel } = useDeviceSignIn(row, scopes);
     const [tried, setTried] = useState(false);
     const why = signIn.state === 'expired' ? 'failed' : signIn.state === 'ended' ? signIn.why : null;
     useEffect(() => {
@@ -82,7 +82,7 @@ function CodeConnect({ connectorId, row, label, againLabel, scopes, onEnded, onS
                     onPress={() => {
                         setTried(true);
                         onStarted?.();
-                        start();
+                        startFor(target);
                     }}
                     testID={testID ?? `connect-${connectorId}`}
                 />

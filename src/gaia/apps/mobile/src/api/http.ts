@@ -951,7 +951,12 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         startConnectorDeviceSignIn(connectorId, scopes, options) {
-            return postJson<ConnectorDeviceAuthResponse>(connectorAuthorizeDevicePath(connectorId), { scopes }, options?.signal);
+            const target = options?.target;
+            return postJson<ConnectorDeviceAuthResponse>(
+                connectorAuthorizeDevicePath(connectorId),
+                { scopes, ...(target && 'addAccount' in target ? { add_account: true } : {}), ...(target && 'account' in target ? { account: target.account } : {}) },
+                options?.signal,
+            );
         },
 
         async watchConnectorSignIn(connectorId, options) {
