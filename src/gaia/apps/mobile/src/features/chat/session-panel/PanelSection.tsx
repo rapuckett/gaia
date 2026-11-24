@@ -44,7 +44,7 @@ export function PanelSection({ id, title, summary, summaryTone = 'muted', divide
             <Pressable
                 onPress={() => setSection(id, !open)}
                 accessibilityLabel={title}
-                accessibilityHint={summary ?? undefined}
+                accessibilityValue={summary ? { text: summary } : undefined}
                 aria-expanded={open}
                 minSize={40}
                 testID={`panel-section-${id}-toggle`}

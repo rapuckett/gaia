@@ -18,7 +18,7 @@ import { isolate } from '@webui/i18n/registry';
 import { environmentOffline } from '@webui/utils/sessionPanelSummary.core';
 
 import { failureNoticeProps } from '../header/failureText';
-import { COMPACT_ROW, CompactRow, InlineSegment, MiniSwitch, RowText } from './compact';
+import { CompactRow, InlineSegment, MiniSwitch, RowText } from './compact';
 import { FolderPicker } from './FolderPicker';
 import { PanelSection } from './PanelSection';
 import { useSessionPanelStore } from './panelStore';
@@ -137,7 +137,7 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
                         />
                     ) : !locked && !addRefused ? (
                         <Pressable
-                            minSize={COMPACT_ROW}
+                            minSize={44}
                             accessibilityLabel={t('env.addFolder')}
                             onPress={() => {
                                 addFolder.reset();
