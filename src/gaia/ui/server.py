@@ -100,7 +100,7 @@ from .security import (
     is_local_pc,
     require_local_pc,
 )
-from .tunnel import TunnelManager
+from .tunnel import TunnelManager, redact_tunnel_token_in_access_log
 from .utils import UploadStaticFiles
 from .utils import sanitize_static_path as _sanitize_static_path
 from .utils import uploads_dir
@@ -865,6 +865,7 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
     app.state.tunnel = tunnel
     # Paired devices on the home network; touches no file until it is used.
     app.state.devices = DeviceAccess(app)
+    redact_tunnel_token_in_access_log()
 
     # Per-session locks prevent the same session from having multiple
     # concurrent requests, which would corrupt conversation state.

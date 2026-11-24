@@ -85,6 +85,33 @@ export function countText(t: Translate, base: PluralKey, n: number): string {
     return t.plural(base, n, { n: isolate(String(n), 'ltr') });
 }
 
+/** A library longer than this gets a filter box. */
+export const FILTER_AFTER = 5;
+
+/** The text to filter by: empty (no filtering) until the library is long enough to show the box. */
+export function filterNeedle(filter: string, documentCount: number): string {
+    return documentCount > FILTER_AFTER ? filter.trim().toLowerCase() : '';
+}
+
+export function matchesName(filename: string, needle: string): boolean {
+    return !needle || filename.toLowerCase().includes(needle);
+}
+
+/** Which chats a readable document is in; null while it is still indexing or failed. */
+export function documentUsage(
+    t: Translate,
+    doc: { indexing_status?: string; sessions_using?: number },
+    where: { inThisChat: boolean; inNextChat: boolean },
+): { label: string; here: boolean } | null {
+    if (doc.indexing_status && doc.indexing_status !== 'complete') return null;
+    const others = Math.max((doc.sessions_using ?? 0) - (where.inThisChat ? 1 : 0), 0);
+    if (where.inThisChat) {
+        return { here: true, label: others > 0 ? t.plural('docs.usage.hereAndOthers', others) : t('docs.usage.here') };
+    }
+    if (where.inNextChat) return { here: false, label: t('docs.usage.next') };
+    return { here: false, label: others > 0 ? t.plural('docs.usage.chats', others) : t('docs.usage.none') };
+}
+
 /** Format an ISO timestamp as a relative or absolute local time string. */
 export function formatTimestamp(isoString: string, t: Translate, now: Date = new Date()): string {
     try {
