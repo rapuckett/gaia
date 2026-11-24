@@ -109,7 +109,7 @@ export function PairingSceneView({ scene }: { scene: PairingScene }) {
     if (scene.localNetwork) {
         return (
             <UIProvider>
-                {scene.localNetwork === 'explainer' ? <LocalNetworkExplainer onContinue={() => undefined} /> : <LocalNetworkDenied />}
+                {scene.localNetwork === 'explainer' ? <LocalNetworkExplainer onContinue={() => undefined} /> : <LocalNetworkDenied onBack={() => undefined} />}
             </UIProvider>
         );
     }

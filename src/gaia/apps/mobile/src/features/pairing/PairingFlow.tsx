@@ -8,7 +8,7 @@ import { GaiaApiError, GaiaPinMismatchError } from '@/api/errors';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
 import { Button, Card, Icon, Notice, NumberMarker, Row, Screen, Spinner, Stack, Text, TextField, UpButton, useBackStep } from '@/ui';
-import { CircleAlert, Clock, House, Monitor, Smartphone } from '@/ui/icons';
+import { CircleAlert, Clock, Monitor, Smartphone, Wifi } from '@/ui/icons';
 
 import { parseInvite, type PairingInvite } from './invite';
 import { localNetworkStep, looksDenied, markAllowed, markExplained, watchForeground } from './localNetwork';
@@ -271,7 +271,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
         return <LocalNetworkExplainer onContinue={() => continueToPrompt(confirm)} busy={busy} error={error} />;
     }
     if (typeof view === 'object' && view.at === 'localNetworkDenied') {
-        return <LocalNetworkDenied busy={busy} error={error} />;
+        return <LocalNetworkDenied onBack={retry} busy={busy} error={error} />;
     }
     if (typeof view === 'object' && view.at === 'confirm') {
         const confirm = view;
@@ -412,16 +412,15 @@ export function LocalNetworkExplainer({ onContinue, busy, error }: { onContinue:
     const t = useT();
     return (
         <Page
+            icon={Wifi}
+            iconSize="xl"
             title={t('mobileApp.localNetwork.title')}
             body={t('mobileApp.localNetwork.body')}
             footer={<Button variant="primary" label={t('mobileApp.localNetwork.continue')} onPress={onContinue} busy={busy} full testID="local-network-continue" />}
         >
-            <Stack gap="xs" align="center">
-                <Icon icon={House} size="sm" tone="muted" />
-                <Text role="body" tone="muted" align="center">
-                    {t('mobileApp.localNetwork.privacy')}
-                </Text>
-            </Stack>
+            <Text role="body" tone="muted" align="center">
+                {t('mobileApp.localNetwork.privacy')}
+            </Text>
             <Text role="body" tone="muted" align="center">
                 {t('mobileApp.localNetwork.next')}
             </Text>
@@ -430,8 +429,8 @@ export function LocalNetworkExplainer({ onContinue, busy, error }: { onContinue:
     );
 }
 
-/** In place of "can't reach your PC" when the phone's local network setting looks off for GAIA. */
-export function LocalNetworkDenied({ busy, error }: { busy?: boolean; error?: ShownError }) {
+/** In place of "can't reach your PC" when the phone's local network setting looks off for GAIA; Back goes to how to pair. */
+export function LocalNetworkDenied({ onBack, busy, error }: { onBack: () => void; busy?: boolean; error?: ShownError }) {
     const t = useT();
     const open = () => {
         Linking.openSettings().catch((e: unknown) => console.error("Couldn't open this app's page in the phone's Settings", e));
@@ -439,6 +438,7 @@ export function LocalNetworkDenied({ busy, error }: { busy?: boolean; error?: Sh
     return (
         <Page icon={CircleAlert} title={t('mobileApp.localNetwork.deniedTitle')} body={t('mobileApp.localNetwork.deniedBody')}>
             <Button variant="primary" label={t('mobileApp.localNetwork.openSettings')} onPress={open} busy={busy} full testID="local-network-settings" />
+            <Button variant="secondary" label={t('mobileApp.pairing.manual.back')} onPress={onBack} disabled={busy} full testID="local-network-back" />
             {error ? <Notice tone="danger" message={error.text} detail={error.detail} /> : null}
         </Page>
     );
@@ -446,6 +446,7 @@ export function LocalNetworkDenied({ busy, error }: { busy?: boolean; error?: Sh
 
 function Page({
     icon,
+    iconSize = 'lg',
     title,
     body,
     busy,
@@ -454,6 +455,7 @@ function Page({
     children,
 }: {
     icon?: typeof Clock;
+    iconSize?: 'lg' | 'xl';
     title: string;
     body?: string;
     busy?: boolean;
@@ -481,7 +483,7 @@ function Page({
             <Stack flex={1} gap="lg" padding="xl" justify="center" width="100%" testID="pairing-page">
                 {icon ? (
                     <Stack align="center">
-                        <Icon icon={icon} size="lg" tone="accent" />
+                        <Icon icon={icon} size={iconSize} tone="accent" />
                     </Stack>
                 ) : null}
                 <Text role="title" weight="semibold" align="center">

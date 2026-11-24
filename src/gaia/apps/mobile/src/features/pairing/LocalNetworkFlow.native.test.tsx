@@ -142,6 +142,20 @@ describeNative('the local network explainer and denied card', () => {
         expect(openSettings).toHaveBeenCalledTimes(1);
     });
 
+    itIos('goes back to how to pair from the denied card, and stops retrying there', async () => {
+        const reached = recordingService([{ state: 'unreachable' }]);
+        await render(<PairingFlow initialStep="how" />, { wrapper: wrap });
+        await scanAndPair();
+        await fireEvent.press(await screen.findByTestId('local-network-continue'));
+        await screen.findByText(t('mobileApp.localNetwork.deniedBody'));
+
+        await fireEvent.press(screen.getByTestId('local-network-back'));
+        expect(await screen.findByText(t('mobileApp.pairing.how.title'))).toBeTruthy();
+        expect(screen.queryByText(t('mobileApp.localNetwork.deniedBody'))).toBeNull();
+        await leaveAndReturn();
+        expect(reached).toHaveLength(1);
+    });
+
     itIos('keeps the generic "can’t reach your PC" off Wi-Fi, where the permission isn’t the cause', async () => {
         mockNetwork.type = 'CELLULAR';
         recordingService([{ state: 'unreachable' }]);
