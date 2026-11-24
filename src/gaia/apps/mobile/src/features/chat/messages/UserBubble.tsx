@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { Platform } from 'react-native';
 
+import { splitUploadedImages } from '@webui/utils/messageImages';
 import { isolate } from '@webui/i18n/registry';
 import { middleTruncate } from '@webui/utils/format';
 import { isLongUserMessage, sizeLabel, USER_COLLAPSE_LINES } from '@webui/utils/longContent';
@@ -31,7 +32,10 @@ export function UserBubble({ message, onCollapse, context, startOpen }: UserBubb
     const t = useT();
     const uiDir = useDirection();
     const actions = useMessageActions(message, message.content, context, startOpen);
-    const { text, files: attached } = splitAttachmentLinks(message.content);
+    const lifted = splitUploadedImages(message.content);
+    const { text, files: links } = splitAttachmentLinks(lifted.text);
+    const pictures: SentAttachment[] = lifted.images.map((i) => ({ name: i.name, url: i.src, isImage: true }));
+    const attached = [...pictures, ...links];
     const images = attached.filter(drawable);
     const files = attached.filter((f) => !drawable(f));
     const long = isLongUserMessage(text);

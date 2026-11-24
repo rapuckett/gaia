@@ -139,6 +139,18 @@ describeNative('image strip and viewer', () => {
         expect(screen.getAllByTestId('user-attachment')).toHaveLength(1);
     });
 
+    it('lifts an image line from the middle and closes the text up around it', async () => {
+        await bubble('Before\n\n![a.png](/api/files/uploads/a.png)\n\nAfter\n[n.txt](/api/files/uploads/n.txt)');
+        expect(screen.getAllByTestId('user-image-thumb')).toHaveLength(1);
+        expect(screen.getAllByTestId('user-attachment')).toHaveLength(1);
+        expect(screen.getByText('Before\n\nAfter')).toBeTruthy();
+    });
+
+    it('leaves an image line inside a code fence alone', async () => {
+        await bubble('```\n![a.png](/api/files/uploads/a.png)\n```');
+        expect(screen.queryByTestId('user-image-thumb')).toBeNull();
+    });
+
     it('shows an image-off icon in the frame when a thumbnail fails to load', async () => {
         jest.spyOn(console, 'error').mockImplementation(() => undefined);
         await wrap(<ImageThumbs images={[image('bad.png'), image('a.png')]} />);

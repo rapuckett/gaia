@@ -49,7 +49,8 @@ export function setApiBase(url: string): void {
 }
 
 export function getApiBase(): string {
-    if (typeof window === 'undefined') return '/api';
+    // React Native defines `window` but not `window.location`.
+    if (typeof window === 'undefined' || !window.location) return '/api';
     if (override) return override;
 
     if (window.location.protocol === 'file:') {
