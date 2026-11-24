@@ -6,6 +6,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useT } from '../../i18n/useT';
 import type { SetupCatalogEntry, SetupPlan } from '../../types';
 import { formatSize } from './format';
+import { chatRows } from './jobModels.core';
 import { statusText, tooBigText } from './ModelChecklist';
 import {
     canCreateImages, cantRunHere, catalogOf, isEmbedding, isNpu, isOptional, isVision, pickChat, pickVision, resolveVision,
@@ -106,10 +107,7 @@ export function JobModels({ plan, selection, onSelection, disabled }: Props) {
     const chat = catalog.find((e) => e.id === selection.defaultChat);
     // Only the models for where the chat model runs, as chosen in Run on above.
     const onNpu = !!chat && isNpu(chat);
-    const chatRows = catalog.filter((e) => e.chat_choice && !isEmbedding(e) && (e.gaia_model || e.downloaded) && isNpu(e) === onNpu
-        && (e.setup_offer || e.id === selection.defaultChat));
-    const verified = chatRows.filter((e) => e.support === 'verified');
-    const untested = chatRows.filter((e) => e.support !== 'verified');
+    const { verified, untested, untestedPicked } = chatRows(catalog, selection.defaultChat);
     const visionPick = resolveVision(catalog, selection);
     const builtIn = !!chat?.reads_images;
     const visionRows = catalog.filter((e) => isVision(e) && e.id !== chat?.id);
@@ -123,7 +121,6 @@ export function JobModels({ plan, selection, onSelection, disabled }: Props) {
     const voice = extra('voice');
     const images = extra('image_creation');
     const imagesAllowed = canCreateImages(chat);
-    const untestedPicked = chat?.support === 'untested';
     const [showUntested, setShowUntested] = useState(untestedPicked);
     useEffect(() => {
         if (untestedPicked) setShowUntested(true);

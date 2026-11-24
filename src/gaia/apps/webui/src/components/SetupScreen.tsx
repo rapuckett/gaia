@@ -27,6 +27,7 @@ import { StageLogs } from './setup/StageLogs';
 import { SetupFooter, SetupFooterSlot } from './setup/SetupFooter';
 import { LanguagePicker } from './setup/LanguagePicker';
 import { AgentChoice } from './setup/AgentChoice';
+import { planAgentLabel } from './setup/jobModels.core';
 import { AGENT_PICK_KEY, type AgentPick } from './setup/agentPrograms';
 import { AgentDownloadRow, useAgentDownload } from './setup/AgentDownload';
 import { BackendChoice, applyTestedBackend } from './setup/BackendChoice';
@@ -1162,12 +1163,7 @@ export function SetupScreen({ onReady, onClose }: SetupScreenProps) {
             .catch((err: unknown) => console.warn('[SetupScreen] could not read the agents; the plan leaves out the agent line', err));
         return () => { live = false; };
     }, [stage]);
-    const cppProgram = agents?.programs.find((p) => p.id === 'gaiacpp');
-    const agentShown = agentPick?.id ?? agents?.current;
-    const agentLabel: MessageKey | null = !cppProgram || !(cppProgram.installed || cppProgram.can_download) ? null
-        : agentShown === 'gaiapy' ? 'setup.agent.gaiapy'
-            : agentShown === 'gaiacpp' ? 'setup.agent.gaiacpp'
-                : null;
+    const agentLabel = planAgentLabel(agents ?? undefined, agentPick?.id);
     // One flat line of steps; Customize, the cloud key and GPU memory are screens of the step they open from.
     const trail: Array<{ id: Stage; label: string; key: MessageKey }> = [
         { id: 'check', label: t('setup.check.title'), key: 'setup.check.title' },
