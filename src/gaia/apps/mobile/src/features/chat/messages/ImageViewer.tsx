@@ -29,7 +29,7 @@ function Stage({ image, width, height }: { image: SentAttachment; width: number;
     if (state.status === 'loading') return <Spinner />;
     if (state.status === 'failed') {
         return (
-            <View style={{ padding: 24, alignItems: 'center', gap: 12 }} testID="image-viewer-failed">
+            <View style={{ paddingVertical: 24, paddingHorizontal: 80, alignItems: 'center', gap: 12 }} testID="image-viewer-failed">
                 <Icon icon={ImageOff} size="lg" tone="muted" />
                 <Text role="body" tone="muted" align="center">{t('mobileApp.render.imageFailed')}</Text>
             </View>
