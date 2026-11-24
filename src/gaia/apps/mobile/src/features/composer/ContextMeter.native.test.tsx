@@ -31,7 +31,7 @@ const usage = (pct: number, over: Partial<ContextUsage> = {}): ContextUsage =>
         ...over,
     }) as unknown as ContextUsage;
 
-const shown = (u: ContextUsage) =>
+const shown = (u: ContextUsage | null) =>
     render(
         <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
             <UIProvider>
@@ -46,6 +46,11 @@ describeNative('ContextMeter threshold', () => {
         expect(screen.queryByTestId('context-meter', opts)).toBeNull();
         await screen.unmount();
         await shown(usage(50));
+        expect(screen.queryByTestId('context-meter', opts)).toBeNull();
+    });
+
+    it('is not rendered when nothing is measured yet', async () => {
+        await shown(null);
         expect(screen.queryByTestId('context-meter', opts)).toBeNull();
     });
 

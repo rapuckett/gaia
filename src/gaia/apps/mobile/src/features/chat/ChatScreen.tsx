@@ -233,7 +233,7 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                         rightControls={
                             <>
                                 <SpendMeter sessionId={sessionId} busy={busy} />
-                                <ContextMeter usage={context.usage} unavailable={context.unavailable} onDetails={() => setPanelOpen(true)} />
+                                <ContextMeter usage={context.usage} onDetails={() => setPanelOpen(true)} />
                                 <SessionFolderChip sessionId={sessionId} live={busy} onOpen={showEnvironment} />
                                 <ModelChip turnRunning={busy} initialQueued={initialQueuedModel} />
                             </>

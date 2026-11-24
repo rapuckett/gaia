@@ -24,8 +24,6 @@ const PARTS = [
 
 export interface ContextMeterProps {
     usage: ContextUsage | null;
-    /** Why there is no reading yet; shown as a dash that opens that reason. */
-    unavailable?: string | null;
     /** Opens the chat's panel, where the context and performance details are. */
     onDetails?: () => void;
     /** Starts with the breakdown sheet open (developer gallery). */
@@ -33,17 +31,16 @@ export interface ContextMeterProps {
 }
 
 /** How full the model's context window is; tap for what fills it. */
-export function ContextMeter({ usage, unavailable, onDetails, initialOpen = false }: ContextMeterProps) {
+export function ContextMeter({ usage, onDetails, initialOpen = false }: ContextMeterProps) {
     const t = useT();
     const { colors, radius } = useTheme();
     const [open, setOpen] = useState(initialOpen);
     const barless = useChipCollapsed('meter');
-    const wordless = useChipCollapsed('meterWord');
-    if (!usage && !unavailable) return null;
+    if (!usage) return null;
 
-    const pct = usage ? contextPct(usage) : 0;
-    const warn = !!usage && usage.at_risk.length > 0;
-    if (usage && !meterVisible(pct, warn, open)) return null;
+    const pct = contextPct(usage);
+    const warn = usage.at_risk.length > 0;
+    if (!meterVisible(pct, warn, open)) return null;
     const partColor = {
         system: colors.accentBlue,
         tools: colors.accentPurple,
@@ -51,15 +48,13 @@ export function ContextMeter({ usage, unavailable, onDetails, initialOpen = fals
         history: colors.accentSolid,
         query: colors.accentCyan,
     };
-    const aria = usage
-        ? t('ctx.meter.aria', {
-              pct,
-              used: formatTokens(usage.used),
-              window: formatTokens(usage.window),
-          })
-        : `${t('ctx.context')}: ${unavailable}`;
+    const aria = t('ctx.meter.aria', {
+        pct,
+        used: formatTokens(usage.used),
+        window: formatTokens(usage.window),
+    });
 
-    const capped = !!usage && usage.model_window != null && usage.model_window > usage.window;
+    const capped = usage.model_window != null && usage.model_window > usage.window;
     const hint = capped
         ? t('ctx.meter.titleCapped', { gaia: formatTokens(usage.window), model: formatTokens(usage.model_window!) })
         : t('ctx.meter.title');
@@ -86,34 +81,28 @@ export function ContextMeter({ usage, unavailable, onDetails, initialOpen = fals
                 </View>
             )}
             <Text role="caption" tone={warn ? 'warning' : 'secondary'} compact>
-                {usage ? <Ltr>{`${pct}%`}</Ltr> : `${t.bare('ctx.context')} –`}
+                <Ltr>{`${pct}%`}</Ltr>
             </Text>
         </Row>
     );
 
-    // Last step with no reading: nothing to show or tap. The measures stay mounted in one place either way,
-    // since a remounted measure reports 0 on unmount and that undoes the collapse.
-    const hidden = wordless && !usage;
-
     return (
         <>
             <ChipMeasure id="meter">{reading(false)}</ChipMeasure>
-            <ChipMeasure id="meterWord">{usage ? reading(true) : null}</ChipMeasure>
-            {hidden ? null : (
-                <Pressable
-                    onPress={() => setOpen(true)}
-                    accessibilityLabel={aria}
-                    accessibilityHint={usage ? hint : unavailable ?? undefined}
-                    aria-expanded={open}
-                    aria-haspopup="dialog"
-                    inline
-                    testID="context-meter"
-                >
-                    {reading(barless)}
-                </Pressable>
-            )}
+            <ChipMeasure id="meterWord">{reading(true)}</ChipMeasure>
+            <Pressable
+                onPress={() => setOpen(true)}
+                accessibilityLabel={aria}
+                accessibilityHint={hint}
+                aria-expanded={open}
+                aria-haspopup="dialog"
+                inline
+                testID="context-meter"
+            >
+                {reading(barless)}
+            </Pressable>
             <Sheet open={open} onClose={() => setOpen(false)} title={t('ctx.meter.window')}>
-                {usage ? <Breakdown usage={usage} colors={partColor} onDetails={onDetails ? () => { setOpen(false); onDetails(); } : undefined} /> : <Text role="body">{unavailable}</Text>}
+                <Breakdown usage={usage} colors={partColor} onDetails={onDetails ? () => { setOpen(false); onDetails(); } : undefined} />
             </Sheet>
         </>
     );
