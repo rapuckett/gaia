@@ -6,7 +6,7 @@ import { X } from 'lucide-react';
 import * as api from '../services/api';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { contextReason, type ContextUnavailable } from '../utils/contextReason';
+import { contextReason, type ContextUnavailable } from '../utils/contextReason.core';
 import { log } from '../utils/logger';
 import type { ChatPerformance, ContextUsage, TurnPerformance } from '../types';
 import { ref } from '../i18n/registry';
