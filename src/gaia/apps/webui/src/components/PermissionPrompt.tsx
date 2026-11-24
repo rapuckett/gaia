@@ -1,7 +1,7 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { ChevronRight, ShieldQuestion } from 'lucide-react';
 import {
     useNotificationStore,
@@ -21,6 +21,7 @@ import {
 } from './CalendarApproval';
 import { cmdReading, decodedPowerShell } from './shownText';
 import {
+    APPROVAL_ARM_MS,
     CODE_TOOLS,
     COMMAND_SUMMARY_TOOLS,
     EXACT_SUMMARY_TOOLS,
@@ -102,6 +103,8 @@ export function CodeBlock({ code, previewLines = CODE_PREVIEW_LINES, testId = 'p
  *
  * Enter never answers it: focus moves to the card, not a button, so a keystroke
  * meant for the composer can't approve. Esc denies; Tab reaches the buttons.
+ * A mouse or touch click counts only once the card has been still for APPROVAL_ARM_MS,
+ * since it appears where the transcript was; a keyboard or screen reader click counts at once.
  */
 export function PermissionPrompt({ sessionId }: { sessionId: string }) {
     const selector = useMemo(() => selectSessionPermissionPrompt(sessionId), [sessionId]);
@@ -175,6 +178,32 @@ function PromptCard({ notification }: { notification: GaiaNotification }) {
     // Take focus from the composer so its Enter can't land on a button here.
     useEffect(() => { cardRef.current?.focus({ preventScroll: true }); }, []);
 
+    // A ref for the check, so a click in the same frame as a resize reads it disarmed; state only marks the card.
+    const ready = useRef(false);
+    const [armed, setArmed] = useState(false);
+    useEffect(() => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const rearm = () => {
+            ready.current = false;
+            setArmed(false);
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                ready.current = true;
+                setArmed(true);
+            }, APPROVAL_ARM_MS);
+        };
+        rearm();
+        // The composer pins the card from below, so the card or anything in its column (the composer, a notice, a
+        // queued message) changing size moves the buttons.
+        const card = cardRef.current;
+        const resized = card && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(rearm) : null;
+        for (const el of [card, card?.parentElement]) if (el) resized?.observe(el);
+        return () => {
+            clearTimeout(timer);
+            resized?.disconnect();
+        };
+    }, []);
+
     // The backend denies on its own when the wait runs out; this only shows it.
     useEffect(() => {
         if (deadline.current === null) return;
@@ -211,6 +240,12 @@ function PromptCard({ notification }: { notification: GaiaNotification }) {
         return () => window.removeEventListener('keydown', onKey, true);
     }, [answer, busy, remaining]);
 
+    // `detail` is 0 for a click from the keyboard or a screen reader, which is aimed by focus, not by position.
+    const clicked = (decision: PermissionDecision) => (e: ReactMouseEvent) => {
+        if (e.detail > 0 && !ready.current) return;
+        void answer(decision);
+    };
+
     const expired = remaining !== null && remaining <= 0;
     return (
         <section
@@ -219,6 +254,7 @@ function PromptCard({ notification }: { notification: GaiaNotification }) {
             className="perm-card"
             role="alertdialog"
             aria-labelledby={`perm-${notification.id}`}
+            data-armed={armed || undefined}
         >
             <div className="perm-card-head">
                 <ShieldQuestion size={16} className="perm-card-icon" aria-hidden="true" />
@@ -290,7 +326,7 @@ function PromptCard({ notification }: { notification: GaiaNotification }) {
                 <p className="perm-card-detail">{t('prompt.expired')}</p>
             ) : (
                 <div className="perm-card-actions">
-                    <button type="button" className="perm-btn is-primary" onClick={() => answer('allow')} disabled={busy}>
+                    <button type="button" className="perm-btn is-primary" onClick={clicked('allow')} disabled={busy}>
                         {/* Granting a path lasts for the chat, as the question says. */}
                         {t(notification.tool === PROJECT_TRUST_TOOL ? 'prompt.trust.allow' : isPath ? 'prompt.allowForChat' : 'prompt.allowOnce')}
                     </button>
@@ -298,14 +334,14 @@ function PromptCard({ notification }: { notification: GaiaNotification }) {
                         <button
                             type="button"
                             className={`perm-btn is-lasting${suggestAlways ? ' is-suggested' : ''}`}
-                            onClick={() => answer('always')}
+                            onClick={clicked('always')}
                             disabled={busy}
                             title={scopeText}
                         >
                             {t('prompt.alwaysAllow', { scope: shortScope(scopeText) })}
                         </button>
                     )}
-                    <button type="button" className="perm-btn" onClick={() => answer('deny')} disabled={busy}>
+                    <button type="button" className="perm-btn" onClick={clicked('deny')} disabled={busy}>
                         {t('prompt.deny')}
                     </button>
                 </div>
