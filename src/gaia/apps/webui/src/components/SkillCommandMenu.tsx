@@ -4,18 +4,12 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { SkillCommands } from '../hooks/useSkillCommands';
 import { useT } from '../i18n/useT';
+import { firstSentence } from '../utils/skillCommands.core';
 
 export const SKILL_MENU_ID = 'composer-skill-menu';
 
 export function skillOptionId(index: number): string {
     return `${SKILL_MENU_ID}-${index}`;
-}
-
-/** A skill description's first sentence: they are written for models and run long. */
-function firstSentence(text: string): string {
-    const flat = text.replace(/\s+/g, ' ').trim();
-    const end = flat.indexOf('. ');
-    return end >= 0 ? flat.slice(0, end + 1) : flat;
 }
 
 const MAX_HEIGHT = 320;

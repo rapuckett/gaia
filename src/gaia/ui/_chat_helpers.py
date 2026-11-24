@@ -88,6 +88,7 @@ from . import followups
 from . import permissions as session_permissions
 from . import spending
 from .database import PLACEHOLDER_TITLES, SESSION_DEFAULT_MODEL, ChatDatabase
+from .devices import push
 from .generated_media import media_card
 from .models import ChatRequest
 from .session_environment import apply_environment, folders_refusal, held_internet_off
@@ -3170,6 +3171,7 @@ def _dispatch_sidecar_query(
         sse_handler._emit(
             {"type": "agent_error", "content": _missing_local_model_text(init_body)}
         )
+        push.needs_you(push.NEEDS_YOU_SETUP)
         return
     elif status_code != 200:
         hint = (init_body or {}).get("hint")
@@ -4313,10 +4315,13 @@ def _preflight_load(
         raise
     except (ModelInUseError, LemonadeModelUnavailableError) as exc:
         logger.error("Pre-flight model load refused: %s", exc)
+        if isinstance(exc, LemonadeModelUnavailableError):
+            push.needs_you(push.NEEDS_YOU_SETUP)
         raise
     except (GaiaLemonadeStartError, LemonadeServerDownError) as exc:
         # Already worded; "send the message again" would repeat a failed start.
         logger.error("Pre-flight could not bring GAIA's Lemonade back: %s", exc)
+        push.needs_you(push.NEEDS_YOU_MODEL_SERVER)
         raise
     except LeaseWaitCancelled:
         logger.info("Pre-flight model load stopped with the turn")
@@ -6239,6 +6244,7 @@ def _record_run_outcome(db: ChatDatabase, session_id: str, status: str) -> None:
             session_id[:8],
             exc,
         )
+    push.run_ended(session_id, status)
 
 
 async def _run_chat_lifecycle(
@@ -6264,6 +6270,7 @@ async def _run_chat_lifecycle(
         outcome.observe(data)
         journal.observe(data)
         run.emit(data)
+        push.observe_run_frame(session_id, data)
 
     def _announce_place(position: int) -> None:
         # From when this wait began: a turn back from the user counts afresh.

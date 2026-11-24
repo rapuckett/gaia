@@ -66,6 +66,13 @@ from gaia.utils.json_string import (
 logger = logging.getLogger(__name__)
 
 
+def _push_resolved(approval_id: Optional[str]) -> None:
+    """Tell paired phones this prompt is gone, so they drop its notification."""
+    from gaia.ui.devices import push
+
+    push.approval_resolved(approval_id)
+
+
 def short_id(value: Optional[str]) -> str:
     """First 6 characters of an approval id, for logs that end up in bundles."""
     if not value:
@@ -2462,7 +2469,9 @@ class SSEOutputHandler(OutputHandler):
                     answered = True
                     break
         if self.cancelled.is_set():
+            cancelled_id = self._confirm_id
             self._clear_pending_confirmation()
+            _push_resolved(cancelled_id)
             self._last_denial = Denial(
                 tool_name,
                 f"Confirmation for '{tool_name}' was abandoned: the run was "
@@ -2483,7 +2492,9 @@ class SSEOutputHandler(OutputHandler):
                 }
             )
             logger.warning("Tool confirmation timed out for '%s'", tool_name)
+            expired_id = self._confirm_id
             self._clear_pending_confirmation()
+            _push_resolved(expired_id)
             self._last_denial = Denial(
                 tool_name,
                 timeout_denial_message(tool_name, f"{timeout:g} s"),
@@ -2674,7 +2685,9 @@ class SSEOutputHandler(OutputHandler):
                 self.grant_call_for_session(self._confirm_tool, self._confirm_args)
             self._confirm_result = (approved or always) and not timed_out
             self._confirm_timed_out = timed_out
+            answered_id = self._confirm_id
             self._confirm_event.set()
+        _push_resolved(answered_id)
         return True
 
     def close_active_relay_response(self) -> None:
@@ -2835,6 +2848,7 @@ class SSEOutputHandler(OutputHandler):
 
         if response is not None:
             return response
+        _push_resolved(request_id)
         if default_if_no_response is not None:
             return default_if_no_response
         if not continue_if_no_response:
@@ -2861,6 +2875,7 @@ class SSEOutputHandler(OutputHandler):
                 return False
             self._user_input_results[request_id] = response
             evt.set()
+        _push_resolved(request_id)
         return True
 
     def resolve_relay_input(self, request_id: str, value: str) -> bool:
@@ -2881,12 +2896,15 @@ class SSEOutputHandler(OutputHandler):
             # A newer question may already be pending; only this one is answered.
             if self._relay_question_id == request_id:
                 self._relay_question_id = None
+        _push_resolved(request_id)
         return True
 
     def set_relay_question(self, request_id: Optional[str]) -> None:
         """Record (or clear, with ``None``) the relayed question now pending."""
         with self._user_input_lock:
-            self._relay_question_id = request_id
+            previous, self._relay_question_id = self._relay_question_id, request_id
+        if previous and previous != request_id:
+            _push_resolved(previous)
 
     def set_relay_confirmation(
         self,
@@ -2900,7 +2918,7 @@ class SSEOutputHandler(OutputHandler):
         *path_access* is the path a path-access prompt asks to open.
         """
         with self._confirm_lock:
-            self._relay_confirm_id = confirm_id
+            previous, self._relay_confirm_id = self._relay_confirm_id, confirm_id
             self._relay_always_scope = always_scope if confirm_id else None
             self._relay_path_access = path_access if confirm_id else None
             if self._relay_confirm_timer is not None:
@@ -2915,6 +2933,8 @@ class SSEOutputHandler(OutputHandler):
                 timer.daemon = True
                 timer.start()
                 self._relay_confirm_timer = timer
+        if previous and previous != confirm_id:
+            _push_resolved(previous)
 
     def _expire_relay_confirmation(self, confirm_id: str) -> None:
         """Tell the sidecar nobody answered *confirm_id* in time."""
@@ -2986,6 +3006,7 @@ class SSEOutputHandler(OutputHandler):
         else:
             decision = "allow" if approved else "deny"
         proxy.tool_decision(run_id, decision, confirm_id)
+        _push_resolved(confirm_id)
         return True
 
     def signal_done(self):

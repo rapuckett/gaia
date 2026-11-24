@@ -13,12 +13,12 @@ import { useRenameSession, useSession, useTogglePrivate } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { exportChat } from '@/features/share/exportChat';
 import { describeHttpFailure, useT } from '@/i18n/useT';
-import { Icon, IconButton, Notice, Pressable, Row, Stack, Text, TextField } from '@/ui';
+import { Icon, IconButton, Notice, Pressable, Row, Stack, Text, TextField, useAppearance } from '@/ui';
 import { Activity, Check, Download, Eye, EyeOff, PanelRight, X } from '@/ui/icons';
 
 import { DocsBar } from './DocsBar';
 import { failureNotice } from './failureText';
-import { ResourceStrip } from './ResourceStrip';
+import { ResourceStripSlot } from './ResourceStripSlot';
 
 export interface ChatHeaderProps {
     sessionId: string;
@@ -41,7 +41,8 @@ function ChatHeaderForSession({ sessionId, onOpenSessionPanel, onManageDocuments
     const togglePrivate = useTogglePrivate();
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState('');
-    const [resources, setResources] = useState(false);
+    const resources = useAppearance((s) => s.showResources);
+    const setResources = useAppearance((s) => s.setShowResources);
     const client = useGaiaClient();
     const [error, setError] = useState<{ text: string; detail?: string } | null>(null);
     const [exporting, setExporting] = useState(false);
@@ -157,7 +158,7 @@ function ChatHeaderForSession({ sessionId, onOpenSessionPanel, onManageDocuments
                     <Notice tone="danger" message={error.text} detail={error.detail} onDismiss={() => setError(null)} testID="header-error" />
                 </Stack>
             ) : null}
-            {resources ? <ResourceStrip onClose={() => setResources(false)} /> : null}
+            <ResourceStripSlot />
             <DocsBar sessionId={sessionId} onFailed={setError} onManage={onManageDocuments} />
         </>
     );

@@ -3242,7 +3242,7 @@ export const enMessages = {
     'settings.connectors.keyStore.locked': "The OS key store is locked, so GAIA can't read some of your connected accounts. They can't be used until it's unlocked.",
     'settings.connectors.keyStore.waiting': "Waiting for the OS to allow reading your connected accounts.",
     'settings.connectors.tile.heldBack': "Not available until the key store is unlocked",
-    'settings.connectors.notRevoked': "Disconnected locally, but the provider did not confirm the revoke ({reason}). It may still show as connected in your account's app permissions.",
+    'settings.connectors.notRevoked': "Disconnected from GAIA, but the provider didn't confirm it removed GAIA's access ({reason}). If GAIA still shows in your account's app permissions, remove it there.",
     'settings.connectors.localOnly': 'Disconnected locally. {reason}',
     'settings.connectors.noRevokeApi': "Disconnected locally. This provider has no API to revoke access remotely — remove GAIA from your account's connected-apps page if you want to fully revoke it.",
     'settings.connectors.nothingStored': 'Nothing was stored for this connector, so there was nothing to disconnect or revoke.',

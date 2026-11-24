@@ -27,6 +27,8 @@ PAIR_ROUTE = "/api/devices/pair"
 SELF_ROUTE = "/api/devices/me"
 #: Where a device learns every origin it may reach this PC at.
 ROUTES_ROUTE = "/api/devices/me/routes"
+#: Where an allowed device turns its own push notifications on, reads or off.
+PUSH_ROUTE = "/api/devices/me/push"
 
 #: How a device reached the listener: the home network, or an away route the
 #: PC turned on. Only ``home`` may pair.
