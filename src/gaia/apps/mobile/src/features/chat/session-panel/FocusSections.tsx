@@ -193,6 +193,9 @@ export function ScheduleSection({ schedules, close }: { schedules: Schedule[]; c
     );
 }
 
+/** Command and document rows are this tall, so the two lists share one rhythm and no tap target overlaps another. */
+const ROW_MIN = 44;
+
 /** Commands shown before "Show more": the latest ones, since those are what the chat is on now. */
 export const COMMANDS_SHOWN = 5;
 
@@ -229,7 +232,7 @@ export function CommandsSection({ commands, close }: { commands: RanCommand[]; c
     return (
         <PanelSection id="commands" title={t('cmd.title')} summary={failed > 0 ? t.plural('cmd.failedCount', failed, { n: failed }) : String(commands.length)}>
             <Stack gap="md">
-                <Stack gap="md" accessibilityRole="list" accessibilityLabel={t('cmd.listLabel')}>
+                <Stack accessibilityRole="list" accessibilityLabel={t('cmd.listLabel')}>
                     {shown.map((c) => {
                         const text = visibleText(c.command, true);
                         const line = (
@@ -244,11 +247,11 @@ export function CommandsSection({ commands, close }: { commands: RanCommand[]; c
                         );
                         const label = `${t(COMMAND_LABEL[c.state])}: ${text}`;
                         return c.messageId != null ? (
-                            <Pressable key={c.key} inline hugHeight accessibilityLabel={label} onPress={() => goTo(c.messageId as number)}>
+                            <Pressable key={c.key} minSize={ROW_MIN} accessibilityLabel={label} onPress={() => goTo(c.messageId as number)}>
                                 {line}
                             </Pressable>
                         ) : (
-                            <Stack key={c.key} accessibilityLabel={label}>
+                            <Stack key={c.key} minHeight={ROW_MIN} justify="center" accessibilityLabel={label}>
                                 {line}
                             </Stack>
                         );
@@ -276,7 +279,7 @@ export function DocumentsSection({ documents, messages }: { documents: ChatDocum
     if (documents.length === 0) return null;
     return (
         <PanelSection id="documents" title={t('docsp.title')} summary={String(documents.length)}>
-            <Stack gap="md" accessibilityRole="list" accessibilityLabel={t('docsp.listLabel')}>
+            <Stack accessibilityRole="list" accessibilityLabel={t('docsp.listLabel')}>
                 {documents.map(({ entry, doc }) => {
                     const name = entry.name || doc?.filename || entry.path.split(/[\\/]/).pop() || entry.path;
                     const status = doc?.indexing_status;
@@ -285,7 +288,7 @@ export function DocumentsSection({ documents, messages }: { documents: ChatDocum
                     const used = passagesUsed(messages, entry.path);
                     const trailing = used > 0 ? t.plural('docsp.used', used, { n: used }) : indexing ? t('docs.indexingLabel') : failed ? t('docs.failed') : doc && doc.chunk_count > 0 ? t.plural('docsp.passages', doc.chunk_count, { n: doc.chunk_count }) : null;
                     return (
-                        <Stack key={entry.path} gap="xs">
+                        <Stack key={entry.path} gap="xs" minHeight={ROW_MIN} justify="center">
                             <Row gap="md">
                                 {indexing ? <Spinner size="sm" /> : <Icon icon={failed ? CircleAlert : FileText} size="sm" tone={failed ? 'danger' : 'muted'} />}
                                 <Stack flex={1}>
