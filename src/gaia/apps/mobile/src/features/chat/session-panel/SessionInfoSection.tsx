@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { isolate } from '@webui/i18n/registry';
 
 import { useSession, useSystemStatus } from '@/data';
-import { dateLocale, describeFailureWith, useT } from '@/i18n/useT';
+import { dateLocale, plainFailure, useT } from '@/i18n/useT';
 import { IconButton, Notice, Row, Stack, Text } from '@/ui';
 import { Check, Copy } from '@/ui/icons';
 
@@ -31,6 +31,7 @@ export function SessionInfoSection({ sessionId }: { sessionId: string }) {
     const system = useSystemStatus().data;
     const [copied, setCopied] = useState(false);
     const [failure, setFailure] = useState<unknown>(null);
+    const copyFailure = failure ? plainFailure(t, 'session.copyFailed', {}, failure) : null;
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
 
@@ -65,9 +66,7 @@ export function SessionInfoSection({ sessionId }: { sessionId: string }) {
                         <IconButton icon={copied ? Check : Copy} size="sm" variant="ghost" label={t('session.copyId')} onPress={copy} testID="session-copy-id" />
                     </Row>
                 </Fact>
-                {failure ? (
-                    <Notice tone="danger" message={t.compose((say) => say('session.copyFailed', { error: describeFailureWith(failure, say) }))} testID="session-copy-failed" />
-                ) : null}
+                {copyFailure ? <Notice tone="danger" message={copyFailure.text} detail={copyFailure.detail} testID="session-copy-failed" /> : null}
                 {startedText ? (
                     <Fact label={t('session.started')}>
                         <Text>{startedText}</Text>

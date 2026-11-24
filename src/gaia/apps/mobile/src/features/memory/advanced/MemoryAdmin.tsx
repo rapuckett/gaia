@@ -10,7 +10,7 @@ import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useClearAllMemory, useReinitializeMemory, useUpdateMemorySettings } from '@/data';
-import { describeFailureWith, useT } from '@/i18n/useT';
+import { plainFailureText, useT } from '@/i18n/useT';
 import { Badge, Button, Card, Row, Sheet, Stack, Switch, Text } from '@/ui';
 import { Shield } from '@/ui/icons';
 
@@ -63,7 +63,7 @@ export function MemoryAdmin({ settings, notify }: { settings: MemorySettings; no
     const reinitRefused = useDeviceRefused('POST', ENDPOINTS.memoryReinitialize);
     const busy = update.isPending || clear.isPending || reinit.isPending;
 
-    const fail = (key: MessageKey, error: unknown) => notify({ tone: 'danger', text: t.compose((say) => say(key, { error: describeFailureWith(error, say) })) });
+    const fail = (key: MessageKey, error: unknown) => notify({ tone: 'danger', text: plainFailureText(t, key, {}, error) });
 
     const turnOff = (kind: Beta) => update.mutate({ [BETA[kind].setting]: false }, { onError: (e) => fail('mem.toast.settingFailed', e) });
 
