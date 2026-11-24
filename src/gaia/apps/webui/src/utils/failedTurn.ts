@@ -4,7 +4,7 @@
 import type { SettingsSection } from '../stores/chatStore';
 
 /** What a failed turn's card is headed with. */
-export type FailedTurnKind = 'modelUnavailable' | 'modelLoad' | 'context' | 'unknown';
+export type FailedTurnKind = 'modelServer' | 'modelUnavailable' | 'modelLoad' | 'context' | 'unknown';
 
 export interface FailedTurn {
     kind: FailedTurnKind;
@@ -28,6 +28,9 @@ const RAW_MAX_CHARS = 1500;
 // A remedy written for a terminal never reads as the answer in the app.
 const COMMAND_RE = /\brun:\s|re-run your|`gaia [a-z]/i;
 
+// english: the PC's own notice (LemonadeServerDownError), "... model server at host:port isn't answering ... Start the model server".
+// Both halves are required, so "the model server isn't answering, so it is still saved" (Local only) is not caught.
+const MODEL_SERVER_RE = /\bmodel server\b[^\n]{0,80}\bisn't answering\b[\s\S]{0,200}\bStart the model server\b/i;
 const MODEL_UNAVAILABLE_RE = /no model called|doesn't list (?:it|this model)|must include the .?user.? namespace|isn't installed on the local LLM server|\bmodel\b[^\n]{0,80}\bwas not found\b/i;
 // Anchored on the model: "GAIA's assistant failed to load" is a setup fault, not a model one.
 const MODEL_LOAD_RE = /\bmodel\b[^\n]{0,40}\b(?:couldn't|didn't|failed to) (?:pre)?load|failed to (?:pre)?load (?:lemonade )?model/i;
@@ -42,6 +45,7 @@ const SECTION_LABELS: Record<string, SettingsSection> = {
 const SECTION_RE = /Settings\s*(?:>|›|→)\s*(General|Setup|Agent & model|Model|Permissions|Skills|Connectors|Messaging|Automations|Memory|Privacy|Notifications|Read aloud|Advanced|About)\b/g;
 
 function kindOf(text: string): FailedTurnKind {
+    if (MODEL_SERVER_RE.test(text)) return 'modelServer';
     if (MODEL_UNAVAILABLE_RE.test(text)) return 'modelUnavailable';
     if (MODEL_LOAD_RE.test(text)) return 'modelLoad';
     if (CONTEXT_RE.test(text)) return 'context';
@@ -53,7 +57,8 @@ export function describeFailedTurn(content: string): FailedTurn {
     const text = failedTurnDetails(content);
     const kind = kindOf(text);
     // Length-capped: a long answer that only mentions a command is not an error dump.
-    const raw = RAW_RE.test(text) || (text.length < RAW_MAX_CHARS && COMMAND_RE.test(text));
+    // The PC's sentence names the host and a provider, and carries its report line: it goes under Details.
+    const raw = kind === 'modelServer' || RAW_RE.test(text) || (text.length < RAW_MAX_CHARS && COMMAND_RE.test(text));
     const sections: SettingsSection[] = kind === 'modelUnavailable' || kind === 'modelLoad' ? ['model'] : [];
     for (const match of text.matchAll(SECTION_RE)) {
         const section = SECTION_LABELS[match[1].toLowerCase()];
