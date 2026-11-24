@@ -683,7 +683,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'privacy-server-down': {
         section: 'privacy',
         gpuMemory: GPU,
-        data: { settings: SETTINGS },
+        data: { settings: SETTINGS, ...local([model('Qwen3.6-35B-A3B-GGUF', { display_name: 'Qwen 3.6 35B A3B' })]) },
         override: {
             setNetworkPolicy: async () => ({
                 ...SETTINGS,

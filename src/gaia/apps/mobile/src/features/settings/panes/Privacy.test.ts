@@ -20,3 +20,11 @@ describe('policyText for saved models the PC could not check', () => {
         expect(policyText(t, [{ ...down, models: [] }], true).text).toBe(general);
     });
 });
+
+describe('policyText model names', () => {
+    it('names the model by the catalog name the caller gives, not its raw id', () => {
+        const text = policyText(t, [{ ...down, models: ['Qwen3.6-35B-A3B-GGUF'] }], true, () => 'Qwen 3.6 35B A3B').text;
+        expect(text).toContain('Qwen 3.6 35B A3B');
+        expect(text).not.toContain('Qwen3.6-35B-A3B-GGUF');
+    });
+});
