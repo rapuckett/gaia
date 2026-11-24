@@ -8,6 +8,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { AgentActivity } from '../../components/AgentActivity';
 import { useChatStore } from '../../stores/chatStore';
 import type { StreamEvent } from '../../types';
+import { stripIsolates } from '../../i18n/registry';
 import { applyStatusEvent, selectToolStatus } from '../statusEvents';
 
 vi.mock('../../services/api');
@@ -99,4 +100,21 @@ it('says where the turn stands in line', () => {
     applyStatusEvent(queued({ event: 'queued', holder: 'gaia', position: 2, queue_length: 3, waited_s: 4 }), { current: 0 });
 
     expect(useChatStore.getState().liveStatus).toBe('Waiting for another chat to finish, #2 of 3 in line (4s)');
+});
+
+it('says the queued-for-the-GPU line in the chosen language, from the position', () => {
+    const queued = { type: 'status', status: 'working', phase: 'queued', queue_position: 2, message: 'Waiting for the GPU — 2nd in line' } as StreamEvent;
+    applyStatusEvent(queued, { current: 0 });
+    expect(stripIsolates(useChatStore.getState().liveStatus ?? '')).toBe('Waiting for the GPU, #2 in line');
+
+    useChatStore.getState().resetStreaming();
+    useChatStore.getState().setLocale('ar');
+    applyStatusEvent(queued, { current: 0 });
+    expect(stripIsolates(useChatStore.getState().liveStatus ?? '')).toContain('في انتظار معالج الرسومات، رقم 2 في الدور');
+    useChatStore.getState().setLocale('en');
+});
+
+it('keeps the server message for a queued line without a position', () => {
+    applyStatusEvent({ type: 'status', status: 'working', phase: 'queued', message: 'Waiting for the GPU' } as StreamEvent, { current: 0 });
+    expect(useChatStore.getState().liveStatus).toBe('Waiting for the GPU');
 });

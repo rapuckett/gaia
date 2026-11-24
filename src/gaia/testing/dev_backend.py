@@ -45,6 +45,24 @@ from typing import Any, Dict, List, Optional
 DEFAULT_REPLY = "Hello from the dev backend."
 #: GB of GPU memory the fake machine has beyond what its models need to load.
 GPU_MEMORY_MARGIN_GB = 4.0
+#: Sizes the fake machine's memory pool in GB (``--gpu-memory-gb`` overrides it).
+#: Set, the PC is an AMD integrated GPU sharing N GB of RAM, so GAIA keeps
+#: max(10 GB, 25%) of it for other apps and a big model can come out "tight".
+#: 32 (27 to 36 work) makes Qwen3.6-35B-A3B tight (fits, leaves apps under the
+#: reserve) while Gemma-4-E4B stays a plain fit; the unit test derives it.
+GPU_MEMORY_ENV = "GAIA_DEV_BACKEND_GPU_GB"
+GPU_MEMORY_MAX_GB = 1024.0
+#: Comma-separated model ids listed as already downloaded, after the defaults
+#: (``--downloaded`` overrides it). Device-check recipe for the phone's tight
+#: confirm sheet: GAIA_DEV_BACKEND_GPU_GB=32
+#: GAIA_DEV_BACKEND_DOWNLOADED=Qwen3.6-35B-A3B-GGUF gives a downloaded, tight
+#: Qwen3.6, so Settings > Agent & model > Use shows the sheet.
+DOWNLOADED_ENV = "GAIA_DEV_BACKEND_DOWNLOADED"
+#: Set to 1/true/yes/on to answer ``/embeddings`` so documents finish indexing
+#: (``--fake-embeddings`` overrides it). Off, every indexed document ends failed.
+FAKE_EMBEDDINGS_ENV = "GAIA_DEV_BACKEND_FAKE_EMBEDDINGS"
+#: Width of the fake vectors, EmbeddingGemma-300m's.
+FAKE_EMBEDDING_DIM = 768
 HOST = "127.0.0.1"
 READY_TIMEOUT_SECONDS = 60.0
 #: Exit code for a bad invocation, as ``gaia uninstall`` uses.
@@ -161,11 +179,74 @@ def isolate_environment(home: Path, llm_url: str, memory: bool = False) -> None:
 # ── Fake LLM ────────────────────────────────────────────────────────────────
 
 
-def fake_system_info(model_ids: List[str]) -> Dict[str, Any]:
+def parse_gpu_gb(raw: Any, source: str) -> float:
+    """*raw* as a memory size in GB, or a :class:`DevBackendError` naming *source*."""
+    try:
+        gb = float(raw)
+    except (TypeError, ValueError):
+        gb = float("nan")
+    if not 0.0 < gb <= GPU_MEMORY_MAX_GB:
+        raise DevBackendError(
+            f"{source} must be a number of GB between 0 and "
+            f"{GPU_MEMORY_MAX_GB:g}, such as 32; got {raw!r}."
+        )
+    return gb
+
+
+def parse_downloaded(raw: Any, source: str) -> List[str]:
+    """Model ids in comma-separated *raw*, each known to GAIA's MODELS catalog."""
+    from gaia.llm.lemonade_client import MODELS
+
+    known = {mr.model_id for mr in MODELS.values()}
+    ids = [part.strip() for part in str(raw).split(",")]
+    bad = [i for i in ids if i not in known]
+    if bad:
+        raise DevBackendError(
+            f"{source} names unknown model id(s) {bad!r}; use ids from MODELS "
+            "in src/gaia/llm/lemonade_client.py, comma-separated, such as "
+            "Qwen3.6-35B-A3B-GGUF."
+        )
+    return list(dict.fromkeys(ids))
+
+
+def parse_flag(raw: Any, source: str) -> bool:
+    """*raw* as an on/off switch, or a :class:`DevBackendError` naming *source*."""
+    word = str(raw).strip().lower()
+    if word in ("1", "true", "yes", "on"):
+        return True
+    if word in ("0", "false", "no", "off"):
+        return False
+    raise DevBackendError(
+        f"{source} must be 1, true, yes, on, 0, false, no or off; got {raw!r}."
+    )
+
+
+def fake_embedding(text: str, dim: int = FAKE_EMBEDDING_DIM) -> List[float]:
+    """A unit vector of *dim* floats derived only from *text* (same text, same vector)."""
+    import hashlib
+    import math
+
+    raw = bytearray()
+    counter = 0
+    while len(raw) < dim * 4:
+        raw += hashlib.sha256(f"{counter}:{text}".encode("utf-8")).digest()
+        counter += 1
+    values = [
+        int.from_bytes(raw[i * 4 : i * 4 + 4], "big") / 2**31 - 1.0 for i in range(dim)
+    ]
+    norm = math.sqrt(sum(v * v for v in values))
+    return [v / norm for v in values]
+
+
+def fake_system_info(
+    model_ids: List[str], gpu_gb: Optional[float] = None
+) -> Dict[str, Any]:
     """Lemonade's ``/system-info`` for a PC whose GPU holds *model_ids* with room.
 
     One GPU, no NPU, llama.cpp on GAIA's proven backend; its memory is what
     ``model_fit`` needs for every listed model at once, plus the margin.
+    With *gpu_gb* the PC is instead an integrated GPU on *gpu_gb* of shared RAM,
+    whatever the models need, so a model can fit and still leave apps too little.
     """
     from gaia.config import GaiaConfig
     from gaia.llm.lemonade_client import find_model_requirement
@@ -178,6 +259,28 @@ def fake_system_info(model_ids: List[str]) -> Dict[str, Any]:
             kv = kv_cache_gb(req.kv_bytes_per_token, req.min_ctx_size)
             need_gb += required_memory_gb(req.size_gb, kv)
     backend = GaiaConfig.TESTED_LLAMACPP_BACKENDS[0]
+    recipes = {
+        "llamacpp": {
+            "default_backend": backend,
+            "backends": {backend: {"state": "installed"}},
+        }
+    }
+    if gpu_gb is not None:
+        return {
+            "OS Version": "Windows 11",
+            "Physical Memory": f"{gpu_gb:g} GB",
+            "devices": {
+                "amd_igpu": [
+                    {
+                        "name": "Dev backend GPU",
+                        "available": True,
+                        "integrated": True,
+                        "vram_gb": gpu_gb,
+                    }
+                ]
+            },
+            "recipes": recipes,
+        }
     return {
         "devices": {
             "amd_gpu": [
@@ -189,22 +292,23 @@ def fake_system_info(model_ids: List[str]) -> Dict[str, Any]:
                 }
             ]
         },
-        "recipes": {
-            "llamacpp": {
-                "default_backend": backend,
-                "backends": {backend: {"state": "installed"}},
-            }
-        },
+        "recipes": recipes,
     }
 
 
 def build_fake_llm(
-    script: List[Dict[str, Any]], model: str, downloaded: Optional[List[str]] = None
+    script: List[Dict[str, Any]],
+    model: str,
+    downloaded: Optional[List[str]] = None,
+    gpu_gb: Optional[float] = None,
+    fake_embeddings: bool = False,
 ):
     """A FastAPI app speaking the slice of Lemonade's API a chat turn uses.
 
     *downloaded* names further models listed as downloaded beside *model*;
-    the speech model is served only when it is among them.
+    the speech model is served only when it is among them. *gpu_gb* sizes the
+    machine's memory (:func:`fake_system_info`). With *fake_embeddings*
+    ``/embeddings`` answers deterministic vectors, so indexing completes.
     """
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -214,7 +318,11 @@ def build_fake_llm(
         KOKORO_VOICES,
         TTS_SAMPLE_RATE,
     )
-    from gaia.llm.lemonade_client import EMBEDDER_MODELS, GPU_CTX_SIZE
+    from gaia.llm.lemonade_client import (
+        EMBEDDER_MODELS,
+        GPU_CTX_SIZE,
+        LARGE_DEFAULT_MODEL_NAME,
+    )
     from gaia.version import LEMONADE_VERSION
 
     app = FastAPI()
@@ -250,13 +358,28 @@ def build_fake_llm(
 
     @app.get("/api/v1/system-info")
     def system_info():
-        return fake_system_info([model, *(downloaded or [])])
+        return fake_system_info([model, *(downloaded or [])], gpu_gb)
 
     @app.get("/api/v1/models")
-    def models():
+    def models(show_all: bool = False):
+        catalog_only = (
+            [
+                {
+                    "id": LARGE_DEFAULT_MODEL_NAME,
+                    "object": "model",
+                    "downloaded": False,
+                    "recipe": "llamacpp",
+                    "labels": [],
+                    "size": 21.7,
+                }
+            ]
+            if show_all and LARGE_DEFAULT_MODEL_NAME not in (downloaded or [])
+            else []
+        )
         return {
             "object": "list",
-            "data": [
+            "data": catalog_only
+            + [
                 {
                     "id": model_id,
                     "object": "model",
@@ -296,6 +419,34 @@ def build_fake_llm(
             content=bytes(2 * int(1.5 * TTS_SAMPLE_RATE)),
             media_type=f"audio/l16;rate={TTS_SAMPLE_RATE}",
         )
+
+    if fake_embeddings:
+
+        @app.post("/api/v1/embeddings")
+        def embeddings(body: Dict[str, Any]):
+            texts = body.get("input")
+            if isinstance(texts, str):
+                texts = [texts]
+            if not isinstance(texts, list) or not all(
+                isinstance(t, str) for t in texts
+            ):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": {
+                            "message": "'input' must be a string or list of strings"
+                        }
+                    },
+                )
+            return {
+                "object": "list",
+                "model": body.get("model"),
+                "data": [
+                    {"object": "embedding", "index": i, "embedding": fake_embedding(t)}
+                    for i, t in enumerate(texts)
+                ],
+                "usage": {"prompt_tokens": 1, "total_tokens": 1},
+            }
 
     @app.get("/api/v1/stats")
     def stats():
@@ -520,6 +671,9 @@ def run(
     script: List[Dict[str, Any]],
     memory: bool = False,
     fresh: bool = False,
+    gpu_gb: Optional[float] = None,
+    extra_downloaded: Optional[List[str]] = None,
+    fake_embeddings: bool = False,
 ) -> int:
     llm_port = llm_port if llm_port is not None else port + 1
     if llm_port == port:
@@ -547,10 +701,13 @@ def run(
         if fresh
         else list(dict.fromkeys([*INIT_PROFILES["gaia"]["models"], DEFAULT_TTS_MODEL]))
     )
+    downloaded = list(dict.fromkeys([*downloaded, *(extra_downloaded or [])]))
     if not fresh:
         mark_set_up()
     llm = _Server(
-        build_fake_llm(script, DEFAULT_MODEL_NAME, downloaded), llm_port, "fake-llm"
+        build_fake_llm(script, DEFAULT_MODEL_NAME, downloaded, gpu_gb, fake_embeddings),
+        llm_port,
+        "fake-llm",
     )
     llm.start()
     backend: Optional[_Server] = None
@@ -600,11 +757,52 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="start not set up, so a client lands on the first-run Setup wizard",
     )
+    parser.add_argument(
+        "--gpu-memory-gb",
+        help=f"fake PC memory in GB (default: ${GPU_MEMORY_ENV}); an integrated "
+        "GPU sharing that RAM, so a big model can show as tight",
+    )
+    parser.add_argument(
+        "--downloaded",
+        help=f"comma-separated model ids to list as already downloaded, after "
+        f"the defaults (default: ${DOWNLOADED_ENV})",
+    )
+    parser.add_argument(
+        "--fake-embeddings",
+        action="store_true",
+        help="answer /embeddings with deterministic vectors so documents finish "
+        f"indexing instead of failing (default: ${FAKE_EMBEDDINGS_ENV})",
+    )
     args = parser.parse_args(argv)
     try:
         home = validate_home(args.home)
         script = load_script(args.script)
-        return run(args.port, home, args.llm_port, script, args.memory, args.fresh)
+        gpu_gb = None
+        if args.gpu_memory_gb is not None:
+            gpu_gb = parse_gpu_gb(args.gpu_memory_gb, "--gpu-memory-gb")
+        elif GPU_MEMORY_ENV in os.environ:
+            gpu_gb = parse_gpu_gb(os.environ[GPU_MEMORY_ENV], GPU_MEMORY_ENV)
+        extra = None
+        if args.downloaded is not None:
+            extra = parse_downloaded(args.downloaded, "--downloaded")
+        elif DOWNLOADED_ENV in os.environ:
+            extra = parse_downloaded(os.environ[DOWNLOADED_ENV], DOWNLOADED_ENV)
+        fake_embeddings = args.fake_embeddings
+        if not fake_embeddings and FAKE_EMBEDDINGS_ENV in os.environ:
+            fake_embeddings = parse_flag(
+                os.environ[FAKE_EMBEDDINGS_ENV], FAKE_EMBEDDINGS_ENV
+            )
+        return run(
+            args.port,
+            home,
+            args.llm_port,
+            script,
+            args.memory,
+            args.fresh,
+            gpu_gb,
+            extra,
+            fake_embeddings,
+        )
     except DevBackendError as e:
         print(f"Error: {e}", file=sys.stderr)
         return EX_USAGE

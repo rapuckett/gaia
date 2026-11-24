@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { SystemStatus, WarmUpStatus } from '@webui/types';
+import type { QueueError } from '@webui/utils/messageQueue';
 
 import { createFakeClient } from '@/api/fake';
 import { translator } from '@/i18n/useT';
@@ -15,7 +16,7 @@ import { withExample } from './tryExamples';
 import { createFirstSend } from './firstSend';
 import { greetingKey } from './greeting';
 import { startingReason } from './starting';
-import { assistantProblem } from './useNewChat';
+import { agentProblem, assistantProblem } from './useNewChat';
 import { warmUpLine, warmUpProgress } from './warmUp';
 
 const t = translator('en');
@@ -24,7 +25,7 @@ const turn = (patch: Partial<ChatTurn>): ChatTurn => ({ ...IDLE_TURN, ...patch }
 
 function setup(overrides: { createSession?: () => Promise<{ id: string }>; deliver?: (id: string, text: string) => Promise<boolean | void> } = {}) {
     const fake = createFakeClient();
-    const queued: { id: string; items: { text: string; state: string; error?: string }[] }[] = [];
+    const queued: { id: string; items: { text: string; state: string; error?: QueueError }[] }[] = [];
     const held: string[] = [];
     const flushed: string[] = [];
     const flow = createFirstSend({
@@ -158,6 +159,15 @@ describe('assistant did not start', () => {
         expect(assistantProblem(null, { ...screen, skills_error: 'no skills' }, t)).toBe('no skills');
         expect(assistantProblem(null, screen, t)).toBeNull();
         expect(assistantProblem(null, undefined, t)).toBeNull();
+    });
+
+    it('leaves the chosen agent to its own card, through a failed re-read too', () => {
+        const problem = { code: 'gaiacpp_missing' as const, detail: 'not installed' };
+        const answered = { ...screen, skills_error: 'agent exited', agent_problem: problem };
+        expect(assistantProblem(null, answered, t)).toBeNull();
+        expect(assistantProblem(new Error('boom'), answered, t)).toBeNull();
+        expect(agentProblem(answered)).toBe(problem);
+        expect(agentProblem({ ...screen, skills_error: 'no skills' })).toBeNull();
     });
 });
 

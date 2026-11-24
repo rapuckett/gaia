@@ -59,6 +59,18 @@ describeNative('calculator card', () => {
         expect(screen.getByText(/\$647,514\./)).toBeTruthy();
     });
 
+    it('renders without Intl formatToParts, which iOS Hermes lacks', async () => {
+        const original = Intl.NumberFormat.prototype.formatToParts;
+        // @ts-expect-error simulate an engine that lacks it
+        delete Intl.NumberFormat.prototype.formatToParts;
+        try {
+            await show('calculator', { kind: 'calculator', calculator: 'tip', currency: 'USD', inputs: { bill: 100, tipPercent: 20, people: 2 } });
+            expect(screen.getByText(/\$60\.00/)).toBeTruthy();
+        } finally {
+            Intl.NumberFormat.prototype.formatToParts = original;
+        }
+    });
+
     it('ignores out-of-range typing and keeps the last good result', async () => {
         await show('calculator', { kind: 'calculator', calculator: 'tip', currency: 'USD', inputs: { bill: 100, tipPercent: 20, people: 2 } });
         expect(screen.getByText(/\$60\.00/)).toBeTruthy();

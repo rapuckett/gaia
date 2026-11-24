@@ -592,9 +592,9 @@ def _prefix(messages, tools):
 
 @pytest.fixture
 def ui_flagship(monkeypatch, tmp_path):
-    pytest.importorskip("gaia_agent")
-    pytest.importorskip("gaia_agent")
-    from gaia_agent.chat_agent import ChatAgent
+    pytest.importorskip("gaiapy")
+    pytest.importorskip("gaiapy")
+    from gaiapy.chat_agent import ChatAgent
 
     from gaia.agents.base.memory import MemoryMixin
     from gaia.agents.base.tools import _TOOL_REGISTRY
@@ -607,6 +607,8 @@ def ui_flagship(monkeypatch, tmp_path):
     monkeypatch.setenv("GAIA_PROJECT_MAP_AUTO_INDEX", "0")
     monkeypatch.setenv("LEMONADE_BASE_URL", "http://127.0.0.1:9/api/v1")
     monkeypatch.delenv("GAIA_DYNAMIC_TOOLS", raising=False)
+    # The unit lanes disable memory, which turns dynamic tools off; embeddings are faked below.
+    monkeypatch.delenv("GAIA_MEMORY_DISABLED", raising=False)
     monkeypatch.setattr(MemoryMixin, "_embed_text", lambda self, t: _fake_embedding(t))
     monkeypatch.setattr(
         ChatAgent,
@@ -771,3 +773,25 @@ def test_a_warm_up_stopped_mid_prompt_is_skipped(ui_flagship, monkeypatch):
 
     monkeypatch.setattr(_registry, "create_agent", create)
     assert warmup._warm_new_chat_prefix(db, None, threading.Event()) is None
+
+
+def test_the_warm_up_does_not_wait_for_mcp_servers_to_exit(ui_flagship, monkeypatch):
+    """A first turn waits on the warm-up, so its agent's MCP servers stop in the background."""
+    chat, _registry, _requests, _agents, db = ui_flagship
+    real_create = _registry.create_agent
+    closes = []
+
+    def create(*args, **kwargs):
+        agent = real_create(*args, **kwargs)
+        real_close = agent.close
+
+        def close(*, wait_for_mcp=True):
+            closes.append({"wait_for_mcp": wait_for_mcp})
+            real_close(wait_for_mcp=wait_for_mcp)
+
+        monkeypatch.setattr(agent, "close", close)
+        return agent
+
+    monkeypatch.setattr(_registry, "create_agent", create)
+    warmup._warm_new_chat_prefix(db)
+    assert closes == [{"wait_for_mcp": False}]

@@ -27,7 +27,7 @@ private const val PROBE_ROUTE = "/api/health"
 private const val PROBE_SECONDS = 5L
 private const val REDEEM_SECONDS = 30L
 // Longer than the app's own longest wait for a quiet stream (a turn queued for the model).
-private const val REQUEST_IDLE_SECONDS = 15 * 60L
+private const val REQUEST_IDLE_SECONDS = 17 * 60L
 private const val VAULT_DIR = "gaia-paired-pcs"
 
 private fun coded(error: TransportException) = CodedException(error.code, error.message, null)

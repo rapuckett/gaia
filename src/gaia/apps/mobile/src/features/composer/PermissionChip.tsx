@@ -5,8 +5,8 @@ import { useState } from 'react';
 
 import type { PermissionMode } from '@/api/client.types';
 import { describeErrorWith, describeHttpFailure, useT } from '@/i18n/useT';
-import { Button, Icon, ListRow, Notice, Sheet, Stack } from '@/ui';
-import { Check, ShieldAlert, ShieldCheck } from '@/ui/icons';
+import { Button, ListRow, Notice, Sheet, Stack } from '@/ui';
+import { ShieldAlert, ShieldCheck } from '@/ui/icons';
 
 import { ControlChip } from './ControlChip';
 
@@ -83,7 +83,7 @@ export function PermissionChip({ mode, onChange, onReread, promptWaiting, disabl
                             title={m.label}
                             subtitle={m.note}
                             subtitleLines={3}
-                            leading={m.mode === mode ? <Icon icon={Check} size="sm" tone="accent" /> : undefined}
+                            checked={m.mode === mode}
                             selected={m.mode === mode}
                             onPress={() => void apply(m.mode)}
                             testID={`permission-${m.mode}`}
@@ -99,7 +99,7 @@ export function PermissionChip({ mode, onChange, onReread, promptWaiting, disabl
                     ) : null}
                     {full && promptWaiting && !confirming ? <Notice tone="info" role="note" message={t('perm.fullPendingNote')} testID="permission-pending" /> : null}
                     {error ? <Notice tone="danger" message={error.text} detail={error.detail} testID="permission-error" /> : null}
-                    <Button variant="secondary" label={t('modelMenu.cancel')} onPress={() => setOpen(false)} />
+                    <Button variant="secondary" label={t('modelMenu.cancel')} onPress={() => setOpen(false)} testID="permission-cancel" />
                 </Stack>
             </Sheet>
         </>

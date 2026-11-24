@@ -30,12 +30,12 @@ const doc = (id: string, filename: string, file_size: number, over: Partial<Libr
     id, filename, filepath: `/Users/me/Documents/${filename}`, file_size, chunk_count: 12, indexed_at: ago(25), indexing_status: 'complete', ...over,
 });
 
-const BOARD = doc('d1', 'q3-board-deck.pdf', 481_000, { indexed_at: ago(5) });
-const BUDGET = doc('d2', 'budget-2026.xlsx', 92_160, { indexed_at: ago(26 * 60) });
-const NOTES = doc('d3', 'meeting-notes.md', 3_400, { indexed_at: ago(3 * 24 * 60) });
+const BOARD = doc('d1', 'q3-board-deck.pdf', 481_000, { indexed_at: ago(5), sessions_using: 3 });
+const BUDGET = doc('d2', 'budget-2026.xlsx', 92_160, { indexed_at: ago(26 * 60), sessions_using: 1 });
+const NOTES = doc('d3', 'meeting-notes.md', 3_400, { indexed_at: ago(3 * 24 * 60), sessions_using: 2 });
 const PLAN = doc('d4', 'roadmap.docx', 1_250_000, { indexed_at: ago(40) });
 
-const MIXED = [BOARD, BUDGET, NOTES, PLAN, doc('d5', 'server.py', 18_200, { indexed_at: ago(9 * 24 * 60) }), doc('d6', 'handbook.txt', 2_800_000, { indexed_at: ago(2) })];
+const MIXED = [BOARD, BUDGET, NOTES, PLAN, doc('d5', 'server.py', 18_200, { indexed_at: ago(9 * 24 * 60), sessions_using: 1 }), doc('d6', 'handbook.txt', 2_800_000, { indexed_at: ago(2) })];
 
 const CLOCK = Date.now();
 const NO_ANSWER = new GaiaNetworkError('https://pc.local', new Error('timed out'));
@@ -55,6 +55,12 @@ const FAILED = [
     doc('f5', 'mystery.bin', 4_000, { indexing_status: 'failed', error_kind: null, last_error: null, indexed_at: undefined }),
     doc('c1', 'draft-v2.pdf', 740_000, { indexing_status: 'cancelled', indexed_at: undefined }),
     doc('m1', 'old-invoice.pdf', 120_000, { indexing_status: 'missing', indexed_at: undefined }),
+    BOARD,
+];
+
+const WAITING = [
+    doc('w1', 'supplier-contracts.pdf', 6_200_000, { filepath: '/Users/Shared/Documents/supplier-contracts.pdf', indexing_status: 'failed', error_kind: 'model_server_down', last_error: 'RAG indexing failed for supplier-contracts.pdf: connection refused by the model server', indexed_at: undefined }),
+    FAILED[0]!,
     BOARD,
 ];
 
@@ -105,11 +111,16 @@ export const DOCUMENTS_SCENES: Record<string, DocumentsScene> = {
     empty: scene({}),
     'empty-next-chat': scene({ chat: false }),
     library: scene({ docs: MIXED }),
+    // DOC-42: in this chat, in this chat and others, in n chats, in none.
+    usage: scene({ docs: MIXED, attached: ['d1', 'd2'] }),
+    'usage-filter-none': scene({ docs: MIXED, attached: ['d1', 'd2'], start: { filter: 'zzz' } }),
     'library-next-chat': scene({ chat: false, docs: MIXED }),
     'next-chat-chosen': scene({ docs: MIXED, start: { target: 'next' } }),
     attached: scene({ docs: MIXED, attached: ['d1', 'd2'], start: { note: { key: 'docs.attached', params: { name: 'q3-board-deck.pdf', chat: '“Board prep”' } } } }),
     indexing: scene({ docs: INDEXING, data: { documentStatuses: PROGRESS }, start: { indexing: SEEDED_CLOCK } }),
     failed: scene({ docs: FAILED }),
+    // DOC-41: one document waiting on the model server, one that can't be read, one indexed.
+    waiting: scene({ docs: WAITING }),
     // Cancelled and File missing at the top, which the long `failed` list pushes below the first screen.
     'failed-more': scene({ docs: [FAILED[5]!, FAILED[6]!, FAILED[4]!, BOARD] }),
     long: scene({ docs: LONG }),

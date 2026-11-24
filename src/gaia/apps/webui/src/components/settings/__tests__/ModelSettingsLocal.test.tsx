@@ -139,6 +139,44 @@ describe('ModelSettings local models', () => {
         await waitFor(() => expect(mockedApi.selectModel).toHaveBeenCalledWith('Gemma-4-E4B-it-GGUF'));
     });
 
+    describe('Use on a tight model', () => {
+        const withTight = async () => {
+            mockedApi.listProviderModels.mockResolvedValue({
+                provider: 'local', capacity_error: null, memory_gb: 16, memory_source: 'AMD iGPU',
+                models: MODELS.map((m) => (m.id === 'Gemma-4-E4B-it-GGUF' ? { ...m, tight: true } : m)),
+            });
+            mockedApi.selectModel.mockResolvedValue({ ...ACTIVE, model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B' });
+            await renderLocal();
+            fireEvent.click(screen.getByRole('button', { name: /^Use / }));
+        };
+
+        it('asks once, naming the model, and switches only on confirm', async () => {
+            await withTight();
+            const sheet = await screen.findByRole('alertdialog');
+            expect(sheet).toHaveTextContent('Gemma 4 E4B');
+            expect(sheet).toHaveTextContent('Your PC may slow down while it runs.');
+            expect(mockedApi.selectModel).not.toHaveBeenCalled();
+            fireEvent.click(within(sheet).getByRole('button', { name: 'Use it anyway' }));
+            await waitFor(() => expect(mockedApi.selectModel).toHaveBeenCalledTimes(1));
+            expect(mockedApi.selectModel).toHaveBeenCalledWith('Gemma-4-E4B-it-GGUF');
+        });
+
+        it('does nothing on cancel', async () => {
+            await withTight();
+            fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Pick a smaller one' }));
+            await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+            expect(mockedApi.selectModel).not.toHaveBeenCalled();
+        });
+
+        it('switches straight away when the model is not tight', async () => {
+            mockedApi.selectModel.mockResolvedValue({ ...ACTIVE, model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B' });
+            await renderLocal();
+            fireEvent.click(screen.getByRole('button', { name: /^Use / }));
+            await waitFor(() => expect(mockedApi.selectModel).toHaveBeenCalledWith('Gemma-4-E4B-it-GGUF'));
+            expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+        });
+    });
+
     it('groups models and keeps the download group closed until it is needed', async () => {
         mockedApi.listProviderModels.mockResolvedValue({
             provider: 'local', memory_gb: 112, memory_source: 'AMD iGPU', capacity_error: null,

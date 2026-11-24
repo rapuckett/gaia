@@ -139,3 +139,29 @@ describeNative('Environment: a failed folder removal', () => {
         expect(within(notice).queryByText(/Couldn't remove that folder\..*disk is read-only/)).toBeNull();
     });
 });
+
+describeNative('Environment: the full-access note while a prompt waits', () => {
+    const note = 'Full access starts from the next step. The question already waiting still needs your answer.';
+    const show = async (permissions: Record<string, 'ask' | 'full_access'>, promptWaiting: boolean) => {
+        const client = createFakeClient({ environments: { s1: ENV }, permissions });
+        await render(<EnvironmentSection sessionId="s1" live={false} promptWaiting={promptWaiting} />, { wrapper: wrapper(client) });
+        await screen.findByText(/^.?Reports.?$/);
+    };
+
+    it('shows only in full access with a prompt waiting', async () => {
+        await show({ s1: 'full_access' }, true);
+        expect(await screen.findByTestId('environment-full-pending')).toBeTruthy();
+        expect(screen.getByText(note)).toBeTruthy();
+    });
+
+    it('stays away without a waiting prompt', async () => {
+        await show({ s1: 'full_access' }, false);
+        await screen.findByText('Full access');
+        expect(screen.queryByTestId('environment-full-pending')).toBeNull();
+    });
+
+    it('stays away when the chat asks first', async () => {
+        await show({ s1: 'ask' }, true);
+        expect(screen.queryByTestId('environment-full-pending')).toBeNull();
+    });
+});

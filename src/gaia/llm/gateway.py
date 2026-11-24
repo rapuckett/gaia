@@ -836,9 +836,14 @@ def use_stored_key(
 
 def forget_token() -> bool:
     """Remove the remembered token from both slots. True when one was stored."""
-    from gaia.connectors.store import delete_secret
+    from gaia.connectors.store import delete_secret, secret_in_use
 
-    had = recall_token() is not None
+    # A weak keyring refuses the read but not the delete.
+    had = (
+        recall_token() is not None
+        or secret_in_use(GATEWAY_KEY_SLOT)
+        or secret_in_use(GATEWAY_SECRET_NAME)
+    )
     delete_secret(GATEWAY_KEY_SLOT)
     delete_secret(GATEWAY_SECRET_NAME)
     return had

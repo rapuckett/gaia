@@ -76,9 +76,12 @@ def test_terminate_server_spares_the_caller(tmp_path, background):
     script = tmp_path / "reproducer.py"
     script.write_text(_REPRODUCER, encoding="utf-8")
 
+    # A silent launch logs to ~/.gaia/logs/lemonade.log: give the child a tmp home.
+    env = {**os.environ, "HOME": str(tmp_path), "USERPROFILE": str(tmp_path)}
     result = subprocess.run(
         [sys.executable, str(script), background],
         cwd=tmp_path,
+        env=env,
         capture_output=True,
         text=True,
         timeout=60,
@@ -148,6 +151,7 @@ def _assert_names_the_foreign_holder(error, port, pid, program):
 
 
 @posix_only
+@pytest.mark.real_port_listeners
 @pytest.mark.skipif(shutil.which("nc") is None, reason="needs nc for a listener")
 def test_launch_server_leaves_a_non_gaia_listener_running():
     port = _free_port()

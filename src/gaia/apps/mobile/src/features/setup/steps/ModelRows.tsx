@@ -20,7 +20,7 @@ export function SupportBadge({ entry }: { entry: SetupCatalogEntry }) {
 }
 
 /** A pressable row with a radio or checkbox mark, its name and chips, and what it says below. */
-export function MarkedRow({ kind, checked, disabled, name, chips, onPress, children, label }: {
+export function MarkedRow({ kind, checked, disabled, name, chips, onPress, children, label, description }: {
     kind: 'radio' | 'checkbox';
     checked: boolean;
     disabled?: boolean;
@@ -29,6 +29,8 @@ export function MarkedRow({ kind, checked, disabled, name, chips, onPress, child
     onPress: () => void;
     children?: ReactNode;
     label: string;
+    /** What the row says below its name (status, warnings), read after the label: the label stands in for the row, so its children are not read. */
+    description?: string;
 }) {
     const mark = kind === 'radio' ? (checked ? '●' : '○') : checked ? '☑' : '☐';
     return (
@@ -37,6 +39,7 @@ export function MarkedRow({ kind, checked, disabled, name, chips, onPress, child
             disabled={disabled}
             accessibilityRole={kind}
             accessibilityLabel={label}
+            accessibilityHint={description || undefined}
             aria-checked={checked}
         >
             <Row gap="sm" align="start">
@@ -67,12 +70,14 @@ export function ModelRadio({ entry: e, checked, recommended, disabled, onPick }:
 }) {
     const t = useT();
     const locale = useLocaleCode();
+    const warning = e.fits === false ? tooBigText(e, t, locale) : e.fits === true && e.tight ? t('setup.models.warn.tight') : null;
     return (
         <MarkedRow
             kind="radio"
             checked={checked}
             disabled={disabled || cantRunHere(e)}
             label={e.name}
+            description={[recommended ? t('setup.models.recommended') : null, statusText(e, t, locale), warning].filter(Boolean).join('. ')}
             onPress={onPick}
             name={<Text role="ui" weight="medium" dir="ltr">{e.name}</Text>}
             chips={
@@ -84,7 +89,7 @@ export function ModelRadio({ entry: e, checked, recommended, disabled, onPick }:
             }
         >
             <Text role="caption" tone="secondary">{statusText(e, t, locale)}</Text>
-            {e.fits === false ? <Warn message={tooBigText(e, t, locale)} /> : null}
+            {warning ? <Warn message={warning} /> : null}
         </MarkedRow>
     );
 }

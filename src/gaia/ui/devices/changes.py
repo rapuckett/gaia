@@ -78,8 +78,22 @@ def record_device_change(request: Request, kind: str, **params: Any) -> None:
 
 def record_folder_added(request: Request, path: str) -> None:
     """Note that the device behind *request* gave a chat the folder *path*, by name."""
-    name = Path(path).name or path
-    record_device_change(request, "folderAdded", folder=name[:DEVICE_CHANGE_PARAM_MAX])
+    record_device_change(request, "folderAdded", folder=folder_label(path))
+
+
+def record_folder_removed(request: Request, path: str) -> None:
+    """Note that the device behind *request* took the folder *path* from a chat."""
+    record_device_change(request, "folderRemoved", folder=folder_label(path))
+
+
+def folder_label(path: str) -> str:
+    """*path* as a change row names it: its last part, never the PC path."""
+    return (Path(path).name or path)[:DEVICE_CHANGE_PARAM_MAX]
+
+
+def name_label(name: str) -> str:
+    """A user-given *name* cut to what a change row holds."""
+    return name[:DEVICE_CHANGE_PARAM_MAX]
 
 
 def prune_device_changes(request: Request, paired: Optional[List[str]]) -> None:

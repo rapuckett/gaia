@@ -5,9 +5,10 @@ import { consolidateSteps, matchesStepFilter, stepsSummary, toolRowText } from '
 
 import type { StreamEvent } from '@/api/client.types';
 import { translator } from '@/i18n/useT';
+import { stampArrival } from '@/state/eventArrival';
 
 import { liveStatusLine } from '../liveStatus';
-import { stepsFromEvents } from './stepsFromEvents';
+import { endRunningSteps, stepsFromEvents } from './stepsFromEvents';
 import { TERMINAL_HARD_CAP_CHARS, terminalWindow } from './terminalText';
 
 const t = translator('en');
@@ -55,6 +56,27 @@ describe('a model retry', () => {
     });
 });
 
+describe('waiting for the GPU', () => {
+    const queued = event({ type: 'status', status: 'working', phase: 'queued', queue_position: 2, message: 'Waiting for the GPU \u2014 2nd in line' });
+    const state = { waitingOnPerson: false, answering: false };
+
+    it('says the place in line in English', () => {
+        expect(liveStatusLine([queued], state, t)).toBe('Waiting for the GPU, #\u20662\u2069 in line');
+    });
+
+    it('says it in Arabic with the number kept left to right', () => {
+        const line = liveStatusLine([queued], state, translator('ar'));
+        expect(line).toContain('\u0641\u064a \u0627\u0646\u062a\u0638\u0627\u0631');
+        expect(line).toMatch(/\u20662\u2069/);
+        expect(line).not.toContain('2nd');
+    });
+
+    it('keeps the raw message for another phase', () => {
+        const other = event({ type: 'status', status: 'working', phase: 'warming', message: 'Warming up the model' });
+        expect(liveStatusLine([other], state, t)).toBe('Warming up the model');
+    });
+});
+
 describe('the steps filter', () => {
     const rows = consolidateSteps(
         stepsFromEvents(
@@ -96,5 +118,35 @@ describe('terminal output window', () => {
         const view = terminalWindow(huge, true);
         expect(view.text.length).toBe(TERMINAL_HARD_CAP_CHARS);
         expect(view.capped).toBe(true);
+    });
+});
+
+describe('a step still running when the turn ends', () => {
+    const steps = stepsFromEvents([event({ type: 'tool_start', tool: 'sleep', narration: 'Waiting' })], t);
+
+    it('stops and keeps the time it had run', () => {
+        expect(steps[0]!.active).toBe(true);
+        const [ended] = endRunningSteps(steps, steps[0]!.timestamp + 13_000);
+        expect(ended).toMatchObject({ active: false, latencyMs: 13_000 });
+    });
+
+    it('keeps its spinner in a live turn, where nothing ends it', () => {
+        expect(consolidateSteps(steps, true)[0]).toMatchObject({ active: true });
+    });
+});
+
+describe('a step\'s time comes from when its event arrived', () => {
+    const start = stampArrival(event({ type: 'tool_start', tool: 'sleep', narration: 'Waiting' }), 50_000);
+
+    it('freezes at the real duration even when the steps are rebuilt later', () => {
+        const rebuilt = stepsFromEvents([start, stampArrival(event({ type: 'agent_error', content: 'Connection lost' }), 62_000)], t);
+        const [ended] = endRunningSteps(rebuilt, 62_000);
+        expect(ended).toMatchObject({ active: false, latencyMs: 12_000 });
+    });
+
+    it('does not move a live step when a later event arrives', () => {
+        const later = stampArrival(event({ type: 'status', status: 'working', message: 'Still going' }), 58_000);
+        expect(stepsFromEvents([start], t)[0]!.timestamp).toBe(50_000);
+        expect(stepsFromEvents([start, later], t).find((s) => s.type === 'tool')!.timestamp).toBe(50_000);
     });
 });

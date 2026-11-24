@@ -27,7 +27,12 @@ export interface ChatHeaderProps {
 }
 
 /** The chat's header: the title (tap to rename), the resource and private toggles, and the documents bar. */
-export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }: ChatHeaderProps) {
+export function ChatHeader(props: ChatHeaderProps) {
+    // Switching chats starts a fresh header, so an open rename never carries over to another chat.
+    return <ChatHeaderForSession key={props.sessionId} {...props} />;
+}
+
+function ChatHeaderForSession({ sessionId, onOpenSessionPanel, onManageDocuments }: ChatHeaderProps) {
     const t = useT();
     const session = useSession(sessionId);
     const rename = useRenameSession();

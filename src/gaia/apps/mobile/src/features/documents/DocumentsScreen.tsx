@@ -4,11 +4,12 @@
 import { useEffect, useState } from 'react';
 
 import { isolate, isolateUnit } from '@webui/i18n/registry';
+import { FILTER_AFTER, filterNeedle, matchesName } from '@webui/utils/documentLibrary.core';
 
 import { useAttachDocument, useCancelIndexing, useDocumentRemoval, useDocuments, useIndexingView, type IndexingSeed, useReindexDocument, useSession } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeErrorWith, useT } from '@/i18n/useT';
-import { EmptyState, ErrorState, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
+import { EmptyState, ErrorState, List, ListSkeleton, Notice, Row, Screen, SearchField, Stack, Text, useTheme } from '@/ui';
 
 import { AddDocuments, type AddStart, type StartMessage } from './AddDocuments';
 import { DocumentRow } from './DocumentRow';
@@ -40,6 +41,8 @@ export interface LibraryStart {
     path?: string;
     // A frozen clock and when each row began indexing, so the elapsed time is the same on every shot.
     indexing?: IndexingSeed;
+    // The text in the filter box.
+    filter?: string;
 }
 
 function startError(t: ReturnType<typeof useT>, error: LibraryStart['error']): string | null {
@@ -96,6 +99,9 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
     const documents = all.filter((d) => d.id !== removal.pending?.id);
     const view = useIndexingView(all, initial?.indexing);
     const stats = libraryStats(documents, t);
+    const [filter, setFilter] = useState(initial?.filter ?? '');
+    const needle = filterNeedle(filter, documents.length);
+    const shown = documents.filter((d) => matchesName(d.filename, needle));
     const nameOf = (id: string) => all.find((d) => d.id === id)?.filename ?? id;
     const onCancel = (id: string) => {
         action.dismiss();
@@ -157,7 +163,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
     return (
         <Screen header={header}>
             <List
-                data={documents}
+                data={shown}
                 keyExtractor={(d) => d.id}
                 accessibilityLabel={t('docs.title')}
                 contentContainerStyle={{ paddingBottom: space.xl, flexGrow: empty ? 1 : undefined }}
@@ -165,7 +171,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                     <>
                         {query.isPending ? <ListSkeleton rows={4} /> : null}
                         {loadFailed ? <ErrorState title={loadFailed.text} detail={loadFailed.detail} action={retry} /> : null}
-                        {query.data ? <EmptyState title={t('docs.empty')} message={t('docs.emptyHintPhone')} /> : null}
+                        {query.data && empty ? <EmptyState title={t('docs.empty')} message={t('docs.emptyHintPhone')} /> : null}
                     </>
                 }
                 ListHeaderComponent={
@@ -175,6 +181,14 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                             {note ? <Notice tone="success" role="note" message={note} onDismiss={() => setNote(null)} /> : null}
                             {loadFailed && !empty ? <Notice tone="danger" message={loadFailed.text} detail={loadFailed.detail} action={retry} /> : null}
                             {action.error ? <Notice tone="danger" message={action.error} onDismiss={action.dismiss} dismissLabel={t('docs.dismissError')} /> : null}
+                            {documents.length > FILTER_AFTER ? (
+                                <SearchField value={filter} onChangeText={setFilter} placeholder={t.bare('docs.filterPlaceholder')} accessibilityLabel={t('docs.filterAria')} testID="docs-filter" />
+                            ) : null}
+                            {needle && shown.length === 0 ? (
+                                <Text role="caption" tone="muted" testID="docs-filter-none">
+                                    {t('docs.filterNone', { text: isolate(filter.trim(), 'ltr') })}
+                                </Text>
+                            ) : null}
                             {stats ? (
                                 <Row gap="sm" wrap>
                                     <Text role="caption" tone="secondary">
@@ -183,6 +197,16 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                                     {stats.unreadable ? (
                                         <Text role="caption" tone="danger">
                                             {stats.unreadable}
+                                        </Text>
+                                    ) : null}
+                                    {stats.serverWaiting ? (
+                                        <Text role="caption" tone="warning">
+                                            {stats.serverWaiting}
+                                        </Text>
+                                    ) : null}
+                                    {stats.needsRetry ? (
+                                        <Text role="caption" tone="danger">
+                                            {stats.needsRetry}
                                         </Text>
                                     ) : null}
                                 </Row>
@@ -197,6 +221,8 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                         startedAt={view.startedAt[item.id]}
                         now={view.now}
                         retrying={reindex.isPending && reindex.variables === item.id}
+                        inChat={!!chat?.documentIds.includes(item.id)}
+                        inNextChat={nextIds.includes(item.id)}
                         attach={attachedIds.includes(item.id) ? undefined : { chatName: targetChat?.name ?? null, onAttach }}
                         onPreview={chat && onPreview ? (docId, name) => onPreview(chat.id, docId, name) : undefined}
                         onCancel={onCancel}

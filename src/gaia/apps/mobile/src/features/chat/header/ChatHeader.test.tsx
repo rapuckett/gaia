@@ -51,6 +51,31 @@ async function mount(onOpenSessionPanel?: () => void, client: ReturnType<typeof 
 }
 
 describe('ChatHeader title', () => {
+    it('closes an open rename and discards it when the chat changes', async () => {
+        const client = createFakeClient({ sessions: [SESSION, { ...SESSION, id: 'chat-2', title: 'B chat' }] });
+        const updateSession = jest.spyOn(client, 'updateSession');
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const wrap = ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={queryClient}>
+                <GaiaClientProvider client={client}>
+                    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                        <ThemeProvider>{children}</ThemeProvider>
+                    </SafeAreaProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>
+        );
+        const view = await render(<ChatHeader sessionId="chat-1" />, { wrapper: wrap });
+        await fireEvent.press(await screen.findByRole('button', { name: 'A chat' }));
+        await fireEvent.changeText(screen.getByTestId('chat-title-input'), 'Renamed by mistake');
+
+        await view.rerender(<ChatHeader sessionId="chat-2" />);
+
+        expect(await screen.findByRole('button', { name: 'B chat' })).toBeTruthy();
+        expect(screen.queryByTestId('chat-title-input')).toBeNull();
+        expect(updateSession).not.toHaveBeenCalled();
+    });
+
+
     it('is named by the chat title, with rename as the hint', async () => {
         await mount();
         const title = await screen.findByRole('button', { name: 'A chat' });

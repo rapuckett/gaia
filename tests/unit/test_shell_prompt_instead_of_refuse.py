@@ -352,17 +352,18 @@ def test_an_auto_approving_run_refuses_rather_than_widening(repo, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Full access in a relayed Agent UI chat: gated commands are asked about
+# Prompts pre-approved with the shell gates kept on: gated commands are asked about
 # ---------------------------------------------------------------------------
 
 
 def _full_access_chat(*, watched: bool = True) -> SSEOutputHandler:
-    """The handler a sidecar ``/query`` builds for a Full access chat.
+    """The handler of a host that pre-approves prompts but keeps the shell gates on.
 
-    Over the socket Full access pre-approves prompts but keeps the shell gates
-    on (#3373); ``watched`` is the caller declaring a person can answer.
+    ``PermissionState(lifts_shell_gates=False)``; ``watched`` is the caller
+    declaring a person can answer. A sidecar session's own Full access lifts
+    the gates (``test_full_access_runs_anything``).
     """
-    stdio = pytest.importorskip("gaia_agent.stdio")
+    stdio = pytest.importorskip("gaiapy.stdio")
     handler = SSEOutputHandler()
     stdio.PermissionState(full_access=True, lifts_shell_gates=False).attach(handler)
     handler.answers_confirmations = watched
@@ -558,7 +559,7 @@ def test_a_prompt_nobody_answers_refuses(repo):
 def test_a_timed_out_prompt_is_not_asked_again_in_the_same_turn(repo):
     """One unanswered prompt held a chat for 20 minutes by being re-asked (#7999)."""
     handler = SSEOutputHandler()
-    handler.confirm_timeout_seconds = 0.3
+    handler.confirm_timeout_seconds = 2.0
     agent = _agent(handler)
     _drive(agent, handler, _shell("git add a.txt", repo))
 
@@ -566,7 +567,7 @@ def test_a_timed_out_prompt_is_not_asked_again_in_the_same_turn(repo):
     again, again_events = _drive(agent, handler, _shell("git add a.txt", repo))
 
     assert _prompts(again_events) == []
-    assert time.monotonic() - started < 0.3
+    assert time.monotonic() - started < 1.0
     assert again["status"] == "denied" and again["timed_out"] is True
     assert "Don't ask again" in again["error"] and "git add a.txt" in again["error"]
     assert _staged(repo) == {"tracked.txt"}

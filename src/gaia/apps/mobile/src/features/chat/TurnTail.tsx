@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { cardsFromEvents } from '@webui/utils/renderCards.core';
@@ -13,7 +13,7 @@ import { Button, Notice, Row, Spinner, Stack, Text } from '@/ui';
 import { RotateCcw } from '@/ui/icons';
 
 import { ActivityTimeline } from './activity/ActivityTimeline';
-import { stepsFromEvents } from './activity/stepsFromEvents';
+import { endRunningSteps, stepsFromEvents } from './activity/stepsFromEvents';
 import { AnswerCards } from './cards/RenderCard';
 import { chatErrorInfo, isModelServerDown } from './chatErrors';
 import { StoppedNote } from './EndingNotes';
@@ -21,6 +21,8 @@ import { LibraryNotices, libraryNoticesFromEvents } from './LibraryNotices';
 import { Markdown } from './markdown/Markdown';
 import { RecordingProgress } from './recording/RecordingProgress';
 import type { TurnTail as Tail } from './tailState';
+
+const clock = () => Date.now();
 
 export interface TurnTailProps {
     tail: Tail;
@@ -30,12 +32,22 @@ export interface TurnTailProps {
     awaitingUser?: boolean;
     onTryAgain(): void;
     onContinue(): void;
+    /** When the turn ended, for the time a cut-off step stops at; defaults to when the turn was seen to end. */
+    endedAt?: number;
 }
 
 /** The running or just-ended turn, under the saved messages. */
-export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onContinue }: TurnTailProps) {
+export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onContinue, endedAt }: TurnTailProps) {
     const t = useT();
-    const steps = useMemo(() => stepsFromEvents(tail.events, t), [tail.events, t]);
+    const [stoppedAt, setStoppedAt] = useState<number | null>(null);
+    // Set once when the turn is first seen ended, so a cut-off step's time stays put.
+    if (tail.live && stoppedAt !== null) setStoppedAt(null);
+    else if (!tail.live && stoppedAt === null) setStoppedAt(endedAt ?? clock());
+    const ended = tail.live ? null : stoppedAt;
+    const steps = useMemo(() => {
+        const all = stepsFromEvents(tail.events, t);
+        return ended === null ? all : endRunningSteps(all, ended);
+    }, [tail.events, t, ended]);
     const cards = useMemo(() => cardsFromEvents(tail.events), [tail.events]);
     const libraryNotices = useMemo(() => libraryNoticesFromEvents(tail.events), [tail.events]);
     // A running step row already says what is happening.

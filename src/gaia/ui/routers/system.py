@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from gaia.llm.lemonade_client import (
@@ -141,11 +142,17 @@ async def _pull_body(model_name: str) -> Dict[str, Any]:
 # touching callers.
 _download_progress: Dict[str, Dict[str, Any]] = {}
 _download_progress_lock = threading.Lock()
-_DOWNLOAD_PROGRESS_TTL = 30.0  # seconds to retain a terminal entry post-finish
+# A completed entry lingers this long so a poll can see 100%; a failed one
+# stays until the next pull of that model, because Settings may already be
+# closed and no poll was running when the failure arrived.
+_DOWNLOAD_PROGRESS_TTL = 30.0
 
 
 def _set_download_progress(model_name: str, payload: Dict[str, Any]) -> None:
     with _download_progress_lock:
+        # Reinsert so the map is ordered oldest to newest; the status surface
+        # takes the newest when no download belongs to the chat's model.
+        _download_progress.pop(model_name, None)
         _download_progress[model_name] = payload
 
 
@@ -167,21 +174,48 @@ def _get_download_progress(model_name: str) -> Optional[Dict[str, Any]]:
         return dict(entry) if entry else None
 
 
-def _clear_download_progress(model_name: str) -> None:
-    with _download_progress_lock:
-        _download_progress.pop(model_name, None)
-
-
 async def _evict_progress_after_ttl(model_name: str) -> None:
-    """Delay-evict a terminal progress entry so the frontend's poll cycle
-    has a chance to observe the ``complete`` / ``error`` state once.
-    Without this, a fast download finishes between two polls and the UI
-    misses the "complete" beat entirely.
+    """Retire a finished entry so a completed download doesn't linger.
+
+    A failed entry stays until the next pull of that model replaces it: the
+    failure has to outlive Settings closing and a hidden window's stopped poll,
+    and a retry then overwrites it with a fresh ``starting``. Only ``complete``
+    is retired, so an old eviction or a cancelled one can never erase a live
+    retry's progress.
     """
     try:
         await asyncio.sleep(_DOWNLOAD_PROGRESS_TTL)
     finally:
-        _clear_download_progress(model_name)
+        with _download_progress_lock:
+            entry = _download_progress.get(model_name)
+            if entry and entry.get("state") == "complete":
+                _download_progress.pop(model_name, None)
+
+
+def _surface_download_progress(
+    target_model: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """The pull the app chrome should show: one in flight, else a failure.
+
+    A download started from Settings is for a model the chat may not be using,
+    so looking only at ``target_model`` hides it and its failure. Prefer the
+    chat's own pull, then the most recent other one. A completed entry has
+    nothing to show; the model list carries that state.
+    """
+    with _download_progress_lock:
+        entries = list(_download_progress.items())
+    for states in (("starting", "downloading"), ("error",)):
+        candidates = [
+            (name, entry) for name, entry in entries if entry.get("state") in states
+        ]
+        if not candidates:
+            continue
+        if target_model:
+            for name, entry in reversed(candidates):
+                if _model_ids_match(name, target_model):
+                    return dict(entry)
+        return dict(candidates[-1][1])
+    return None
 
 
 def _parse_pull_event_block(block: str) -> Optional[Dict[str, Any]]:
@@ -234,6 +268,20 @@ def _install_npu_backend(model_name: str) -> None:
     from gaia.llm.lemonade_client import LemonadeClient
 
     LemonadeClient(verbose=False).ensure_npu_backend(model_name)
+
+
+def _interrupted_reason(exc: BaseException) -> str:
+    """A readable reason when the transport's own message is empty.
+
+    A dropped stream often raises ``ReadError`` or ``RemoteProtocolError``
+    with no text, which used to render as ``Download stream interrupted: ``.
+    """
+    detail = str(exc).strip()
+    if detail:
+        return detail
+    if type(exc).__name__ in {"ReadError", "RemoteProtocolError", "ConnectError"}:
+        return "the connection to the model server closed"
+    return type(exc).__name__
 
 
 async def _stream_lemonade_pull(
@@ -458,6 +506,22 @@ async def _stream_lemonade_pull(
                             logger.error(
                                 "Pull stream error for %s: %s", model_name, err_msg
                             )
+                # Only "complete" retires, so a stream that just ends must not
+                # leave the download showing as running forever.
+                current = _get_download_progress(model_name)
+                if current and current.get("state") in ("starting", "downloading"):
+                    logger.error("Pull stream ended early for %s", model_name)
+                    _set_download_progress(
+                        model_name,
+                        {
+                            **current,
+                            "state": "error",
+                            "message": (
+                                "Download stream interrupted: the model server "
+                                "ended the download before it finished"
+                            ),
+                        },
+                    )
     except LemonadeClientError as exc:
         logger.error("NPU backend not ready for %s: %s", model_name, exc)
         _set_download_progress(
@@ -487,7 +551,7 @@ async def _stream_lemonade_pull(
                 "total_files": 0,
                 "downloaded_bytes": 0,
                 "total_bytes": 0,
-                "message": f"Download stream interrupted: {exc}",
+                "message": f"Download stream interrupted: {_interrupted_reason(exc)}",
             },
         )
     finally:
@@ -1053,11 +1117,11 @@ async def system_status(request: Request, db: ChatDatabase = Depends(get_db)):
         ]
 
     # ── Live download progress ──────────────────────────────────────────
-    # Surfaced for whichever model the UI cares about (custom override
-    # wins, else the registered default). Looking up by model name keeps
-    # us decoupled from concurrent pulls of unrelated models.
+    # Surface a download the user can see anywhere: the chat's own pull when
+    # one runs, else the most recent pull, such as the one Settings started
+    # for another model. A failure stays until that model's next pull.
     target_model = db.get_setting("custom_model") or default_model
-    progress_dict = _get_download_progress(target_model)
+    progress_dict = _surface_download_progress(target_model)
     if progress_dict:
         status.download_progress = DownloadProgress(**progress_dict)
 
@@ -1160,6 +1224,92 @@ async def _check_model_status(model_name: str) -> ModelStatus:
     return status
 
 
+def _flagship_agent_setting() -> tuple[str, bool]:
+    """``(flagship_agent, gaiacpp_available)`` for the settings response."""
+    from gaia.daemon.sidecars import fetch
+
+    return fetch.saved_flagship(), fetch.native_flagship() is not None
+
+
+class _SavedButNotStopped(HTTPException):
+    """The choice was saved but the running agent could not be stopped."""
+
+
+def _refuse_missing_gaiacpp(choice: str, http_request: Request) -> None:
+    """422 when *choice* is gaiacpp, changes the saved one, and gaiacpp isn't here."""
+    from gaia.config import GaiaConfig
+    from gaia.daemon.sidecars import fetch
+
+    if choice != fetch.NATIVE_FLAGSHIP or choice == GaiaConfig.load().flagship_agent:
+        return
+    if fetch.native_flagship() is None:
+        looked = ", ".join(str(p) for p in fetch.native_flagship_candidates())
+        raise HTTPException(
+            status_code=422,
+            detail=security.detail_for(
+                http_request,
+                "gaiacpp is not installed on this PC, so it cannot be the agent "
+                f"yet (looked in: {looked}). Download it first.",
+            ),
+        )
+
+
+def _set_flagship_agent(choice: str, http_request: Request) -> bool:
+    """Save the agent choice and stop the running agent so the next message starts the new one.
+
+    Returns True when the saved choice changed.
+    """
+    from gaia.config import GaiaConfig
+    from gaia.daemon.sidecars import fetch
+    from gaia.daemon.sidecars.errors import SidecarError
+    from gaia.ui.run_manager import run_manager
+    from gaia.ui.security import FLAGSHIP_AGENT_ID
+    from gaia.ui.sidecar import daemon_client
+
+    saved = GaiaConfig.load().flagship_agent
+    if choice == saved:
+        return False
+    _refuse_missing_gaiacpp(choice, http_request)
+    if saved is None and choice == fetch.PYTHON_FLAGSHIP:
+        # Already what runs here; saving it makes the terminal UI use it too.
+        GaiaConfig.save_key("flagship_agent", choice)
+        return True
+    from gaia.ui.setup_runner import runner as setup_runner
+
+    setup = setup_runner.status() or {}
+    if setup.get("state") in ("running", "verifying"):
+        # Setup's own test chat runs on the agent; stopping it fails setup.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "GAIA is still setting up and testing the agent. Switch once "
+                "setup has finished."
+            ),
+        )
+    if run_manager.active_sessions():
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "GAIA is answering in a chat, and switching agents now would cut "
+                "that answer off. Let it finish or stop it, then switch."
+            ),
+        )
+    GaiaConfig.save_key("flagship_agent", choice)
+    logger.info("Flagship agent set: %s", choice)
+    try:
+        daemon_client.stop_sidecar(FLAGSHIP_AGENT_ID)
+    except SidecarError as e:
+        raise _SavedButNotStopped(
+            status_code=500,
+            detail=security.detail_for(
+                http_request,
+                f"The agent choice was saved as {choice}, but the agent that is "
+                f"running could not be stopped: {e} Restart GAIA to switch.",
+            ),
+        ) from e
+    return True
+
+
 def _resolve_dynamic_tools_setting() -> tuple[bool, bool]:
     """Return ``(effective, locked)`` for dynamic tool loading.
 
@@ -1204,6 +1354,7 @@ async def get_settings(db: ChatDatabase = Depends(get_db)):
     model_status = await _check_model_status(custom_model) if custom_model else None
     from gaia.llm.local_only import cloud_blocked
 
+    flagship_agent, gaiacpp_available = _flagship_agent_setting()
     return SettingsResponse(
         custom_model=custom_model or None,
         model_status=model_status,
@@ -1211,6 +1362,8 @@ async def get_settings(db: ChatDatabase = Depends(get_db)):
         agent_mode=agent_mode,
         dynamic_tools=dynamic_tools,
         dynamic_tools_locked=dynamic_tools_locked,
+        flagship_agent=flagship_agent,
+        gaiacpp_available=gaiacpp_available,
         network_policy="local_ai_only" if cloud_blocked() else "cloud_allowed",
     )
 
@@ -1232,7 +1385,9 @@ def _load_newly_selected_model(db: ChatDatabase) -> None:
 
 
 #: Settings a paired device may change: the ones PC Settings shows.
-DEVICE_SETTINGS = frozenset({"custom_model", "dynamic_tools", "network_policy"})
+DEVICE_SETTINGS = frozenset(
+    {"custom_model", "dynamic_tools", "flagship_agent", "network_policy"}
+)
 
 
 def _refuse_device_only_fields(request: SettingsUpdateRequest) -> None:
@@ -1280,6 +1435,13 @@ async def update_settings(
         security.require_pc_or_allowed_device(http_request)
     if security.allowed_device(http_request) is not None:
         _refuse_device_only_fields(request)
+    flagship_requested = (
+        "flagship_agent" in request.model_fields_set
+        and request.flagship_agent is not None
+    )
+    if flagship_requested:
+        security.require_pc_or_allowed_device(http_request)
+        _refuse_missing_gaiacpp(request.flagship_agent, http_request)
 
     if request.custom_model is not None:
         value = request.custom_model.strip() if request.custom_model else None
@@ -1372,6 +1534,21 @@ async def update_settings(
         GaiaConfig.save_key("dynamic_tools", request.dynamic_tools)
         logger.info("Dynamic tools setting persisted: %s", request.dynamic_tools)
 
+    if flagship_requested:
+        try:
+            changed = await run_in_threadpool(
+                _set_flagship_agent, request.flagship_agent, http_request
+            )
+        except _SavedButNotStopped:
+            record_device_change(
+                http_request, "agentProgramSwitched", program=request.flagship_agent
+            )
+            raise
+        if changed:
+            record_device_change(
+                http_request, "agentProgramSwitched", program=request.flagship_agent
+            )
+
     policy_warnings: List[str] = []
     policy_notices: List[Dict[str, Any]] = []
     if policy_requested:
@@ -1423,6 +1600,7 @@ async def update_settings(
     model_status = await _check_model_status(custom_model) if custom_model else None
     from gaia.llm.local_only import cloud_blocked
 
+    flagship_agent, gaiacpp_available = _flagship_agent_setting()
     return SettingsResponse(
         custom_model=custom_model or None,
         model_status=model_status,
@@ -1430,20 +1608,12 @@ async def update_settings(
         agent_mode=agent_mode,
         dynamic_tools=dynamic_tools,
         dynamic_tools_locked=dynamic_tools_locked,
+        flagship_agent=flagship_agent,
+        gaiacpp_available=gaiacpp_available,
         network_policy="local_ai_only" if cloud_blocked() else "cloud_allowed",
         policy_warnings=policy_warnings,
         policy_notices=policy_notices,
     )
-
-
-class AgentUiHealthStats(WireModel):
-    """Row counts and indexed size in the chat database."""
-
-    sessions: int
-    messages: int
-    documents: int
-    total_chunks: int
-    total_size_bytes: int
 
 
 class AgentUiHealthResponse(WireModel):
@@ -1451,22 +1621,12 @@ class AgentUiHealthResponse(WireModel):
 
     status: Literal["ok"]
     service: Literal["gaia-agent-ui"]
-    stats: AgentUiHealthStats
 
 
-@router.get(
-    "/api/health",
-    response_model=AgentUiHealthResponse,
-    response_model_exclude_unset=True,
-)
-async def health(db: ChatDatabase = Depends(get_db)):
-    """Health check endpoint."""
-    stats = db.get_stats()
-    return {
-        "status": "ok",
-        "service": "gaia-agent-ui",
-        "stats": stats,
-    }
+@router.get("/api/health", response_model=AgentUiHealthResponse)
+async def health():
+    """Liveness probe. Needs no token, so it returns nothing about the user."""
+    return {"status": "ok", "service": "gaia-agent-ui"}
 
 
 def _read_model_server(custom_model: Optional[str]) -> ModelServerInfo:
@@ -1789,6 +1949,40 @@ class DownloadModelRequest(BaseModel):
     model_name: str
     force: bool = False
     load_after: bool = False
+
+
+def _dismiss_download_failure(model_name: str) -> int:
+    """Drop the failed entry for `model_name`; return how many were dropped.
+
+    Only ``error`` entries go: an active download for the same model, and every
+    other model's entry, must survive a dismissal.
+    """
+    with _download_progress_lock:
+        stale = [
+            name
+            for name, entry in _download_progress.items()
+            if entry.get("state") == "error" and _model_ids_match(name, model_name)
+        ]
+        for name in stale:
+            _download_progress.pop(name, None)
+    return len(stale)
+
+
+class DismissDownloadRequest(BaseModel):
+    model_name: str
+
+
+@router.post("/api/system/download-progress/dismiss")
+async def dismiss_download_failure(body: DismissDownloadRequest):
+    """Forget a failed download so its warning stays gone after a reload."""
+    model_name = body.model_name.strip()
+    if not model_name:
+        raise HTTPException(status_code=400, detail="model_name must not be empty")
+    cleared = _dismiss_download_failure(model_name)
+    return {
+        "status": "dismissed" if cleared else "unchanged",
+        "model": model_name,
+    }
 
 
 class DownloadModelResponse(WireModel):

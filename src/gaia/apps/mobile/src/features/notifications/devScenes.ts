@@ -103,7 +103,13 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     'banner-config-error': { view: 'banner', data: status({ config_error: 'The settings file is not valid JSON (line 12).' } as Partial<SystemStatus>) },
     'banner-context-small': { view: 'banner', data: status({ context_size_sufficient: false, model_context_size: 4096 }) },
     'banner-download': { view: 'banner', data: status({ download_progress: DOWNLOAD }) },
-    'banner-download-failed': { view: 'banner', data: status({ download_progress: { ...DOWNLOAD, state: 'error', message: 'Not enough disk space on C:.' } }) },
+    'banner-download-failed': {
+        view: 'banner',
+        data: {
+            ...status({ download_progress: { ...DOWNLOAD, state: 'error', message: 'Not enough disk space on C:.' } }),
+            providerModels: { local: { provider: 'local', models: [{ id: DOWNLOAD.model_name, display_name: 'Gemma 4 E4B', context_length: null, downloaded: false, labels: [], rank: null, note: null, evidence: null, available: true }] } },
+        },
+    },
     'banner-download-starting': { view: 'banner', data: status({ download_progress: { ...DOWNLOAD, state: 'starting', percent: 0, total_bytes: 0, message: null } }) },
     // The model server isn't answering: GAIA's own (it starts by itself, so the title stands alone), your own server
     // busy or stopped with the PC's start command on its own line, and a PC with no model server set up yet.
@@ -112,7 +118,7 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     'banner-server-setup': { view: 'banner', data: status({ lemonade_running: false, start_command: null, start_instruction: 'Run gaia init to install the model server.' }) },
     'banner-server-stopped': { view: 'banner', data: status({ lemonade_running: false, start_command: START_COMMAND }) },
     'banner-slow': { view: 'banner', slow: true },
-    'banner-starting': { view: 'banner', data: status({ init_state: 'initializing', init_tasks: [{ name: 'Loading the model', status: 'running' }] } as Partial<SystemStatus>) },
+    'banner-starting': { view: 'banner', data: status({ init_state: 'initializing', init_tasks: [{ name: 'Loading the model', step: 'load_model', status: 'running' }] } as Partial<SystemStatus>) },
     'banner-unreachable': { view: 'banner', unreachable: true },
     empty: { view: 'center', items: [] },
     'goal-store-error': { view: 'center', items: (t) => [finishedNote(t)], goalStore: true },

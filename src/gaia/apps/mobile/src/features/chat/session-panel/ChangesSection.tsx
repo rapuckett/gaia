@@ -119,7 +119,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                 ))}
             </Stack>
             {changes.incomplete ? (
-                <Notice tone="warning" role="note" {...untrackedNotice(untrackedWarning(changes.untracked, t, { inChat: true, undo: 'chg.undoAll' }), groups)} />
+                <Notice tone="warning" role="note" {...untrackedNotice(untrackedWarning(changes.untracked, { inChat: true }, t), groups)} testID="changes-untracked" />
             ) : null}
             <Row gap="sm" wrap stack>
                 <Button size="sm" variant="secondary" label={t('chg.review')} onPress={() => setReviewing(true)} testID="changes-review" />
@@ -141,7 +141,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                     <Text role="caption" dir="auto">{t(count === 1 ? 'chg.confirm.one' : 'chg.confirm.other', { files: filesRef(count) })}</Text>
                     <Row gap="sm" wrap stack>
                         <Button size="sm" variant="danger" label={t('chg.undoAll')} disabled={live} onPress={() => void run(false)} testID="changes-undo-confirm" />
-                        <Button size="sm" variant="secondary" label={t('mobileApp.changes.cancel')} onPress={() => setPhase('idle')} />
+                        <Button size="sm" variant="secondary" label={t('mobileApp.changes.cancel')} onPress={() => setPhase('idle')} testID="changes-undo-cancel" />
                     </Row>
                 </Stack>
             ) : null}
@@ -158,6 +158,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                             setMessage(null);
                             setDetail(undefined);
                         }}
+                        testID="changes-undo-keep"
                     />
                 </Row>
             ) : null}

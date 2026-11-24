@@ -73,6 +73,7 @@ export function Select({ label, hideLabel, value, options, onChange, placeholder
             </Pressable>
             <Sheet open={open} onClose={() => setOpen(false)} title={label}>
                 <ChoiceList
+                    testID={testID}
                     options={options}
                     value={value}
                     onChange={(v) => {

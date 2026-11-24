@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 
 import DrawerGalleryRoute from '@/app/dev/drawer';
@@ -38,6 +38,54 @@ describeNative('drawer gallery route', () => {
         mockState = name;
         await render(<DrawerGalleryRoute />);
         expect((await screen.findAllByLabelText(/search/i)).length).toBeGreaterThan(0);
+    });
+
+    it('hides the navigation rows while a query is typed, and brings them back when it is cleared', async () => {
+        mockState = 'search-title';
+        await render(<DrawerGalleryRoute />);
+        expect(await screen.findByText(/chats? match/i)).toBeTruthy();
+        expect(screen.queryByText('New chat')).toBeNull();
+        expect(screen.queryByText('Skills')).toBeNull();
+        fireEvent.changeText(screen.getByLabelText('Search chats'), '');
+        expect(await screen.findByText('New chat')).toBeTruthy();
+        expect(screen.getByText('Skills')).toBeTruthy();
+    });
+
+    it('lets a tap open a result and a drag put the search keyboard away', async () => {
+        const scroller = (from: { parent: any }) => {
+            let node = from.parent;
+            while (node && node.props.keyboardDismissMode === undefined) node = node.parent;
+            return node;
+        };
+        mockState = 'groups';
+        await render(<DrawerGalleryRoute />);
+        const list = scroller(await screen.findByText('Weekly planning notes'));
+        expect(list.props.keyboardShouldPersistTaps).toBe('handled');
+        expect(list.props.keyboardDismissMode).toBe('on-drag');
+    });
+
+    it('puts the keyboard away on a drag in the short drawer too', async () => {
+        const scroller = (from: { parent: any }) => {
+            let node = from.parent;
+            while (node && node.props.keyboardDismissMode === undefined) node = node.parent;
+            return node;
+        };
+        mockState = 'empty';
+        await render(<DrawerGalleryRoute />);
+        const scroll = scroller(await screen.findByText('New chat'));
+        expect(scroll.props.keyboardShouldPersistTaps).toBe('handled');
+        expect(scroll.props.keyboardDismissMode).toBe('on-drag');
+    });
+
+    it('starts a chat title with no status icon on the row gutter, with no empty icon slot before it', async () => {
+        mockState = 'groups-older';
+        await render(<DrawerGalleryRoute />);
+        const title = await screen.findByText('Recipe ideas for the weekend');
+        const row = title.parent!.parent!;
+        expect(row.children).toHaveLength(1);
+        const surface = row.parent!;
+        expect(surface.props.style.paddingHorizontal).toBe(16);
+        expect(surface.props.style.paddingStart).toBeUndefined();
     });
 
     it('hides the background runs behind a counted toggle', async () => {

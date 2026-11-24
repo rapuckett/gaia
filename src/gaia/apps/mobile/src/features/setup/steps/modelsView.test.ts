@@ -1,19 +1,21 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { initialSelection, resolveVision, totals } from '@webui/components/setup/selection';
+import { chooseChat, initialSelection, resolveVision, tooBig, totals } from '@webui/components/setup/selection';
 import type { SetupCatalogEntry, SetupPlan } from '@webui/types';
 
 import { saveModelChoices } from '@/data/setup';
 import { createFakeClient } from '@/api/fake';
 
-import { backendView, chooseBackend } from './modelsView';
+import type { Translate } from '@/i18n/useT';
+
+import { backendView, chooseBackend, tooBigText } from './modelsView';
 
 const entry = (e: Partial<SetupCatalogEntry>): SetupCatalogEntry => ({
     id: 'm', name: 'M', roles: ['chat'], purpose: '', if_skipped: null, recipe: null, size_gb: 10, full_size_gb: 10,
     partial: false, partial_gb: 0, downloaded: false, in_lemonade: false, recommended: false, planned: true,
     gaia_model: true, selected: true, skipped: false, chat_choice: true, support: 'verified', reads_images: true,
-    feature_tier: 'full', source: null, fits: true, need_gb: 12, capacity_gb: 64, fit_reason: null, ...e,
+    feature_tier: 'full', source: null, fits: true, need_gb: 12, capacity_gb: 64, fit_reason: null, setup_offer: true, ...e,
 });
 
 const gpuChat = entry({ id: 'gpu-chat', recommended: true });
@@ -62,5 +64,25 @@ describe('saveModelChoices', () => {
         const held = createFakeClient({ setupPlan: p });
         await saveModelChoices(held, p, initialSelection(p), false);
         expect(held.setupChoices).toEqual([]);
+    });
+});
+
+describe('a tight chat model', () => {
+    const t = ((key: string) => key) as unknown as Translate;
+    const tightChat = entry({ id: 'tight-chat', tight: true, recommended: false, planned: false, selected: false });
+    const p = plan([gpuChat, tightChat, embed]);
+
+    it('is worded as tight rather than too big, and only a fitting model gets that wording', () => {
+        expect(tooBigText(tightChat, t, 'en')).toBe('setup.models.warn.tight');
+        expect(tooBigText({ ...tightChat, fits: false }, t, 'en')).toBe('setup.models.warn.tooBig');
+    });
+
+    it('asks first when chosen, and sends the acknowledgement with the save', async () => {
+        const chosen = chooseChat(initialSelection(p), p.catalog!, 'tight-chat');
+        expect(tooBig(p.catalog!, initialSelection(p))).toEqual([]);
+        expect(tooBig(p.catalog!, chosen).map((e) => e.id)).toEqual(['tight-chat']);
+        const client = createFakeClient({ setupPlan: p });
+        await saveModelChoices(client, p, chosen, true);
+        expect(client.setupChoices[0]).toEqual({ kind: 'chat', modelId: 'tight-chat', flag: true });
     });
 });

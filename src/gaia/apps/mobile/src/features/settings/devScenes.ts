@@ -6,12 +6,12 @@ import type { SystemStatus } from '@webui/types';
 import { tEn } from '@webui/i18n/translator';
 
 import type { SkillsAddSeed } from '@/features/skills';
-import type { Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, GatewayFields, CustomModelReport, LocalModelStatus, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
+import type { AgentDownload, AgentProgram, AgentPrograms, Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, GatewayFields, CustomModelReport, LocalModelStatus, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { DevicePromptKind, DevicePromptNote, DevicePromptState } from '@/features/devices/devicePrompts';
 import type { OwnServerSeed } from '@/features/settings/panes/advanced/LemonadeTarget';
-import { COMMON, GPU, RUN } from '@/features/setup/devScenes';
+import { AGENT_PROGRAMS, COMMON, GPU, RUN } from '@/features/setup/devScenes';
 
 import type { SectionId } from './sections';
 
@@ -37,6 +37,8 @@ export interface SettingsScene {
     search?: string;
     /** Opens this model's Details section expanded. */
     openDetails?: string;
+    /** Opens with this tight model's Use question already asked. */
+    tightUse?: string;
     /** Opens Add a model from Hugging Face with this link typed and its check still running. */
     checkPending?: string;
     /** Opens Add a model from Hugging Face with this link already checked. */
@@ -57,6 +59,8 @@ export interface SettingsScene {
     confirmFullAccess?: boolean;
     /** Opens Automations already asking to remove the automation with this id. */
     confirmRemove?: string;
+    /** Opens the Agent choice with "Compare the two" already open. */
+    agentCompareOpen?: boolean;
     /** Opens Skills with the Add skills sheet already up. */
     skillsAdd?: boolean | SkillsAddSeed;
     /** Covers the screen as an English to Arabic pick would, with this platform's buttons, whatever the device is. */
@@ -234,6 +238,11 @@ const AUTOMATIONS: Automation[] = [
 ];
 const autos = (list: AutomationList | Error, scene: Partial<SettingsScene> = {}): SettingsScene => ({ section: 'automations', gpuMemory: GPU, data: { automations: list }, ...scene });
 
+const AGENT_DOWNLOADING: AgentDownload = { state: 'downloading', bytes_done: 4_200_000, bytes_total: 9_400_000, error: null };
+const agentListing = (current: string, cpp: Partial<AgentProgram>): AgentPrograms => ({
+    ...AGENT_PROGRAMS, current, programs: AGENT_PROGRAMS.programs.map((p) => (p.id === 'gaiacpp' ? { ...p, ...cpp } : p)),
+});
+
 const msg = (status: DiscordStatus | Error, scene: Partial<SettingsScene> = {}): SettingsScene => ({ section: 'messaging', gpuMemory: GPU, data: { discordStatus: status }, ...scene });
 
 const SERVER: ModelServerInfo = {
@@ -261,7 +270,7 @@ const YOURS_INFO: Partial<ModelServerInfo> = { owner: 'user', base_url: 'http://
 const YOURS: Partial<LemonadeTarget> = { mode: 'external', base_url: 'http://192.168.1.20:13305', saved_base_url: 'http://192.168.1.20:13305' };
 const SETTINGS: Settings = {
     custom_model: null, model_status: null, context_size: null, dynamic_tools: false, dynamic_tools_locked: false,
-    agent_mode: 'manual', network_policy: 'cloud_allowed',
+    agent_mode: 'manual', network_policy: 'cloud_allowed', flagship_agent: 'gaiapy', gaiacpp_available: false,
 };
 const advanced = (settings: Partial<Settings>, mcp?: MCPServerStatus[]): SettingsScene => ({
     section: 'advanced', gpuMemory: GPU, data: { settings: { ...SETTINGS, ...settings }, ...(mcp ? { mcpServers: mcp } : {}) },
@@ -438,6 +447,9 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
         data: local([HAVE, model(WANT.id, { ...WANT, download_progress: { model_name: WANT.id, state: 'downloading', percent: 42, downloaded_bytes: 9.8e9, total_bytes: 23.3e9, file: null, file_index: 1, total_files: 1, message: null } }), WANT_SMALL]),
     },
     // SET-MODEL-20: eight models, so the search field shows (`model-search`); the same with a miss typed into it.
+    'model-tight': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE, { ...WANT, downloaded: true, tight: true }]) },
+    // The Use question for a tight model: "Use it anyway" and Cancel under the one-line body.
+    'model-tight-use-confirm': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, tightUse: WANT.id, data: local([HAVE, { ...WANT, downloaded: true, tight: true }]) },
     'model-many': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local(MANY) },
     'model-search-miss': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, search: 'zzz-no-such-model', data: local(MANY) },
     // SET-MODEL-24: a model row with its Details section expanded.
@@ -576,6 +588,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'adv-custom-saved': advanced({ custom_model: 'Qwen3-4B-Instruct-2507-GGUF', model_status: { checked: true, found: true, downloaded: true, loaded: false } }),
     'adv-custom-unlisted': advanced({ custom_model: 'user.missing-GGUF', model_status: { checked: true, found: false, downloaded: false, loaded: false } }),
     'adv-custom-unchecked': advanced({ custom_model: 'user.maybe-GGUF', model_status: { checked: false, found: false, downloaded: false, loaded: false } }),
+    // SET-ADV-24: an ID over 256 characters is refused in the app's language, and Save is off.
+    'adv-custom-invalid': { ...advanced({ custom_model: `user.${'long-model-name-'.repeat(20)}GGUF` }), target: 'custom-model' },
     'adv-custom-pc-only': { section: 'advanced', gpuMemory: GPU, data: { settings: SETTINGS }, override: { getSettings: refused } },
     // SET-ADV-21: Dynamic tools, closed until tapped (`#tap=advanced-dynamic-toggle`): on, and locked by GAIA_DYNAMIC_TOOLS.
     'adv-dynamic-on': advanced({ dynamic_tools: true }),
@@ -604,8 +618,28 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'perm-chats': { section: 'permissions', gpuMemory: GPU, data: PERM_CHATS },
     // SET-VOICE-03: Preview; `#tap=read-aloud-preview` starts a preview that never finishes, so the button reads Stop reading beside a spinner (no audio plays).
     'voice-preview': { section: 'voice', gpuMemory: GPU, data: { speechSettings: SPEECH }, override: { speak: never } },
+    // SET-VOICE-08: the PC says read aloud is unavailable; the pane shows only the notice.
+    'read-aloud-unavailable': { section: 'voice', gpuMemory: GPU, data: { speechSettings: { ...SPEECH, voices: [], available: false, unavailable_reason: 'No verified voice on this PC' } } },
     // SET-MODEL-08: Fireworks blocked by Local only, shown on its own tab.
     'model-local-only-blocked': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { providers: blockedProviders } },
+    // SET-MODEL-39: the Agent choice. gaiacpp in use; one downloading (followed from the PC); its download failed
+    // (Details, Retry, Python stays); gaiacpp the PC can't reach the download server for; a saved agent this version
+    // can't run (nothing selected); the PC refusing this phone the listing; and the listing unreadable.
+    'model-agent-gaiacpp': { section: 'model', gpuMemory: GPU, data: { agentPrograms: agentListing('gaiacpp', { installed: true, can_download: false }) } },
+    'model-agent-downloading': { section: 'model', gpuMemory: GPU, data: { agentPrograms: { ...AGENT_PROGRAMS, download: AGENT_DOWNLOADING }, agentDownloads: [AGENT_DOWNLOADING] } },
+    'model-agent-download-failed': {
+        section: 'model', gpuMemory: GPU,
+        data: { agentPrograms: { ...AGENT_PROGRAMS, download: AGENT_DOWNLOADING }, agentDownloads: [{ ...AGENT_DOWNLOADING, state: 'failed', error: 'gaiacpp-0.4.1-macos-arm64.tar.gz: checksum does not match the release manifest' }] },
+    },
+    'model-agent-interrupted': {
+        section: 'model', gpuMemory: GPU,
+        data: { agentPrograms: { ...AGENT_PROGRAMS, download: AGENT_DOWNLOADING }, agentDownloads: [{ state: 'idle', bytes_done: 0, bytes_total: null, error: null }] },
+    },
+    'model-agent-compare': { section: 'model', gpuMemory: GPU, agentCompareOpen: true },
+    'model-agent-blocked': { section: 'model', gpuMemory: GPU, data: { agentPrograms: agentListing('gaiapy', { can_download: false, size_bytes: null, unavailable_reason: "GAIA couldn't reach the download server.", unavailable_code: 'unreachable' }) } },
+    'model-agent-unknown': { section: 'model', gpuMemory: GPU, data: { agentPrograms: { ...AGENT_PROGRAMS, current: 'gaiacode' } } },
+    'model-agent-pc-only': { section: 'model', gpuMemory: GPU, data: { agentPrograms: new GaiaApiError(403, PC_ONLY_REFUSAL) } },
+    'model-agent-load-failed': { section: 'model', gpuMemory: GPU, data: { agentPrograms: new GaiaNetworkError('http://pc.local:4200/api/agent-programs', new Error('Network request failed')) } },
     // SET-MODEL-09: the providers call fails; the notice has Check again.
     'model-providers-offline': { section: 'model', gpuMemory: GPU, override: { listProviderSummaries: () => Promise.reject(new GaiaNetworkError('http://pc.local:4200/api/providers', new Error('Network request failed'))) } },
     // SET-NAV-04: Model opened from Privacy on the Cloud key row: "Back to Privacy" shows under the header and the target flashes.
@@ -645,6 +679,19 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'lang-switch-ar-ios': { section: 'general', gpuMemory: GPU, languageSwitch: 'ios' },
     // SET-PRIV-06: the Delete chats card with chats (`#tap=privacy-delete-all` opens the confirm sheet), and with none.
     'privacy-delete': { section: 'privacy', gpuMemory: GPU, data: { settings: SETTINGS, sessions: [chat('a'), chat('b'), chat('c')] } },
+    // SET-PRIV-08: Local only turned on (`#tap=privacy-local-only`) while the model server is down.
+    'privacy-server-down': {
+        section: 'privacy',
+        gpuMemory: GPU,
+        data: { settings: SETTINGS, ...local([model('Qwen3.6-35B-A3B-GGUF', { display_name: 'Qwen 3.6 35B A3B' })]) },
+        override: {
+            setNetworkPolicy: async () => ({
+                ...SETTINGS,
+                network_policy: 'local_ai_only',
+                policy_notices: [{ code: 'saved_models_not_checked', cause: 'model_server_down', severity: 'warning', models: ['Qwen3.6-35B-A3B-GGUF'] }],
+            }),
+        },
+    },
     'privacy-delete-none': { section: 'privacy', gpuMemory: GPU, data: { settings: SETTINGS, sessions: [] } },
 };
 

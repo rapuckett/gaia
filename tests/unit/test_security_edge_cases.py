@@ -30,6 +30,7 @@ from gaia.security import (
     PathValidator,
     _format_size,
     _get_blocked_directories,
+    _path_is_within,
     audit_logger,
 )
 
@@ -354,7 +355,7 @@ class TestIsWriteBlockedException:
     def test_exception_includes_error_detail(self, validator):
         """The reason string should include the error message."""
         with patch("os.path.realpath", side_effect=ValueError("Bad path chars")):
-            is_blocked, reason = validator.is_write_blocked("/invalid\x00path")
+            is_blocked, reason = validator.is_write_blocked("/invalid/path")
 
         assert is_blocked is True
         assert "Bad path chars" in reason
@@ -658,6 +659,17 @@ class TestPromptGuardCallbacks:
 
         assert console.progress.is_running
         console.stop_progress()
+
+
+def test_containment_casefolds_where_paths_ignore_case():
+    """A long s spells ``.ssh`` on a case-insensitive disk; lower() alone misses it."""
+    with patch("gaia.security.CASE_INSENSITIVE_PATHS", True):
+        assert _path_is_within(Path("/h/.ſsh/config"), Path("/h/.ssh"))
+
+
+def test_containment_keeps_case_where_paths_are_case_sensitive():
+    with patch("gaia.security.CASE_INSENSITIVE_PATHS", False):
+        assert not _path_is_within(Path("/h/.SSH/config"), Path("/h/.ssh"))
 
 
 if __name__ == "__main__":

@@ -31,6 +31,7 @@ import { useDeviceStore } from '../stores/deviceStore';
 import { useChatStore } from '../stores/chatStore';
 import { log } from '../utils/logger';
 import './NotificationCenter.css';
+import { noticeText, visibleStrict } from './CalendarApproval';
 
 interface NotificationCenterProps {
   onClose: () => void;
@@ -215,7 +216,7 @@ export function NotificationCenter({ onClose, onOpenChat }: NotificationCenterPr
           notifications.map((n) => {
             const meta = NOTIFICATION_META[n.type];
             // A prompt reads as its card does, not as its stored English text.
-            const prompt = n.type === 'permission_request' && n.tool ? permissionPromptText(n, t, markLtr) : null;
+            const prompt = n.type === 'permission_request' && n.tool ? permissionPromptText(n, t, (s) => markLtr(visibleStrict(s))) : null;
             return (
               <div
                 className={`notification-item ${!n.read ? 'unread' : ''} ${meta.colorClass}`}
@@ -250,9 +251,9 @@ export function NotificationCenter({ onClose, onOpenChat }: NotificationCenterPr
                   ) : (
                     <>
                       {n.title && (
-                        <span className="notification-title">{n.title}</span>
+                        <span className="notification-title">{noticeText(n.title)}</span>
                       )}
-                      <span className="notification-message" dir="auto">{n.message}</span>
+                      <span className="notification-message" dir="auto">{noticeText(n.message)}</span>
                     </>
                   )}
 

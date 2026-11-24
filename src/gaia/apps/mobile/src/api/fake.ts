@@ -7,6 +7,9 @@ import type {
     ContextChoice,
     CustomModelReport,
     AgentCapabilities,
+    AgentDownload,
+    AgentPrograms,
+    FlagshipAgent,
     AgentInfo,
     AgentInstallStatus,
     AgentMcpServer,
@@ -327,6 +330,14 @@ export interface FakeClientData {
     goalStoreDamaged?: boolean;
     /** Thrown by resetGoalStore. */
     goalStoreResetError?: Error;
+    /** What getAgentPrograms answers; an Error is thrown. A save of the agent program changes `current`, and a finished download installs gaiacpp. */
+    agentPrograms?: AgentPrograms | Error;
+    /** What startAgentDownload answers (a download from nothing when unset); an Error is thrown. */
+    agentDownloadStart?: AgentDownload | Error;
+    /** Each getAgentDownload answers the next entry (the last one repeats); an Error entry is thrown. Unset, the listing's download. */
+    agentDownloads?: (AgentDownload | Error)[];
+    /** Thrown by updateSettings when it carries `flagship_agent`, as the PC's 403, 409 or 422 is. */
+    flagshipAgentError?: Error;
     /** What getSettings answers; setNetworkPolicy changes it. */
     settings?: Settings;
     /** Thrown by setNetworkPolicy, as the PC's 403 is. */
@@ -444,6 +455,10 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly modelLoads: { modelName: string; force: boolean; ctxSize?: number }[];
     readonly removals: string[];
     readonly backendSets: string[];
+    /** How many times startAgentDownload was asked. */
+    readonly agentDownloadStarts: number;
+    /** The agent programs updateSettings was asked to save, in order, refused ones included. */
+    readonly flagshipAgentSets: FlagshipAgent[];
     /** The text each speak call was given, in order. */
     readonly spoken: string[];
     readonly targetSets: LemonadeTargetRequest[];
@@ -579,6 +594,22 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const followUps: FakeGaiaClient['followUps'] = [];
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
     const backendSets: string[] = [];
+    let agentDownloadStarts = 0;
+    let agentDownloadAt = 0;
+    const flagshipAgentSets: FlagshipAgent[] = [];
+    const agentListing = (): AgentPrograms => {
+        if (!data.agentPrograms) throw new GaiaApiError(503, 'This fake client was given no agent programs.');
+        if (data.agentPrograms instanceof Error) throw data.agentPrograms;
+        return data.agentPrograms;
+    };
+    // A finished download puts gaiacpp on the PC, as the next listing shows.
+    const agentDownloadSeen = (job: AgentDownload): AgentDownload => {
+        if (job.state === 'done' && data.agentPrograms && !(data.agentPrograms instanceof Error)) {
+            const l = data.agentPrograms;
+            data.agentPrograms = { ...l, programs: l.programs.map((p) => (p.id === 'gaiacpp' ? { ...p, installed: true, can_download: false } : p)), download: job };
+        }
+        return job;
+    };
     const spoken: string[] = [];
     const targetSets: LemonadeTargetRequest[] = [];
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
@@ -717,6 +748,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         removals,
         setupStarts,
         backendSets,
+        get agentDownloadStarts() {
+            return agentDownloadStarts;
+        },
+        flagshipAgentSets,
         spoken,
         targetSets,
         setupChoices,
@@ -1372,6 +1407,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return data.settings;
         },
         async updateSettings(patch) {
+            if (patch.flagship_agent !== undefined) {
+                flagshipAgentSets.push(patch.flagship_agent);
+                if (data.flagshipAgentError) throw data.flagshipAgentError;
+                const id = patch.flagship_agent;
+                if (data.agentPrograms && !(data.agentPrograms instanceof Error)) data.agentPrograms = { ...data.agentPrograms, current: id };
+                data.settings = { ...(data.settings as Settings), flagship_agent: id };
+                return data.settings;
+            }
             if (!data.settings) throw new GaiaApiError(503, 'This fake client was given no settings.');
             data.settings = {
                 ...data.settings,
@@ -1824,6 +1867,18 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async cancelSetup() {
             return { cancelled: true };
+        },
+        async getAgentPrograms() {
+            return agentListing();
+        },
+        async startAgentDownload() {
+            agentDownloadStarts += 1;
+            if (data.agentDownloadStart instanceof Error) throw data.agentDownloadStart;
+            return agentDownloadSeen(data.agentDownloadStart ?? { state: 'downloading', bytes_done: 0, bytes_total: null, error: null });
+        },
+        async getAgentDownload() {
+            if (data.agentDownloads?.length) return agentDownloadSeen(nextOf(data.agentDownloads, agentDownloadAt++));
+            return agentListing().download;
         },
         async getStartScreen() {
             if (!data.start) throw new GaiaApiError(503, 'This fake client was given no start screen.');

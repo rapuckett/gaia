@@ -7,7 +7,7 @@ import { isStarting } from '@/data';
 import { namesSetupCommand, needsLocalSetup } from '@/features/settings/panes/advanced/statusText';
 import { technicalDetail, type Translate } from '@/i18n/useT';
 import type { NoticeTone } from '@/ui';
-import { isolate } from '@webui/i18n/registry';
+import { isMessageKey, isolate } from '@webui/i18n/registry';
 import { GB_UNIT, MIN_CONTEXT_SIZE } from '@webui/utils/constants';
 import { shortModelName, type PickLoad } from '@webui/utils/modelList.core';
 
@@ -58,7 +58,7 @@ export function pickBanner(
     fetchError: unknown,
     t: Translate,
     goalStoreError?: string | null,
-    pick?: { load?: PickLoad | null; name?: string | null; awayHint?: boolean; slow?: boolean; slowPending?: boolean; lost?: boolean },
+    pick?: { load?: PickLoad | null; name?: string | null; awayHint?: boolean; slow?: boolean; slowPending?: boolean; lost?: boolean; modelNames?: Record<string, string> },
 ): Banner | null {
     // An unreachable PC's last status is stale; the web drops it too (App.tsx applyStatus).
     if (fetchError && !pick?.slowPending && (pick?.lost || fetchError instanceof GaiaNetworkError)) status = undefined;
@@ -66,7 +66,8 @@ export function pickBanner(
     if (progress?.state === 'downloading' || progress?.state === 'starting' || progress?.state === 'error') {
         const name = progress.model_name || status?.default_model_name || '';
         if (progress.state === 'error') {
-            return { id: 'download', tone: 'danger', title: t('banner.download.failed', { name }), message: progress.message ?? undefined, dismissible: true, downloadRetry: name };
+            const label = pick?.modelNames?.[name] ?? shortModelName(name);
+            return { id: 'download', tone: 'danger', title: t('mobileApp.model.downloadFailedShort', { model: isolate(label, 'ltr') }), detail: progress.message ? isolate(progress.message, 'ltr') : undefined, dismissible: true, downloadRetry: name };
         }
         const knownSize = progress.total_bytes ? `${gb(progress.total_bytes, 1)} ${GB_UNIT}` : null;
         const file = progress.file ? t('banner.download.file', { index: progress.file_index, total: progress.total_files }) : undefined;
@@ -126,7 +127,9 @@ export function pickBanner(
 
     if (isStarting(status)) {
         const running = status.init_tasks?.find((task) => task.status === 'running');
-        return { id: 'starting', tone: 'info', title: running?.name || t('banner.preparing'), progress: {} };
+        const key = `banner.boot.${running?.step}`;
+        const label = running?.step && isMessageKey(key) ? t(key) : t('banner.boot.generic');
+        return { id: 'starting', tone: 'info', title: label, progress: {} };
     }
 
     if (status.config_error) {

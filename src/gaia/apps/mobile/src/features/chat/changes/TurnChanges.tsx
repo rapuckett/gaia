@@ -98,14 +98,14 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
                             </Text>
                             <Row gap="sm" wrap stack>
                                 <Button size="sm" variant="primary" label={t('mobileApp.changes.confirmYes')} onPress={() => void undo(false)} testID="turn-changes-confirm" />
-                                <Button size="sm" variant="secondary" label={t('mobileApp.changes.cancel')} onPress={() => setPhase('idle')} />
+                                <Button size="sm" variant="secondary" label={t('mobileApp.changes.cancel')} onPress={() => setPhase('idle')} testID="turn-changes-cancel" />
                             </Row>
                         </Stack>
                     ) : null}
                 </Stack>
             ) : null}
             {turn.incomplete ? (
-                <Notice tone="warning" role="note" {...untrackedNotice(untrackedWarning(turn.untracked, t, { also: count > 0 }), groups)} />
+                <Notice tone="warning" role="note" {...untrackedNotice(untrackedWarning(turn.untracked, { also: count > 0 }, t), groups)} testID="turn-changes-untracked" />
             ) : null}
             {message ? (
                 <Notice
@@ -127,6 +127,7 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
                             setMessage(null);
                             setDetail(undefined);
                         }}
+                        testID="turn-changes-keep"
                     />
                 </Row>
             ) : null}

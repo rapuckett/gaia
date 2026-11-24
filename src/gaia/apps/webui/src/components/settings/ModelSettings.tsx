@@ -12,11 +12,13 @@ import { useChatStore } from '../../stores/chatStore';
 import { useT, type Translate } from '../../i18n/useT';
 import { keyStoreOf } from '../../utils/keyStore';
 import { providerName, providerNotice } from '../../utils/providerText';
+import { setVisibleInterval } from '../../utils/visibleInterval';
 import { AddCustomModel } from './AddCustomModel';
 import { ErrorNotice, isServerDown } from './ErrorNotice';
 import { LocalModelsSections } from './LocalModelsSections';
 import { ModelInUse } from './ModelInUse';
 import { ModelRow } from './ModelRow';
+import { AgentChoice } from '../setup/AgentChoice';
 import { ConfirmSheet } from '../setup/ConfirmSheet';
 import { SettingsDisclosure } from './SettingsDisclosure';
 import { isDownloading } from '../modelMeta';
@@ -121,8 +123,7 @@ export function ModelSettings() {
     const awaitingPermission = !!providers?.some((p) => keyStoreOf(p) === 'waiting');
     useEffect(() => {
         if (!awaitingPermission) return;
-        const timer = setInterval(() => { void loadProviders(); }, DOWNLOAD_POLL_MS);
-        return () => clearInterval(timer);
+        return setVisibleInterval(() => { void loadProviders(); }, DOWNLOAD_POLL_MS);
     }, [awaitingPermission, loadProviders]);
     const activeProvider = active?.provider;
     useEffect(() => { if (activeProvider && !requested) setChosen(activeProvider); }, [activeProvider, requested]);
@@ -209,6 +210,12 @@ export function ModelSettings() {
         }
     }, [chosen, loadModels, selectModel, t]);
 
+    const [tightAsk, setTightAsk] = useState<{ id: string; name: string } | null>(null);
+    const askUse = (m: ProviderModel | undefined, id: string, name: string) => {
+        if (m && m.fits === true && m.available !== false && m.tight) setTightAsk({ id, name });
+        else void use(id);
+    };
+
     const download = useCallback(async (model: string) => {
         setBusy(`dl:${model}`);
         setNotice(null);
@@ -257,8 +264,7 @@ export function ModelSettings() {
     }, [anyDownloading, refreshActive]);
     useEffect(() => {
         if (chosen !== 'local' || !anyDownloading) return;
-        const timer = setInterval(() => { void loadModels('local', true); }, DOWNLOAD_POLL_MS);
-        return () => clearInterval(timer);
+        return setVisibleInterval(() => { void loadModels('local', true); }, DOWNLOAD_POLL_MS);
     }, [anyDownloading, chosen, loadModels]);
 
     // Keeps the in-use model's device and size on screen while another provider's tab is open.
@@ -290,7 +296,7 @@ export function ModelSettings() {
             current={isCurrent(m)}
             remote={!!provider?.remote}
             busy={busy}
-            onUse={() => void use(m.id)}
+            onUse={() => askUse(m, m.id, labels[m.id])}
             onDownload={() => void download(m.id)}
             onAskRemove={() => setConfirmRemove(m.id)}
             onNpuRecheck={() => void loadModels(chosen, true)}
@@ -301,13 +307,15 @@ export function ModelSettings() {
         <div className="settings-pane">
             <h2 className="settings-pane-title">{t('settings.section.model')}</h2>
 
+            <AgentChoice inSettings />
+
             <ModelInUse
                 row={listedInUse ?? (sameModelId(inUseRow?.id, active?.model) ? inUseRow : null)}
                 providerName={active?.provider_name ?? null}
                 choices={connected ? switchChoices : []}
                 labels={labels}
                 disabled={busy !== null}
-                onSwitch={(model) => void use(model)}
+                onSwitch={(model) => askUse((models ?? []).find((m) => m.id === model), model, labels[model] ?? displayModelName(model))}
             />
 
             <RadioGroup className="provider-tabs" aria-label={t('settings.model.whereRuns')}>
@@ -580,6 +588,17 @@ export function ModelSettings() {
                     onCancel={() => setConfirmRemove(null)}
                 >
                     {removing.downloaded && <p>{t('settings.model.removeDownloadBody')}</p>}
+                </ConfirmSheet>
+            )}
+            {tightAsk && (
+                <ConfirmSheet
+                    title={t('setup.confirm.tightOne', { name: tightAsk.name })}
+                    confirmLabel={t('setup.confirm.useAnyway')}
+                    cancelLabel={t('setup.confirm.pickSmaller')}
+                    onConfirm={() => { const id = tightAsk.id; setTightAsk(null); void use(id); }}
+                    onCancel={() => setTightAsk(null)}
+                >
+                    <p>{t('setup.confirm.tightBody')}</p>
                 </ConfirmSheet>
             )}
             {confirmForget && provider && (

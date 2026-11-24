@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { item, type QueuedMessage } from '@webui/utils/messageQueue';
@@ -18,6 +18,7 @@ import { useComposerQueueStore } from '@/features/composer/composerQueue';
 import { translator } from '@/i18n/useT';
 import { useChatStreamStore } from '@/state/chatStreams';
 import { ThemeProvider } from '@/ui';
+import { SheetHost } from '@/ui/overlays/SheetHost';
 
 import { ChatScreen } from './ChatScreen';
 
@@ -54,7 +55,9 @@ async function mount(client: ReturnType<typeof createFakeClient>) {
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-                    <ThemeProvider>{children}</ThemeProvider>
+                    <ThemeProvider>
+                        <SheetHost>{children}</SheetHost>
+                    </ThemeProvider>
                 </SafeAreaProvider>
             </GaiaClientProvider>
         </QueryClientProvider>
@@ -155,6 +158,21 @@ describe('ChatScreen', () => {
         expect(screen.queryByTestId('error-banner')).toBeNull();
     });
 
+    it('keeps the sent message above a failed turn\'s card and Try again', async () => {
+        const client = createFakeClient({
+            sessions: [SESSION],
+            messages: { [CHAT]: [message(1, 'user', 'hello'), { ...message(2, 'assistant', 'Lemonade is not running.'), failed: true }] },
+        });
+        await mount(client);
+
+        let list = (await screen.findByText('hello')).parent;
+        while (list && list.props.keyboardDismissMode === undefined) list = list.parent;
+        expect(await screen.findByTestId('try-again')).toBeTruthy();
+        expect(screen.getByText('Lemonade is not running.')).toBeTruthy();
+        expect(list?.props.keyboardDismissMode).toBe(Platform.OS === 'ios' ? 'interactive' : 'on-drag');
+        expect(list?.props.keyboardShouldPersistTaps).toBe('handled');
+    });
+
     it('Stop returns the queued messages to the box and sends none of them', async () => {
         const finish = gate();
         const client = createFakeClient({
@@ -190,7 +208,7 @@ describe('ChatScreen', () => {
         });
         await mount(client);
 
-        expect(await screen.findByText(t('queue.notSent'))).toBeTruthy();
+        expect(await screen.findByText(t('queue.notSentBare'))).toBeTruthy();
         expect(screen.getByText('no connection')).toBeTruthy();
         expect(client.sent).toEqual([]);
 
@@ -264,6 +282,20 @@ describe('ChatScreen', () => {
             await waitFor(() => expect(client.confirmations).toEqual([{ session_id: CHAT, approved: true, always: false, confirm_id: 'c1' }]));
             await waitFor(() => expect(screen.queryByTestId('perm-card')).toBeNull());
             expect(useChatStreamStore.getState().resolved[CHAT]?.c1).toEqual({ state: 'answered' });
+            await act(async () => hold.open());
+        });
+
+        it('notes on the waiting card that Full access starts from the next step', async () => {
+            await mount(permissionClient(REQUEST));
+            await sendText('Save it');
+            await screen.findByTestId('perm-card');
+            await waitFor(() => expect(screen.queryByTestId('perm-full-pending')).toBeNull());
+            await fireEvent.press(screen.getByTestId('permission-chip'));
+            await fireEvent.press(await screen.findByTestId('permission-full_access'));
+            await fireEvent.press(await screen.findByText(t('env.turnOn')));
+            await screen.findByTestId('permission-pending');
+            await fireEvent.press(screen.getByTestId('permission-cancel'));
+            expect(await screen.findByTestId('perm-full-pending')).toBeTruthy();
             await act(async () => hold.open());
         });
 

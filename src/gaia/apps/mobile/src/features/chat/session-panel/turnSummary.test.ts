@@ -25,6 +25,13 @@ describe('where a turn sent its data', () => {
         expect(facts.cost).toEqual({ key: 'rail.costAbout', params: { usd: '$0.0016' } });
     });
 
+    it('names a local model by the PC list, and falls back to the short id without an entry', () => {
+        const models = [{ id: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B' }];
+        expect(turnFacts(LOCAL, false, models).modelName).toBe('Gemma 4 E4B');
+        expect(turnFacts(LOCAL, false, []).modelName).toBe('Gemma-4-E4B-it-GGUF');
+        expect(turnFacts(LOCAL, false).modelName).toBe('Gemma-4-E4B-it-GGUF');
+    });
+
     it('says a stopped turn reported no cost, and flags only a fully failed live lookup', () => {
         expect(turnFacts({ cost: { kind: 'unreported' } }, true).cost.key).toBe('rail.costUnreportedStopped');
         expect(liveDataFailed({ ...LOCAL, live_data: { attempted: 2, failed: 2 } })).toBe(true);

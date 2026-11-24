@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import { useState, type ReactNode } from 'react';
+import { View } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
+import { middleTruncate } from '@webui/utils/format';
 
 import { useMcpStatus, useSettings, useUpdateSettings } from '@/data';
 import { technicalDetail, useT } from '@/i18n/useT';
@@ -81,26 +83,28 @@ function CustomModelCard() {
     const settings = useSettings();
     const saved = settings.data?.custom_model;
     return (
-        <SettingCard
-            title={t('settings.advanced.customTitle')}
-            hint={saved ? <Ltr>{saved}</Ltr> : t('settings.advanced.customHint')}
-            open={open}
-            onToggle={() => setOpen((v) => !v)}
-            testID="advanced-custom"
-        >
-            {settings.data ? (
-                <CustomModel settings={settings.data} />
-            ) : settings.isPending ? (
-                <Spinner />
-            ) : isPcRefusal(settings.error) ? (
-                <PcOnlyNotice testID="advanced-custom-pc-only" />
-            ) : (
-                <Stack gap="sm">
-                    <Notice tone="warning" message={t('mobileApp.settings.modelActionFailed')} />
-                    <RawDetails text={technicalDetail(settings.error)} />
-                </Stack>
-            )}
-        </SettingCard>
+        <SettingsAnchor name="custom-model" onTarget={() => setOpen(true)}>
+            <SettingCard
+                title={t('settings.advanced.customTitle')}
+                hint={saved ? <View accessible accessibilityLabel={saved}><Ltr>{middleTruncate(saved, 64)}</Ltr></View> : t('settings.advanced.customHint')}
+                open={open}
+                onToggle={() => setOpen((v) => !v)}
+                testID="advanced-custom"
+            >
+                {settings.data ? (
+                    <CustomModel settings={settings.data} />
+                ) : settings.isPending ? (
+                    <Spinner />
+                ) : isPcRefusal(settings.error) ? (
+                    <PcOnlyNotice testID="advanced-custom-pc-only" />
+                ) : (
+                    <Stack gap="sm">
+                        <Notice tone="warning" message={t('mobileApp.settings.modelActionFailed')} />
+                        <RawDetails text={technicalDetail(settings.error)} />
+                    </Stack>
+                )}
+            </SettingCard>
+        </SettingsAnchor>
     );
 }
 

@@ -45,7 +45,7 @@ describeNative('schedules gallery route', () => {
     it('delete-confirm shows the Confirm? step and keeps it up', async () => {
         mockState = 'delete-confirm';
         await render(<SchedulesGalleryRoute />);
-        expect(await screen.findByText('Confirm?')).toBeTruthy();
+        expect(await screen.findByText('Delete schedule')).toBeTruthy();
     });
 
     it('new-valid previews the weekday schedule it was typed as, not every hour', async () => {

@@ -8,12 +8,12 @@ import { useBackendStore } from '../stores/backendStore';
 import type { BackendLifecycle } from '../types/agent';
 import { useT } from '../i18n/useT';
 import { isMessageKey } from '../i18n/registry';
-import { namesSetupCommand, needsLocalSetup, SetUpLocalButton } from './settings/ErrorNotice';
+import { namesSetupCommand, needsLocalSetup, SetUpLocalButton, startInstructionText } from './settings/ErrorNotice';
 import { MIN_CONTEXT_SIZE, DEFAULT_MODEL_NAME, GB_UNIT } from '../utils/constants';
 import { ref } from '../i18n/registry';
 import { useModelActions } from '../hooks/useModelActions';
 import { isStarting, modelServerHealth } from '../services/statusPoll';
-import { displayModelName, useModelNames, useModelStore } from '../stores/modelStore';
+import { displayModelName, useLocalModelNames, useModelStore } from '../stores/modelStore';
 import './ConnectionBanner.css';
 
 /**
@@ -112,7 +112,7 @@ export function ConnectionBanner({ onRetry, backendSlow = false, backendError = 
     const pickLoad = useModelStore((s) => s.pickLoad);
     const retryPickLoad = useModelStore((s) => s.retryPickLoad);
     const dismissPickLoad = useModelStore((s) => s.dismissPickLoad);
-    useModelNames();
+    useLocalModelNames();
 
     // Track previous warning-worthy states so the banner reappears when
     // a new issue is detected after being dismissed.
@@ -157,11 +157,7 @@ export function ConnectionBanner({ onRetry, backendSlow = false, backendError = 
         isDownloadingModel ||
         activeProgress?.state === 'downloading' ||
         activeProgress?.state === 'starting';
-    const [downloadErrorDismissed, setDownloadErrorDismissed] = useState(false);
-    // A new download's failure must show even if the last one was dismissed.
-    useEffect(() => {
-        if (isActiveDownload) setDownloadErrorDismissed(false);
-    }, [isActiveDownload]);
+    const dismissDownloadFailure = useChatStore((s) => s.dismissDownloadFailure);
 
     // A crashed backend outranks everything, even a chat in progress: nothing answers until it's back.
     if (lifecycle && lifecycle.status !== 'running') return <BackendRestartBanner lifecycle={lifecycle} />;
@@ -175,7 +171,15 @@ export function ConnectionBanner({ onRetry, backendSlow = false, backendError = 
     // suppressing during an active conversation: if the download fails
     // mid-chat we still want to surface the failure prominently.
     const downloadName = activeProgress?.model_name || modelName;
-    if (isActiveDownload || (activeProgress?.state === 'error' && !downloadErrorDismissed)) {
+    const dismissDownloadError = async () => {
+        try {
+            await dismissDownloadFailure(activeProgress?.model_name ?? downloadName);
+        } catch {
+            // The server still holds the failure; keep the warning until a retry works.
+        }
+    };
+    if (isActiveDownload || activeProgress?.state === 'error') {
+        const shownName = displayModelName(downloadName);
         const sizeHint = activeProgress?.total_bytes
             ? `${(activeProgress.total_bytes / 1e9).toFixed(1)} ${GB_UNIT}`
             : ref('banner.download.sizeUnknown');
@@ -193,14 +197,16 @@ export function ConnectionBanner({ onRetry, backendSlow = false, backendError = 
                 <div className="connection-banner__text" dir="auto">
                     {isError ? (
                         <>
-                            {t('banner.download.failed', { name: downloadName })}{' '}
+                            {t('banner.download.failed', { name: shownName })}
                             {(downloadError ?? activeProgress?.message) && (
-                                <span className="connection-banner__hint">{downloadError ?? activeProgress?.message}</span>
+                                <span className="connection-banner__hint connection-banner__detail" dir="auto">
+                                    {downloadError ?? activeProgress?.message}
+                                </span>
                             )}
                         </>
                     ) : (
                         <>
-                            {t('banner.download.running', { name: downloadName, size: sizeHint })}
+                            {t('banner.download.running', { name: shownName, size: sizeHint })}
                             {activeProgress?.state === 'downloading' && activeProgress.file && (
                                 <>
                                     {' '}
@@ -257,7 +263,7 @@ export function ConnectionBanner({ onRetry, backendSlow = false, backendError = 
                 {isError && (
                     <button
                         className="connection-banner__dismiss"
-                        onClick={() => setDownloadErrorDismissed(true)}
+                        onClick={() => void dismissDownloadError()}
                         aria-label={t('banner.dismiss')}
                     >
                         <X size={14} />
@@ -312,7 +318,11 @@ export function ConnectionBanner({ onRetry, backendSlow = false, backendError = 
     // Takes priority over all other cases (including dismiss and active-conversation suppression)
     // because the system is not yet ready to serve requests. A status the backend
     // can't refresh (slow or failing) is not proof the boot is still running.
-    if (isStarting(systemStatus) && !backendSlow && !backendError) {
+    // Once the server check is over, a server that isn't answering outranks the later boot steps.
+    const serverCheck = systemStatus?.init_tasks?.find(t => t.step === 'check_server');
+    const serverDownAfterCheck = systemStatus?.lemonade_running === false
+        && !!serverCheck && serverCheck.status !== 'pending' && serverCheck.status !== 'running';
+    if (isStarting(systemStatus) && !backendSlow && !backendError && !serverDownAfterCheck) {
         // The task's English `name` is a log label; only its `step` is shown, translated.
         const step = systemStatus?.init_tasks?.find(t => t.status === 'running')?.step;
         const stepKey = `banner.boot.${step}`;
@@ -427,7 +437,7 @@ export function ConnectionBanner({ onRetry, backendSlow = false, backendError = 
                             <code dir="ltr">{startCommand}</code>
                         </span>
                     ) : startInstruction && (
-                        <span className="connection-banner__hint">{startInstruction}</span>
+                        <span className="connection-banner__hint">{startInstructionText(t, startInstruction)}</span>
                     )}
                 </div>
                 {setupNeeded && <SetUpLocalButton className="connection-banner__retry" />}

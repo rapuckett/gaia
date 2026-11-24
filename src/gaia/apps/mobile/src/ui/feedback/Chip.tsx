@@ -17,16 +17,18 @@ export interface ChipProps {
     /** What pressing it does, when the label alone doesn't say. */
     hint?: string;
     selected?: boolean;
+    /** `tab` for a chip in a tab list; the others stay buttons. */
+    role?: 'tab';
     onPress?: () => void;
     icon?: LucideIcon;
     testID?: string;
 }
 
 // Selected shows a check beside the label as well as the accent fill.
-export function Chip({ label, accessibilityLabel, hint, selected, onPress, icon, testID }: ChipProps) {
+export function Chip({ label, accessibilityLabel, hint, selected, role, onPress, icon, testID }: ChipProps) {
     const { colors, radius } = useTheme();
     return (
-        <Pressable onPress={onPress} accessibilityLabel={accessibilityLabel ?? label} accessibilityHint={hint} aria-selected={!!selected} testID={testID}>
+        <Pressable inline hugHeight shape={{ radius: radius.full, hug: true }} onPress={onPress} accessibilityRole={role} accessibilityLabel={accessibilityLabel ?? label} accessibilityHint={hint} aria-selected={!!selected} testID={testID}>
             <View
                 style={{
                     alignSelf: 'flex-start',

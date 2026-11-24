@@ -87,6 +87,31 @@ class TestSafeOpenDocument:
                 pass
         assert exc_info.value.status_code == 404
 
+    def test_safe_open_errors_name_no_path_away_from_the_pc(self, home_tmp_dir):
+        """A device's 404 and folder answers hide the path; the PC's name it."""
+        missing = home_tmp_dir / "nonexistent.txt"
+        with pytest.raises(HTTPException) as away:
+            with safe_open_document(str(missing), away=True):
+                pass
+        with pytest.raises(HTTPException) as pc:
+            with safe_open_document(str(missing)):
+                pass
+        assert away.value.status_code == pc.value.status_code == 404
+        assert str(home_tmp_dir) not in away.value.detail
+        assert str(missing) in pc.value.detail
+
+        folder = home_tmp_dir / "docs"
+        folder.mkdir()
+        with pytest.raises(HTTPException) as away:
+            with safe_open_document(str(folder), away=True):
+                pass
+        with pytest.raises(HTTPException) as pc:
+            with safe_open_document(str(folder)):
+                pass
+        assert away.value.detail["status"] == pc.value.detail["status"] == "is_folder"
+        assert str(folder) not in away.value.detail["message"]
+        assert str(folder) in pc.value.detail["message"]
+
     def test_safe_open_rejects_outside_home(self):
         """Path outside home directory must return 403."""
         with pytest.raises(HTTPException) as exc_info:

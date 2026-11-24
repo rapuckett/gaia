@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { BrowseResponse, ChatPerformance, ContextUsage, LocalModelStatus, Message, OutputItem, Session, SessionChanges, SessionEnvironment, SessionGit } from '@/api/client.types';
+import type { BrowseResponse, ChatPerformance, ContextUsage, LocalModelStatus, Message, OutputItem, ProviderModel, Session, SessionChanges, SessionEnvironment, SessionGit } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaApiError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
@@ -21,6 +21,7 @@ import { SessionPanel } from './SessionPanel';
 /** Developer gallery: the session panel open over a chat, with Skills and Agent info in each state. */
 export type SessionPanelGalleryState =
     | 'loaded'
+    | 'runsOnCpp'
     | 'empty'
     | 'error'
     | 'notRunning'
@@ -33,6 +34,7 @@ export type SessionPanelGalleryState =
     | 'envFolders'
     | 'envRemove'
     | 'envOffline'
+    | 'envFullWaiting'
     | 'envFull'
     | 'envEmpty'
     | 'chgList'
@@ -46,6 +48,7 @@ export type SessionPanelGalleryState =
     | 'ansFull'
     | 'ansPending'
     | 'ansNoLive'
+    | 'ansLocal'
     | 'ansError'
     | 'outItems'
     | 'outEmpty'
@@ -54,7 +57,7 @@ export type SessionPanelGalleryState =
 
 const CONTEXT_STATES: readonly SessionPanelGalleryState[] = ['ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn'];
 
-const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty', 'envPick', 'envPickRefused'];
+const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFullWaiting', 'envFull', 'envEmpty', 'envPick', 'envPickRefused'];
 
 const CHANGES_STATES: readonly SessionPanelGalleryState[] = ['chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgGitPr', 'chgPending', 'chgError', 'chgReview'];
 
@@ -111,7 +114,9 @@ const GIT: SessionGit = {
 
 const GIT_PR: SessionGit = { ...GIT, repos: [{ ...GIT.repos[0]!, branch: 'q3-summary', pr_blocked: null }] };
 
-const ANSWER_STATES: readonly SessionPanelGalleryState[] = ['ansFull', 'ansPending', 'ansNoLive', 'ansError'];
+const WAITING_PERMISSION = { type: 'permission_request', confirm_id: 'p1', tool: 'write_file', args: { file_path: '/Users/Shared/gaia-demo/notes.txt', content: 'hello' }, timeout_seconds: 600 };
+
+const ANSWER_STATES: readonly SessionPanelGalleryState[] = ['ansFull', 'ansPending', 'ansNoLive', 'ansLocal', 'ansError'];
 
 const OUTPUT_STATES: readonly SessionPanelGalleryState[] = ['outItems', 'outEmpty'];
 
@@ -132,6 +137,11 @@ const SUMMARY: TurnSummary = {
     ],
     sites: ['weather.gov', 'nps.gov'],
     live_data: { attempted: 2, failed: 0 },
+};
+
+const LOCAL_LIST_ENTRY: ProviderModel = {
+    id: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', context_length: null, downloaded: true, labels: [], rank: null, note: null, evidence: null,
+    available: true, custom: false, price: null, recipe: null, size_gb: 5.97, source_url: null,
 };
 
 const utc = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString().slice(0, 19).replace('T', ' ');
@@ -335,6 +345,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
         const ctx = CONTEXT_STATES.includes(state);
         const env = ENV_STATES.includes(state);
         const chg = CHANGES_STATES.includes(state);
+        const seeded = env || chg || state === 'runsOnCpp';
         const environment: SessionEnvironment =
             state === 'envOffline'
                 ? { ...ENVIRONMENT, folders: ENVIRONMENT.folders.slice(0, 2), internet: false, removed: ['/Users/avery/Downloads/old-drafts'] }
@@ -345,7 +356,9 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
                     : ENVIRONMENT;
         const answerState = ANSWER_STATES.includes(state);
         const summary: TurnSummary =
-            state === 'ansNoLive'
+            state === 'ansLocal'
+                ? { cost: { kind: 'local' }, model: { name: 'Gemma-4-E4B-it-GGUF', provider: 'local', provider_name: 'Local', remote: false } }
+                : state === 'ansNoLive'
                 ? { ...SUMMARY, live_data: { attempted: 2, failed: 2 }, pages: [], sites: [] }
                 : state === 'ansError'
                   ? { cost: { kind: 'unreported' }, error: 'the PC ran out of memory' }
@@ -355,15 +368,16 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             messages: { dev: [FIXTURES.short.messages[0]!, withSummary(reply, summary)] },
             outputs: state === 'outItems' ? { dev: { session_id: 'dev', items: OUTPUTS } } : undefined,
             fileStatus: answerState ? { '/Users/avery/Documents/packing-list.md': { path: '/Users/avery/Documents/packing-list.md', exists: true, mtime: 200 }, '/Users/avery/Documents/old-plan.md': { path: '/Users/avery/Documents/old-plan.md', exists: false } } : undefined,
-            sessions: env || chg ? [SESSION] : undefined,
+            sessions: seeded ? [SESSION] : undefined,
             sessionChanges: chg && state !== 'chgError' ? { dev: { ...CHANGES, pending: state === 'chgPending' } } : undefined,
             sessionGit: state === 'chgGitPr' ? { dev: GIT_PR } : state === 'chgGit' || state === 'chgConfirm' ? { dev: GIT } : undefined,
             undoConflict: state === 'chgConflict' ? new GaiaApiError(409, UNDO_CONFLICT, undefined, undefined, { status: 'conflict' }) : undefined,
-            environments: env || chg ? { dev: environment } : undefined,
+            environments: seeded ? { dev: environment } : undefined,
             fileFolders: env ? (state === 'envPickRefused' ? { ...BROWSE_FOLDERS, '': BROWSE_FOLDERS['/Users/avery']! } : BROWSE_FOLDERS) : undefined,
-            permissions: state === 'envOffline' ? { dev: 'full_access' } : undefined,
-            activeModel: env || chg ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
-            localModel: env || chg ? LOCAL_MODEL : undefined,
+            permissions: state === 'envOffline' || state === 'envFullWaiting' ? { dev: 'full_access' } : undefined,
+            providerModels: state === 'ansLocal' ? { local: { provider: 'local', models: [LOCAL_LIST_ENTRY] } } : undefined,
+            activeModel: seeded ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
+            localModel: seeded ? LOCAL_MODEL : undefined,
             contextUsage: ctx
                 ? {
                       available: true,
@@ -374,11 +388,12 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
                 : undefined,
             chatPerformance: state === 'ctxNoTurn' ? { ...PERFORMANCE, latest_message_id: null, turns: [] } : ctx ? PERFORMANCE : undefined,
             capabilities:
-                state === 'loaded'
+                state === 'loaded' || state === 'runsOnCpp'
                     ? {
                           dev: {
                               session_id: 'dev',
                               agent_type: 'gaia',
+                              ...(state === 'runsOnCpp' ? { program: 'gaiacpp' as const } : {}),
                               tools: TOOLS,
                               skills: [
                                   { name: 'coding', how: 'model' },
@@ -433,7 +448,14 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
                   ? { phase: 'conflict', detail: UNDO_CONFLICT }
                   : null,
         );
-        writeTurn('dev', state === 'ansPending' ? { ...IDLE_TURN, status: 'streaming' } : null);
+        writeTurn(
+            'dev',
+            state === 'ansPending'
+                ? { ...IDLE_TURN, status: 'streaming' }
+                : state === 'envFullWaiting'
+                  ? { ...IDLE_TURN, status: 'streaming', pendingPermission: WAITING_PERMISSION as typeof IDLE_TURN.pendingPermission }
+                  : null,
+        );
         store.setSection('context', ctx);
         store.setEnvPicking(state === 'envPick' || state === 'envPickRefused');
         store.setEnvConfirm(state === 'envRemove' ? { kind: 'remove', path: ENVIRONMENT.folders[0]!.path } : state === 'envFull' ? { kind: 'full' } : null);

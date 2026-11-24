@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 import {
+    documentUsage,
     elapsed,
     failureHint,
     formatFullTimestamp,
@@ -14,6 +15,7 @@ import {
     progressPercent,
     splitFailureReason,
 } from '@webui/utils/documentLibrary.core';
+import { serverFailureText, waitsForServerReturn } from '@webui/utils/documentFailure';
 import { formatSize, middleTruncate } from '@webui/utils/format';
 
 import type { DocumentListResponse, IndexProgress } from '@/api/client.types';
@@ -30,6 +32,9 @@ interface DocumentRowProps {
     startedAt?: number;
     now: number;
     retrying: boolean;
+    /** Where the document already is: the chat the library opened from, and the next new chat. */
+    inChat?: boolean;
+    inNextChat?: boolean;
     /** Set for a complete document not yet in the target: its chat's quoted title, null for the next chat. */
     attach?: { chatName: string | null; onAttach: (docId: string) => void };
     /** Set when the document can be previewed or shared from the phone; the phone never opens anything on the PC. */
@@ -40,7 +45,7 @@ interface DocumentRowProps {
 }
 
 // Name (extension kept), then the state: size and when it was indexed, how far indexing has got, or why it failed.
-export function DocumentRow({ document: doc, progress, startedAt, now, retrying, attach, onPreview, onCancel, onRetry, onRemove }: DocumentRowProps) {
+export function DocumentRow({ document: doc, progress, startedAt, now, retrying, inChat = false, inNextChat = false, attach, onPreview, onCancel, onRetry, onRemove }: DocumentRowProps) {
     const t = useT();
     const largeText = useLargeText();
     const [reasonOpen, setReasonOpen] = useState(false);
@@ -50,16 +55,20 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
     const size = isolate(formatSize(doc.file_size), 'ltr');
     const running = isIndexing(status);
     const hint = failureHint(t, doc.error_kind);
+    const serverReason = serverFailureText(doc.error_kind, t);
+    const waiting = waitsForServerReturn(doc.error_kind);
     const reason = doc.last_error ? splitFailureReason(doc.last_error) : null;
     const pct = progress ? progressPercent(progress) : null;
     const indexingText = startedAt ? t.hint(t('docs.indexingLabel'), elapsed(startedAt, now)) : t('docs.indexing');
 
+    const usage = documentUsage(t, doc, { inThisChat: inChat, inNextChat });
+
     const badge =
         status === 'failed' ? (
             <Badge
-                tone="danger"
-                label={hint ? t('docs.cantRead') : t('docs.failed')}
-                accessibilityLabel={doc.last_error ? t('docs.failedAria', { error: doc.last_error }) : t('docs.indexingFailed')}
+                tone={waiting ? 'warning' : 'danger'}
+                label={hint ? t('docs.cantRead') : waiting ? t('docs.waiting') : t('docs.failed')}
+                accessibilityLabel={doc.last_error ? t(waiting ? 'docs.waitingAria' : 'docs.failedAria', { error: doc.last_error }) : t('docs.indexingFailed')}
             />
         ) : status === 'cancelled' ? (
             <Badge tone="neutral" label={t('docs.cancelled')} />
@@ -67,20 +76,24 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
             <Badge tone="warning" label={t('docs.missing')} />
         ) : null;
 
+    const retryButton = (
+        <Button
+            size="sm"
+            variant={hint ? 'secondary' : 'ghost'}
+            icon={RotateCcw}
+            label={retrying ? t('docs.retrying') : t('docs.retry')}
+            accessibilityLabel={t('docs.retryAria', { name: doc.filename })}
+            disabled={retrying}
+            onPress={() => onRetry(doc.id)}
+        />
+    );
+
     const actions = running ? (
         <Button size="sm" variant="secondary" icon={Square} label={t('docs.cancel')} accessibilityLabel={t('docs.cancelIndexingAria', { name: doc.filename })} onPress={() => onCancel(doc.id)} />
     ) : (
         <Row gap="xs" wrap={largeText} testID="doc-actions">
             {status === 'failed' ? (
-                <Button
-                    size="sm"
-                    variant={hint ? 'ghost' : 'secondary'}
-                    icon={RotateCcw}
-                    label={retrying ? t('docs.retrying') : t('docs.retry')}
-                    accessibilityLabel={t('docs.retryAria', { name: doc.filename })}
-                    disabled={retrying}
-                    onPress={() => onRetry(doc.id)}
-                />
+                retryButton
             ) : null}
             {onPreview && doc.filepath && status === 'complete' ? (
                 <IconButton icon={Eye} label={t('mobileApp.docs.previewShare', { name: doc.filename })} size="sm" onPress={() => onPreview(doc.id, doc.filename)} />
@@ -94,6 +107,8 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
             <ListRow
                 title={isolate(middleTruncate(doc.filename), 'ltr')}
                 subtitle={running || badge ? undefined : indexed ? `${size} · ${indexed}` : size}
+                detail={usage?.label}
+                detailTone={usage?.here ? 'accent' : 'muted'}
                 leading={<Icon icon={FileText} size="md" tone="secondary" />}
                 titleLines={2}
                 titleLargeLines={2}
@@ -118,7 +133,7 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
                         size="sm"
                         variant="secondary"
                         icon={Link2}
-                        label={attach.chatName === null ? t('docs.useNext') : t('docs.useIn', { chat: attach.chatName })}
+                        label={attach.chatName === null ? t('docs.addToNextChat') : t('docs.addToThisChat')}
                         accessibilityLabel={
                             attach.chatName === null
                                 ? t('docs.attachNextAria', { name: doc.filename })
@@ -139,13 +154,14 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
             {status === 'failed' ? (
                 <Stack gap="xs" paddingX="lg" paddingY="xs">
                     {hint ? <Text role="caption" tone="secondary">{hint}</Text> : null}
+                    {serverReason ? <Text role="caption" tone="secondary">{serverReason}</Text> : null}
                     {reason && reason.more ? (
                         <Disclosure title={reason.summary} open={reasonOpen} onToggle={() => setReasonOpen((o) => !o)}>
                             <Text role="caption" tone="muted" dir="ltr" align="ltr">{reason.more}</Text>
                         </Disclosure>
                     ) : reason ? (
                         <Text role="caption" tone="muted" dir="ltr" align="ltr">{reason.summary}</Text>
-                    ) : !hint ? (
+                    ) : !hint && !serverReason ? (
                         <Text role="caption" tone="secondary">{t('docs.noReason')}</Text>
                     ) : null}
                 </Stack>

@@ -6,7 +6,7 @@ import { AlertTriangle, HardDrive, HelpCircle, Loader2 } from 'lucide-react';
 import { useT, type Translate } from '../../i18n/useT';
 import type { Say } from '../../i18n/registry';
 import type { SetupCatalogEntry, SetupModelProgress, SetupPlan } from '../../types';
-import { formatBytes, formatFitGb, formatSize } from './format';
+import { driveName, formatBytes, formatFitGb, formatSize } from './format';
 import { useDebounced, useTweened } from './motion';
 import { Reveal } from './Reveal';
 import {
@@ -54,6 +54,7 @@ function fitLine(e: SetupCatalogEntry, t: Say): string | null {
 
 /** Why a model doesn't fit: its real reason, never "too big" for one no backend here runs. */
 export function tooBigText(e: SetupCatalogEntry, t: Translate): string {
+    if (e.fits === true && e.tight) return t('setup.models.warn.tight');
     if (e.fit_code === 'npu') return t('setup.models.warn.npu');
     if (e.fit_code === 'backend') return t('setup.models.warn.backend');
     return e.need_gb != null && e.capacity_gb != null
@@ -93,7 +94,8 @@ function ModelRow({ entry: e, ticked, onToggle, disabled, progress, actions, pla
     const big = e.fits === false;
     const caveat = !ticked ? skipCaveat(e, t, place, imagesCovered) : null;
     const downloading = progress?.state === 'downloading' && progress.bytes_total > 0;
-    const warning = big ? tooBigText(e, t) : caveat;
+    const tight = e.fits === true && !!e.tight;
+    const warning = big ? tooBigText(e, t) : (caveat ?? (tight ? t('setup.models.warn.tight') : null));
     const describedBy = [`${id}-status`, `${id}-note`, warning ? `${id}-warn` : null].filter(Boolean).join(' ');
     return (
         <li className={`mc-row${ticked ? ' is-ticked' : ''}${warning ? ' has-warning' : ''}`}>
@@ -203,13 +205,6 @@ export function SelectionSummary({ plan, selection }: SummaryProps) {
             <span className="visually-hidden" aria-live="polite">{announced}</span>
         </div>
     );
-}
-
-/** "C:" from "C:\Users\me\.cache\huggingface\hub"; the folder itself elsewhere. */
-export function driveName(path: string | null): string | null {
-    if (!path) return null;
-    const win = /^([A-Za-z]:)[\\/]/.exec(path);
-    return win ? win[1] : path;
 }
 
 function round1(n: number): number {

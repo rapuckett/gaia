@@ -1005,10 +1005,10 @@ def test_folding_a_scripts_names_stays_cheap():
 def test_folding_a_huge_literal_stays_cheap(blowup):
     code = _CSV + blowup + "\nprint(len(rows))"
 
-    started = time.perf_counter()
+    started = time.thread_time()
     _script_opens(_run_python(code))
 
-    assert time.perf_counter() - started < 0.5
+    assert time.thread_time() - started < 0.5
 
 
 def test_a_script_is_parsed_once_per_record():

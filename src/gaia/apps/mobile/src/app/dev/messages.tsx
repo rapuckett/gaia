@@ -14,8 +14,8 @@ import { TURN_SCENES, TurnScenes, type TurnScene } from '@/features/chat/message
 import { LIVE_SCENES, LiveScenes, type LiveScene } from '@/features/chat/messages/LiveScenes';
 import { UIProvider } from '@/ui';
 
-const OPEN_STATES = ['actions', 'delete', 'edit', 'drop', 'guided', 'guided-sets', 'prescan-dismissing', 'prescan-done'];
-const PANEL_STATES = ['loaded', 'empty', 'error', 'notRunning', 'ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn', 'envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty', 'chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgGitPr', 'chgPending', 'chgError', 'chgReview', 'ansFull', 'ansPending', 'ansNoLive', 'ansError', 'outItems', 'outEmpty', 'envPick', 'envPickRefused'];
+const OPEN_STATES = ['actions', 'delete', 'edit', 'drop', 'guided', 'guided-sets', 'prescan-dismissing', 'prescan-done', 'images-one', 'images-four', 'images-viewer', 'images-long', 'images-failed', 'images-failed-viewer'];
+const PANEL_STATES = ['loaded', 'runsOnCpp', 'empty', 'error', 'notRunning', 'ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn', 'envFolders', 'envRemove', 'envOffline', 'envFullWaiting', 'envFull', 'envEmpty', 'chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgGitPr', 'chgPending', 'chgError', 'chgReview', 'ansFull', 'ansPending', 'ansNoLive', 'ansLocal', 'ansError', 'outItems', 'outEmpty', 'envPick', 'envPickRefused'];
 
 function isState(state?: string): state is MessagesGalleryState {
     return !!state && (state in FIXTURES || OPEN_STATES.includes(state));

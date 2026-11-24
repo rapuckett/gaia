@@ -80,6 +80,14 @@ export default function ReadAloud() {
         );
     }
 
+    if (data.available === false) {
+        return (
+            <Stack gap="lg" padding="lg">
+                <Notice tone="info" role="status" message={t('readAloud.settings.unavailable')} testID="read-aloud-unavailable" />
+            </Stack>
+        );
+    }
+
     return (
         <Stack gap="lg" padding="lg">
             <Text role="body" tone="secondary">
@@ -106,7 +114,7 @@ export default function ReadAloud() {
                                 onPress={preview.toggle}
                                 testID="read-aloud-preview"
                             />
-                            {preview.loading ? <Spinner size="sm" /> : null}
+                            {preview.loading ? <Spinner size="sm" accessibilityLabel={t('settings.loading')} /> : null}
                         </Row>
                         <Text role="label" tone="muted">
                             {t('readAloud.settings.englishOnly')}

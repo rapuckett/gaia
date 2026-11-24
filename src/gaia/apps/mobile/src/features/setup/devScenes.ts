@@ -5,7 +5,7 @@ import type { SetupCatalogEntry, SetupModelProgress, SetupRole, SetupTest } from
 
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
-import type { GaiaClient, GpuMemoryStatus, PreflightReport, SetupPlan, SetupRunStatus } from '@/api/client.types';
+import type { AgentPrograms, GaiaClient, GpuMemoryStatus, PreflightReport, SetupPlan, SetupRunStatus } from '@/api/client.types';
 
 import type { SetupStage } from './flow';
 
@@ -24,15 +24,20 @@ export interface SetupScene {
     queued?: string[];
     /** The existing-server offer with this picked and typed, and its confirm sheet up when `confirming` (FR-CHECK-03). */
     offer?: { pick: 'gaia' | 'external'; key?: string; confirming?: boolean };
+    /** Customize's "Compare the two" open on arrival. */
+    agentCompareOpen?: boolean;
+    /** The wait setup shows after Continue with gaiacpp picked and not on the PC: its download failed, or the PC restarted and dropped it. */
+    agentWait?: 'failed' | 'interrupted';
 }
 
-export type ConfirmScene = 'low-disk' | 'no-fit-many' | 'no-fit-one' | 'server-low-disk' | 'server-no-fit';
+export type ConfirmScene = 'low-disk' | 'no-fit-many' | 'no-fit-one' | 'no-fit-tight' | 'server-low-disk' | 'server-no-fit';
 
 const entry = (over: Partial<SetupCatalogEntry> & { id: string }): SetupCatalogEntry => ({
     name: over.id, roles: ['chat'], purpose: 'Answers your chats', if_skipped: null, recipe: 'llamacpp', size_gb: 1, full_size_gb: 1,
     partial: false, partial_gb: 0, downloaded: false, in_lemonade: true, recommended: false, planned: false,
     gaia_model: true, selected: false, skipped: false, chat_choice: true, support: 'verified', reads_images: false,
-    feature_tier: 'full', source: 'huggingface.co/amd', fits: true, need_gb: 2, capacity_gb: 16, fit_reason: null, ...over,
+    feature_tier: 'full', source: 'huggingface.co/amd', fits: true, need_gb: 2, capacity_gb: 16, fit_reason: null,
+    setup_offer: over.fits !== false, ...over,
 });
 
 const GEMMA_ID = 'Gemma-4-E4B-it-GGUF';
@@ -61,7 +66,7 @@ const PLAN: SetupPlan = {
     lemonade: { mode: 'gaia', url: 'http://127.0.0.1:13305/api/v1', reachable: true },
     chat_model: { id: GEMMA_ID, user_set: false, size_gb: 5.97, downloaded: false },
     recommended_model: GEMMA_ID, decided_after_server: false, memory_gb: 16, memory_source: 'AMD iGPU',
-    capacity_gb: 16, disk: { path: 'C:\\Users\\you\\.cache\\huggingface\\hub', free_gb: 25.3, source: 'lemonade' },
+    capacity_gb: 16, left_for_apps_gb: 7.8, disk: { path: 'C:\\Users\\you\\.cache\\huggingface\\hub', free_gb: 25.3, source: 'lemonade' },
     download_gb: 6.3, disk_warning: null, skipped_models: [], options: [], models: [], catalog: CATALOG,
     components: COMPONENTS,
     backends: [
@@ -80,6 +85,13 @@ const PLAN: SetupPlan = {
     },
 };
 
+// A tight model reaches the plan only when the person picked it in Customize; the ladder recommends Gemma.
+const QWEN_TIGHT = entry({ ...QWEN, fits: true, tight: true, planned: true, selected: true, need_gb: 27.1, capacity_gb: 32 });
+const PLAN_TIGHT: SetupPlan = {
+    ...PLAN, chat_model: { id: QWEN_ID, user_set: true, size_gb: 23.3, downloaded: false }, recommended_model: GEMMA_ID,
+    memory_gb: 32, capacity_gb: 32, download_gb: 23.6,
+    catalog: [{ ...GEMMA, planned: false, selected: false }, EMBED, QWEN_TIGHT, NPU, MINE, FLM, SPEECH, VOICE, IMAGES],
+};
 const PLAN_COLD: SetupPlan = { ...PLAN, lemonade: { mode: 'gaia', url: null, reachable: false }, decided_after_server: true, catalog: [] };
 const PLAN_PRESENT: SetupPlan = { ...PLAN, download_gb: 0, catalog: CATALOG.map((e) => (e.planned ? { ...e, downloaded: true, size_gb: 0 } : e)) };
 const PLAN_SHORT: SetupPlan = { ...PLAN, disk: { ...PLAN.disk, path: PLAN.disk?.path ?? null, source: 'lemonade', free_gb: 2.1 } };
@@ -262,7 +274,18 @@ const providers = (localOnly: boolean): NonNullable<FakeClientData['providers']>
     };
 };
 
+/** Python in use, and gaiacpp not on the PC but offered for download. */
+export const AGENT_PROGRAMS: AgentPrograms = {
+    current: 'gaiapy',
+    programs: [
+        { id: 'gaiapy', installed: true, size_bytes: 412_000_000, can_download: false, unavailable_reason: null, unavailable_code: null },
+        { id: 'gaiacpp', installed: false, size_bytes: 9_400_000, can_download: true, unavailable_reason: null, unavailable_code: null },
+    ],
+    download: { state: 'idle', bytes_done: 0, bytes_total: null, error: null },
+};
+
 export const COMMON: FakeClientData = {
+    agentPrograms: AGENT_PROGRAMS,
     setupPlan: PLAN,
     setupStatus: { state: 'idle' },
     gpuMemory: NO_GPU,
@@ -300,7 +323,7 @@ const START_CARDS: NonNullable<FakeClientData['start']> = {
     working_folder: { path: '/home/you', name: 'you', gaia_folder: false, choosable: true },
 };
 type Step = 'check' | 'plan' | 'gpu' | 'models' | 'key' | 'download' | 'test' | 'ready';
-const scene = (step: Step, data: FakeClientData = {}, extra: Pick<SetupScene, 'shell' | 'confirm' | 'chip' | 'queued' | 'offer'> = {}): SetupScene => {
+const scene = (step: Step, data: FakeClientData = {}, extra: Pick<SetupScene, 'shell' | 'confirm' | 'chip' | 'queued' | 'offer' | 'agentCompareOpen' | 'agentWait'> = {}): SetupScene => {
     const stage: SetupStage = step === 'gpu' || step === 'models' || step === 'key' ? 'plan' : step;
     return { stage, screen: step === 'gpu' || step === 'models' || step === 'key' ? step : undefined, data, ...extra };
 };
@@ -323,6 +346,7 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'confirm/low-disk': scene('plan', { setupPlan: PLAN_SHORT }, { confirm: 'low-disk' }),
     'confirm/no-fit-many': scene('plan', {}, { confirm: 'no-fit-many' }),
     'confirm/no-fit-one': scene('plan', {}, { confirm: 'no-fit-one' }),
+    'confirm/no-fit-tight': scene('plan', {}, { confirm: 'no-fit-tight' }),
     'confirm/server-low-disk': scene('download', { setupStatus: RUN_VERIFY_FAILED }, { confirm: 'server-low-disk' }),
     'confirm/server-no-fit': scene('plan', {}, { confirm: 'server-no-fit' }),
     'download/agent-failed': scene('download', { setupStatus: RUN_AGENT_COMPONENT_FAILED }),
@@ -351,16 +375,27 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'gpu/keep': scene('gpu', { gpuMemory: GPU_KEEP }),
     'key/default': scene('key'),
     'key/no-key': scene('key', { lemonadeTarget: { ...COMMON.lemonadeTarget!, source: 'gaia' } }),
+    // FR-AGENT-01: gaiacpp that this release can't download: dimmed, Not installed, and why under it.
+    'models/agent-blocked': scene('models', {
+        agentPrograms: { ...AGENT_PROGRAMS, programs: AGENT_PROGRAMS.programs.map((p) => (p.id === 'gaiacpp' ? { ...p, can_download: false, size_bytes: null, unavailable_reason: 'No gaiacpp build for this GAIA release.', unavailable_code: 'no_release' as const } : p)) },
+    }),
+    // FR-AGENT-02: "Compare the two" open under the agent rows; gaiacpp is not downloaded yet, so its note says it downloads after Continue.
+    'models/agent-compare': scene('models', {}, { agentCompareOpen: true }),
     'models/all-present': scene('models', { setupPlan: PLAN_PRESENT }),
     'models/default': scene('models'),
+    // FR-AGENT-03: after Continue with gaiacpp picked, its download failed (Details, Retry, Carry on with gaiapy) or the PC restarted and dropped it.
+    'plan/agent-failed': scene('plan', {}, { agentWait: 'failed' }),
+    'plan/agent-interrupted': scene('plan', {}, { agentWait: 'interrupted' }),
     'models/disk-short': scene('models', { setupPlan: PLAN_SHORT }),
     'models/long': scene('models', { setupPlan: PLAN_LONG }),
     'models/npu-not-ready': scene('models', { setupPlan: PLAN_NPU_NOT_READY }),
     'models/npu-unusable': scene('models', { setupPlan: PLAN_NPU_UNUSABLE }),
+    'models/tight': scene('models', { setupPlan: PLAN_TIGHT }),
     'models/untested-no-vision': scene('models', { setupPlan: PLAN_NO_VISION }),
     'plan/default': scene('plan'),
     'plan/disk-short': scene('plan', { setupPlan: PLAN_SHORT }),
     'plan/local-only': scene('plan', { providers: providers(true) }),
+    'plan/tight': scene('plan', { setupPlan: PLAN_TIGHT }),
     'plan/long': scene('plan', { setupPlan: PLAN_LONG }),
     'ready/cards': scene('ready', { setupStatus: RUN_READY, setupPlan: PLAN_DONE, start: START_CARDS }),
     'ready/default': scene('ready', { setupStatus: RUN_READY, setupPlan: PLAN_DONE }),
