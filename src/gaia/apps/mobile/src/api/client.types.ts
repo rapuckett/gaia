@@ -14,6 +14,7 @@ import type {
     ChatPerformance,
     CloudPriceList,
     ConnectorListEntry,
+    ConnectorAccount,
     ConnectorRow,
     ContextChoice,
     ContextUsageResult,
@@ -103,6 +104,7 @@ export type {
     ChatPerformance,
     CloudPriceList,
     ConnectorListEntry,
+    ConnectorAccount,
     ConnectorRow,
     ContextChoice,
     ContextUsage,
@@ -191,6 +193,9 @@ export interface DisconnectOutcome {
     /** True only when a revoke request was sent; false for an empty slot, an unreadable sign-in or a provider with no revoke endpoint. */
     revoke_attempted?: boolean;
 }
+
+/** Which account a browser sign-in is for: another one (the provider's account picker shows), or one stored account again (its id or address). */
+export type ConnectorSignInTarget = { addAccount: true } | { account: string };
 
 /** How a sign-in the PC is finishing ended, from its `connector.oauth.*` events; `error` is the PC's own message, `reason` its code (such as `superseded`). */
 export type ConnectorSignInEnd = { outcome: 'completed' } | { outcome: 'cancelled' | 'failed'; error?: string; reason?: string };
@@ -652,7 +657,7 @@ export interface GaiaClient {
      * Starts a browser sign-in whose redirect comes back to this phone's loopback listener on `redirectPort`; the PC
      * keeps the PKCE verifier and starts no listener of its own. Only an allowed paired device may ask.
      */
-    startConnectorBrowserSignIn(connectorId: string, redirectPort: number, scopes: string[], options?: RequestOptions): Promise<ConnectorAuthorizeResponse>;
+    startConnectorBrowserSignIn(connectorId: string, redirectPort: number, scopes: string[], options?: RequestOptions & { target?: ConnectorSignInTarget }): Promise<ConnectorAuthorizeResponse>;
     /**
      * Hands the redirect's code and state to the PC, which checks the state, exchanges the code and answers with the
      * connector as the list shows it (never a token). Only the device that started the flow may: 403 for anyone else,
@@ -675,7 +680,11 @@ export interface GaiaClient {
      * provider-side revoke, `{}` for a connector with no revoke concept, or null when the PC's
      * event stream could not be read in time.
      */
-    disconnectConnector(connectorId: string, options?: RequestOptions): Promise<DisconnectOutcome | null>;
+    disconnectConnector(connectorId: string, options?: RequestOptions & { all?: boolean }): Promise<DisconnectOutcome | null>;
+    /** Signs out of one account; the connector's other accounts and its grants stay. */
+    disconnectConnectorAccount(connectorId: string, accountId: string, options?: RequestOptions): Promise<void>;
+    /** Makes one account the one GAIA uses when nothing names an account. */
+    setDefaultConnectorAccount(connectorId: string, accountId: string, options?: RequestOptions): Promise<{ accounts: ConnectorAccount[] }>;
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     /** The agents this PC can run; a PC without the `gaia` agent can't start chats. */

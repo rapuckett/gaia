@@ -5,7 +5,9 @@ import { ltrIn } from '@webui/components/setup/format';
 import { isMessageKey, isolate } from '@webui/i18n/registry';
 import { tEn, translator, type Translate } from '@webui/i18n/translator';
 
-import type { AgentMcpServer, ConnectorListEntry, DisconnectOutcome, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
+import { accountsOf, needsSignIn } from '@webui/utils/connectorAccounts';
+
+import type { AgentMcpServer, ConnectorAccount, ConnectorListEntry, DisconnectOutcome, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
 
 /** The search box appears once there are more connectors than this, as on the web. */
 export const SEARCH_ABOVE = 6;
@@ -130,18 +132,23 @@ function searchText(c: ConnectorListEntry, t: Translate): string[] {
     return [c.display_name, c.description, connectorDescription(t, c, true), ...(SEARCH_KEYWORDS[c.id] ?? [])];
 }
 
+/** Set up, or holding an account whose sign-in expired: that account is still the person's, so it stays under Connected. */
+function isConnected(c: ConnectorRow): boolean {
+    return !!c.configured || accountsOf(c).length > 0;
+}
+
 export function groupConnectors(connectors: readonly ConnectorListEntry[], query: string, t: Translate): ConnectorGroups {
     const q = query.trim().toLowerCase();
     const shown = connectors.filter((c) => !q || searchText(c, t).some((s) => s.toLowerCase().includes(q)));
     const available = shown.filter((c): c is ConnectorRow => !isUnavailable(c));
-    const connected = available.filter((c) => c.configured);
-    const rest = available.filter((c) => !c.configured);
+    const connected = available.filter(isConnected);
+    const rest = available.filter((c) => !isConnected(c));
     return {
         unavailable: shown.filter(isUnavailable),
         connected,
         accounts: rest.filter((c) => c.type === 'oauth_pkce'),
         servers: rest.filter((c) => c.type !== 'oauth_pkce'),
-        nothingConnected: !connectors.some((c) => !isUnavailable(c) && c.configured),
+        nothingConnected: !connectors.some((c) => !isUnavailable(c) && isConnected(c)),
     };
 }
 
@@ -159,13 +166,28 @@ export function agentMcpKey(s: AgentMcpServer): string {
 export type TileStatus =
     | { kind: 'connected'; accountId: string | null }
     | { kind: 'paused' }
+    /** Several accounts: how many, and which sign-in problem one of them has, if any. */
+    | { kind: 'accounts'; count: number; problem: AccountProblem | null }
+    /** The one account's sign-in stopped working. */
+    | { kind: 'attention'; problem: AccountProblem }
     | { kind: 'setupRequired' }
     /** The PC's key store held back its read: neither connected nor not. */
     | { kind: 'heldBack' }
     | { kind: 'none' };
 
+export type AccountProblem = 'signInExpired' | 'notWorking';
+
+function problemOf(accounts: readonly ConnectorAccount[]): AccountProblem | null {
+    const failing = accounts.filter(needsSignIn);
+    if (failing.length === 0) return null;
+    return failing.some((a) => a.status === 'reauth_required') ? 'signInExpired' : 'notWorking';
+}
+
 export function tileStatus(c: ConnectorRow): TileStatus {
     if (c.key_store) return { kind: 'heldBack' };
+    const accounts = accountsOf(c);
+    if (accounts.length > 1) return { kind: 'accounts', count: accounts.length, problem: problemOf(accounts) };
+    if (accounts.length === 1 && needsSignIn(accounts[0]!)) return { kind: 'attention', problem: problemOf(accounts)! };
     if (!c.configured) return c.configurable === false ? { kind: 'setupRequired' } : { kind: 'none' };
     if (c.type === 'mcp_server' && c.enabled === false) return { kind: 'paused' };
     return { kind: 'connected', accountId: c.account_id };

@@ -248,6 +248,7 @@ describe('endpoints', () => {
         chatRetryWithChoose: ['POST'],
         chatUserInput: ['POST'],
         connector: ['DELETE'],
+        connectorAccount: ['DELETE', 'PATCH'],
         connectorActivation: ['DELETE', 'PUT'],
         connectorActivations: ['GET'],
         connectorAuthorize: ['POST'],
