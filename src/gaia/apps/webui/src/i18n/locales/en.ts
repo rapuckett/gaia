@@ -4411,7 +4411,7 @@ export const enMessages = {
     'mobileApp.error.auth': 'GAIA did not accept this phone\'s pairing: {detail}. Pair this phone with your PC again.',
     'mobileApp.error.authNoDetail': 'GAIA did not accept this phone\'s pairing. Pair this phone with your PC again.',
     'mobileApp.error.http': 'GAIA answered with an error ({status}): {detail}',
-    'mobileApp.error.httpNoDetail': 'GAIA answered with an error ({status}).',
+    'mobileApp.error.httpNoDetail': "Your PC couldn't do that.",
     'mobileApp.error.agentInstallFailed': 'The GAIA agent could not be installed.',
     'mobileApp.newChat.agent.cantDownload': "{name} can't be downloaded here.",
     'mobileApp.error.featuredLibrariesFailed': 'Could not load suggested libraries.',

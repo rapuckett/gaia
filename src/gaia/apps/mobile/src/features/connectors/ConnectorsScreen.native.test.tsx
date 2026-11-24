@@ -188,7 +188,7 @@ describeNative('ConnectorsGallery list states', () => {
 });
 
 describeNative('ConnectorsScreen server text', () => {
-    const SENTENCE = 'GAIA answered with an error (500).';
+    const SENTENCE = "Your PC couldn't do that.";
     const gaia = { id: 'gaia', name: 'GAIA', namespaced_agent_id: 'gaia', description: '', source: 'builtin', conversation_starters: [], models: [], consumes_mcp_servers: true };
     const expectSplit = async (reason: string) => {
         expect((await screen.findByText(SENTENCE)).props.children).not.toContain(reason);
