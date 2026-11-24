@@ -107,6 +107,8 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
             <ListRow
                 title={isolate(middleTruncate(doc.filename), 'ltr')}
                 subtitle={running || badge ? undefined : indexed ? `${size} · ${indexed}` : size}
+                detail={usage?.label}
+                detailTone={usage?.here ? 'accent' : 'muted'}
                 leading={<Icon icon={FileText} size="md" tone="secondary" />}
                 titleLines={2}
                 titleLargeLines={2}
@@ -115,11 +117,6 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
                 testID="doc-row-main"
                 accessibilityLabel={full ? `${doc.filename}, ${size}, ${t('docs.indexedAt', { time: full })}` : doc.filename}
             />
-            {usage ? (
-                <Stack paddingX="lg" paddingY="xs">
-                    <Text role="caption" tone={usage.here ? 'accent' : 'muted'} testID="doc-usage">{usage.label}</Text>
-                </Stack>
-            ) : null}
             {badge ? (
                 <Stack paddingX="lg" paddingY="xs">
                     {badge}
