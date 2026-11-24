@@ -588,6 +588,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'adv-custom-saved': advanced({ custom_model: 'Qwen3-4B-Instruct-2507-GGUF', model_status: { checked: true, found: true, downloaded: true, loaded: false } }),
     'adv-custom-unlisted': advanced({ custom_model: 'user.missing-GGUF', model_status: { checked: true, found: false, downloaded: false, loaded: false } }),
     'adv-custom-unchecked': advanced({ custom_model: 'user.maybe-GGUF', model_status: { checked: false, found: false, downloaded: false, loaded: false } }),
+    // SET-ADV-24: an ID over 256 characters is refused in the app's language, and Save is off.
+    'adv-custom-invalid': advanced({ custom_model: `user.${'long-model-name-'.repeat(20)}GGUF` }),
     'adv-custom-pc-only': { section: 'advanced', gpuMemory: GPU, data: { settings: SETTINGS }, override: { getSettings: refused } },
     // SET-ADV-21: Dynamic tools, closed until tapped (`#tap=advanced-dynamic-toggle`): on, and locked by GAIA_DYNAMIC_TOOLS.
     'adv-dynamic-on': advanced({ dynamic_tools: true }),
@@ -677,6 +679,19 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'lang-switch-ar-ios': { section: 'general', gpuMemory: GPU, languageSwitch: 'ios' },
     // SET-PRIV-06: the Delete chats card with chats (`#tap=privacy-delete-all` opens the confirm sheet), and with none.
     'privacy-delete': { section: 'privacy', gpuMemory: GPU, data: { settings: SETTINGS, sessions: [chat('a'), chat('b'), chat('c')] } },
+    // SET-PRIV-08: Local only turned on (`#tap=privacy-local-only`) while the model server is down.
+    'privacy-server-down': {
+        section: 'privacy',
+        gpuMemory: GPU,
+        data: { settings: SETTINGS },
+        override: {
+            setNetworkPolicy: async () => ({
+                ...SETTINGS,
+                network_policy: 'local_ai_only',
+                policy_notices: [{ code: 'saved_models_not_checked', cause: 'model_server_down', severity: 'warning', models: ['Qwen3.6-35B-A3B-GGUF'] }],
+            }),
+        },
+    },
     'privacy-delete-none': { section: 'privacy', gpuMemory: GPU, data: { settings: SETTINGS, sessions: [] } },
 };
 

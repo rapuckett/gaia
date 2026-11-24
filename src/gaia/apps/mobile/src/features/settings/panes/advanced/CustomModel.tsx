@@ -7,11 +7,20 @@ import { isolate } from '@webui/i18n/registry';
 import { customModelNote } from '@webui/utils/modelServer.core';
 
 import type { Settings } from '@/api/client.types';
+import { GaiaApiError } from '@/api/errors';
 import { useUpdateSettings } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Button, Notice, Stack, Text, TextField } from '@/ui';
 
 import { ActionError } from './errors';
+
+const MAX_MODEL_ID = 256;
+
+/** The PC refuses an ID that is not a single line of up to 256 characters. */
+export function customModelRefused(id: string): boolean {
+    const trimmed = id.trim();
+    return trimmed.length > MAX_MODEL_ID || /[\r\n]/.test(trimmed);
+}
 
 /** The saved ID is read once from the PC; the field edits a copy until Save. */
 export function CustomModel({ settings }: { settings: Settings }) {
@@ -22,6 +31,11 @@ export function CustomModel({ settings }: { settings: Settings }) {
     const dirty = value.trim() !== saved.trim();
     const note = customModelNote(saved, settings.model_status);
     const justSaved = save.isSuccess && !dirty;
+    const invalid = customModelRefused(value);
+    const refusedByPc = save.error instanceof GaiaApiError && save.error.status === 422;
+    const apply = () => {
+        if (!invalid) save.mutate({ custom_model: value.trim() });
+    };
 
     return (
         <Stack gap="sm">
@@ -37,7 +51,7 @@ export function CustomModel({ settings }: { settings: Settings }) {
                 disabled={save.isPending}
                 returnKeyType="done"
                 onSubmitEditing={() => {
-                    if (dirty && !save.isPending) save.mutate({ custom_model: value.trim() });
+                    if (dirty && !save.isPending) apply();
                 }}
                 testID="advanced-custom-model"
             />
@@ -47,12 +61,13 @@ export function CustomModel({ settings }: { settings: Settings }) {
                 variant="primary"
                 full
                 busy={save.isPending}
-                disabled={save.isPending || (!dirty && !justSaved)}
-                onPress={() => save.mutate({ custom_model: value.trim() })}
+                disabled={save.isPending || invalid || (!dirty && !justSaved)}
+                onPress={apply}
                 testID="advanced-custom-save"
             />
             <Text role="caption" tone="muted">{t('settings.advanced.customIds')}</Text>
-            {save.isError ? <ActionError error={save.error} title={t('settings.advanced.saveFailed')} /> : null}
+            {invalid || refusedByPc ? <Notice tone="danger" message={t('settings.advanced.customModelInvalid')} testID="advanced-custom-invalid" /> : null}
+            {save.isError && !refusedByPc ? <ActionError error={save.error} title={t('settings.advanced.saveFailed')} /> : null}
             {note ? (
                 <Notice
                     tone="warning"
