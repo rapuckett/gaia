@@ -1421,6 +1421,42 @@ for (const locale of ['ar', 'en']) {
     });
 }
 
+const CONFIRM_TIMEOUT_LINE = "Confirmation for 'write_file_to_the_project_folder_after_checking_it_against_the_saved_notes_and_the_shared_drafts_folder' timed out (30 s). Execution denied.";
+const CONFIRM_TIMEOUT_LABEL = "You didn't answer in time, so GAIA didn't do this step.";
+
+async function withConfirmTimeout(page: Page): Promise<void> {
+    await page.route((url) => url.pathname === `/api/sessions/${ANSWER_SESSION}/messages`, (route) =>
+        route.fulfill({
+            json: {
+                messages: [
+                    { id: 1, session_id: ANSWER_SESSION, role: 'user', content: 'Save my notes to notes.txt', created_at: NOW.toISOString(), rag_sources: null },
+                    {
+                        id: 2, session_id: ANSWER_SESSION, role: 'assistant', content: "I didn't write the file, because the approval timed out.", created_at: NOW.toISOString(), rag_sources: null,
+                        agent_steps: [
+                            { id: 1, type: 'status', label: CONFIRM_TIMEOUT_LABEL, detail: CONFIRM_TIMEOUT_LINE, active: false, success: false, timestamp: 1 },
+                        ],
+                    },
+                ],
+                total: 2,
+            },
+        }),
+    );
+}
+
+test('an unanswered tool approval shows a translated row with the raw line under Details (en, dark)', async ({ page }) => {
+    await open(page, `#${ANSWER_SESSION}`, 'en', withConfirmTimeout, 'dark');
+    const answer = page.locator('.msg-assistant');
+    const warning = answer.locator('.flow-warning');
+    await expect(warning).toContainText(CONFIRM_TIMEOUT_LABEL);
+    const raw = warning.getByText(CONFIRM_TIMEOUT_LINE);
+    await expect(raw).toBeHidden();
+    await warning.scrollIntoViewIfNeeded();
+    await shot(page, 'timeout-step-en-dark-closed');
+    await warning.locator('summary').click();
+    await expect(raw).toBeVisible();
+    await shot(page, 'timeout-step-en-dark-open');
+});
+
 /** The server's crash notice is English; it ends a partial answer and repeats as the last error step. */
 const CRASH_NOTICE = 'GAIA stopped unexpectedly while answering. Anything it had already written is kept above. Send your message again.';
 
