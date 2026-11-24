@@ -23,6 +23,13 @@ export interface Env {
   APNS_TEAM_ID?: string;
   FCM_SERVICE_ACCOUNT_JSON?: string;
   IP_HASH_SALT?: string;
+
+  /** Local end-to-end tests only: a loopback APNs origin (e.g. `http://127.0.0.1:8443`) for both environments. */
+  APNS_HOST_OVERRIDE?: string;
+  /** Local end-to-end tests only: a loopback Google OAuth token URL. */
+  FCM_TOKEN_URL_OVERRIDE?: string;
+  /** Local end-to-end tests only: a loopback FCM base URL that `/v1/projects/...` is appended to. */
+  FCM_API_BASE_OVERRIDE?: string;
 }
 
 export type Platform = "apns" | "fcm";
