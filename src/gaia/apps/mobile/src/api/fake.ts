@@ -162,6 +162,8 @@ export interface FakeClientData {
     schedules?: Schedule[];
     /** Past runs by schedule name, newest first. */
     scheduleResults?: Record<string, ScheduleResult[]>;
+    /** What editSchedule does instead of saving: an Error is thrown, and `'saving'` never answers. */
+    editScheduleError?: Error | 'saving';
     messages?: Record<string, Message[]>;
     /** What every send streams back; a function takes the sent text and streams what a test scripts. */
     replies?: StreamEvent[] | ((message: string) => AsyncIterable<StreamEvent>);
@@ -430,7 +432,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly deletedOne: { sessionId: string; messageId: number }[];
     readonly confirmations: ToolConfirmRequest[];
     readonly answers: UserInputRequest[];
-    readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
+    readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete' | 'edit'; name: string }[];
     readonly automationActions: { action: AutomationAction | 'delete'; ref: string }[];
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
@@ -1618,6 +1620,15 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
                 next_run_at: valid ? new Date(Date.now() + 3_600_000).toISOString() : null,
                 valid,
             };
+        },
+        async editSchedule(name, request) {
+            const schedule = findSchedule(name);
+            scheduleActions.push({ action: 'edit', name });
+            if (data.editScheduleError === 'saving') return new Promise<never>(() => {});
+            if (data.editScheduleError) throw data.editScheduleError;
+            if (schedule.running) throw new GaiaApiError(409, `Schedule '${name}' is running`);
+            Object.assign(schedule, { prompt: request.prompt, description: request.interval, schedule_config: JSON.stringify({ raw_input: request.interval }) });
+            return { ...schedule };
         },
         async updateScheduleStatus(name, status) {
             const schedule = findSchedule(name);

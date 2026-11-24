@@ -438,6 +438,13 @@ export interface CreateScheduleRequest {
     timezone?: string;
 }
 
+/** Changes when a schedule runs and what it asks; its name, chat and history stay. */
+export interface EditScheduleRequest {
+    interval: string;
+    prompt: string;
+    timezone?: string;
+}
+
 export interface ScheduleResults {
     results: ScheduleResult[];
     total: number;
@@ -790,6 +797,8 @@ export interface GaiaClient {
     createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Reads a plain-words "when to run" without saving it, for the form's live preview. */
     parseSchedule(input: string, timezone: string | undefined, options?: RequestOptions): Promise<ParsedSchedule>;
+    /** Edits a schedule in place (409 while a run is in flight); answers with the schedule as it now is. */
+    editSchedule(name: string, request: EditScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Pauses or resumes a schedule; answers with the schedule as it now is. */
     updateScheduleStatus(name: string, status: 'active' | 'paused', options?: RequestOptions): Promise<Schedule>;
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */

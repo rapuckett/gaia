@@ -3,12 +3,16 @@
 
 import { useEffect, useState } from 'react';
 
-import type { ParsedSchedule } from '@/api/client.types';
+import type { ParsedSchedule, Schedule } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
-import { useCreateSchedule, useGaiaClient } from '@/data';
+import { useCreateSchedule, useEditSchedule, useGaiaClient } from '@/data';
 import { describeHttpFailure, useT } from '@/i18n/useT';
+import { isolateUnit } from '@webui/i18n/registry';
+import { WHEN_PRESETS, scheduleInputText } from '@webui/utils/scheduleForm.core';
+
 import { Button, Notice, Row, Sheet, Stack, Text, TextField } from '@/ui';
 
+import { ChipButton } from './ChipButton';
 import { composeDateLocale, describeSchedule, formatNextClock, formatTime } from './scheduleText';
 
 const PARSE_DEBOUNCE_MS = 400;
@@ -46,19 +50,23 @@ export interface NewScheduleSheetProps {
     onClose: () => void;
     /** Dev gallery only: opens with the form filled in. */
     initial?: { when: string; name: string; prompt: string };
+    /** The schedule being changed; the sheet then saves in place and keeps its name. */
+    editing?: Schedule;
 }
 
-export function NewScheduleSheet({ open, onClose, initial }: NewScheduleSheetProps) {
+export function NewScheduleSheet({ open, onClose, initial, editing }: NewScheduleSheetProps) {
     const t = useT();
-    const create = useCreateSchedule();
-    const [when, setWhen] = useState(initial?.when ?? '');
-    const [name, setName] = useState(initial?.name ?? '');
-    const [prompt, setPrompt] = useState(initial?.prompt ?? '');
+    const createMutation = useCreateSchedule();
+    const editMutation = useEditSchedule();
+    const create = editing ? editMutation : createMutation;
+    const [when, setWhen] = useState(editing ? scheduleInputText(editing) : (initial?.when ?? ''));
+    const [name, setName] = useState(editing?.name ?? initial?.name ?? '');
+    const [prompt, setPrompt] = useState(editing?.prompt ?? initial?.prompt ?? '');
     const preview = usePreview(when);
     const parsed = preview.status === 'done' ? preview.parsed : null;
     const rejected = parsed !== null && !parsed.valid;
     const nextClock = parsed?.valid ? formatNextClock(parsed.next_run_at, new Date(), composeDateLocale(t.locale, t)) : null;
-    const nameTaken = create.error instanceof GaiaApiError && create.error.status === 409;
+    const nameTaken = !editing && create.error instanceof GaiaApiError && create.error.status === 409;
     const formError = create.isError && !nameTaken ? describeHttpFailure(create.error, t) : null;
     // The backend validates on create, so only a parse that says no blocks it.
     const canCreate = when.trim() !== '' && name.trim() !== '' && prompt.trim() !== '' && !rejected && !create.isPending;
@@ -70,38 +78,51 @@ export function NewScheduleSheet({ open, onClose, initial }: NewScheduleSheetPro
 
     const submit = () => {
         if (!canCreate) return;
-        create.mutate(
-            { name: name.trim(), interval: when.trim(), prompt: prompt.trim(), timezone: deviceTimeZone() },
-            {
-                onSuccess: () => {
+        const done = {
+            onSuccess: () => {
+                if (!editing) {
                     setWhen('');
                     setName('');
                     setPrompt('');
-                    close();
-                },
+                }
+                close();
             },
-        );
+        };
+        const body = { interval: when.trim(), prompt: prompt.trim(), timezone: deviceTimeZone() };
+        if (editing) editMutation.mutate({ name: editing.name, request: body }, done);
+        else createMutation.mutate({ name: name.trim(), ...body }, done);
     };
 
     return (
         <Sheet
             open={open}
             onClose={close}
-            title={t('schedules.new')}
+            title={editing ? t('schedules.editingTitle', { name: isolateUnit(editing.name) }) : t('schedules.new')}
             footer={
                 <Row gap="sm" justify="end" stack>
                     <Button label={t('schedules.cancel')} variant="ghost" onPress={close} />
                     <Button
-                        label={t(create.isPending ? 'schedules.creating' : 'schedules.create')}
+                        label={t(editing ? (create.isPending ? 'schedules.saving' : 'schedules.save') : create.isPending ? 'schedules.creating' : 'schedules.create')}
                         variant="primary"
                         busy={create.isPending}
                         disabled={!canCreate}
+                        testID="schedule-form-submit"
                         onPress={submit}
                     />
                 </Row>
             }
         >
             <Stack gap="md">
+                <Row gap="xs" wrap>
+                    {WHEN_PRESETS.map((preset) => (
+                        <ChipButton
+                            key={preset.value}
+                            label={t(preset.label)}
+                            variant={when.trim() === preset.value ? 'accent' : 'default'}
+                            onPress={() => setWhen(preset.value)}
+                        />
+                    ))}
+                </Row>
                 <TextField
                     label={t('schedules.when')}
                     value={when}
@@ -110,7 +131,7 @@ export function NewScheduleSheet({ open, onClose, initial }: NewScheduleSheetPro
                     hint={t('schedules.whenHint')}
                     multiline
                     maxLines={3}
-                    autoFocus
+                    autoFocus={!editing}
                 />
                 {preview.status === 'parsing' ? <Text role="caption" tone="muted">{t('schedules.parsing')}</Text> : null}
                 {parsed?.valid ? (
@@ -151,6 +172,7 @@ export function NewScheduleSheet({ open, onClose, initial }: NewScheduleSheetPro
                     placeholder={t.bare('schedules.namePlaceholder')}
                     accessibilityLabel={t('schedules.namePlaceholder')}
                     error={nameTaken ? t('schedules.nameTaken') : undefined}
+                    disabled={editing !== undefined}
                 />
                 <TextField
                     label={t('schedules.prompt')}
@@ -160,7 +182,7 @@ export function NewScheduleSheet({ open, onClose, initial }: NewScheduleSheetPro
                     accessibilityLabel={t('schedules.promptPlaceholder')}
                     multiline
                 />
-                {formError ? <Notice tone="danger" message={formError.text} detail={formError.detail} /> : null}
+                {formError ? <Notice tone="danger" message={editing ? t('schedules.editFailed') : formError.text} detail={editing ? (formError.detail ?? formError.text) : formError.detail} /> : null}
             </Stack>
         </Sheet>
     );

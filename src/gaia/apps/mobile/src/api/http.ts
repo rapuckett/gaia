@@ -430,8 +430,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         return readJson<T>(await request('POST', path, body, signal), path);
     }
 
-    async function patchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-        return readJson<T>(await request('PATCH', path, undefined, signal), path);
+    async function patchJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+        return readJson<T>(await request('PATCH', path, body, signal), path);
     }
 
     async function deleteJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -803,7 +803,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         toggleSessionPrivate(sessionId, options) {
-            return patchJson<Session>(sessionPrivatePath(sessionId), options?.signal);
+            return patchJson<Session>(sessionPrivatePath(sessionId), undefined, options?.signal);
         },
 
         async detachDocument(sessionId, docId, options) {
@@ -1061,6 +1061,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         parseSchedule(input, timezone, options) {
             return postJson<ParsedSchedule>(ENDPOINTS.scheduleParse, { input, timezone }, options?.signal);
+        },
+
+        editSchedule(name, request, options) {
+            return patchJson<Schedule>(schedulePath(name), request, options?.signal);
         },
 
         updateScheduleStatus(name, status, options) {
