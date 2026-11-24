@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 import { ENDPOINTS, UI_HEADERS } from '@/api/constants';
 import { GaiaApiError, GaiaPinMismatchError, parseErrorDetail } from '@/api/errors';
 import { normalizeBaseUrl } from '@/api/http';
+import { isDeviceUnknown } from '@/platform/deviceGate';
 import { onDeviceGone, pinnedFetch, transportError } from '@/platform/pinnedFetch';
 import { useConnectionStore, type ConnectionConfig } from '@/state/connection';
 
@@ -94,15 +95,6 @@ function deviceName(): string {
 }
 
 const NO_ANSWER = new Set(['unreachable', 'not_home_network', 'network']);
-
-/** The `code` of a JSON error answer; undefined for any other body. */
-function errorCode(text: string): unknown {
-    try {
-        return (JSON.parse(text) as { code?: unknown } | null)?.code;
-    } catch {
-        return undefined;
-    }
-}
 
 /** A native failure's code, for a log line that never carries the secret's contents. */
 function failureCode(err: unknown): string {
@@ -234,7 +226,7 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
             const text = await res.text();
             if (res.ok) return 'known';
             // Only the device gate's own refusal says the PC dropped this phone; other layers send Bearer 401s too.
-            if (res.status === 401 && /^bearer\b/i.test(res.headers.get('www-authenticate') ?? '') && errorCode(text) === 'device_unknown') return 'unknown';
+            if (isDeviceUnknown(res.status, res.headers.get('www-authenticate'), text)) return 'unknown';
             console.warn(`${pc.name} answered ${res.status} at ${origin} when asked whether it still knows this phone`);
             return 'none';
         } catch (err) {
