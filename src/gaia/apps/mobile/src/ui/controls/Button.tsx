@@ -5,7 +5,7 @@ import { View } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Text } from '../text/Text';
 import { Icon } from './Icon';
-import { Pressable } from './Pressable';
+import { Pressable, RIPPLE } from './Pressable';
 import { Spinner } from './Spinner';
 import { Row } from '../layout/layout';
 import { useLargeText } from '../theme/a11y';
@@ -60,16 +60,23 @@ export function Button({
     const pressedBg = { primary: colors.accentSolid, secondary: colors.bgActive, ghost: colors.bgTertiary, danger: colors.dangerDim };
     const v = look[variant];
     return (
-        <View style={full ? { alignSelf: 'stretch' } : shrink ? { alignSelf: 'flex-start', flexShrink: 1, minWidth: BUTTON_MIN_WIDTH, maxWidth: '100%' } : { alignSelf: 'flex-start', flexShrink: 0 }}>
+        <View
+            style={[
+                full ? { alignSelf: 'stretch' } : shrink ? { alignSelf: 'flex-start', flexShrink: 1, minWidth: BUTTON_MIN_WIDTH, maxWidth: '100%' } : { alignSelf: 'flex-start', flexShrink: 0 },
+                // A regular button's shape fills its target, so the ripple is clipped here; a small one clips its own shape.
+                RIPPLE && size !== 'sm' ? { borderRadius: radius.md, overflow: 'hidden' } : null,
+            ]}
+        >
             <Pressable
                 onPress={busy ? undefined : onPress}
                 disabled={disabled}
                 minSize={size === 'sm' ? 44 : undefined}
+                shape={size === 'sm' ? { radius: radius.sm } : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
                 accessibilityState={{ busy: !!busy }}
                 testID={testID}
             >
-                {({ pressed }) => (
+                {({ highlight }) => (
                 <View
                     style={{
                         minHeight: size === 'sm' ? 28 : 48,
@@ -77,7 +84,7 @@ export function Button({
                         borderRadius: size === 'sm' ? radius.sm : radius.md,
                         borderWidth: 1,
                         borderColor: v.border,
-                        backgroundColor: pressed ? pressedBg[variant] : v.bg,
+                        backgroundColor: highlight ? pressedBg[variant] : v.bg,
                         alignItems: 'center',
                         justifyContent: 'center',
                     }}
