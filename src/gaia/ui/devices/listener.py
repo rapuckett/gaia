@@ -46,6 +46,7 @@ from . import (
     LISTENER_SHUTDOWN_SECONDS,
     LISTENER_UPLOAD_PATHS,
     PAIR_ROUTE,
+    PC_ONLY_CODE,
     SELF_ROUTE,
     ListenerErrorCode,
 )
@@ -219,7 +220,7 @@ class DeviceGate:
                 403,
                 "Do this on the PC running GAIA. It isn't allowed from a "
                 "paired device.",
-                code="pc_only",
+                code=PC_ONLY_CODE,
             )
             return
         scope[DEVICE_SCOPE_KEY] = DevicePrincipal(device.id, device.allowed)

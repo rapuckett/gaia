@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 
 from gaia.config import GaiaConfig
 from gaia.ui import api_token
+from gaia.ui.devices import PC_ONLY_CODE
 from gaia.ui.devices import listener as listener_module
 from gaia.ui.devices.access import DeviceAccess
 from gaia.ui.devices.listener import DeviceGate, ListenerError
@@ -352,6 +353,29 @@ def test_pair_allow_use_and_unpair(served):
     assert gone[0] == 204
     assert call(served.port, served.pin, "GET", "/api/sessions", token=token)[0] == 401
     assert _pc(served, "GET", "/api/devices").json()["devices"] == []
+
+
+def test_a_device_starts_a_chat_but_never_grants_it_folders(served, tmp_path):
+    """Folder grants stay on the PC: a device's new chat may not bring any."""
+    device = _pair(served)
+    folder = tmp_path / "work"
+    folder.mkdir()
+
+    status, _, body = call(
+        served.port,
+        served.pin,
+        "POST",
+        "/api/sessions",
+        token=device["token"],
+        body={"folders": [str(folder)]},
+    )
+    assert status == 403 and json.loads(body)["code"] == PC_ONLY_CODE
+    assert served.app.state.db.count_sessions() == 0
+
+    status, _, body = call(
+        served.port, served.pin, "POST", "/api/sessions", token=device["token"], body={}
+    )
+    assert status == 200 and json.loads(body)["id"]
 
 
 def test_pair_window_closed_gives_uniform_refusal(served):

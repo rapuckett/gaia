@@ -14,6 +14,7 @@ import sqlite3
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 
 from gaia.agents.base import file_snapshots
 from gaia.config import GaiaConfigError
@@ -40,6 +41,7 @@ from ..database import (
     resolved_default_model,
 )
 from ..dependencies import get_db
+from ..devices import PC_ONLY_CODE
 from ..models import (
     AttachDocumentRequest,
     CreateSessionRequest,
@@ -51,7 +53,7 @@ from ..models import (
     UpdateSessionRequest,
 )
 from ..run_manager import run_manager
-from ..security import flagship_only, is_local_pc
+from ..security import flagship_only, is_local_pc, on_device_listener
 from ..utils import UPLOAD_LINK_RE, message_to_response, session_to_response
 from .memory import _get_store as get_memory_store
 
@@ -246,6 +248,16 @@ async def create_session(
     db: ChatDatabase = Depends(get_db),
 ):
     """Create a new chat session."""
+    if request.folders and on_device_listener(http_request):
+        # Folder grants are the PC's to make, as on the chat's own folder route.
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail": "Give a chat its folders on the PC running GAIA. A "
+                "paired device can start a chat, but not with folders.",
+                "code": PC_ONLY_CODE,
+            },
+        )
     request.agent_type = flagship_only(http_request, request.agent_type)
     _reject_unknown_agent_type(request.agent_type)
     try:
