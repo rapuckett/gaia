@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { item, type QueuedMessage } from '@webui/utils/messageQueue';
@@ -153,6 +153,21 @@ describe('ChatScreen', () => {
         expect(await screen.findByTestId('server-down-notice')).toBeTruthy();
         expect(await screen.findByText('Lemonade is not running.')).toBeTruthy();
         expect(screen.queryByTestId('error-banner')).toBeNull();
+    });
+
+    it('keeps the sent message above a failed turn\'s card and Try again', async () => {
+        const client = createFakeClient({
+            sessions: [SESSION],
+            messages: { [CHAT]: [message(1, 'user', 'hello'), { ...message(2, 'assistant', 'Lemonade is not running.'), failed: true }] },
+        });
+        await mount(client);
+
+        let list = (await screen.findByText('hello')).parent;
+        while (list && list.props.keyboardDismissMode === undefined) list = list.parent;
+        expect(await screen.findByTestId('try-again')).toBeTruthy();
+        expect(screen.getByText('Lemonade is not running.')).toBeTruthy();
+        expect(list?.props.keyboardDismissMode).toBe(Platform.OS === 'ios' ? 'interactive' : 'on-drag');
+        expect(list?.props.keyboardShouldPersistTaps).toBe('handled');
     });
 
     it('Stop returns the queued messages to the box and sends none of them', async () => {
