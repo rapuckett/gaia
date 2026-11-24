@@ -13,7 +13,10 @@ import { SavedReplyErrors } from './ReplyErrors';
 const mockPush = jest.fn();
 let mockLocal = false;
 jest.mock('expo-router', () => ({ router: { push: (href: unknown) => mockPush(href) } }));
-jest.mock('@/data', () => ({ useSession: () => ({ data: { inference_remote: !mockLocal ? undefined : false } }) }));
+jest.mock('@/data', () => ({
+    useSession: () => ({ data: { inference_remote: !mockLocal ? undefined : false } }),
+    useStartScreen: () => ({ data: undefined, dataUpdatedAt: 0, refetch: () => undefined }),
+}));
 
 const t = translator('en');
 const reply = (content: string) => ({ id: 1, session_id: 's1', role: 'assistant', content, failed: true }) as Message;
