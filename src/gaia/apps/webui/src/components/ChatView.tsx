@@ -4,13 +4,14 @@
 import { useEffect, useRef, useCallback, useState, useMemo, type CSSProperties } from 'react';
 import { Activity, Edit3, Download, Upload, ArrowDown, FolderSearch, Clock } from 'lucide-react';
 import { TurnAnnouncer } from './TurnAnnouncer';
-import { MessageBubble, cleanToolCallContent, turnEnding } from './MessageBubble';
+import { MessageBubble, cleanToolCallContent } from './MessageBubble';
 import { toolRowText } from './AgentActivity';
 import { agentEventToStep } from '../utils/streamSteps';
 import { latencyByMessage } from '../utils/answerStats.core';
 import { applyStatusEvent, selectToolStatus } from '../utils/statusEvents';
 import { TOOL_CALL_JSON_SAFETY_RE, carryMessageKeys, fromApiMessages, isEchoOfFailedTool, keepFailedReply, onlyFailureAfter, persistedQuestion, policyReceiptAnchor, stripStreamingEnvelope } from '../utils/chatStream';
 import { useChatStore } from '../stores/chatStore';
+import { useBackendStore } from '../stores/backendStore';
 import { useModelStore } from '../stores/modelStore';
 import { useReadAloudStore } from '../stores/readAloudStore';
 import { readsAloudWhenDone } from '../utils/autoReadAloud';
@@ -31,21 +32,21 @@ import { isAuthRequiredMessage } from './email/EmailConnectCta';
 import { connectCardAccounts, connectCardProviders, hasConnectCard } from './render/ConnectAccountCard';
 import { ConnectorRetryBanner } from './ConnectorRetryBanner';
 import { answerQuestion, QuestionGoneError, resolveTypedAnswer, waitingQuestionId } from './render/NeedsInputCard';
-import type { Message, StreamEvent, AgentStep, RenderCardData, ContextUsage } from '../types';
+import type { Message, StreamEvent, AgentStep, RenderCardData, ContextUsage, SystemStatus } from '../types';
 
 import './ChatView.css';
+import { AgentChip } from './AgentChip';
 import { Composer } from './Composer';
 import { ModelChip } from './ModelChip';
 import { SessionFolderChip } from './FolderChip';
 import { PermissionModeChip } from './PermissionModeChip';
 import { ResearchChip, useResearchMode, withResearch } from './ResearchChip';
-import { HistoryNotice, LibraryNotices } from './ChatNotices';
+import { HistoryNotice } from './ChatNotices';
 import { PermissionPrompt } from './PermissionPrompt';
 import { QueuedMessages } from './QueuedMessages';
 import { ContextMeter, ContextWarning } from './ContextMeter';
 import { SpendMeter } from './SpendMeter';
-import { RetryWithMenu } from './RetryWithMenu';
-import { AnswerComparison } from './AnswerComparison';
+import { TranscriptRow } from './TranscriptRow';
 import * as messageQueue from '../utils/messageQueue';
 import type { QueuedMessage } from '../utils/messageQueue';
 import { SessionPanel, SessionPanelToggle } from './session-panel/SessionPanel';
@@ -72,13 +73,12 @@ import { requestErrorParam } from '../utils/requestErrors';
 import { MAX_SESSION_TITLE_CHARS, RECONNECTING_PHASE } from '../utils/constants';
 import { scrollBehavior } from '../utils/motion';
 import { setVisibleInterval } from '../utils/visibleInterval';
-import { ModelServerDownNotice } from './ModelServerDownNotice';
 import { useChatDraft } from '../hooks/useSavedDraft';
 import { followSlideEvent, settleSlideDraft, SLIDE_PREVIEW_ENABLED } from '../stores/slideDraftStore';
 import { chatDraftKey, clearSavedDraft } from '../utils/savedDraft';
 import { useOpeningMessage } from '../hooks/useOpeningMessage';
 import { getT, useT } from '../i18n/useT';
-import { STOP_GRACE_MS, canRegenerate } from '../utils/turnEnding.core';
+import { STOP_GRACE_MS } from '../utils/turnEnding.core';
 
 /** Events that only come after the agent got past a permission prompt. */
 const RESOLVES_PROMPTS = new Set(['tool_start', 'tool_end', 'tool_result']);
@@ -86,6 +86,8 @@ const RESOLVES_PROMPTS = new Set(['tool_start', 'tool_end', 'tool_result']);
 const ANSWER_CHECK_PHASE = 'answer_check';
 
 export { STOP_GRACE_MS };
+/** How long Try again waits on the status before saying GAIA is still starting. */
+export const RESEND_STATUS_LIMIT_MS = 10_000;
 
 export { QUEUE_BUSY_WAIT_MS } from '../services/queueDispatch';
 
@@ -366,7 +368,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
 
     useEffect(() => { userStoppedRef.current = false; }, [sessionId]);
 
-    const { contextUsage, contextUnavailable, refreshContext, showContextUsage } = useContextUsage(sessionId, isStale);
+    const { contextUsage, refreshContext, showContextUsage } = useContextUsage(sessionId, isStale);
     const { comparison, comparing, comparingRef, handleRetryWith, handleKeepAnswer, handleCloseComparison, closeForNewTurn } =
         useAnswerComparison({ sessionId, isStreaming, isStale, setMessages, refreshContext });
 
@@ -525,7 +527,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
         const notTaken = (outcome: SendOutcome) => { if (fromQueue) options?.onQueuedOutcome?.(outcome); };
         if (!reattach && retiredAgent) {
             log.chat.warn(`Send blocked: chat ${sessionId} belongs to the retired "${retiredAgent}" agent`);
-            notTaken({ kind: 'failed', error: getT()('chat.retiredSend', { agent: retiredAgent }) });
+            notTaken({ kind: 'failed', error: messageQueue.retiredAgentError(retiredAgent) });
             return false;
         }
         // Waiting messages go first, so a new one joins the end of the line.
@@ -671,7 +673,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
             gaveUpOnRunRef.current = true;
             streamEndedAtRef.current = Date.now();
             endStopWait();
-            settleQueued({ kind: 'failed', error: getT()('chat.stoppedBeforeConfirmed') });
+            settleQueued({ kind: 'failed', error: messageQueue.STOPPED_ERROR });
             abortRef.current?.abort();
             abortRef.current = null;
             if (streamRafRef.current !== null) {
@@ -1321,7 +1323,11 @@ export function ChatView({ sessionId }: ChatViewProps) {
     const resendingRef = useRef(false);
     // True once the text went out or waits in the queue; false when nothing was sent and nothing deleted.
     const handleResendMessage = useCallback(async (message: Message, failedReply?: Message, editedText?: string): Promise<boolean> => {
-        if (isStreaming || message.role !== 'user' || resendingRef.current) return false;
+        if (isStreaming || message.role !== 'user') return false;
+        if (resendingRef.current) {
+            log.chat.info(`Resend of message ${message.id} ignored: an earlier resend is still running`);
+            return false;
+        }
         resendingRef.current = true;
         const text = editedText ?? message.content;
         log.chat.info(`Resending message ${message.id} from session=${sessionId}`, { preview: text.slice(0, 80) });
@@ -1342,9 +1348,26 @@ export function ChatView({ sessionId }: ChatViewProps) {
 
         try {
             // The old turn is deleted below, so first make sure the new one can start.
+            if (useBackendStore.getState().lifecycle?.status === 'restarting') {
+                log.chat.info(`Resend of message ${message.id} refused: the desktop app is restarting the backend`);
+                notify(t('chatError.resendStarting'));
+                return false;
+            }
             if (isStarting(useChatStore.getState().systemStatus)) {
                 // Read while a restarted backend booted, the status may be stale.
-                const status = await api.getSystemStatus();
+                const limit = new AbortController();
+                const timer = setTimeout(() => limit.abort(), RESEND_STATUS_LIMIT_MS);
+                let status: SystemStatus;
+                try {
+                    status = await api.getSystemStatus(limit.signal);
+                } catch (err) {
+                    if (!limit.signal.aborted) throw err;
+                    log.chat.warn(`Resend of message ${message.id} refused: no status within ${RESEND_STATUS_LIMIT_MS} ms`);
+                    notify(t('chatError.resendStarting'));
+                    return false;
+                } finally {
+                    clearTimeout(timer);
+                }
                 useChatStore.getState().setSystemStatus(status);
                 if (isStarting(status)) {
                     notify(t('chatError.resendStarting'));
@@ -1513,6 +1536,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
         const last = lastSentMessage(messages);
         if (last) startEdit(last.id);
     }, [messages, startEdit]);
+    const handleEditDraft = useCallback((text: string) => { editDraftRef.current = text; }, []);
     const handleEditCancel = useCallback(() => {
         editDraftRef.current = null;
         setEditingId(null);
@@ -1709,68 +1733,38 @@ export function ChatView({ sessionId }: ChatViewProps) {
                     )}
 
                     {rows.map((msg, idx) => {
-                        const notice = msg.role === 'assistant'
-                            ? msg.historyNotice ?? historyNotices.get(msg.id)
-                            : undefined;
-                        const cutOff = msg.role === 'assistant' && turnEnding(msg.content, msg.stopState) === 'interrupted';
-                        const stopped = msg.role === 'assistant' && msg.stopState === 'stopped' && !msg.stopError;
-                        const canTryAgain = (msg.failed === true || cutOff || stopped) && !busy && !retiredAgent
-                            && idx === messages.length - 1;
-                        const canRetry = !canTryAgain && canRegenerate(msg, {
-                            latest: idx === messages.length - 1, busy: !!busy, comparing: !!comparison, retiredAgent: !!retiredAgent,
-                        });
-                        const latency = msg.stats?.seconds != null ? msg.stats.seconds * 1000 : latencyByMsgId.get(msg.id);
-                        const serverDown = msg.failure === 'model_server_down' && idx === messages.length - 1 && !busy;
+                        const rowKey = messageKeysRef.current.get(msg.id) ?? msg.id;
                         const unsent = isUnsent(msg);
                         return (
-                            <div
-                                key={openingKey(msg) ?? messageKeysRef.current.get(msg.id) ?? msg.id}
-                                className={deletingMsgId === msg.id ? 'msg-deleting' : settledIdsRef.current.has(messageKeysRef.current.get(msg.id) ?? msg.id) ? 'msg-settled' : undefined}
-                                data-message-id={msg.id}
-                                data-role={msg.role}
-                            >
-                                {notice && <HistoryNotice text={notice} />}
-                                {msg.libraryNotices && msg.libraryNotices.length > 0 && (
-                                    <LibraryNotices notices={msg.libraryNotices} />
-                                )}
-                                <MessageBubble
-                                    message={msg}
-                                    agentSteps={msg.role === 'assistant' ? msg.agentSteps : undefined}
-                                    onDelete={!busy && !unsent ? handleDeleteMessage : undefined}
-                                    onResend={!busy && !unsent && msg.role === 'user' && !retiredAgent ? handleResendMessage : undefined}
-                                    onEditStart={!busy && !unsent && msg.role === 'user' && !retiredAgent ? () => startEdit(msg.id) : undefined}
-                                    editing={editingId === msg.id && !busy}
-                                    editDraft={editingId === msg.id ? editDraftRef.current : null}
-                                    onEditDraft={(text: string) => { editDraftRef.current = text; }}
-                                    onEdit={handleEdit}
-                                    onEditCancel={handleEditCancel}
-                                    laterCount={msg.role === 'user' ? laterTurns(messages, idx) : 0}
-                                    onRegenerate={canRetry && !unsent ? () => handleRegenerate(msg) : undefined}
-                                    extraActions={canRetry ? (
-                                        <RetryWithMenu
-                                            answeredBy={msg.stats?.model ?? session?.effective_model}
-                                            onPick={(model) => handleRetryWith(msg, model)}
-                                        />
-                                    ) : undefined}
-                                    onTryAgain={canTryAgain ? () => handleTryAgain(msg) : undefined}
-                                    onContinue={canTryAgain && stopped ? handleContinue : undefined}
-                                    latest={msg.role === 'assistant' && idx === messages.length - 1}
-                                    latencyMs={latency}
-                                    fixShownBelow={serverDown}
-                                />
-                                {serverDown && <ModelServerDownNotice />}
-                                {comparison?.messageId === msg.id && (
-                                    <AnswerComparison
-                                        original={msg}
-                                        originalModel={msg.stats?.model ?? session?.effective_model}
-                                        originalLatencyMs={latency}
-                                        state={comparison.state}
-                                        keeping={comparison.keeping}
-                                        onKeep={(which) => { void handleKeepAnswer(which); }}
-                                        onClose={handleCloseComparison}
-                                    />
-                                )}
-                            </div>
+                            <TranscriptRow
+                                key={openingKey(msg) ?? rowKey}
+                                message={msg}
+                                className={deletingMsgId === msg.id ? 'msg-deleting' : settledIdsRef.current.has(rowKey) ? 'msg-settled' : undefined}
+                                notice={msg.role === 'assistant' ? msg.historyNotice ?? historyNotices.get(msg.id) : undefined}
+                                busy={busy}
+                                readOnly={!!retiredAgent}
+                                unsent={unsent}
+                                isLast={idx === messages.length - 1}
+                                comparing={!!comparison}
+                                comparison={comparison?.messageId === msg.id ? comparison : null}
+                                laterCount={msg.role === 'user' ? laterTurns(messages, idx) : 0}
+                                latencyMs={msg.stats?.seconds != null ? msg.stats.seconds * 1000 : latencyByMsgId.get(msg.id)}
+                                answeredBy={session?.effective_model}
+                                editing={editingId === msg.id && !busy}
+                                editDraft={editingId === msg.id ? editDraftRef.current : null}
+                                onDelete={handleDeleteMessage}
+                                onResend={handleResendMessage}
+                                onEditStart={startEdit}
+                                onEditDraft={handleEditDraft}
+                                onEdit={handleEdit}
+                                onEditCancel={handleEditCancel}
+                                onRegenerate={handleRegenerate}
+                                onRetryWith={handleRetryWith}
+                                onTryAgain={handleTryAgain}
+                                onContinue={handleContinue}
+                                onKeepAnswer={handleKeepAnswer}
+                                onCloseComparison={handleCloseComparison}
+                            />
                         );
                     })}
 
@@ -1898,7 +1892,6 @@ export function ChatView({ sessionId }: ChatViewProps) {
                             <>
                                 <ContextMeter
                                     usage={contextUsage}
-                                    unavailable={contextUnavailable}
                                     sessionId={sessionId}
                                     busy={busy}
                                     onUsage={showContextUsage}
@@ -1906,6 +1899,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
                                 />
                                 <SpendMeter sessionId={sessionId} busy={busy} />
                                 <SessionFolderChip sessionId={sessionId} onOpen={() => revealPanelSection('environment')} />
+                                <AgentChip />
                                 <ModelChip />
                             </>
                         )}

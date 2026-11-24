@@ -11,9 +11,9 @@ vi.mock('../../services/api');
 describe('MobileAccessModal when the tunnel cannot start', () => {
     it('says why, and offers no QR code or scan steps that cannot work', () => {
         render(<MobileAccessModal isOpen onClose={vi.fn()} error="ngrok is not installed." />);
-        expect(screen.getByText(tEn('mobileAccess.couldntStart'))).toBeInTheDocument();
+        expect(screen.getByText(tEn('mobile.startFailed'))).toBeInTheDocument();
         expect(screen.getByText('ngrok is not installed.')).toBeInTheDocument();
-        expect(screen.queryByText(tEn('mobileAccess.stepScan'))).toBeNull();
+        expect(screen.queryByText(tEn('mobile.stepScan'))).toBeNull();
         expect(screen.queryByText(/Failed to connect/)).toBeNull();
     });
 });

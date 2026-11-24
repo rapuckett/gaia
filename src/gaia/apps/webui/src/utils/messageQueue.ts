@@ -1,14 +1,26 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Translate } from '../i18n/translator';
-
 /**
  * Messages typed while GAIA is answering. Each waits here and goes out, in
  * order, as the next message once the reply ends; the user can instead offer
  * one to the running reply. A message is only ever removed once the chat holds
  * it, or by the user.
  */
+
+import { isMessageKey } from '../i18n/registry';
+import type { MessageKey } from '../i18n/types';
+
+/** A reason GAIA itself gives, kept as a key so it reads in the language shown. */
+export interface QueueReason {
+    key: MessageKey;
+    params?: Record<string, string>;
+    /** The raw error under GAIA's reason, shown as written on its own line. */
+    detail?: string;
+}
+
+/** Why a message was not sent: GAIA's own reason, or error text from elsewhere. */
+export type QueueError = string | QueueReason;
 
 /**
  * `sending`: offered to the running reply. `delivered`: it accepted, not yet read.
@@ -24,9 +36,9 @@ export interface QueuedMessage {
     text: string;
     state: QueuedState;
     /** Why a `failed` message did not go out. */
-    error?: string;
+    error?: QueueError;
     /** Why a `queued` message could not be added to the running reply. */
-    note?: string;
+    note?: MessageKey;
 }
 
 /** What a finished turn did with the messages offered to it (GET /api/chat/followup). */
@@ -50,7 +62,7 @@ export function promote(items: QueuedMessage[], id: number, from: QueuedState, t
     return items.map((m) => (m.id === id && m.state === from ? { ...m, state: to, error: undefined, note: undefined } : m));
 }
 
-export const STEER_REFUSED_NOTE = "Can't add to this reply; it will send when the reply ends.";
+export const STEER_REFUSED_NOTE: MessageKey = 'queue.steerRefused';
 
 /** The running reply refused a message offered to it: back in line, saying so. */
 export function steerRefused(items: QueuedMessage[], id: number): QueuedMessage[] {
@@ -62,7 +74,7 @@ export function remove(items: QueuedMessage[], id: number): QueuedMessage[] {
 }
 
 /** A `starting` message did not go out: back in line, or shown as failed. Gone if its chat was deleted. */
-export function notStarted(items: QueuedMessage[], id: number, error?: string): QueuedMessage[] {
+export function notStarted(items: QueuedMessage[], id: number, error?: QueueError): QueuedMessage[] {
     if (!items.some((m) => m.id === id && m.state === 'starting')) return items;
     return items.map((m) => {
         if (m.id !== id) return m;
@@ -95,8 +107,7 @@ export function needsOutcome(items: QueuedMessage[]): boolean {
     return items.some((m) => m.state === 'delivered');
 }
 
-// english: the stored id of this failure; localizeQueueError shows it in the chosen language
-export const UNCONFIRMED_ERROR = 'GAIA could not confirm it read this message.';
+export const UNCONFIRMED_ERROR: QueueReason = { key: 'queue.errorUnconfirmed' };
 
 /**
  * Settle every `delivered` message against the server's record of the turn:
@@ -129,7 +140,7 @@ export function reconcile(items: QueuedMessage[], outcome: FollowUpOutcome): Que
 }
 
 /** Mark every `delivered` message as not sent, when the turn's record cannot be read. */
-export function failDelivered(items: QueuedMessage[], error: string): QueuedMessage[] {
+export function failDelivered(items: QueuedMessage[], error: QueueError): QueuedMessage[] {
     return items.map((m) => (m.state === 'delivered' ? { ...m, state: 'failed', error } : m));
 }
 
@@ -143,25 +154,48 @@ export function nextToSend(items: QueuedMessage[]): QueuedMessage | undefined {
     return first?.state === 'queued' ? first : undefined;
 }
 
-// english: the stored id of this failure; localizeQueueError shows it in the chosen language
-export const INTERRUPTED_ERROR = 'GAIA closed while this was being sent, so it may not have gone out. '
-    + 'Check the chat above before sending it again.'; // english: part of the stored id above
+export const INTERRUPTED_ERROR: QueueReason = { key: 'queue.errorInterrupted' };
+export const STOPPED_ERROR: QueueReason = { key: 'queue.errorStopped' };
+export const FIRST_NOT_SENT_ERROR: QueueReason = { key: 'queue.errorFirstNotSent' };
 
-/** A failed message's saved error in the chosen language; text from anywhere else is shown as written. */
-export function localizeQueueError(t: Translate, error: string): string {
-    if (error === UNCONFIRMED_ERROR) return t('queue.err.unconfirmed');
-    if (error === INTERRUPTED_ERROR) return t('queue.err.interrupted');
-    return error;
+export function retiredAgentError(agent: string): QueueReason {
+    return { key: 'queue.errorRetiredAgent', params: { agent } };
 }
 
-/** Joins a translated sentence to the raw error beneath it in a stored failure. */
-export const ERROR_DETAIL_SEP = '\u001e';
+/** The reply's outcome could not be read; `detail` is the error that stopped it. */
+export function unreadError(detail: string): QueueReason {
+    return { key: 'queue.errorUnread', detail };
+}
 
-/** A failed message's saved error as a sentence plus, when it carries one, the raw text to show on its own line. */
-export function splitQueueError(t: Translate, error: string): { message: string; detail?: string } {
-    const i = error.indexOf(ERROR_DETAIL_SEP);
-    if (i === -1) return { message: localizeQueueError(t, error) };
-    return { message: error.slice(0, i), detail: error.slice(i + 1) };
+/** Older builds saved this failure as a translated sentence, this separator, then the raw error. */
+const SAVED_DETAIL_SEP = '\u001e';
+
+/** English reasons older builds saved as text, so they still translate. */
+const SAVED_ENGLISH: ReadonlyArray<[RegExp, (m: RegExpMatchArray) => QueueReason]> = [
+    [/^GAIA could not confirm it read this message\.$/, () => UNCONFIRMED_ERROR],
+    [/^GAIA closed while this was being sent, so it may not have gone out\. /, () => INTERRUPTED_ERROR],
+    [/^Stopped before GAIA confirmed it got this message\.$/, () => STOPPED_ERROR],
+    [/^The first message was not sent\.$/, () => FIRST_NOT_SENT_ERROR],
+    [/^This chat's "(.+)" agent was retired, so it cannot take new messages\.$/, (m) => retiredAgentError(m[1])],
+];
+
+function restoredError(error: unknown): QueueError | undefined {
+    if (typeof error === 'string') {
+        const sep = error.indexOf(SAVED_DETAIL_SEP);
+        if (sep !== -1) return unreadError(error.slice(sep + 1));
+        for (const [pattern, reason] of SAVED_ENGLISH) {
+            const m = error.match(pattern);
+            if (m) return reason(m);
+        }
+        return error;
+    }
+    if (!error || typeof error !== 'object') return undefined;
+    const { key, params, detail } = error as { key?: unknown; params?: unknown; detail?: unknown };
+    if (typeof key !== 'string' || !isMessageKey(key)) return undefined;
+    const valid = !!params && typeof params === 'object'
+        && Object.values(params).every((v) => typeof v === 'string');
+    const reason: QueueReason = valid ? { key, params: params as Record<string, string> } : { key };
+    return typeof detail === 'string' ? { ...reason, detail } : reason;
 }
 
 /**
@@ -181,9 +215,12 @@ export function restore(saved: unknown): Record<string, QueuedMessage[]> {
                 && typeof (m as QueuedMessage).id === 'number'
                 && typeof (m as QueuedMessage).text === 'string'
                 && STATES.includes((m as QueuedMessage).state))
-            .map((m): QueuedMessage => {
+            .map((raw): QueuedMessage => {
+                const m = raw.error === undefined ? raw : { ...raw, error: restoredError(raw.error) };
                 if (m.state === 'sending') return { ...m, state: 'delivered' };
                 if (m.state === 'starting') return { ...m, state: 'failed', error: INTERRUPTED_ERROR };
+                // A note saved as English text by an older build is not a key to translate.
+                if (m.note !== undefined && !isMessageKey(m.note)) return { ...m, note: undefined };
                 return m;
             });
         for (const m of items) nextId = Math.max(nextId, m.id + 1);

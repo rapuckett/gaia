@@ -386,23 +386,34 @@
 }
 
 .sb-row-queue {
-    flex-shrink: 0;
-    margin-inline-start: auto;
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 8px;
+    min-width: 0;
     color: var(--text-muted);
     font-size: 11.5px;
-    white-space: nowrap;
+}
+
+.sb-row-note {
+    max-width: 100%;
+    overflow-wrap: anywhere;
 }
 
 .sb-row-queue.is-failed {
     color: var(--danger);
 }
 
-/* Muted text and its gloss fall under 4.5:1 on the selected row's fill. */
+/* Muted text falls under 4.5:1 on the selected row's fill. */
 .sb-row.is-active .sb-row-queue:not(.is-failed) {
     color: var(--text-secondary);
 }
 
-.sb-row .sb-row-queue .i18n-gloss.i18n-gloss {
+/* The gloss's own muting drops the already-muted note below 4.5:1 on a selected row. */
+.sb-row-queue .i18n-gloss.i18n-gloss {
+    color: var(--text-secondary);
+}
+
+.sb-row-queue.is-failed .i18n-gloss.i18n-gloss {
     color: inherit;
 }
 

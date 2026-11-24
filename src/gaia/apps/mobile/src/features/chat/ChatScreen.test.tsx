@@ -208,7 +208,7 @@ describe('ChatScreen', () => {
         });
         await mount(client);
 
-        expect(await screen.findByText(t('queue.notSent'))).toBeTruthy();
+        expect(await screen.findByText(t('queue.notSentBare'))).toBeTruthy();
         expect(screen.getByText('no connection')).toBeTruthy();
         expect(client.sent).toEqual([]);
 
