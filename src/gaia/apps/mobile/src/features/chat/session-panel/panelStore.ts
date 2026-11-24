@@ -3,10 +3,11 @@
 
 import { create } from 'zustand';
 
-export type PanelSectionId = 'answer' | 'outputs' | 'changes' | 'skills' | 'context' | 'tools' | 'plan' | 'schedule' | 'commands' | 'documents' | 'session';
+export type PanelSectionId = 'environment' | 'answer' | 'outputs' | 'changes' | 'skills' | 'context' | 'tools' | 'plan' | 'schedule' | 'commands' | 'documents' | 'session';
 
 // The web UI's defaults (stores/sessionPanelStore.ts); remembered for the app session only.
 const DEFAULT_OPEN: Record<PanelSectionId, boolean> = {
+    environment: true,
     answer: true,
     outputs: true,
     changes: true,

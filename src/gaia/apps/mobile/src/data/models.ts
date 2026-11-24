@@ -4,7 +4,7 @@
 import { useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { LocalModelStatus, ModelNeedJob, RestartModelResult } from '@/api/client.types';
+import type { LocalModelStatus, TunnelStatus, ModelNeedJob, RestartModelResult } from '@/api/client.types';
 import { MODEL_STATUS_OPEN_POLL_MS, MODEL_STATUS_POLL_MS } from '@/api/constants';
 import { useModelNeededStore } from '@/state/modelNeeded';
 
@@ -12,6 +12,7 @@ import { useGaiaClient } from './GaiaClientProvider';
 import { failedWithoutData, requireClient } from './queries';
 
 export const modelKeys = {
+    tunnel: ['tunnelStatus'] as const,
     local: ['localModelStatus'] as const,
 };
 
@@ -48,4 +49,15 @@ export function useRestartLocalModel() {
 export function useEnsureModel(): (job: ModelNeedJob) => Promise<boolean> {
     const client = useGaiaClient();
     return useCallback((job) => useModelNeededStore.getState().ensure(requireClient(client), job), [client]);
+}
+
+/** Whether the PC's phone access is on; it is changed on the PC only. */
+export function usePhoneAccess() {
+    const client = useGaiaClient();
+    return useQuery<TunnelStatus>({
+        queryKey: modelKeys.tunnel,
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).getTunnelStatus({ signal }),
+        refetchInterval: MODEL_STATUS_POLL_MS,
+    });
 }

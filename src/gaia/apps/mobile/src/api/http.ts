@@ -82,6 +82,7 @@ import type {
     LinkAddResult,
     LinkPreview,
     LocalModelStatus,
+    TunnelStatus,
     KnowledgeSaveResult,
     MemoryActivityDay,
     MemoryCleared,
@@ -1366,6 +1367,9 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             );
         },
 
+        getTunnelStatus(options) {
+            return getJson<TunnelStatus>(ENDPOINTS.tunnelStatus, options?.signal);
+        },
         getLocalModelStatus(options) {
             return getJson<LocalModelStatus>(ENDPOINTS.localModelStatus, options?.signal);
         },

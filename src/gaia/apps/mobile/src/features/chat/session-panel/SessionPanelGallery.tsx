@@ -429,6 +429,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             providerModels: state === 'ansLocal' ? { local: { provider: 'local', models: [LOCAL_LIST_ENTRY] } } : undefined,
             activeModel: seeded ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
             localModel: seeded ? LOCAL_MODEL : undefined,
+            tunnel: seeded ? { active: false, url: null, token: null, startedAt: null, error: null } : undefined,
             contextUsage: ctx
                 ? {
                       available: true,
