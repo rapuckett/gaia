@@ -37,6 +37,8 @@ const EXPECTED: Record<string, string> = {
     'changes-wave6': t('settings.devices.change.permissionsDefaultAsk'),
     'changes-error': 'The PC could not read its audit log.',
     'changes-unknown-kind': 'cameraEnabled',
+    'local-network-explainer': t('mobileApp.localNetwork.next'),
+    'local-network-denied': t('mobileApp.localNetwork.openSettings'),
 };
 
 const hidden = { includeHiddenElements: true };

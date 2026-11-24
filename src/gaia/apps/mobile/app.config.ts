@@ -28,7 +28,7 @@ const PHOTOS_ADD_USE = 'GAIA saves the images you choose to your photo library.'
 const BACKGROUND_LIGHT = '#FAF9F7';
 const BACKGROUND_DARK = '#1A1917';
 
-const LOCAL_NETWORK_USE = 'GAIA uses your local network to connect to GAIA on your PC.';
+const LOCAL_NETWORK_USE = 'GAIA uses this to talk to your PC directly over your home Wi-Fi.';
 
 export function readAppEnv(value: string | undefined): AppEnv {
     if (value === 'development' || value === 'production') return value;
