@@ -1489,9 +1489,11 @@ Deleting a chat deletes its copies.
     `{"exact": true, "model"}`. Otherwise (a cloud model, another model
     loaded, or the model server not answering) they are estimates and
     `tokenizer` is `{"exact": false, "reason"}`. Asking never loads or swaps a
-    model. `{"available": false, "reason"}` until an agent has answered in the
-    chat. A streaming turn sends estimates of the same numbers as a
-    `context_usage` event.
+    model. `{"available": false, "reason", "reason_code"?}` until an agent has
+    answered in the chat. `reason_code` (`not_answered_yet`,
+    `remeasure_next_turn`, `agent_too_old`) is set when GAIA wrote the reason,
+    so the UI can translate it; an agent's own error has none. A streaming
+    turn sends estimates of the same numbers as a `context_usage` event.
   </Accordion>
 
   <Accordion title="GET /api/chat/performance/{session_id}">
@@ -3354,7 +3356,10 @@ shows on the PC. The troubleshooting report is PC-only.
     `/models/skip` checks the model against that plan.
 
     Each `catalog` entry says `support` (`verified`, `untested`, or null for an
-    optional model), `reads_images`, `feature_tier` and `source`. `components`
+    optional model), `reads_images`, `feature_tier` and `source`, and
+    `setup_offer`: whether setup lists it as a chat choice, which is false for
+    a model that doesn't fit this PC and for the opt-in Qwen3.8 Flash Next, and
+    always true for the plan's own chat model. `components`
     lists what setup fetches besides the models, `backends` what Lemonade
     reports for this PC, and `vision_model` the user's vision pick.
 

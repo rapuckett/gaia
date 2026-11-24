@@ -39,7 +39,6 @@ class TunnelStatus(WireModel):
     error: Optional[str]
     reason: Optional[Literal["ngrok_not_installed"]]
     installCommands: List[str]
-    publicIp: Optional[str]
     device: Optional[TunnelDevice]
 
 

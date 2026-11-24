@@ -34,7 +34,7 @@ describeNative('server text stays off the sentence in the chat area', () => {
     it('shows a failed queued message as "Not sent." with the reason on its own left-to-right line', async () => {
         const failed: QueuedMessage = { ...item('hello', 'failed'), error: SERVER_TEXT };
         await render(<QueuedMessages items={[failed]} replying={false} onRemove={() => undefined} onRetry={() => undefined} />, { wrapper: wrap });
-        expect(screen.getByText(t('queue.notSent'))).toBeTruthy();
+        expect(screen.getByText(t('queue.notSentBare'))).toBeTruthy();
         expect(screen.getByTestId(`queued-retry-${failed.id}`)).toBeTruthy();
         const detail = screen.getByText(SERVER_TEXT);
         expect(StyleSheet.flatten(detail.props.style)).toMatchObject({ writingDirection: 'ltr' });
@@ -46,14 +46,14 @@ describeNative('server text stays off the sentence in the chat area', () => {
 
     it('shows a failed network send as a translated sentence, with no catalog key or params', async () => {
         await drawRow(failedRow(new GaiaNetworkError('http://pc:4200', new Error('refused'))));
-        expect(screen.getByText(t('queue.notSent'))).toBeTruthy();
+        expect(screen.getByText(t('queue.notSentBare'))).toBeTruthy();
         expect(screen.getByText(t('mobileApp.error.network', { url: 'http://pc:4200', reason: 'refused' }))).toBeTruthy();
         expect(screen.queryByText(/mobileApp\.|\{/)).toBeNull();
     });
 
     it('shows a failed PC error as "Not sent." with the PC reason as a left-to-right detail', async () => {
         await drawRow(failedRow(new GaiaApiError(500, 'disk full')));
-        expect(screen.getByText(t('queue.notSent'))).toBeTruthy();
+        expect(screen.getByText(t('queue.notSentBare'))).toBeTruthy();
         expect(screen.getByText(t('mobileApp.error.httpNoDetail', { status: 500 }))).toBeTruthy();
         expect(StyleSheet.flatten(screen.getByText('disk full').props.style)).toMatchObject({ writingDirection: 'ltr' });
     });

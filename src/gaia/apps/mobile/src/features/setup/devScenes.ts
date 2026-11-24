@@ -36,7 +36,8 @@ const entry = (over: Partial<SetupCatalogEntry> & { id: string }): SetupCatalogE
     name: over.id, roles: ['chat'], purpose: 'Answers your chats', if_skipped: null, recipe: 'llamacpp', size_gb: 1, full_size_gb: 1,
     partial: false, partial_gb: 0, downloaded: false, in_lemonade: true, recommended: false, planned: false,
     gaia_model: true, selected: false, skipped: false, chat_choice: true, support: 'verified', reads_images: false,
-    feature_tier: 'full', source: 'huggingface.co/amd', fits: true, need_gb: 2, capacity_gb: 16, fit_reason: null, ...over,
+    feature_tier: 'full', source: 'huggingface.co/amd', fits: true, need_gb: 2, capacity_gb: 16, fit_reason: null,
+    setup_offer: over.fits !== false, ...over,
 });
 
 const GEMMA_ID = 'Gemma-4-E4B-it-GGUF';

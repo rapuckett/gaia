@@ -17,6 +17,7 @@ const {
   app,
   autoUpdater: electronAutoUpdater,
   BrowserWindow,
+  clipboard,
   Menu,
   dialog,
   ipcMain,
@@ -125,6 +126,7 @@ const {
   describeBlockedUrl,
 } = require("./services/link-policy.cjs");
 const { installWindowKeys } = require("./services/window-keys.cjs");
+const { installContextMenu } = require("./services/context-menu.cjs");
 const { installQuitCleanup } = require("./services/quit-cleanup.cjs");
 const { chromiumSwitches } = require("./services/chromium-switches.cjs");
 const { titleBarKind, titleBarOptions } = require("./services/window-frame.cjs");
@@ -349,6 +351,15 @@ async function cleanupOrphanedBackend() {
   });
 }
 
+/** What the user reads when GAIA's backend program can't be found: what to do, and where it looked. */
+function missingBackendMessage() {
+  const looked = [backendInstaller.BUNDLED_GAIA_BIN, backendInstaller.GAIA_BIN].filter(Boolean).join(", ");
+  return (
+    "GAIA's backend program is missing, so GAIA can't start: the app's files are incomplete. " +
+    `Reinstall GAIA from https://amd-gaia.ai/#install. Looked for ${looked} and for gaia on PATH.`
+  );
+}
+
 /**
  * Start the GAIA Python backend. Expects the backend installer to have
  * already ensured the venv is populated — callers should await
@@ -497,9 +508,7 @@ async function startBackend() {
 async function restartBackend() {
   backendStarting = startBackend();
   const child = await backendStarting;
-  if (!child) {
-    throw new Error("GAIA's backend program is missing, so it can't restart. Reinstall GAIA.");
-  }
+  if (!child) throw Object.assign(new Error(missingBackendMessage()), { terminal: true });
   if (quitStarted()) {
     isIntentionalKill = true;
     await portManager.killBackend(child);
@@ -734,6 +743,7 @@ function createWindow() {
     installWindowKeys(mainWindow.webContents, { devTools: !app.isPackaged });
   }
   mainWindow.setMenuBarVisibility(false);
+  installContextMenu(mainWindow, { Menu, clipboard, locale: app.getLocale() });
 
   // Open external links in the default browser. The URL here is already
   // RESOLVED against the file:// document, so a scheme-less markdown link
@@ -981,19 +991,10 @@ function setupJumpList() {
         items: [
           {
             type: "task",
-            title: "New Task",
-            description: "Start a new agent task",
+            title: "Open GAIA",
+            description: "Show the GAIA window",
             program: process.execPath,
             args: "",
-            iconPath: process.execPath,
-            iconIndex: 0,
-          },
-          {
-            type: "task",
-            title: "Agent Manager",
-            description: "View and manage OS agents",
-            program: process.execPath,
-            args: "--show-agents",
             iconPath: process.execPath,
             iconIndex: 0,
           },
@@ -1189,7 +1190,9 @@ app.whenReady().then(async () => {
   if (shutdownStarted) return;
   backendStarting = startBackend();
   backendProcess = await backendStarting;
+  // The window reads this state and shows the failure instead of waiting for a backend.
   if (backendProcess) backendSupervisor.running(backendPort);
+  else backendSupervisor.failedToStart(missingBackendMessage());
   if (shutdownStarted) {
     console.log("[main] Quit during startup — not opening the window");
     return;

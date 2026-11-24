@@ -2100,6 +2100,7 @@ export interface InferenceStatsResponse {
   steps?: number | null;
   time_to_first_token?: number;
   tokens_per_second?: number;
+  waiting_seconds?: number | null;
 }
 /**
  * The model a ``hybrid`` turn was routed to, and why.
@@ -4412,7 +4413,6 @@ export interface TunnelStatus {
   device: TunnelDevice | null;
   error: string | null;
   installCommands: string[];
-  publicIp: string | null;
   reason: "ngrok_not_installed" | null;
   startedAt: string | null;
   token: string | null;
