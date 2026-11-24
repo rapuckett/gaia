@@ -1,7 +1,6 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { translate } from '@webui/i18n/registry';
 import { translator } from '@webui/i18n/translator';
 
 import { GaiaApiError } from '@/api/errors';
@@ -10,7 +9,7 @@ import type { Session } from '@/api/client.types';
 
 import { buildChatSections, chatListState, deleteConfirmLabel, msUntilNextMidnight, NO_LIVE_RUNS, rowFailure, rowText, searchedSessions, type ChatRow } from './chatList';
 
-const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('en', key, params);
+const t = translator('en');
 
 const NOW = new Date(2026, 10, 12, 12, 0, 0);
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3_600_000).toISOString();
@@ -100,10 +99,10 @@ describe('rowText', () => {
 
     it('joins title, status, note and unread into the aria label', () => {
         const text = rowText({ ...base, dot: 'queued', place: 2, unsent: 3, unread: true }, t);
-        expect(text.status).toBe('Waiting for the GPU, #2 in line');
-        expect(text.note).toBe('#2 in line · 3 to send');
+        expect(text.status).toBe('Waiting for the GPU, 2nd in line');
+        expect(text.note).toBe('2nd in line · 3 to send');
         expect(text.noteFailed).toBe(false);
-        expect(text.aria).toBe('Taxes, Waiting for the GPU, #2 in line, 3 to send, unread');
+        expect(text.aria).toBe('Taxes, Waiting for the GPU, 2nd in line, 3 to send, unread');
     });
 
     it('says not sent, in the failed tone, when any queued message failed', () => {

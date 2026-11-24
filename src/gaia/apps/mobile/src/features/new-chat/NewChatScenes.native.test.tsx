@@ -3,7 +3,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { StartScreen, SystemStatus } from '@webui/types';
@@ -45,6 +45,35 @@ describeNative('/dev/composer new-chat scenes', () => {
         await screen.findByTestId('composer-send');
         expect(screen.getAllByTestId('composer-send', { includeHiddenElements: true })).toHaveLength(1);
         expect(screen.getAllByTestId('composer-input', { includeHiddenElements: true })).toHaveLength(1);
+    });
+
+    it('new-chat-starters shows two of this PC\'s tasks then one example, and a pick fills and focuses the box without sending', async () => {
+        const created = jest.spyOn(global, 'fetch');
+        await mount('new-chat-starters');
+        expect(await screen.findByText('Ask about your documents')).toBeTruthy();
+        expect(screen.getByText('Research a topic')).toBeTruthy();
+        expect(screen.getByText('Recipe')).toBeTruthy();
+        expect(screen.queryByText('Work on code')).toBeNull();
+        expect(screen.queryByText('Checklist')).toBeNull();
+        await fireEvent.press(screen.getByTestId('try-task-research-report'));
+        await waitFor(() => expect(screen.getByDisplayValue(/Research and write a short cited report on:/)).toBeTruthy());
+        expect((TextInput.prototype as unknown as { focus: jest.Mock }).focus).toHaveBeenCalled();
+        expect(created).not.toHaveBeenCalled();
+        created.mockRestore();
+    });
+
+    it('new-chat-doc-brief offers the documents task once, as the brief card, not also as a starter', async () => {
+        await mount('new-chat-doc-brief');
+        expect(await screen.findByTestId('document-brief-card')).toBeTruthy();
+        expect(screen.queryByTestId('try-task-document-brief')).toBeNull();
+        expect(screen.getByText('Recipe')).toBeTruthy();
+    });
+
+    it('new-chat-starters-none shows three examples', async () => {
+        await mount('new-chat-starters-none');
+        expect(await screen.findByText('Recipe')).toBeTruthy();
+        expect(screen.getByText('Checklist')).toBeTruthy();
+        expect(screen.getByText('Split a bill')).toBeTruthy();
     });
 
     it('skill-prompt lands the Try it prompt under the unsent draft', async () => {

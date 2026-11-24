@@ -697,8 +697,9 @@ function ConnectorTile({
                         {accountList ? null : (
                             <Row gap="sm" wrap>
                                 {server && !paused && !checkOnPc ? (
-                                    <ChipButton
-                                        label={t.bare('settings.connectors.check')}
+                                    <Button
+                                        size="sm"
+                                        label={t('settings.connectors.check')}
                                         accessibilityLabel={t('settings.connectors.check')}
                                         disabled={action.isPending || check?.state === 'checking'}
                                         onPress={onCheck}
@@ -706,15 +707,17 @@ function ConnectorTile({
                                     />
                                 ) : null}
                                 {form === 'mcp' ? (
-                                    <ChipButton
-                                        label={t.bare('mobileApp.connectors.editSetup')}
+                                    <Button
+                                        size="sm"
+                                        label={t('mobileApp.connectors.editSetup')}
                                         accessibilityLabel={t('mobileApp.connectors.editSetup')}
                                         onPress={onSetup}
                                         testID={`connector-edit-${connector.id}`}
                                     />
                                 ) : null}
-                                <ChipButton
-                                    label={t.bare('settings.connectors.disconnect')}
+                                <Button
+                                    size="sm"
+                                    label={t('settings.connectors.disconnect')}
                                     accessibilityLabel={t('settings.connectors.disconnect')}
                                     variant="danger"
                                     testID={`connector-disconnect-${connector.id}`}

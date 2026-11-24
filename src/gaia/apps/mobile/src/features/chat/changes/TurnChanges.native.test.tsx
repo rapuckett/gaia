@@ -50,6 +50,10 @@ const turn: Turn = {
         await fireEvent.press(screen.getByTestId('turn-changes-confirm'));
         const sentence = await screen.findByText(t('mobileApp.changes.undoTurnConflict'));
         expect(sentence.props.children).not.toContain('a.txt changed after this turn');
+        screen.getByText(t('chg.undoAnyway'));
+        screen.getByText(t('chg.keep'));
+        expect(screen.queryByText('a.txt changed after this turn')).toBeNull();
+        await fireEvent.press(screen.getByTestId('turn-changes-details-toggle'));
         const detail = await screen.findByText('a.txt changed after this turn');
         expect(StyleSheet.flatten(detail.props.style)).toMatchObject({ writingDirection: 'ltr' });
         expect(client.undone).toEqual([{ sessionId: 's1', turnId: 't1', force: false }]);

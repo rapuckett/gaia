@@ -68,7 +68,7 @@ function ChecklistRow({ entry: e, ticked, disabled, progress, imagesCovered, can
             {canRemove ? (
                 <Row>
                     <Button
-                        variant="ghost"
+                        variant="danger"
                         size="sm"
                         label={t.bare('settings.models.remove')}
                         accessibilityLabel={t('settings.models.removeAria', { name: e.name })}

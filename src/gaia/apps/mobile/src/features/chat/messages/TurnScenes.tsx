@@ -74,9 +74,10 @@ const UNTRACKED: TurnChanges['untracked'] = [
 ];
 
 const DIFF = '@@ -1,3 +1,3 @@\n # Q3 summary\n-Revenue was flat.\n+Revenue grew 4%.\n Costs held steady.\n';
+const LONG_DIFF = '@@ -1,3 +1,3 @@\n # Q3 summary\n-Revenue was flat.\n+Revenue grew 4% year over year, driven by the new enterprise tier and a smaller churn rate in the second half of the quarter.\n Costs held steady.\n';
 const FILE = (path: string, change: FileDiff['change'], extra: Partial<FileDiff> = {}): FileDiff => ({ path, change, unified: DIFF, binary: false, too_large: false, truncated: false, before_size: 120, after_size: 140, ...extra });
 const DIFFS: FileDiff[] = [
-    FILE('/Users/avery/Documents/Quarterly reports/q3-summary.md', 'edited'),
+    FILE('/Users/avery/Documents/Quarterly reports/q3-summary.md', 'edited', { unified: LONG_DIFF }),
     FILE('/Users/avery/Documents/Quarterly reports/forecast.csv', 'created', { truncated: true }),
     FILE('/Users/avery/Documents/Quarterly reports/old-draft.txt', 'deleted'),
     FILE('/Users/avery/Documents/Quarterly reports/chart.png', 'created', { binary: true, unified: '' }),

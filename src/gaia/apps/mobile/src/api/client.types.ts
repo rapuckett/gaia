@@ -658,7 +658,7 @@ export interface GaiaClient {
     /** Hides an MCP server's tools from an agent; its grant stays. */
     deactivateConnectorAgent(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
     /** Starts a sign-in with a code on the PC; only for a connector with `supports_device_code`. The PC polls the provider and keeps the account. */
-    startConnectorDeviceSignIn(connectorId: string, scopes: string[], options?: RequestOptions): Promise<ConnectorDeviceAuthResponse>;
+    startConnectorDeviceSignIn(connectorId: string, scopes: string[], options?: RequestOptions & { target?: ConnectorSignInTarget }): Promise<ConnectorDeviceAuthResponse>;
     /**
      * Waits for the PC to report a sign-in for this connector finished or failed; null when the events stream can't be read.
      * With `flowId`, a failure counts only when the PC names that flow (one replaced by a newer sign-in), so another flow's end is ignored.

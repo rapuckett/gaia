@@ -12,6 +12,7 @@ import type {
     ConnectorGrants,
     ConnectorList,
     ConnectorRow,
+    ConnectorSignInTarget,
     DisconnectOutcome,
     GaiaClient,
 } from '@/api/client.types';
@@ -244,7 +245,7 @@ export function useDeviceSignIn(connector: ConnectorRow, scopes: string[] = devi
     const scopeKey = scopes.join(' ');
     const configured = connector.configured;
 
-    const start = useCallback(() => {
+    const startFor = useCallback((target?: ConnectorSignInTarget) => {
         setSignIn({ state: 'starting' });
         let c: GaiaClient;
         try {
@@ -253,11 +254,14 @@ export function useDeviceSignIn(connector: ConnectorRow, scopes: string[] = devi
             setSignIn({ state: 'failed', error: error as Error });
             return;
         }
-        c.startConnectorDeviceSignIn(connector.id, scopeKey ? scopeKey.split(' ') : []).then(
+        c.startConnectorDeviceSignIn(connector.id, scopeKey ? scopeKey.split(' ') : [], ...(target ? [{ target }] : [])).then(
             (code) => setSignIn({ state: 'waiting', code, expiresAt: Date.now() + code.expires_in * 1000, wasConnected: configured === true }),
             (error: Error) => setSignIn({ state: 'failed', error }),
         );
     }, [client, connector.id, scopeKey, configured]);
+
+    // Never forwards a press event as a target.
+    const start = useCallback(() => startFor(), [startFor]);
 
     // Signing in again leaves the row connected throughout, so only the PC's event says it finished.
     const connected = signIn.state === 'waiting' && !signIn.wasConnected && configured;
@@ -285,5 +289,5 @@ export function useDeviceSignIn(connector: ConnectorRow, scopes: string[] = devi
     // As the desktop's Cancel: drops the code on the phone; the PC's poll just runs out.
     const cancel = useCallback(() => setSignIn({ state: 'idle' }), []);
 
-    return { signIn: connected ? ({ state: 'done' } as const) : signIn, start, cancel };
+    return { signIn: connected ? ({ state: 'done' } as const) : signIn, start, startFor, cancel };
 }

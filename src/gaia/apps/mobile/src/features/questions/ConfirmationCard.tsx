@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
+import { View } from 'react-native';
 
-import { isolate } from '@webui/i18n/registry';
+import { isMessageKey, isolateUnit } from '@webui/i18n/registry';
 
 import type { StreamEvent } from '@/api/client.types';
-import { useT } from '@/i18n/useT';
-import { Button, Row, Stack, Surface, Text } from '@/ui';
+import { useT, type Translate } from '@/i18n/useT';
+import { Badge, Button, Row, Stack, Surface, Text, useTheme } from '@/ui';
 
 export interface ConfirmationCardProps {
-    /** The machine tool name, shown as is. */
+    /** The machine tool name; shown as a step name. */
     action: string;
     /** Can carry tool arguments derived from untrusted content: shown only as plain text. */
     summary: string;
@@ -23,54 +24,61 @@ export function confirmationProps(event: Pick<StreamEvent, 'type' | 'action' | '
     return { action: event.action, summary: event.summary };
 }
 
-// No per-action lookup, so an unknown tool stays safe; the label comes from `action` alone.
-export function humanizeAction(action: string): string {
-    return action.replace(/_/g, ' ').trim() || 'action';
+/** The step in the UI language ("Writing file"); a tool with no entry reads as its own words, isolated. */
+export function stepName(action: string, t: Translate): string {
+    const key = `tool.${action}.active`;
+    if (isMessageKey(key)) return t(key);
+    const words = action.replace(/[_-]+/g, ' ').trim();
+    return words ? t('tool.named.active', { what: isolateUnit(words) }) : t('tool.default.active');
 }
 
-/** Informational only: the run is over and its answer carries the hand-off; Dismiss just hides the card. */
+/** What is left when the agent is too old to ask: the step did not run. Dismiss just hides the card. */
 export function ConfirmationCard({ action, summary, onDismiss }: ConfirmationCardProps) {
     const t = useT();
     const [dismissed, setDismissed] = useState(false);
+    const { colors, radius } = useTheme();
+    const step = stepName(action, t);
 
     if (dismissed) {
         return (
-            <Surface tone="secondary" radius="md" padding="md" border>
+            <View
+                style={{
+                    borderWidth: 1,
+                    borderStyle: 'dashed',
+                    borderColor: colors.accentLight,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.bgSecondary,
+                    padding: 12,
+                }}
+            >
                 <Text role="caption" tone="muted">
-                    {t('confirmation.dismissed')}
+                    {t('confirmCard.dismissed', { step })}
                 </Text>
-            </Surface>
+            </View>
         );
     }
 
     return (
-        <Surface tone="card" radius="md" padding="md" border>
+        <Surface tone="card" radius="md" padding="md" border="accent">
             <Stack gap="md">
-                <Stack gap="xs">
-                    <Row gap="sm" wrap>
-                        <Text role="caption" weight="semibold" tone="warning">
-                            {t('confirmation.badge')}
-                        </Text>
-                        <Text role="label" weight="semibold">
-                            {humanizeAction(action)}
-                        </Text>
-                    </Row>
-                    <Text role="caption" tone="muted" mono>
-                        {isolate(action, 'ltr')}
+                <Row gap="sm" wrap>
+                    <Badge label={t('confirmCard.badge').toLocaleUpperCase()} tone="accent" accessibilityLabel={t('confirmCard.badge')} />
+                    <Text role="label" weight="semibold">
+                        {step}
                     </Text>
-                </Stack>
+                </Row>
                 <Surface tone="recessed" radius="sm" padding="sm" border>
                     <Text role="caption" mono selectable>
                         {summary}
                     </Text>
                 </Surface>
                 <Text role="caption" tone="secondary">
-                    {t('confirmation.note')}
+                    {t('confirmCard.agentTooOld')}
                 </Text>
                 <Row justify="end">
                     <Button
-                        label={t('banner.dismiss')}
-                        variant="ghost"
+                        label={t('confirmCard.dismiss')}
+                        variant="secondary"
                         size="sm"
                         onPress={() => {
                             setDismissed(true);
