@@ -400,6 +400,33 @@ const audit = async (page: Page): Promise<string[]> => {
     });
 };
 
+// The icon-gap rule on two probes: a label its own box clips just short of the icon (Linux fonts did this to the
+// model pill), which is fine, and a bare label with no gap, which is not.
+test('the icon-gap rule ignores text its own box clips and still catches a label touching its icon', async ({ page }) => {
+    await open(page, '', 'ar');
+    await page.evaluate(() => {
+        const host = document.createElement('div');
+        host.dir = 'rtl';
+        host.style.cssText = 'position:fixed;top:200px;left:40px;z-index:9999;display:flex;flex-direction:column;gap:12px';
+        host.innerHTML = `
+            <button type="button" class="probe-clipped" style="display:flex;align-items:center;gap:6px;font-size:12px">
+                <svg width="13" height="13" aria-hidden="true"></svg>
+                <span dir="ltr" style="flex:none;overflow:hidden;white-space:nowrap;text-align:left">Gemma-4-E4B-it-GGUF</span>
+            </button>
+            <button type="button" class="probe-touching" style="display:flex;align-items:center;gap:0;font-size:12px">
+                <svg width="13" height="13" aria-hidden="true"></svg>محلي
+            </button>`;
+        document.body.append(host);
+        const span = host.querySelector('.probe-clipped span') as HTMLElement;
+        const range = document.createRange();
+        range.selectNodeContents(span);
+        // Clip the text 5 px short, so its hidden tail ends 1 px from the icon, inside the 6 px gap.
+        span.style.width = `${range.getBoundingClientRect().width - 5}px`;
+    });
+    const found = (await audit(page)).filter((f) => f.startsWith('icon touches its label') && f.includes('probe-'));
+    expect(found).toEqual(['icon touches its label: <button class="probe-touching"> "محلي"']);
+});
+
 // A reply that never ends, so the card stays up for the screenshot.
 const RECORDING_EVENTS = [
     { type: 'status', status: 'working', message: 'x', phase: 'recording', stage: 0, state: 1 },
