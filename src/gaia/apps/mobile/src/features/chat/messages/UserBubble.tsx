@@ -9,9 +9,10 @@ import { isLongUserMessage, sizeLabel, USER_COLLAPSE_LINES } from '@webui/utils/
 import type { Message } from '@/api/client.types';
 import { useDirection, useT } from '@/i18n/useT';
 import { contentDir, Icon, Pressable, Row, Stack, Surface, Text } from '@/ui';
-import { FileText, Image as ImageIcon } from '@/ui/icons';
+import { FileText } from '@/ui/icons';
 
 import { splitAttachmentLinks } from './attachedLinks';
+import { ImageThumbs } from './ImageThumbs';
 import { useMessageActions, type MessageContext, type StartOpen } from './useMessageActions';
 
 export interface UserBubbleProps {
@@ -26,7 +27,9 @@ export function UserBubble({ message, onCollapse, context, startOpen }: UserBubb
     const t = useT();
     const uiDir = useDirection();
     const actions = useMessageActions(message, message.content, context, startOpen);
-    const { text, files } = splitAttachmentLinks(message.content);
+    const { text, files: attached } = splitAttachmentLinks(message.content);
+    const images = attached.filter((f) => f.isImage);
+    const files = attached.filter((f) => !f.isImage);
     const long = isLongUserMessage(text);
     const [expanded, setExpanded] = useState(false);
     const collapsed = long && !expanded;
@@ -41,7 +44,7 @@ export function UserBubble({ message, onCollapse, context, startOpen }: UserBubb
             <Stack self="end" maxWidth="85%">
                 <Surface tone="userMsg" radius="lg" padding="md">
                     <Stack gap="sm">
-                        {actions.editor ?? (text || files.length === 0 ? (
+                        {actions.editor ?? (text || attached.length === 0 ? (
                             <Pressable onLongPress={actions.openSheet} accessibilityRole="text" minSize={0} {...actions.a11y}>
                                 <Text
                                     role="body"
@@ -53,10 +56,11 @@ export function UserBubble({ message, onCollapse, context, startOpen }: UserBubb
                                 </Text>
                             </Pressable>
                         ) : null)}
+                        {!actions.editor ? <ImageThumbs images={images} /> : null}
                         {!actions.editor
                             ? files.map((f) => (
                                   <Row key={f.url} gap="sm" testID="user-attachment">
-                                      <Icon icon={f.isImage ? ImageIcon : FileText} size="sm" tone="secondary" />
+                                      <Icon icon={FileText} size="sm" tone="secondary" />
                                       <Text role="label" numberOfLines={1} compact dir="ltr" accessibilityLabel={f.name}>
                                           {middleTruncate(f.name)}
                                       </Text>
