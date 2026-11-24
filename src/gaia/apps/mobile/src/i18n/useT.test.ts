@@ -24,7 +24,9 @@ describe('server text stays out of the sentence', () => {
         const { text, detail } = describeHttpFailure(new GaiaApiError(500, 'The connectors service is not running.'), translator(code));
         expect(detail).toBe('The connectors service is not running.');
         expect(text).not.toContain('connectors service');
-        expect(text).toContain('500');
+        expect(text).not.toMatch(/500/);
+        expect(text).toBe(translator(code)('mobileApp.error.httpNoDetail'));
+        if (code === 'en') expect(text).toBe("Something went wrong on your PC.");
     });
 
     it.each(['en', 'ar'])('a failed turn in %s gives a reason-free sentence and the PC text as detail', (code) => {
