@@ -1,8 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+/** Why the context panel has no figure, in words: shared by the Agent UI and the phone app. */
+
 import { isMessageKey } from '../i18n/registry';
-import { tEn, type Translate } from '../i18n/useT';
+import { tEn, type Translate } from '../i18n/translator';
 
 /** Why the context endpoint has no figure, as the backend sent it. */
 export interface ContextUnavailable {

@@ -11,6 +11,7 @@ import { Icon, Notice, Pressable, ProgressLine, Row, SegmentedControl, Spacer, S
 import { ChevronDown, ChevronRight } from '@/ui/icons';
 import { isolate, ref } from '@webui/i18n/registry';
 import type { TurnPerformance } from '@webui/types';
+import { contextReason } from '@webui/utils/contextReason.core';
 import {
     exact,
     hitRate,
@@ -113,12 +114,12 @@ function Heading({ children }: { children: string }) {
 
 function WindowFill({ reading, perf }: { reading: ReturnType<typeof useContextSection>; perf: ChatPerformance | undefined }) {
     const t = useT();
-    const { usage, unavailable, error } = reading;
+    const { usage, unavailable, unavailableCode, error } = reading;
     return (
         <Stack gap="sm">
             <Heading>{t('ctx.context')}</Heading>
             {isPcRefusal(error) ? <PcOnlyNotice testID="context-pc-only" /> : error ? <Notice tone="danger" message={failureReason(error, t)} /> : null}
-            {!usage && !error ? <Text tone="muted">{unavailable ?? t('ctx.measuring')}</Text> : null}
+            {!usage && !error ? <Text tone="muted">{unavailable != null ? contextReason(t, { reason: unavailable, code: unavailableCode }) : t('ctx.measuring')}</Text> : null}
             {usage ? <Usage usage={usage} perf={perf} t={t} /> : null}
         </Stack>
     );

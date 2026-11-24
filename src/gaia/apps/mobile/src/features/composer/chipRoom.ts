@@ -1,12 +1,12 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-export type ChipId = 'folder' | 'private' | 'permission' | 'model' | 'meter';
+export type ChipId = 'folder' | 'private' | 'permission' | 'model' | 'meter' | 'agent';
 /** What the row can take back for room: a chip's label, or the place after the model's name ("Gemma 4 E4B · Local"). */
 export type RoomId = ChipId | 'place' | 'meterWord';
 
-/** Chips give up their label in the desktop's order: the meter's bar (and the spend with it), then the folder's name, then Private and Permission, then the model's place, which the desktop's chip cuts first from its text, then the meter's "Context" word (all its text, when there is no reading yet). The model's name never goes: it is cut only when everything else already has. */
-export const COLLAPSE_ORDER: readonly RoomId[] = ['meter', 'folder', 'private', 'permission', 'place', 'meterWord'];
+/** Chips give up their label in the desktop's order: the meter's bar (and the spend with it), then the folder's name, then the agent's, then Private and Permission, then the model's place, which the desktop's chip cuts first from its text, then the meter's "Context" word (all its text, when there is no reading yet). The model's name never goes: it is cut only when everything else already has. */
+export const COLLAPSE_ORDER: readonly RoomId[] = ['meter', 'folder', 'agent', 'private', 'permission', 'place', 'meterWord'];
 
 export const CHIP_GAP = 8;
 /** A collapsed chip is its icon in a box this wide; its touch target reaches 44 through hit slop, so two of them `CHIP_GAP` apart don't overlap. */
@@ -23,7 +23,7 @@ export function collapsedChips(full: Partial<Record<RoomId, number>>, available:
         const w = full[id];
         return w === undefined || w <= 0 ? undefined : w;
     };
-    const present = (['folder', 'private', 'permission', 'model', 'meter'] as const).filter((id) => width(id) !== undefined);
+    const present = (['folder', 'agent', 'private', 'permission', 'model', 'meter'] as const).filter((id) => width(id) !== undefined);
     const collapsed: RoomId[] = [];
     const placed = () => width('place') !== undefined && !collapsed.includes('place');
     const total = () =>

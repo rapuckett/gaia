@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { connectCardProviders, hasConnectCard } from '@webui/utils/connectAccountCard.core';
+import { connectCardAccounts } from '@webui/utils/connectCards';
 import { isAuthRequiredMessage } from '@webui/utils/connectorRetry.core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
@@ -15,7 +16,7 @@ import { useChatReadAloud } from '@/features/audio/useChatReadAloud';
 import { modelMenuKeys, useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useRefreshTurnChanges, useSession } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { ModelRestoreNotice } from '@/features/model/ModelRestoreNotice';
-import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, SessionFolderChip, SpendMeter, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { AgentChip, Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, SessionFolderChip, SpendMeter, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { FileScope } from '@/features/files';
 import { describeErrorWith, describeHttpFailure, useT } from '@/i18n/useT';
@@ -81,6 +82,7 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
         !!tail && !tail.live && tail.replyId !== null && lastReply?.id === tail.replyId &&
         ownsTryAgain(lastReply, { fixShownBelow: serverDownReplyId(tail) === lastReply.id, latest: true, busy: hold, readOnly: !!retiredAgent });
     const connectProviders = connectCardProviders(lastReply);
+    const connectAccounts = connectCardAccounts(lastReply);
     // A Connect card names its connectors outright; a reply with only its wording is read for them.
     const connectorError =
         !busy &&
@@ -199,7 +201,7 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                             />
                         </Stack>
                     ) : null}
-                    {connectorError ? <ConnectorRetry content={connectorError.content} providers={connectProviders} onRetry={() => tryAgain(connectorError.id)} /> : null}
+                    {connectorError ? <ConnectorRetry content={connectorError.content} providers={connectProviders} accounts={connectAccounts} onRetry={() => tryAgain(connectorError.id)} /> : null}
                     {permission ? (
                         <Stack paddingX="gutter">
                             <PermissionPrompt
@@ -228,7 +230,8 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                         attachments={attachments}
                         leftControls={
                             <PermissionChip
-                                mode={permissionMode.mode ?? 'ask'}
+                                mode={permissionMode.mode ?? null}
+                                readFailed={permissionMode.readFailed}
                                 onChange={(mode) => permissionMode.set.mutateAsync(mode)}
                                 onReread={() => queryClient.refetchQueries({ queryKey: modelMenuKeys.permissions(sessionId) }, { throwOnError: true })}
                                 promptWaiting={!!permission}
@@ -241,8 +244,9 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                         rightControls={
                             <>
                                 <SpendMeter sessionId={sessionId} busy={busy} />
-                                <ContextMeter usage={context.usage} unavailable={context.unavailable} onDetails={() => setPanelOpen(true)} />
+                                <ContextMeter usage={context.usage} onDetails={() => setPanelOpen(true)} />
                                 <SessionFolderChip sessionId={sessionId} live={busy} onOpen={showEnvironment} />
+                                <AgentChip />
                                 <ModelChip turnRunning={busy} initialQueued={initialQueuedModel} />
                             </>
                         }

@@ -36,6 +36,13 @@ describe('drawer navigation', () => {
         expect(live.running).toEqual(['a', 'c']);
         expect(Object.keys(live.awaiting)).toEqual(['c']);
     });
+
+    it("adds the PC's runs: another device's turn, the GPU line and prompts", () => {
+        const live = liveRunsFromTurns({ a: beginTurn() }, { session_ids: ['a', 'b'], queued: ['c', 'd'], awaiting_user: { b: 'permission' } });
+        expect(live.running).toEqual(['a', 'b']);
+        expect(live.queued).toEqual(['c', 'd']);
+        expect(Object.keys(live.awaiting)).toEqual(['b']);
+    });
 });
 
 describe('drawer options by width', () => {

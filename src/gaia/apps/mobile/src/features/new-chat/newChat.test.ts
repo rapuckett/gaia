@@ -12,7 +12,7 @@ import { IDLE_TURN, type ChatTurn } from '@/state/chatStreams';
 
 import { DOCS_SHOWN, foldDocuments, splitDocuments } from './attachedDocs';
 import { setupError } from './setupFailed';
-import { withExample } from './tryExamples';
+import { withStarter as withExample } from '@webui/components/tryChips.core';
 import { createFirstSend } from './firstSend';
 import { greetingKey } from './greeting';
 import { startingReason } from './starting';

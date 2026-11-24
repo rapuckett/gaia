@@ -125,7 +125,6 @@ export function TurnChanges({ sessionId, messageId }: { sessionId: string; messa
             {message && (
                 <div className={`turn-changes-message${phase === 'done' ? ' is-ok' : ' is-error'}`} role={phase === 'done' ? 'status' : 'alert'}>
                     {message.text}
-                    {message.detail && <bdi dir="ltr" className="turn-changes-detail">{message.detail}</bdi>}
                     {phase === 'conflict' && (
                         <span className="turn-changes-confirm">
                             <button type="button" className="turn-changes-btn is-danger" onClick={() => void undo(true)}>
@@ -133,6 +132,12 @@ export function TurnChanges({ sessionId, messageId }: { sessionId: string; messa
                             </button>
                             <button type="button" className="turn-changes-btn" onClick={() => { setPhase('idle'); setMessage(null); }}>{t('chg.keep')}</button>
                         </span>
+                    )}
+                    {message.detail && (
+                        <details className="turn-changes-details">
+                            <summary>{t('failedTurn.details')}</summary>
+                            <bdi dir="ltr" className="turn-changes-detail">{message.detail}</bdi>
+                        </details>
                     )}
                 </div>
             )}

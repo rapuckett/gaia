@@ -125,4 +125,16 @@ describeNative('Connector accounts', () => {
         await waitFor(() => expect(((data.connectors?.[0]) as ConnectorRow).configured).toBe(false));
         queryClient.clear();
     });
+
+    it('Microsoft: Reconnect and Add another start the code sign-in for that account', async () => {
+        const code = { user_code: 'ABCD-EFGH', verification_uri: 'https://microsoft.com/devicelogin', expires_in: 900, interval: 60, message: '' };
+        const row = { ...google([A, account('blake@example.com', { status: 'reauth_required' })]), id: 'microsoft', display_name: 'Microsoft', supports_device_code: true } as ConnectorRow;
+        const { client, data, queryClient, wrap } = setup([row]);
+        data.deviceSignIn = code;
+        await render(<ConnectorsScreen />, { wrapper: wrap });
+        fireEvent.press(await screen.findByLabelText('Microsoft'));
+        fireEvent.press(await screen.findByLabelText(/Reconnect .*blake@example.com/));
+        await waitFor(() => expect(client.deviceSignInTargets).toEqual([{ connectorId: 'microsoft', target: { account: 'id-blake@example.com' } }]));
+        queryClient.clear();
+    });
 });

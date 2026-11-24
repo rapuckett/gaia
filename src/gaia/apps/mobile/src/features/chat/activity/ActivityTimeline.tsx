@@ -39,6 +39,22 @@ function useNow(ticking: boolean): number {
     return now;
 }
 
+function WarningStep({ step }: { step: ActivityRow }) {
+    const t = useT();
+    const [open, setOpen] = useState(false);
+    return (
+        <Notice tone="warning" message={step.label}>
+            {step.detail ? (
+                <Disclosure title={t('failedTurn.details')} open={open} onToggle={() => setOpen((v) => !v)} headerTestID="step-warning-details-toggle">
+                    <Text role="caption" tone="muted" dir="ltr" selectable testID="step-warning-details-text">
+                        {step.detail}
+                    </Text>
+                </Disclosure>
+            ) : null}
+        </Notice>
+    );
+}
+
 function Thought({ step, live, durationMs, now, testID }: { step: ActivityRow; live: boolean; durationMs?: number; now: number; testID?: string }) {
     const t = useT();
     const [open, setOpen] = useState(false);
@@ -86,7 +102,7 @@ export function ActivityTimeline({ steps, running = false, awaitingUser = false,
                         </Stack>
                     </Row>
                 ) : (
-                    <Notice key={row.id} tone="warning" message={row.label} />
+                    <WarningStep key={row.id} step={row} />
                 );
             case 'error':
                 return <Notice key={row.id} tone="danger" message={row.detail || row.label || t('activity.errorOccurred')} />;

@@ -4,13 +4,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { formatSize, ltrIn } from '@webui/components/setup/format';
+import { planAgentLabel } from '@webui/components/setup/jobModels.core';
 import { cantRunHere, catalogOf, initialSelection, tooBig } from '@webui/components/setup/selection';
 import type { SetupCatalogEntry, SetupComponent, SetupPlan, SetupRunStatus } from '@webui/types';
 
 import type { SetupRunOptions } from '@/api/client.types';
 
 import { GaiaApiError } from '@/api/errors';
-import { useApplyTestedBackend, useCloudProviders, useSetupPlan, useSetupPreflight, useStartSetup } from '@/data';
+import { useAgentPrograms, useApplyTestedBackend, useCloudProviders, useSetupPlan, useSetupPreflight, useStartSetup } from '@/data';
 import { describeHttpFailure, useLocaleCode, useT, type Translate } from '@/i18n/useT';
 import { Button, Card, Disclosure, Ltr, Notice, Pressable, Row, Spinner, Stack, Text } from '@/ui';
 
@@ -22,6 +23,7 @@ import { cloudIsBlocked, planReasons, planView, startOptions, type PlanView } fr
 import { usePlanOpeners } from './planOpeners';
 import { tooBigText } from './modelsView';
 import { usePlanSelection } from './planSelection';
+import { useAgentPick } from './agentPick';
 import { useAgentFirst } from './useAgentFirst';
 
 type Where = 'local' | 'cloud';
@@ -131,6 +133,23 @@ export function Contents({ plan, run, models }: { plan: SetupPlan; run: SetupRun
     );
 }
 
+/** "Agent: Full-featured · Change": shown only where the PC has a second agent to pick; Change opens Customize. */
+function AgentLine({ disabled }: { disabled: boolean }) {
+    const t = useT();
+    const { openModels } = usePlanOpeners();
+    const { pick } = useAgentPick();
+    const label = planAgentLabel(useAgentPrograms().data, pick?.id);
+    if (!label) return null;
+    return (
+        <Row gap="sm" wrap align="center">
+            <Text role="label" tone="secondary" testID="plan-agent">{t.compose((say) => say('setup.plan.agent', { name: say(label) }))}</Text>
+            {openModels ? (
+                <Button variant="ghost" size="sm" label={t('setup.plan.agentChange')} accessibilityLabel={t('setup.plan.agentChangeAria')} disabled={disabled} onPress={openModels} />
+            ) : null}
+        </Row>
+    );
+}
+
 function LocalCard({ view, chatChosen, picked, disabled, onPick }: {
     view: PlanView;
     chatChosen: boolean;
@@ -162,6 +181,7 @@ function LocalCard({ view, chatChosen, picked, disabled, onPick }: {
                 <Fact label={t('setup.plan.diskAfter')}>{after != null ? formatSize(Math.max(0, after)) : '\u2014'}</Fact>
             </Stack>
             <Reasons items={reasons} />
+            <AgentLine disabled={disabled} />
             {view.pending.length > 0 ? <Text role="caption" tone="muted">{t('setup.plan.cancelAnytime')}</Text> : null}
         </RadioCard>
     );
