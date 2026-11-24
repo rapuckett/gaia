@@ -11,6 +11,7 @@ import { useDialogFocus } from '../hooks/useDialogFocus';
 import { log } from '../utils/logger';
 import { useT } from '../i18n/useT';
 import type { MessageKey } from '../i18n/registry';
+import { useChatStore } from '../stores/chatStore';
 import './MobileAccessModal.css';
 
 // QRCode loaded lazily via dynamic import
@@ -29,11 +30,13 @@ interface MobileAccessModalProps {
 }
 
 const NGROK_DOWNLOAD_URL = 'https://ngrok.com/download';
+const LINK_SLOT = '\u0000';
 
 export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommands, onRetry }: MobileAccessModalProps) {
     const [status, setStatus] = useState<TunnelStatus | null>(null);
     const [copied, setCopied] = useState(false);
     const t = useT();
+    const openSettings = useChatStore((s) => s.openSettings);
     const needsSetup = Array.isArray(setupCommands);
     // Nothing to poll for or scan while the tunnel cannot start.
     const halted = !!error || needsSetup;
@@ -253,6 +256,24 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                                 <li>{t('mobile.thirdParty')}</li>
                             </ol>
                         </div>
+                    )}
+
+                    {status?.active && !error && (
+                        <p className="mobile-app-hint">
+                            {t.bare('mobileAccess.appPairHint', { link: LINK_SLOT }).split(LINK_SLOT).flatMap((part, i, parts) => [
+                                part,
+                                ...(i < parts.length - 1 ? [(
+                                    <button
+                                        key="link"
+                                        type="button"
+                                        className="link-btn"
+                                        onClick={() => { onClose(); openSettings('devices'); }}
+                                    >
+                                        <bdi>{t.compose((say) => `${say('settings.title')} › ${say('settings.section.devices')}`)}</bdi>
+                                    </button>
+                                )] : []),
+                            ])}
+                        </p>
                     )}
 
                     {status?.active && !error && (

@@ -3627,6 +3627,19 @@ for (const locale of ['ar', 'en']) {
         expect(await audit(page)).toEqual([]);
     });
 
+    if (locale === 'en') test('Mobile access points app users to Phones and tablets (en, dark)', async ({ page }) => {
+        const active = { active: true, url: 'https://quiet-otter.ngrok.app', token: 'a1b2c3d4-0000-4000-8000-00000000beef', startedAt: NOW.toISOString(), error: null, reason: null, installCommands: [], device: null };
+        await open(page, '', 'en', async (p) => {
+            await p.route('**/api/tunnel/start', (route) => route.fulfill({ json: active }));
+            await p.route('**/api/tunnel/status', (route) => route.fulfill({ json: active }));
+        }, 'dark');
+        await page.locator('.sb-icon-btn').filter({ has: page.locator('.lucide-smartphone') }).click();
+        const hint = page.locator('.mobile-modal .mobile-app-hint');
+        await expect(hint).toHaveText('Have the GAIA app? Pair it in Settings › Phones and tablets instead.');
+        await shot(page, 'mobile-access-app-hint-en-dark');
+        expect(await audit(page)).toEqual([]);
+    });
+
     test(`a Setup row lands on its setting, with a way back (${locale})`, async ({ page }) => {
         await open(page, '', locale, async (p) => {
             await withModelPage(p, MODEL_LIST, SETUP_PLAN);
