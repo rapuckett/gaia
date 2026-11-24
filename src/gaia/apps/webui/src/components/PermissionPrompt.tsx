@@ -1,7 +1,7 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, ShieldQuestion } from 'lucide-react';
 import {
     useNotificationStore,
@@ -11,67 +11,60 @@ import {
     PATH_ACCESS_TOOL,
     PROJECT_TRUST_TOOL,
     permissionPromptText,
+    alwaysScopeText,
     type PermissionDecision,
 } from '../stores/notificationStore';
 import type { GaiaNotification } from '../types/agent';
 import { isEscapeClaimed } from '../hooks/useEscapeToClose';
-import { CalendarApproval, CALENDAR_WRITE_TOOLS } from './CalendarApproval';
+import {
+    CalendarApproval, CALENDAR_WRITE_TOOLS, unseen, unseenCommand, unseenStrict, visibleCommand, visibleStrict, visibleText,
+} from './CalendarApproval';
+import { cmdReading, decodedPowerShell } from './shownText';
+import {
+    CODE_TOOLS,
+    COMMAND_SUMMARY_TOOLS,
+    EXACT_SUMMARY_TOOLS,
+    MAIL_ADDRESS_FIELDS,
+    MAIL_FIELDS,
+    PROMPT_CODE_PREVIEW_LINES,
+    SCRIPT_UNREADABLE,
+    formatCountdown,
+    shortScope,
+    shownArgs,
+    shownField,
+    shownScript,
+    splitCommandSummary,
+    splitMailHeader,
+    summarizeField,
+    type MailHeader,
+} from '../utils/permissionPrompts.core';
 import { pluralKey } from '../i18n/registry';
 import { useT } from '../i18n/useT';
 import { MarkedText, markLtr } from './MarkedText';
 import { ChangePreview, fileChange } from './PermissionChangePreview';
 import './PermissionPrompt.css';
 
-/** One-line description of a tool call, e.g. `run_shell_command · git status`. */
-function summarize(n: GaiaNotification): string {
-    const args = n.toolArgs ?? {};
-    const primary = ['command', 'file_path', 'path', 'url', 'query', 'name']
-        .map((k) => args[k])
-        .find((v) => typeof v === 'string' && v.trim());
-    return typeof primary === 'string' ? primary : '';
-}
-
-/** Tools whose relayed summary is a command and its risk note (`COMMAND_SUMMARY_TOOLS` in sse_translation.py). */
-const COMMAND_SUMMARY_TOOLS = new Set(['run_shell_command', 'wait_for_condition']);
-
-/** Tools whose relayed summary is the exact text being approved (`EXACT_TEXT_ARG` in call_risk.py). The flagship runs them from its send-email skill, so they also arrive namespaced. */
-const EXACT_MAIL_TOOLS = ['send_now', 'send_draft', 'reply_to_message', 'forward_message', 'discard_draft', 'update_draft'];
-const EXACT_SUMMARY_TOOLS = new Set([...EXACT_MAIL_TOOLS, ...EXACT_MAIL_TOOLS.map((tool) => `send-email/${tool}`)]);
-
-/**
- * A relayed command prompt with no args: `command[\n…]\nin <folder>[\n(extras)]\n<risk note>`
- * (`render_command_summary` in sse_translation.py). The command keeps its own lines.
- */
-export function splitCommandSummary(summary: string): { command: string; folder: string; extras: string; note: string } | null {
-    const lines = summary.split('\n');
-    if (lines.length < 2) return null;
-    // No note when the call carries no risk worth naming: the folder is then last.
-    const hasNote = !lines[lines.length - 1].startsWith('in ');
-    const note = hasNote ? lines[lines.length - 1].trim() : '';
-    const body = hasNote ? lines.slice(0, -1) : lines;
-    let at = -1;
-    for (let i = body.length - 1; i > 0; i--) {
-        if (body[i].startsWith('in ')) { at = i; break; }
-    }
-    if (at < 0) return { command: body.join('\n'), folder: '', extras: '', note };
-    return {
-        command: body.slice(0, at).join('\n'),
-        folder: body[at].slice(3).trim(),
-        extras: body.slice(at + 1).join(' ').trim(),
-        note,
-    };
-}
-
-/** A grant's folder by its name alone, for a button; the full path stays in its tooltip. */
-export function shortScope(scope: string): string {
-    return scope.replace(/(\s)((?:[A-Za-z]:)?[\\/][^]*)$/, (_, space: string, path: string) => {
-        const name = path.split(/[\\/]/).filter(Boolean).pop();
-        return name ? `${space}${name}` : `${space}${path}`;
-    });
+function MailFacts({ header }: { header: MailHeader }) {
+    const t = useT();
+    const key = new Map(MAIL_FIELDS);
+    return (
+        <dl className="perm-card-facts perm-mail-header" data-testid="perm-mail-header">
+            {header.fields.map(([label, value], i) => (
+                <Fragment key={i}>
+                    <dt>{t(key.get(label)!)}</dt>
+                    <dd className={label === 'From' ? 'perm-mail-from' : undefined}>
+                        <bdi dir={MAIL_ADDRESS_FIELDS.has(label) ? 'ltr' : 'auto'}>{value}</bdi>
+                    </dd>
+                </Fragment>
+            ))}
+        </dl>
+    );
 }
 
 /** Lines of code a prompt shows before "Show all". */
-export const CODE_PREVIEW_LINES = 12;
+export const CODE_PREVIEW_LINES = PROMPT_CODE_PREVIEW_LINES;
+
+export { formatCountdown, shortScope, shownScript, splitCommandSummary, splitMailHeader, type MailHeader };
 
 /** Long text, collapsed past `previewLines` lines (the code a gated call runs, a tool's output). */
 export function CodeBlock({ code, previewLines = CODE_PREVIEW_LINES, testId = 'perm-code', exact = false }: {
@@ -117,14 +110,6 @@ export function PermissionPrompt({ sessionId }: { sessionId: string }) {
     return <PromptCard key={prompt.id} notification={prompt} />;
 }
 
-/** `45` -> "45s", `600` -> "10:00". */
-export function formatCountdown(seconds: number): string {
-    if (seconds < 60) return `${seconds}s`;
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${String(secs).padStart(2, '0')}`;
-}
-
 function PromptCard({ notification }: { notification: GaiaNotification }) {
     const t = useT();
     const respond = useNotificationStore((s) => s.respondToPermission);
@@ -143,10 +128,14 @@ function PromptCard({ notification }: { notification: GaiaNotification }) {
     const freshConsent = requiresFreshConsent(notification.tool);
     const scope = freshConsent ? undefined : notification.alwaysScope;
     // Shell scopes are already the command itself, so only file and skill grants carry a label.
-    const scopeText = notification.alwaysLabel ?? scope ?? '';
+    // It names a file or skill the model chose, so its hidden characters show as codes.
+    const markedScope = notification.alwaysScope && visibleStrict(notification.alwaysScope);
+    const scopeText = alwaysScopeText({ ...notification, alwaysScope: markedScope }, t)
+        ?? visibleStrict(notification.alwaysLabel ?? scope ?? '');
     const repeats = useNotificationStore((s) => repeatedAllowCount(s.notifications, notification));
     const suggestAlways = !!scope && repeats > 0;
-    const detail = summarize(notification);
+    const field = summarizeField(notification);
+    const detail = field.text;
     const args = notification.toolArgs ?? {};
     const hasArgs = Object.keys(args).length > 0;
     // A call GAIA's own checks don't cover is approved on its exact text, once:
@@ -154,7 +143,13 @@ function PromptCard({ notification }: { notification: GaiaNotification }) {
     const riskNote = typeof args._risk_note === 'string' ? args._risk_note : '';
     const folder = riskNote && typeof args.working_directory === 'string' ? args.working_directory : '';
     // Code is approved as written, so all of it is one click away, never only a summary.
-    const code = typeof args.code === 'string' && args.code.trim() ? args.code : '';
+    // A file is approved on its content too: the path alone does not say what runs.
+    const script = shownScript(notification.tool, args);
+    const code = typeof args.code === 'string' && args.code.trim() ? args.code : script?.text?.trim() ? script.text : '';
+    // GAIA screens a script's text but can't see what it does when it runs.
+    const codeNote = (code || CODE_TOOLS.has(notification.tool ?? '')) && !riskNote ? t('prompt.codeRisk') : '';
+    // The script is on the card already; the raw arguments don't repeat it.
+    const detailArgs = script ? Object.fromEntries(Object.entries(args).filter(([key]) => key !== '_script')) : args;
     // An email is approved as it will be sent, so all of it shows, uncollapsed.
     // Over the sidecar relay it arrives as the summary.
     const exactText = typeof args._exact_text === 'string'
@@ -163,8 +158,17 @@ function PromptCard({ notification }: { notification: GaiaNotification }) {
     const relayed = !hasArgs && COMMAND_SUMMARY_TOOLS.has(notification.tool ?? '')
         ? splitCommandSummary(notification.summary ?? '')
         : null;
+    const mail = exactText ? splitMailHeader(exactText) : null;
     const isPath = notification.tool === PATH_ACCESS_TOOL;
-    const { heading, question } = permissionPromptText(notification, t, markLtr);
+    // Characters that don't show are shown as [U+XXXX]: the card is approved as it reads.
+    const { heading, question } = permissionPromptText(notification, t, (s) => markLtr(visibleStrict(s)));
+    const { shown: shownDetail, coded: detailCoded } = shownField(field.key, detail);
+    const command = typeof args.command === 'string' ? args.command : relayed?.command ?? '';
+    // What the command runs when its own text hides it: base64 PowerShell, cmd's ^ escapes.
+    const decoded = command ? decodedPowerShell(command) : '';
+    const reading = command.includes('^') ? cmdReading(command) : '';
+    const hidden = detailCoded || [code, relayed?.extras].some(unseen) || [command, decoded].some(unseenCommand)
+        || [args.path, folder, relayed?.folder].some(unseenStrict);
 
     const calendar = CALENDAR_WRITE_TOOLS.has(notification.tool ?? '');
 
@@ -222,24 +226,45 @@ function PromptCard({ notification }: { notification: GaiaNotification }) {
                     <h2 id={`perm-${notification.id}`} className="perm-card-title">
                         <MarkedText text={heading} />
                     </h2>
-                    {detail && riskNote && <pre dir="ltr" className="perm-card-pre perm-card-exact">{detail}</pre>}
-                    {detail && !riskNote && <p className="perm-card-detail"><code dir="ltr">{detail}</code></p>}
-                    {folder && <p className="perm-card-detail">{t.bare('prompt.in')} <code dir="ltr">{folder}</code></p>}
+                    {detail && riskNote && <pre dir="ltr" className="perm-card-pre perm-card-exact">{shownDetail}</pre>}
+                    {detail && !riskNote && <p className="perm-card-detail"><code dir="ltr">{shownDetail}</code></p>}
+                    {folder && <p className="perm-card-detail">{t.bare('prompt.in')} <code dir="ltr">{visibleStrict(folder)}</code></p>}
                     {riskNote && <p className="perm-card-risk" role="note"><bdi>{riskNote}</bdi></p>}
-                    {code && <CodeBlock code={code} />}
-                    {exactText && <pre dir="ltr" className="perm-card-pre perm-card-exact" data-testid="perm-exact-text">{exactText}</pre>}
-                    {relayed && <pre dir="ltr" className="perm-card-pre perm-card-exact">{relayed.command}</pre>}
-                    {relayed?.folder && <p className="perm-card-detail">{t.bare('prompt.in')} <code dir="ltr">{relayed.folder}</code></p>}
-                    {relayed?.extras && <p className="perm-card-detail"><bdi>{relayed.extras}</bdi></p>}
+                    {code && <CodeBlock code={visibleText(code, true)} />}
+                    {script?.text != null && !script.text.trim() && (
+                        <p className="perm-card-detail" data-testid="perm-script-empty">{t('prompt.scriptEmpty')}</p>
+                    )}
+                    {!!script?.hiddenLines && (
+                        <p className="perm-card-risk" role="note" data-testid="perm-script-more">
+                            <bdi>{t.plural('prompt.scriptMoreLines', script.hiddenLines, { n: script.hiddenLines })}</bdi>
+                        </p>
+                    )}
+                    {script?.unreadable && (
+                        <p className="perm-card-risk" role="note" data-testid="perm-script-unreadable">
+                            <bdi>{t(SCRIPT_UNREADABLE[script.unreadable])}</bdi>
+                        </p>
+                    )}
+                    {codeNote && <p className="perm-card-risk" role="note" data-testid="perm-code-risk"><bdi>{codeNote}</bdi></p>}
+                    {mail?.before && <pre dir="ltr" className="perm-card-pre perm-card-exact">{mail.before}</pre>}
+                    {mail && <MailFacts header={mail} />}
+                    {exactText && <pre dir="ltr" className="perm-card-pre perm-card-exact" data-testid="perm-exact-text">{mail ? mail.body : exactText}</pre>}
+                    {relayed && <pre dir="ltr" className="perm-card-pre perm-card-exact">{visibleCommand(relayed.command)}</pre>}
+                    {decoded && <p className="perm-card-detail">{t('prompt.decodedCommand')}</p>}
+                    {decoded && <pre dir="ltr" className="perm-card-pre perm-card-exact" data-testid="perm-decoded">{visibleCommand(decoded)}</pre>}
+                    {reading && reading !== command && <p className="perm-card-detail">{t('prompt.cmdReading')}</p>}
+                    {reading && reading !== command && <pre dir="ltr" className="perm-card-pre perm-card-exact" data-testid="perm-cmd-reading">{visibleCommand(reading)}</pre>}
+                    {hidden && <p className="perm-card-risk" role="note" data-testid="perm-hidden-note"><bdi>{t('prompt.hiddenChars')}</bdi></p>}
+                    {relayed?.folder && <p className="perm-card-detail">{t.bare('prompt.in')} <code dir="ltr">{visibleStrict(relayed.folder)}</code></p>}
+                    {relayed?.extras && <p className="perm-card-detail"><bdi>{visibleText(relayed.extras, false)}</bdi></p>}
                     {relayed?.note && <p className="perm-card-risk" role="note"><bdi>{relayed.note}</bdi></p>}
                     {calendar && hasArgs && <CalendarApproval tool={notification.tool!} args={args} />}
                     {calendar && !hasArgs && notification.summary && <pre dir="ltr" className="perm-card-pre perm-card-exact" data-testid="perm-exact-summary">{notification.summary}</pre>}
-                    {!detail && !code && !exactText && !calendar && notification.summary && !relayed && <p className="perm-card-detail"><bdi>{notification.summary}</bdi></p>}
+                    {!detail && !code && !exactText && !calendar && notification.summary && !relayed && <p className="perm-card-detail"><bdi>{visibleText(notification.summary, true)}</bdi></p>}
                     {freshConsent && <p className="perm-card-detail perm-card-question"><MarkedText text={question} /></p>}
                     <ChangePreview args={args} />
                 </div>
                 {remaining !== null && !expired && (
-                    <span className="perm-card-timer" title={t('prompt.timer')}>{formatCountdown(remaining)}</span>
+                    <span className="perm-card-timer" title={t('prompt.timer')}><MarkedText text={t('countdown.left', { time: markLtr(formatCountdown(remaining)) })} /></span>
                 )}
             </div>
             {hasArgs && !exactText && (
@@ -253,7 +278,7 @@ function PromptCard({ notification }: { notification: GaiaNotification }) {
                         <ChevronRight size={13} className={showArgs ? 'is-open' : ''} aria-hidden="true" />
                         {t(fileChange(args) ? 'prompt.technicalDetails' : 'prompt.details')}
                     </button>
-                    {showArgs && <pre dir="ltr" className="perm-card-pre">{JSON.stringify(args, null, 2)}</pre>}
+                    {showArgs && <pre dir="ltr" className="perm-card-pre">{visibleText(JSON.stringify(shownArgs(detailArgs), null, 2), true)}</pre>}
                 </div>
             )}
             {suggestAlways && !expired && (

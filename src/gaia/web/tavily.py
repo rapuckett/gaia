@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from gaia.database.mixin import DatabaseMixin
+from gaia.home import gaia_home
 from gaia.logger import get_logger
 from gaia.web.client import WebClient
 
@@ -54,7 +55,6 @@ except ImportError:  # pragma: no cover - exercised only when SDK absent
 _CONNECTOR_ID = "mcp-tavily"
 _API_KEY_ENV = "TAVILY_API_KEY"
 
-_DEFAULT_DB_PATH = Path.home() / ".gaia" / "tavily_cache.db"
 _DEFAULT_TTL_SECONDS = 24 * 60 * 60  # results go stale; re-fetch after a day
 
 # Credit cost per (operation, depth), used when the SDK response carries no
@@ -177,13 +177,15 @@ class _TavilyBase(DatabaseMixin):
     def __init__(
         self,
         *,
-        db_path: Union[str, Path] = _DEFAULT_DB_PATH,
+        db_path: Union[str, Path, None] = None,
         budget: Optional[BudgetConfig] = None,
         cache_ttl: int = _DEFAULT_TTL_SECONDS,
         sdk_client: Any = None,
         api_key: Optional[str] = None,
         web_client: Optional[WebClient] = None,
     ) -> None:
+        if db_path is None:
+            db_path = gaia_home() / "tavily_cache.db"
         self.init_db(str(db_path))
         self._ensure_schema()
         # The cap is per session; a row id, unlike created_at, survives clock steps.

@@ -248,6 +248,23 @@ class TestEnsure:
         embedded.claim.assert_called_once_with(OWNER, mock.ANY)
         embedded.stop.assert_not_called()
 
+    def test_server_another_live_daemon_owns_is_used_never_claimed_or_stopped(
+        self,
+    ):
+        """A second daemon must not take, then stop, the first one's server."""
+        other = 2000
+        embedded = _embedded(_running(owner_pid=other))
+        embedded.stop.return_value = True
+        owner = _owner(embedded, alive=(other,))
+
+        ensured = owner.ensure()
+        assert ensured.started is False
+        assert ensured.base_url == "http://localhost:51234/api/v1"
+        assert owner.stop() is False
+        embedded.claim.assert_not_called()
+        embedded.stop.assert_not_called()
+        embedded.start.assert_not_called()
+
     def test_stalled_server_a_crashed_daemon_left_is_reaped_and_replaced(self):
         embedded = _embedded(_status(port=1, unresponsive_pid=9, owner_pid=CRASHED))
         ensured = _owner(embedded).ensure()

@@ -4,11 +4,16 @@
 /** A `status` event's effect on the live line and the turn's timeline. */
 
 import { useChatStore } from '../stores/chatStore';
+import { getT } from '../i18n/useT';
 import type { StreamEvent } from '../types';
+import { RECONNECTING_PHASE } from './constants';
 import { agentEventToStep, isProgressTick, statusText } from './streamSteps';
 
-/** Live phases that are a call's own label or the client's wait notice, not the call's progress. */
-const CALL_LABEL_PHASES = new Set(['tool', 'waiting']);
+/** Same as SPEECH_MODEL_DOWNLOADED_PHASE in audio_tools.py. */
+const SPEECH_MODEL_DOWNLOADED = 'speech_model_downloaded';
+
+/** Live phases that are a call's own label or the client's own notice, not the call's progress. */
+const CALL_LABEL_PHASES = new Set(['tool', 'waiting', RECONNECTING_PHASE]);
 
 /** A phase sent while a call runs comes from that call's own model calls, not the turn's. */
 export function selectToolStatus(s: { livePhase: string | null; liveStatus: string | null }): string | null {
@@ -39,6 +44,16 @@ export function applyStatusEvent(event: StreamEvent, stepIdRef: { current: numbe
         });
         return;
     }
+    if (event.phase === SPEECH_MODEL_DOWNLOADED && msg) {
+        // A download the user waited on stays in the turn's steps.
+        const done = { label: msg, active: false, success: true, kept: true };
+        const last = store.agentSteps[store.agentSteps.length - 1];
+        if (last && last.type === 'status' && last.active) store.updateLastAgentStep({ ...done, detail: undefined });
+        // It finished inside the running call, so it goes above that call's row, not under it.
+        else store.addStepBeforeRunningCall({ id: ++stepIdRef.current, type: 'status', timestamp: Date.now(), ...done });
+        store.setLiveStatus(null);
+        return;
+    }
     if (event.phase && msg) store.setLiveStatus(msg, event.phase);
     // The client's own wait notice is not a step of the turn.
     if (event.phase === 'waiting') return;
@@ -49,12 +64,12 @@ export function applyStatusEvent(event: StreamEvent, stepIdRef: { current: numbe
     const lastStep = store.agentSteps[store.agentSteps.length - 1];
     // A warning is its own row; written over a progress row, the next progress line erases it.
     if (lastStep && lastStep.type === 'status' && lastStep.active && status !== 'warning') {
-        store.updateLastAgentStep({ label: msg || 'Working', detail: msg });
+        store.updateLastAgentStep({ label: msg || getT()('activity.working'), detail: msg });
         return;
     }
     // Only the label: a thinking step's detail holds the reasoning so far.
     if (lastStep && lastStep.type === 'thinking' && lastStep.active) {
-        store.updateLastAgentStep({ label: msg || 'Thinking' });
+        store.updateLastAgentStep({ label: msg || getT()('activity.thinking') });
         return;
     }
     const step = agentEventToStep({ ...event, message: msg }, stepIdRef);

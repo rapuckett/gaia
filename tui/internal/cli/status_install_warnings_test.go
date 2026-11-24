@@ -5,6 +5,8 @@ package cli
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,7 +21,7 @@ import (
 // looks exactly like never having installed it.
 func TestStatusNamesAnUnreadableInstallWithTheServiceDown(t *testing.T) {
 	home := t.TempDir()
-	dir := filepath.Join(home, ".gaia", "agents", "email")
+	dir := filepath.Join(home, ".gaia", "agents", "notes")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -31,6 +33,10 @@ func TestStatusNamesAnUnreadableInstallWithTheServiceDown(t *testing.T) {
 		t.Setenv("USERPROFILE", home)
 	}
 	t.Setenv("GAIA_HOME", filepath.Join(home, ".gaia"))
+	// Status also probes the model server: point it at a closed port, not the developer's Lemonade.
+	down := httptest.NewServer(http.NotFoundHandler())
+	down.Close()
+	t.Setenv("LEMONADE_BASE_URL", down.URL+"/api/v1")
 
 	var out bytes.Buffer
 	if err := printStatus(&out); err == nil {
@@ -39,7 +45,7 @@ func TestStatusNamesAnUnreadableInstallWithTheServiceDown(t *testing.T) {
 
 	got := out.String()
 	if !strings.Contains(got, "Not listed:") ||
-		!strings.Contains(got, "'email' is not listed as installed") ||
+		!strings.Contains(got, "'notes' is not listed as installed") ||
 		!strings.Contains(got, "reinstall it") {
 		t.Fatalf("status did not name the unreadable install:\n%s", got)
 	}

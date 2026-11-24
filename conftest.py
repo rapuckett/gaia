@@ -17,7 +17,8 @@ still resolves elsewhere, rather than letting a green run mean nothing.
 It also points GAIA's config file, daemon home, TUI home, memory database, log
 file, file index and scratchpad at a per-session tmp dir, so no result depends
 on the developer's real ~/.gaia, and fails any test that opens a database
-inside it.
+inside it. HOME itself points at a tmp dir too, and any write a test tries
+into the real ~/.gaia is refused and fails that test.
 
 Set ``GAIA_ALLOW_EXTERNAL_IMPORTS=1`` to opt out — testing an actually-installed
 wheel is a legitimate thing to do, it just must not happen by accident.
@@ -46,7 +47,7 @@ def _source_roots():
 
     For a hub agent the importable root is the directory CONTAINING the package
     (``hub/agents/gaia/python``), not the package itself — putting the package
-    dir on sys.path makes ``import gaia_agent`` miss it entirely.
+    dir on sys.path makes ``import gaiapy`` miss it entirely.
 
     A hub agent is included ONLY when its package already resolves somewhere.
     This redirects an existing install to this checkout; it must not *create*
@@ -66,8 +67,8 @@ _SOURCE_ROOTS = _source_roots()
 
 #: Modules whose origin proves which checkout is under test. The hub agents are
 #: listed too: they are separately editable-installed, so ``gaia`` can resolve
-#: here while ``gaia_agent`` quietly comes from another worktree.
-_ANCHOR_MODULES = ("gaia", "gaia_agent")
+#: here while ``gaiapy`` quietly comes from another worktree.
+_ANCHOR_MODULES = ("gaia", "gaiapy")
 
 
 def _prepend_source_roots() -> None:
@@ -160,6 +161,8 @@ def _isolate_gaia_state() -> None:
         os.environ[name] = str(path)
         ours.append(name)
     os.environ[_STATE_SET_BY_CONFTEST] = ",".join(ours)
+    # A test must never run the real npm install and build of the web UI.
+    os.environ.setdefault("GAIA_SKIP_WEBUI_BUILD", "1")
 
 
 def _isolate_config_dir() -> None:
@@ -186,8 +189,23 @@ def _keep_ssl_unpatched() -> None:
 #: run is killed before any teardown runs. Mirrors gaia.daemon.lifetime.
 _EXIT_WITH_PID_ENV = "GAIA_DAEMON_EXIT_WITH_PID"
 
-#: The developer's real GAIA home, read before any test patches ``Path.home``.
-_REAL_GAIA_HOME = Path.home() / ".gaia"
+#: The developer's real home, read before this file points HOME at a tmp dir
+#: (_isolate_user_home) or any test patches ``Path.home``. A pytest-xdist worker
+#: inherits the tmp HOME, so it reads the real one from the controller.
+_REAL_HOME_ENV = "_GAIA_TEST_REAL_HOME"
+
+
+def _account_home() -> Path:
+    """The OS account's home, never a HOME a caller set by hand."""
+    if os.name != "nt":
+        import pwd
+
+        return Path(pwd.getpwuid(os.getuid()).pw_dir)
+    return Path.home()
+
+
+_REAL_USER_HOME = Path(os.environ.get(_REAL_HOME_ENV) or _account_home())
+_REAL_GAIA_HOME = _REAL_USER_HOME / ".gaia"
 
 #: Bound before any test patches ``os.path.realpath``: a test that breaks it
 #: must not break the guards, which coverage also reaches via sqlite3.connect.
@@ -225,9 +243,138 @@ def _child_gaia_home(env) -> Path:
     return (Path(user_home) if user_home else _REAL_GAIA_HOME.parent) / ".gaia"
 
 
+def _isolate_user_home() -> None:
+    """Point HOME at a per-session tmp dir, so no test or child process writes ~/.gaia.
+
+    GAIA builds many paths from ``Path.home()`` rather than ``gaia_home()``, and a
+    ``gaia`` subprocess inherits HOME, so naming each state file (_STATE_ENV)
+    can't cover them all. Git's own config is copied in, so tests that commit
+    behave as they would in the real home. The real SD lane keeps its home.
+    """
+    if os.environ.get("GAIA_REQUIRE_SD") == "1" or os.environ.get(_REAL_HOME_ENV):
+        return
+    # Outside the temp dir: GAIA treats paths under it as temporary, and a real
+    # home never is.
+    if os.name == "nt":
+        cache = Path(
+            os.environ.get("LOCALAPPDATA") or _REAL_USER_HOME / "AppData" / "Local"
+        )
+    elif sys.platform == "darwin":
+        cache = _REAL_USER_HOME / "Library" / "Caches"
+    else:
+        cache = Path(os.environ.get("XDG_CACHE_HOME") or _REAL_USER_HOME / ".cache")
+    (cache / "gaia-test-homes").mkdir(parents=True, exist_ok=True)
+    # matplotlib rebuilds its ~15-30 s font cache in a fresh HOME; a persistent
+    # one beside the homes (never inside one) survives the atexit rmtree.
+    if not os.environ.get("MPLCONFIGDIR"):
+        mpl_cache = cache / "gaia-test-matplotlib"
+        mpl_cache.mkdir(parents=True, exist_ok=True)
+        os.environ["MPLCONFIGDIR"] = str(mpl_cache)
+    home = Path(
+        _REALPATH(tempfile.mkdtemp(prefix="home-", dir=cache / "gaia-test-homes"))
+    )
+    atexit.register(shutil.rmtree, home, ignore_errors=True)
+    for config in (Path(".gitconfig"), Path(".config", "git", "config")):
+        if (_REAL_USER_HOME / config).is_file():
+            (home / config).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(_REAL_USER_HOME / config, home / config)
+    os.environ[_REAL_HOME_ENV] = str(_REAL_USER_HOME)
+    os.environ["HOME"] = str(home)
+    if os.name == "nt":
+        os.environ["USERPROFILE"] = str(home)
+
+
+#: Writes into the real ~/.gaia this process tried, as (test, event, path).
+_REAL_HOME_WRITES: list = []
+_WRITE_EVENTS = frozenset(
+    {"open", "os.mkdir", "os.rename", "os.replace", "os.remove", "os.rmdir"}
+    | {"os.symlink", "os.link", "os.truncate", "shutil.rmtree", "shutil.move"}
+)
+_WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
+
+
+def _refuse_real_home_writes() -> None:
+    """Refuse, and fail the test for, any in-process write into the real ~/.gaia.
+
+    The tmp HOME covers code that asks for the home at run time; this catches a
+    path computed before it, or spelled out, which would reach the developer's
+    own chats, settings and connectors.
+    """
+    real = os.path.normcase(os.path.abspath(_REAL_GAIA_HOME))
+    roots = {real, os.path.normcase(_REALPATH(real))}
+
+    def inside(path) -> bool:
+        if isinstance(path, int) or path is None:
+            return False
+        try:
+            path = os.path.normcase(os.path.abspath(os.fsdecode(path)))
+        except (TypeError, ValueError):
+            return False
+        return any(path == root or path.startswith(root + os.sep) for root in roots)
+
+    def hook(event, args):
+        if event not in _WRITE_EVENTS:
+            return
+        if event == "open":
+            path, mode, flags = args
+            writes = (
+                any(c in mode for c in "wax+")
+                if isinstance(mode, str)
+                else bool(flags & _WRITE_FLAGS)
+            )
+            paths = (path,) if writes else ()
+        else:
+            paths = (
+                args[:2]
+                if event in {"os.rename", "os.replace", "shutil.move"}
+                else args[:1]
+            )
+        for target in paths:
+            if inside(target):
+                test = os.environ.get("PYTEST_CURRENT_TEST", "outside any test")
+                _REAL_HOME_WRITES.append((test, event, os.fsdecode(target)))
+                raise PermissionError(
+                    f"{event} {os.fsdecode(target)}: tests must not write the real "
+                    f"GAIA home {_REAL_GAIA_HOME}. Use tmp_path, or set GAIA_HOME "
+                    "with monkeypatch.setenv."
+                )
+
+    sys.addaudithook(hook)
+
+
 _prepend_source_roots()
+_isolate_user_home()
+if os.environ.get("GAIA_REQUIRE_SD") != "1":
+    _refuse_real_home_writes()
 _isolate_gaia_state()
 os.environ[_EXIT_WITH_PID_ENV] = str(os.getpid())
+
+
+@pytest.fixture(autouse=True)
+def _no_real_gaia_home_writes():
+    """Fail a test that tried to write the real ~/.gaia, even if its code caught the error."""
+    before = len(_REAL_HOME_WRITES)
+    yield
+    tried = _REAL_HOME_WRITES[before:]
+    if tried:
+        listed = "; ".join(f"{event} {path}" for _test, event, path in tried[:5])
+        pytest.fail(
+            f"this test tried to write the real GAIA home {_REAL_GAIA_HOME} "
+            f"({listed}). Use tmp_path, or set GAIA_HOME with monkeypatch.setenv.",
+            pytrace=False,
+        )
+
+
+def pytest_sessionfinish(session, exitstatus):  # noqa: D103 — pytest hook
+    if not _REAL_HOME_WRITES:
+        return
+    print(
+        f"\nWrites into the real GAIA home {_REAL_GAIA_HOME}, refused:", file=sys.stderr
+    )
+    for test, event, path in _REAL_HOME_WRITES:
+        print(f"  {test}: {event} {path}", file=sys.stderr)
+    if session.exitstatus == 0:
+        session.exitstatus = 1
 
 
 def pytest_sessionstart(session):  # noqa: D103 — pytest hook
@@ -274,6 +421,16 @@ def pytest_configure(config):  # noqa: D103 — pytest hook
     config.addinivalue_line(
         "markers",
         "npu_host_probe: let gaia.llm.npu_linux read this machine's NPU setup",
+    )
+    config.addinivalue_line(
+        "markers",
+        "speech_platform_gate: judge whether GAIA offers its voice by this "
+        "machine's real platform",
+    )
+    config.addinivalue_line(
+        "markers",
+        "real_path_refresh: let gaia.program_lookup read PATH from the registry "
+        "or the login shell (its sources must be mocked)",
     )
 
 
@@ -392,6 +549,52 @@ def _no_npu_host_probe(request, monkeypatch):
     monkeypatch.setattr(npu_linux, "problems", lambda: [])
 
 
+_REAL_CURRENT_PLATFORM = {}
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _speech_offered_on_any_platform():
+    """Run speech tests as on a platform where GAIA offers its voice.
+
+    Otherwise every read-aloud and dictation test fails on a Mac, where the
+    voice is withheld. Session scope also covers module-scoped fixtures that
+    build agents. Opt a test in to the real platform with
+    @pytest.mark.speech_platform_gate.
+    """
+    import gaia.config
+
+    _REAL_CURRENT_PLATFORM["function"] = gaia.config._current_platform
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(gaia.config, "_current_platform", lambda: "linux")
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _real_speech_platform(request, monkeypatch):
+    if not request.node.get_closest_marker("speech_platform_gate"):
+        return
+    import gaia.config
+
+    monkeypatch.setattr(
+        gaia.config, "_current_platform", _REAL_CURRENT_PLATFORM["function"]
+    )
+
+
+@pytest.fixture(autouse=True)
+def _no_real_path_refresh(request, monkeypatch):
+    """Keep a program a test hides from ``PATH`` hidden.
+
+    A lookup that misses re-reads ``PATH`` from the registry, which on a
+    developer's PC would put the real git or gh back and flip the test. Opt a
+    test in with @pytest.mark.real_path_refresh.
+    """
+    if request.node.get_closest_marker("real_path_refresh"):
+        return
+    from gaia import program_lookup
+
+    monkeypatch.setattr(program_lookup, "refresh_path", lambda after_install=False: [])
+
+
 @pytest.fixture(autouse=True)
 def _no_real_claude_login(monkeypatch):
     """Hide the developer's real ``claude`` CLI and login from credential choice.
@@ -480,6 +683,24 @@ def _guard_real_gaia_home():
             )
         return real_post_start(*args, **kwargs)
 
+    from gaia.automations import files as automation_files
+
+    real_write_json = automation_files.write_json
+
+    def guarded_write_json(path, data):
+        # A daemon's clock runs the automations pass on every poll.
+        if _is_real_gaia_home(path):
+            pytest.fail(
+                _REAL_HOME_MESSAGE.format(
+                    action=f"write {Path(path).name} in",
+                    home=_REAL_GAIA_HOME,
+                    harm="it would take, queue or drop your own reminders.",
+                    hint="Set GAIA_CONFIG_DIR or GAIA_HOME to tmp_path.",
+                ),
+                pytrace=False,
+            )
+        return real_write_json(path, data)
+
     def guarded_spawn(*args, **kwargs):
         home = _child_gaia_home(os.environ)
         if _is_real_gaia_home(home):
@@ -506,6 +727,76 @@ def _guard_real_gaia_home():
         # sqlite3.dbapi2 is the module SQLAlchemy and other drivers bind.
         for module in (sqlite3, sqlite3.dbapi2):
             mp.setattr(module, "connect", _guard_connect(module.connect))
+        mp.setattr(automation_files, "write_json", guarded_write_json)
+        yield
+
+
+_DEFAULT_LEMONADE_PORT = 13305
+_LOOPBACK_HOSTS = {"localhost", "::1", "0:0:0:0:0:0:0:1"}
+
+
+def _is_loopback(host) -> bool:
+    return isinstance(host, str) and (
+        host.lower() in _LOOPBACK_HOSTS or host.startswith("127.")
+    )
+
+
+def _redirected_lemonade_url() -> str | None:
+    """LEMONADE_BASE_URL when it points away from a local Lemonade on 13305."""
+    base_url = os.environ.get("LEMONADE_BASE_URL", "").strip()
+    if not base_url:
+        return None
+    parsed = urllib.parse.urlsplit(base_url)
+    if _is_loopback(parsed.hostname) and parsed.port == _DEFAULT_LEMONADE_PORT:
+        return None
+    return base_url
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _guard_default_lemonade_port():
+    """Fail a test that reaches local 13305 while LEMONADE_BASE_URL says otherwise.
+
+    Covers sockets opened in this process (requests, urllib, httpx sync); a
+    subprocess or a Windows proactor event loop is not seen.
+    """
+    redirected = _redirected_lemonade_url()
+    if redirected is None:
+        yield
+        return
+
+    import socket
+
+    def _check(address):
+        if (
+            isinstance(address, tuple)
+            and len(address) >= 2
+            and address[1] == _DEFAULT_LEMONADE_PORT
+            and _is_loopback(address[0])
+        ):
+            pytest.fail(
+                f"This test connected to {address[0]}:{_DEFAULT_LEMONADE_PORT}, "
+                f"but LEMONADE_BASE_URL={redirected} points tests elsewhere: it "
+                "would reach, and could load models on, the real Lemonade on "
+                "this machine. Resolve the address from LEMONADE_BASE_URL "
+                "(gaia.llm.lemonade_client._get_lemonade_config) instead of "
+                "hard-coding the default port.",
+                pytrace=False,
+            )
+
+    real_connect = socket.socket.connect
+    real_connect_ex = socket.socket.connect_ex
+
+    def guarded_connect(self, address):
+        _check(address)
+        return real_connect(self, address)
+
+    def guarded_connect_ex(self, address):
+        _check(address)
+        return real_connect_ex(self, address)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(socket.socket, "connect", guarded_connect)
+        mp.setattr(socket.socket, "connect_ex", guarded_connect_ex)
         yield
 
 
@@ -563,7 +854,7 @@ def _off_real_home(path: Path) -> Path:
 
 @pytest.fixture(scope="session", autouse=True)
 def _redirect_default_databases():
-    """Open the file index, scratchpad and email stores under ``_TEST_GAIA_HOME``, not ``~/.gaia``.
+    """Open the file index and scratchpad stores under ``_TEST_GAIA_HOME``, not ``~/.gaia``.
 
     Both default to ``gaia_home()``, and GAIA_HOME stays unset (see
     _STATE_ENV). ``ChatAgentConfig`` passes that same default in explicitly, so
@@ -585,13 +876,6 @@ def _redirect_default_databases():
 
         return init
 
-    def redirect_path(real_resolve):
-        @functools.wraps(real_resolve)
-        def resolve(self):
-            return str(_off_real_home(Path(real_resolve(self)).expanduser()))
-
-        return resolve
-
     with pytest.MonkeyPatch.context() as mp:
         for module, cls in (
             (index, index.FileSystemIndexService),
@@ -599,15 +883,6 @@ def _redirect_default_databases():
         ):
             mp.setattr(module, "gaia_home", redirected_home)
             mp.setattr(cls, "__init__", redirect_init(cls.__init__))
-        # The email agent keeps state.db and memory.db under ~/.gaia/email; its
-        # package is absent from jobs that don't install it.
-        if importlib.util.find_spec("gaia_agent_email") is not None:
-            from gaia_agent_email.config import EmailAgentConfig
-
-            for name in ("resolved_db_path", "resolved_memory_db_path"):
-                mp.setattr(
-                    EmailAgentConfig, name, redirect_path(getattr(EmailAgentConfig, name))
-                )
         yield
 
 
@@ -620,10 +895,11 @@ def _session_daemons():
     import psutil
 
     from gaia.daemon.strays import is_daemon_cmdline
+    from gaia.utils.process_tree import readable_processes
 
     mine = str(os.getpid())
     found = []
-    for proc in psutil.process_iter(["pid", "cmdline"]):
+    for proc in readable_processes(["pid", "cmdline"]):
         if not is_daemon_cmdline(proc.info["cmdline"] or []):
             continue
         try:

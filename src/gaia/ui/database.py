@@ -15,7 +15,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from gaia.config import GaiaConfig, gaia_home
 from gaia.utils.process_owner import current_owner, owner_is_gone
@@ -99,6 +99,11 @@ def is_placeholder_title(title: str | None) -> bool:
     return (title or "").strip().lower() in PLACEHOLDER_TITLES
 
 
+def _path_key(filepath: str) -> str:
+    """A case-insensitive form of *filepath*, for comparing stored paths."""
+    return str(Path(filepath)).replace("\\", "/").casefold()
+
+
 # Sentinel used by update_document_status to distinguish "caller passed None to clear
 # last_error" from "caller did not pass last_error at all" (leaving it unchanged).
 _UNSET = object()
@@ -153,6 +158,15 @@ CREATE TABLE IF NOT EXISTS session_documents (
     document_id TEXT REFERENCES documents(id) ON DELETE CASCADE,
     attached_at TEXT DEFAULT (datetime('now')),
     PRIMARY KEY (session_id, document_id)
+);
+
+-- Files attached in a chat's composer that went into the library. The upload
+-- stays readable while a document with its content is attached to the chat.
+CREATE TABLE IF NOT EXISTS session_uploads (
+    session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,
+    upload_path TEXT NOT NULL,
+    file_hash TEXT NOT NULL,
+    PRIMARY KEY (session_id, upload_path)
 );
 
 -- Messages
@@ -227,7 +241,19 @@ CREATE TABLE IF NOT EXISTS cloud_spend (
     usd           REAL
 );
 
+-- One row per change a paired device made on the PC; params never hold a secret.
+-- removed_at is set once the device is no longer paired.
+CREATE TABLE IF NOT EXISTS device_changes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id  TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    params     TEXT NOT NULL DEFAULT '{}',
+    at         REAL NOT NULL,
+    removed_at REAL
+);
+
 -- Indexes
+CREATE INDEX IF NOT EXISTS idx_device_changes_device ON device_changes(device_id, id);
 CREATE INDEX IF NOT EXISTS idx_cloud_spend_month ON cloud_spend(month);
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(file_hash);
@@ -239,8 +265,10 @@ CREATE INDEX IF NOT EXISTS idx_schedule_results_task
 _CHAT_SCHEMA_OBJECTS = frozenset(
     {
         "cloud_spend",
+        "device_changes",
         "documents",
         "idx_cloud_spend_month",
+        "idx_device_changes_device",
         "idx_documents_hash",
         "idx_messages_session",
         "idx_messages_unfolded",
@@ -253,6 +281,7 @@ _CHAT_SCHEMA_OBJECTS = frozenset(
         "scheduled_tasks",
         "session_documents",
         "session_environment",
+        "session_uploads",
         "sessions",
         "settings",
         "unfinished_turns",
@@ -269,9 +298,11 @@ _CHAT_SCHEMA_COLUMNS = {
     },
     "messages": {
         "agent_steps",
+        "failed",
         "inference_stats",
         "library_notices",
         "model_messages",
+        "page_elements",
         "search_text",
         "stopped",
         "turn_summary",
@@ -497,9 +528,13 @@ class ChatDatabase:
         self._add_column("messages", "agent_steps", "TEXT")
         self._add_column("messages", "inference_stats", "TEXT")
         self._add_column("messages", "turn_summary", "TEXT")
+        # JSON list of the elements the user picked in the browser pane.
+        self._add_column("messages", "page_elements", "TEXT")
         self._add_column("messages", "library_notices", "TEXT")
         # 1 when the user's Stop ended this reply, so a reload still says so.
         self._add_column("messages", "stopped", "INTEGER NOT NULL DEFAULT 0")
+        # 1 when a model failure ended this reply's turn; old rows read as not failed.
+        self._add_column("messages", "failed", "INTEGER NOT NULL DEFAULT 0")
         self._add_column("documents", "indexing_status", "TEXT DEFAULT 'complete'")
         self._add_column("documents", "file_mtime", "REAL")
         self._add_column("documents", "last_error", "TEXT")
@@ -978,6 +1013,7 @@ class ChatDatabase:
         library_notices: List[str] | None = None,
         ends_turn: bool = False,
         stopped: bool = False,
+        failed: bool = False,
     ) -> int:
         """Add a message to a session. Returns message ID.
 
@@ -996,8 +1032,8 @@ class ChatDatabase:
                 """INSERT INTO messages
                    (session_id, role, content, created_at, rag_sources,
                     agent_steps, tokens_prompt, tokens_completion, inference_stats, model_messages,
-                    turn_summary, library_notices, stopped)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    turn_summary, library_notices, stopped, failed)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     session_id,
                     role,
@@ -1012,6 +1048,7 @@ class ChatDatabase:
                     summary_json,
                     notices_json,
                     int(stopped),
+                    int(failed),
                 ),
             )
 
@@ -1042,6 +1079,7 @@ class ChatDatabase:
         library_notices: List[str] | None = None,
         ends_turn: bool = False,
         stopped: bool = False,
+        failed: bool = False,
     ) -> int:
         """Atomically replace a message with a fresh row. Returns the new ID.
 
@@ -1072,8 +1110,8 @@ class ChatDatabase:
                 """INSERT INTO messages
                    (session_id, role, content, created_at, rag_sources,
                     agent_steps, tokens_prompt, tokens_completion, inference_stats, model_messages,
-                    turn_summary, library_notices, stopped)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    turn_summary, library_notices, stopped, failed)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     session_id,
                     role,
@@ -1088,6 +1126,7 @@ class ChatDatabase:
                     summary_json,
                     notices_json,
                     int(stopped),
+                    int(failed),
                 ),
             )
 
@@ -1138,6 +1177,16 @@ class ChatDatabase:
                     msg["inference_stats"] = json.loads(msg["inference_stats"])
                 except (json.JSONDecodeError, TypeError):
                     msg["inference_stats"] = None
+            if msg.get("page_elements"):
+                try:
+                    msg["page_elements"] = json.loads(msg["page_elements"])
+                except (json.JSONDecodeError, TypeError) as exc:
+                    logger.warning(
+                        "Message %s has unreadable picked elements: %s",
+                        msg.get("id"),
+                        exc,
+                    )
+                    msg["page_elements"] = None
             if msg.get("library_notices"):
                 try:
                     msg["library_notices"] = json.loads(msg["library_notices"])
@@ -1431,19 +1480,26 @@ class ChatDatabase:
 
     # ── Unfinished turns ────────────────────────────────────────────────
 
-    def begin_turn(self, session_id: str, question: str) -> int:
+    def begin_turn(
+        self,
+        session_id: str,
+        question: str,
+        page_elements: List[Dict] | None = None,
+    ) -> int:
         """Save the user's *question* and mark its reply as started, together.
 
         The row is this process's: only this process saves into or closes it,
         and another server closes it only once this process has exited.
+        ``page_elements`` are the elements the user picked in the browser pane.
         Returns the question's message id.
         """
         now = self._now()
+        picked_json = json.dumps(page_elements) if page_elements else None
         with self._transaction():
             cursor = self._conn.execute(
-                "INSERT INTO messages (session_id, role, content, created_at) "
-                "VALUES (?, 'user', ?, ?)",
-                (session_id, question, now),
+                "INSERT INTO messages (session_id, role, content, created_at, page_elements) "
+                "VALUES (?, 'user', ?, ?, ?)",
+                (session_id, question, now, picked_json),
             )
             question_id = cursor.lastrowid
             self._conn.execute(
@@ -1726,6 +1782,19 @@ class ChatDatabase:
 
             return self._enrich_document(dict(row))
 
+    def path_held_by_other_content(self, filepath: str, file_hash: str) -> bool:
+        """Whether a library row for different content still names *filepath*.
+
+        Compared case-insensitively: on Windows and macOS two names that differ
+        only in case are one file.
+        """
+        wanted = _path_key(filepath)
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT filepath FROM documents WHERE file_hash != ?", (file_hash,)
+            ).fetchall()
+        return any(_path_key(row["filepath"] or "") == wanted for row in rows)
+
     def _enrich_document(self, doc: Dict[str, Any]) -> Dict[str, Any]:
         """Add sessions_using count to document dict.
 
@@ -1783,6 +1852,44 @@ class ChatDatabase:
             )
             detached = cursor.rowcount > 0
         return detached
+
+    def record_session_upload(
+        self, session_id: str, upload_path: str, file_hash: str
+    ) -> None:
+        """Note that the chat's upload *upload_path* went into the library."""
+        with self._transaction():
+            self._conn.execute(
+                """INSERT OR IGNORE INTO session_uploads
+                   (session_id, upload_path, file_hash) VALUES (?, ?, ?)""",
+                (session_id, upload_path, file_hash),
+            )
+
+    def session_upload_paths(self, session_id: str) -> Set[str]:
+        """The chat's uploads already put in the library, attached or not."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT upload_path FROM session_uploads WHERE session_id = ?",
+                (session_id,),
+            ).fetchall()
+        return {row["upload_path"] for row in rows}
+
+    def removed_session_uploads(self, session_id: str) -> Set[str]:
+        """The chat's uploads whose document the user took off the chat.
+
+        Matched by content: the library keeps one row per content, which may be
+        a document added before the upload.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT su.upload_path FROM session_uploads su
+                   WHERE su.session_id = ? AND NOT EXISTS (
+                       SELECT 1 FROM session_documents sd
+                       JOIN documents d ON d.id = sd.document_id
+                       WHERE sd.session_id = su.session_id
+                         AND d.file_hash = su.file_hash)""",
+                (session_id,),
+            ).fetchall()
+        return {row["upload_path"] for row in rows}
 
     def get_session_environment(self, session_id: str) -> Dict[str, Any]:
         """The chat's added and removed folders and its internet switch."""
@@ -1984,6 +2091,23 @@ class ChatDatabase:
             )
             return cursor.rowcount > 0
 
+    def update_document_path(self, doc_id: str, filepath: str) -> bool:
+        """Point a library row at its file's new location.
+
+        Args:
+            doc_id: Document ID.
+            filepath: Where the file now is.
+
+        Returns:
+            True if the document was found and updated.
+        """
+        with self._transaction():
+            cursor = self._conn.execute(
+                "UPDATE documents SET filepath = ? WHERE id = ?",
+                (filepath, doc_id),
+            )
+            return cursor.rowcount > 0
+
     def recent_inference_stats(self, limit: int = 500) -> List[Dict]:
         """Inference stats of the newest assistant messages that recorded any."""
         with self._lock:
@@ -2022,6 +2146,18 @@ class ChatDatabase:
                 (month, model, provider, input_tokens, output_tokens, usd),
             )
 
+    def cloud_spend_since(self, since: datetime) -> List[Dict]:
+        """Every cloud turn recorded at or after the aware instant *since*."""
+        # Rows are SQLite's UTC "YYYY-MM-DD HH:MM:SS", so the bound is written alike.
+        bound = since.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT model, provider, input_tokens, output_tokens, usd "
+                "FROM cloud_spend WHERE created_at >= ? ORDER BY id",
+                (bound,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def cloud_spend_for_month(self, month: str) -> List[Dict]:
         """Every cloud turn recorded in *month* (``YYYY-MM``)."""
         with self._lock:
@@ -2031,6 +2167,98 @@ class ChatDatabase:
                 (month,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # ── Device changes ────────────────────────────────────────────────
+
+    def add_device_change(
+        self, device_id: str, kind: str, params: Dict[str, Any], at: float, keep: int
+    ) -> None:
+        """Record a change *device_id* made, keeping only its *keep* newest rows."""
+        with self._transaction():
+            self._conn.execute(
+                "INSERT INTO device_changes (device_id, kind, params, at) "
+                "VALUES (?, ?, ?, ?)",
+                (device_id, kind, json.dumps(params, sort_keys=True), at),
+            )
+            self._conn.execute(
+                "DELETE FROM device_changes WHERE device_id = ? AND id NOT IN "
+                "(SELECT id FROM device_changes WHERE device_id = ? "
+                "ORDER BY id DESC LIMIT ?)",
+                (device_id, device_id, keep),
+            )
+
+    def device_changes(
+        self, device_id: str, limit: int
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """*device_id*'s newest *limit* changes, newest first, and how many it has."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, kind, params, at FROM device_changes WHERE device_id = ? "
+                "ORDER BY id DESC LIMIT ?",
+                (device_id, limit),
+            ).fetchall()
+            total = self._conn.execute(
+                "SELECT COUNT(*) FROM device_changes WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()[0]
+        return [
+            {
+                "id": str(r["id"]),
+                "kind": r["kind"],
+                "params": json.loads(r["params"]),
+                "at": r["at"],
+            }
+            for r in rows
+        ], total
+
+    def device_change_counts(self) -> Dict[str, int]:
+        """How many changes each device with any has on record."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT device_id, COUNT(*) AS n FROM device_changes GROUP BY device_id"
+            ).fetchall()
+        return {r["device_id"]: r["n"] for r in rows}
+
+    def prune_device_changes(
+        self, paired: Optional[List[str]], at: float, removed_before: float
+    ) -> None:
+        """Start the clock on devices no longer in *paired*, then drop rows whose
+        device was removed before *removed_before*. *paired* None skips the first."""
+        with self._transaction():
+            if paired is not None:
+                marks = ",".join("?" * len(paired))
+                self._conn.execute(
+                    "UPDATE device_changes SET removed_at = ? WHERE removed_at IS NULL"
+                    + (f" AND device_id NOT IN ({marks})" if paired else ""),
+                    (at, *paired),
+                )
+            self._conn.execute(
+                "DELETE FROM device_changes WHERE removed_at IS NOT NULL "
+                "AND removed_at < ?",
+                (removed_before,),
+            )
+
+    def mark_devices_removed(self, device_ids: Optional[List[str]], at: float) -> None:
+        """Start the retention clock for *device_ids*; None means every device."""
+        where = "removed_at IS NULL"
+        args: List[Any] = [at]
+        if device_ids is not None:
+            if not device_ids:
+                return
+            where += f" AND device_id IN ({','.join('?' * len(device_ids))})"
+            args += device_ids
+        with self._transaction():
+            self._conn.execute(
+                f"UPDATE device_changes SET removed_at = ? WHERE {where}", args
+            )
+
+    def device_change_count(self, device_id: str) -> int:
+        """How many changes *device_id* has on record."""
+        with self._lock:
+            return self._conn.execute(
+                "SELECT COUNT(*) FROM device_changes WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()[0]
 
     # ── Settings ──────────────────────────────────────────────────────
 
@@ -2113,6 +2341,31 @@ class ChatDatabase:
                 ),
             )
 
+    def edit_scheduled_task(
+        self,
+        task_id: str,
+        *,
+        prompt: str,
+        interval_seconds: int,
+        schedule_config: str,
+        next_run_at: str | None,
+    ) -> None:
+        """Change what a scheduled task asks and when it runs.
+
+        Raises:
+            KeyError: if no task has *task_id*.
+        """
+        with self._transaction():
+            cursor = self._conn.execute(
+                """UPDATE scheduled_tasks
+                   SET prompt = ?, interval_seconds = ?, schedule_config = ?,
+                       next_run_at = ?
+                   WHERE id = ?""",
+                (prompt, interval_seconds, schedule_config, next_run_at, task_id),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(f"Scheduled task '{task_id}' not found")
+
     def claim_scheduled_run(
         self, task_id: str, expected_next_run_at: str | None, next_run_at: str
     ) -> bool:
@@ -2128,12 +2381,14 @@ class ChatDatabase:
             )
             return cursor.rowcount == 1
 
-    def scheduled_task_timing(self, task_id: str) -> Dict[str, Any]:
-        """The task's stored ``status`` and ``next_run_at``, as another server
-        may have set them."""
+    def scheduled_task_state(self, task_id: str) -> Dict[str, Any]:
+        """The task's stored ``status``, ``next_run_at``, ``prompt``,
+        ``interval_seconds`` and ``schedule_config``, as another server may
+        have set them."""
         with self._lock:
             row = self._conn.execute(
-                "SELECT status, next_run_at FROM scheduled_tasks WHERE id = ?",
+                "SELECT status, next_run_at, prompt, interval_seconds, "
+                "schedule_config FROM scheduled_tasks WHERE id = ?",
                 (task_id,),
             ).fetchone()
         if row is None:

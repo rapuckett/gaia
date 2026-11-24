@@ -23,7 +23,10 @@ from gaia.llm import lemonade_service
 from gaia.ui import _chat_helpers as helpers
 from gaia.ui import server
 
-pytestmark = pytest.mark.allow_network
+pytestmark = [
+    pytest.mark.allow_network,
+    pytest.mark.usefixtures("restore_gaia_logging"),
+]
 
 
 def test_start_model_server_owner_runs_the_daemon_start_in_a_daemon_thread(
@@ -85,7 +88,7 @@ def test_launch_agent_ui_starts_the_owner_only_for_a_local_server(
         patch.object(gaia_cli, "_ensure_webui_built"),
         patch("gaia.ui.server.create_app"),
         patch("gaia.ui.server.start_model_server_owner") as owner,
-        patch("uvicorn.run"),
+        patch("gaia.ui.shutdown.serve"),
     ):
         gaia_cli._launch_agent_ui(port=0, base_url=base_url, log=MagicMock())
     assert owner.call_count == expected
@@ -111,10 +114,32 @@ def test_standalone_runner_starts_the_owner_only_for_a_local_server(
     with (
         patch("gaia.ui.server.create_app"),
         patch("gaia.ui.server.start_model_server_owner") as owner,
-        patch("uvicorn.run"),
+        patch("gaia.ui.shutdown.serve"),
     ):
         server.main()
     assert owner.call_count == expected
+
+
+def test_both_runners_disable_proxy_headers(monkeypatch):
+    """Neither runner lets a forwarded header rewrite the peer address."""
+    import gaia.cli as gaia_cli
+
+    monkeypatch.setattr(sys, "argv", ["gaia-ui", "--host", "0.0.0.0"])
+    runs = []
+    with (
+        patch.dict(os.environ),
+        patch.object(gaia_cli, "_ensure_webui_built"),
+        patch("gaia.ui.server.create_app"),
+        patch("gaia.ui.server.start_model_server_owner"),
+        patch("gaia.ui.shutdown.serve", side_effect=lambda app, **kw: runs.append(kw)),
+    ):
+        gaia_cli._launch_agent_ui(port=0, log=MagicMock())
+        server.main()
+    assert len(runs) == 2
+    for options in runs:
+        assert options["proxy_headers"] is False
+        assert options["forwarded_allow_ips"] == ""
+    assert [r["host"] for r in runs] == ["127.0.0.1", "0.0.0.0"]
 
 
 def test_scheduled_runs_use_the_flagship(monkeypatch):
@@ -131,17 +156,20 @@ def test_scheduled_runs_use_the_flagship(monkeypatch):
         def process_query(self, prompt):
             return {"result": f"did {prompt}"}
 
-    fake = types.ModuleType("gaia_agent.agent")
+        def close(self):
+            pass
+
+    fake = types.ModuleType("gaiapy.agent")
     fake.GaiaAgent = FakeGaiaAgent
     fake.GaiaAgentConfig = FakeConfig
-    monkeypatch.setitem(sys.modules, "gaia_agent.agent", fake)
-    chat_mod = types.ModuleType("gaia_agent.chat_agent")
+    monkeypatch.setitem(sys.modules, "gaiapy.agent", fake)
+    chat_mod = types.ModuleType("gaiapy.chat_agent")
 
     def _chat_agent(*_a, **_k):
         raise AssertionError("scheduled runs must not build ChatAgent")
 
     chat_mod.ChatAgent = chat_mod.ChatAgentConfig = _chat_agent
-    monkeypatch.setitem(sys.modules, "gaia_agent.chat_agent", chat_mod)
+    monkeypatch.setitem(sys.modules, "gaiapy.chat_agent", chat_mod)
     monkeypatch.setattr(lemonade_service, "ensure_daemon_owns_lemonade", lambda: None)
 
     with TestClient(server.create_app(db_path=":memory:")) as client:

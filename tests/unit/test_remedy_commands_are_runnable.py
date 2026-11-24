@@ -24,6 +24,7 @@ from gaia.llm.lemonade_launcher import (
     describe_client_hint,
     describe_start_hint,
 )
+from tests._repo_scan import files_under, read_text
 
 MODERN_LINUX = LemonadeTooling(
     found=True,
@@ -237,7 +238,7 @@ def test_flagship_readiness_hint_pulls_with_the_resolved_client(mocker, tooling)
     dead command there is as user-visible as one from the CLI."""
     import asyncio
 
-    server = pytest.importorskip("gaia_agent.server")
+    server = pytest.importorskip("gaiapy.server")
 
     mocker.patch("platform.system", return_value="Linux")
     mocker.patch("gaia.llm.lemonade_launcher.resolve_lemonade", return_value=tooling)
@@ -277,10 +278,8 @@ _SKIP_DIRS = {"node_modules", "dist", "build", ".turbo", "tests", "test", "__tes
 
 def _user_facing_files():
     for root in _SCAN_ROOTS:
-        for path in sorted((_REPO / root).rglob("*")):
+        for path in files_under(_REPO / root, skip_dirs=_SKIP_DIRS):
             if not path.is_file() or path.suffix not in _SCAN_EXTENSIONS:
-                continue
-            if any(part in _SKIP_DIRS for part in path.relative_to(_REPO).parts):
                 continue
             # Changelogs record history, including what older releases said.
             if path.name.startswith("test_") or path.name == "CHANGELOG.md":
@@ -297,7 +296,7 @@ def test_no_new_gaia_download_with_a_positional_model():
     for path in _user_facing_files():
         rel = path.relative_to(_REPO).as_posix()
         try:
-            text = path.read_text(encoding="utf-8")
+            text = read_text(path)
         except UnicodeDecodeError:
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
@@ -321,7 +320,7 @@ def test_the_download_guard_actually_reaches_the_hub_and_the_docs():
     """
     scanned = {p.relative_to(_REPO).as_posix() for p in _user_facing_files()}
     for rel in (
-        "hub/agents/gaia/python/gaia_agent/server.py",
+        "hub/agents/gaia/python/gaiapy/server.py",
         "hub/agents/gaia/npm/SKILL.md",
         "docs/guides/gaia.mdx",
     ):

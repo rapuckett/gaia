@@ -15,16 +15,26 @@ import asyncio
 import hashlib
 import logging
 import os
+import sqlite3
 import sys
 import tempfile
+import unicodedata
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
-from .._chat_helpers import UnreadableDocumentError, index_progress
+from gaia.security import secret_read_refusal
+from gaia.upload_names import reserve_copy_path
+from gaia.utils.image_formats import IMAGE_EXTENSIONS
+
+from .._chat_helpers import (
+    ModelServerIndexError,
+    UnreadableDocumentError,
+    index_progress,
+)
 from ..database import ChatDatabase
 from ..dependencies import get_db, get_indexing_tasks, get_upload_locks
 from ..models import (
@@ -33,24 +43,76 @@ from ..models import (
     DocumentUploadRequest,
     IndexFolderRequest,
     IndexFolderResponse,
+    WireModel,
 )
+from ..security import allowed_device, is_local_pc
+from ..session_environment import path_error_reason
 from ..utils import (
     ALLOWED_EXTENSIONS,
     FOLDER_INDEX_EXTENSIONS,
+    INDEX_FAILURE_AWAY,
     LARGE_FILE_THRESHOLD,
     compute_file_hash,
     compute_file_hash_from_fd,
     doc_to_response,
+    document_copies_dir,
     ensure_document_path_allowed,
     harden_served_file,
     managed_documents_dir,
     safe_open_document,
     unsupported_type_message,
 )
+from .files import (
+    _AWAY_FROM_PC,
+    CREDENTIALS_WITHHELD_REFUSAL,
+    _device_refusal,
+    _refuse_remote_read,
+    _refuse_remote_secret,
+    _remote_read_roots,
+    _within_roots,
+    device_withholds,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["documents"])
+
+
+def _withheld_from_device(request: Request, path: Path) -> bool:
+    """Whether *request* is from a paired device kept out of *path*."""
+    return allowed_device(request) is not None and device_withholds(path)
+
+
+class IndexProgressResponse(WireModel):
+    """How far a running index has got."""
+
+    phase: Literal["reading", "embedding"]
+    done: int
+    total: Optional[int]
+
+
+class DocumentStatusResponse(WireModel):
+    """A document's indexing status."""
+
+    id: str
+    indexing_status: str
+    chunk_count: int
+    is_active: bool
+    progress: Optional[IndexProgressResponse]
+
+
+class DocumentCancelResponse(WireModel):
+    """Confirmation that a document's indexing was cancelled."""
+
+    cancelled: bool
+    id: str
+
+
+class DocumentDeleteResponse(WireModel):
+    """Confirmation that a document was removed from the library."""
+
+    deleted: bool
+
 
 # ── Blob upload configuration ────────────────────────────────────────────────
 
@@ -62,17 +124,12 @@ MAX_DOCUMENT_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB
 # Streaming chunk size for multipart blob upload.
 UPLOAD_CHUNK_SIZE = 64 * 1024  # 64 KB
 
-# Length of the random hex ID prefixed to managed document filenames.
-# 12 hex chars = 48 bits ≈ 2.8e14 possibilities; collision probability with
-# 1 million concurrent uploads is ~1 in 1.4e14 — effectively zero. Files are
-# also deduped by SHA-256 hash before writing, so identical-content collisions
-# are impossible. 12 chars keeps the on-disk basename well under Windows
-# MAX_PATH limits once combined with the original filename.
+# Length of the random hex ID in a partial upload's name.
 MANAGED_ID_LEN = 12
 
 
 def _short_id() -> str:
-    """Return a short random hex identifier for managed document filenames."""
+    """Return a short random hex identifier for partial upload names."""
     return uuid.uuid4().hex[:MANAGED_ID_LEN]
 
 
@@ -105,16 +162,19 @@ def _cleanup_temp(path: Path) -> None:
 
 
 def _is_server_owned(filepath: str) -> bool:
-    """Return True if *filepath* lives inside the server-managed docs dir.
+    """Return True if *filepath* lives in a folder the server owns.
 
-    Used by ``delete_document`` to decide whether to unlink the on-disk file.
+    That is GAIA's documents folder or its folder of document copies. Used by
+    ``delete_document`` to decide whether to unlink the on-disk file.
     User-provided paths (from ``upload-path``) are NOT server-owned and must
     be left untouched on delete.
     """
     try:
         resolved = Path(filepath).resolve()
-        managed = managed_documents_dir().resolve()
-        return resolved.is_relative_to(managed)
+        return any(
+            resolved.is_relative_to(owned.resolve())
+            for owned in (managed_documents_dir(), document_copies_dir())
+        )
     except (OSError, ValueError):
         return False
 
@@ -131,6 +191,26 @@ _ILLEGAL_FILENAME_CHARS = '<>:"/\\|?*'
 _SHELL_QUOTING_CHARS = "'`"
 
 
+# Characters drawn like a slash or backslash, which would make a name read as a path.
+_SLASH_LOOKALIKES = "\u2044\u2215\u29f5\u29f8\u29f9\ufe68\uff0f\uff3c"
+
+# Zero-width joiners spell words in Persian, Indic scripts and emoji; they stay.
+_JOINERS = "\u200c\u200d"
+
+
+def _unsafe_name_char(c: str) -> bool:
+    """Whether *c* must not appear in a stored document name."""
+    return (
+        c in _ILLEGAL_FILENAME_CHARS
+        or c in _SHELL_QUOTING_CHARS
+        or c in _SLASH_LOOKALIKES
+        or (
+            unicodedata.category(c) in ("Cc", "Cf", "Cs", "Co", "Zl", "Zp")
+            and c not in _JOINERS
+        )
+    )
+
+
 def _sanitize_stem(stem: str, max_length: int = 80) -> str:
     """Sanitize a filename stem for safe cross-platform filesystem use.
 
@@ -140,19 +220,17 @@ def _sanitize_stem(stem: str, max_length: int = 80) -> str:
     and dots (Windows disallows trailing dots/spaces), and truncates to *max_length*
     characters. Returns ``"file"`` if nothing usable remains.
 
-    The returned stem is combined with a UUID prefix to form the final
-    on-disk filename, so collisions are impossible regardless of what the
-    user-provided name contained. The purpose of preserving the original
-    name is purely so downstream consumers (RAG tools, the LLM) can
+    Invisible and line-breaking characters (Unicode control, format and
+    separator categories) and characters drawn like a slash are replaced too,
+    since the name is shown to the model and the user as part of the path.
+
+    The returned stem becomes the on-disk name, with an id in front only when
+    that name is taken (see ``reserve_copy_path``). The purpose of preserving
+    the original name is so downstream consumers (RAG tools, the LLM) can
     recognize the document by its human-readable name.
     """
     cleaned = "".join(
-        (
-            "_"
-            if c in _ILLEGAL_FILENAME_CHARS or c in _SHELL_QUOTING_CHARS or ord(c) < 32
-            else c
-        )
-        for c in stem
+        "_" if _unsafe_name_char(c) else c for c in unicodedata.normalize("NFC", stem)
     )
     cleaned = cleaned.strip(" .")
     cleaned = cleaned[:max_length]
@@ -163,14 +241,16 @@ def _sanitize_stem(stem: str, max_length: int = 80) -> str:
 
 
 @router.get("/api/documents", response_model=DocumentListResponse)
-async def list_documents(db: ChatDatabase = Depends(get_db)):
+async def list_documents(http_request: Request, db: ChatDatabase = Depends(get_db)):
     """List all documents in the library."""
     docs = db.list_documents()
     total_size = sum(d.get("file_size", 0) for d in docs)
     total_chunks = sum(d.get("chunk_count", 0) for d in docs)
 
     return DocumentListResponse(
-        documents=[doc_to_response(d) for d in docs],
+        documents=[
+            doc_to_response(d, away=not is_local_pc(http_request)) for d in docs
+        ],
         total=len(docs),
         total_size_bytes=total_size,
         total_chunks=total_chunks,
@@ -179,7 +259,9 @@ async def list_documents(db: ChatDatabase = Depends(get_db)):
 
 @router.post("/api/documents/upload-path", response_model=DocumentResponse)
 async def upload_by_path(
+    http_request: Request,
     request: DocumentUploadRequest,
+    session_id: Optional[str] = None,
     db: ChatDatabase = Depends(get_db),
     indexing_tasks: dict = Depends(get_indexing_tasks),
     upload_locks: dict = Depends(get_upload_locks),
@@ -192,7 +274,11 @@ async def upload_by_path(
 
     Small files (<5 MB) are indexed synchronously. Larger files are
     indexed in the background so the UI stays responsive.
+
+    Away from the PC the file must be in the chat *session_id* names, and
+    never holds credentials.
     """
+    roots = _remote_read_roots(http_request, session_id)
     # An empty path resolves to the CWD, so it would be judged by whatever
     # directory the server happens to run from. Refuse it outright.
     if not request.filepath:
@@ -203,13 +289,25 @@ async def upload_by_path(
     if "\x00" in request.filepath:
         raise HTTPException(status_code=400, detail="Invalid file path")
 
+    real = Path(os.path.realpath(os.path.expanduser(request.filepath)))
+    _refuse_remote_read(real, roots)
+    if _withheld_from_device(http_request, real):
+        raise _device_refusal("credentials_withheld", CREDENTIALS_WITHHELD_REFUSAL)
+
     # Resolve once — used for both the lock key and safe_open validation
-    resolved = Path(request.filepath).resolve()
+    try:
+        resolved = Path(request.filepath).resolve()
+    except (ValueError, OSError) as e:  # too long for the OS
+        raise HTTPException(
+            status_code=400, detail=f"Invalid file path: {path_error_reason(e)}"
+        ) from e
     lock = upload_locks.setdefault(str(resolved), asyncio.Lock())
 
     async with lock:
         # Atomic open with O_NOFOLLOW + fstat validation (no TOCTOU window)
-        with safe_open_document(request.filepath) as (fd, file_stat, safe_filepath):
+        with safe_open_document(
+            request.filepath, away=not is_local_pc(http_request)
+        ) as (fd, file_stat, safe_filepath):
             file_size = file_stat.st_size
             file_mtime = file_stat.st_mtime
             file_hash = compute_file_hash_from_fd(fd)
@@ -258,7 +356,7 @@ async def upload_by_path(
                     doc["indexing_status"] = "failed"
                     doc["last_error"] = error_text
                     doc["error_kind"] = error_kind
-                    return doc_to_response(doc)
+                    return doc_to_response(doc, away=not is_local_pc(http_request))
 
                 doc = db.add_document(
                     filename=safe_filepath.name,
@@ -268,7 +366,7 @@ async def upload_by_path(
                     chunk_count=chunk_count,
                     file_mtime=file_mtime,
                 )
-                return doc_to_response(doc)
+                return doc_to_response(doc, away=not is_local_pc(http_request))
 
             # Large file: create placeholder and index in background
             doc = db.add_document(
@@ -344,7 +442,7 @@ async def upload_by_path(
             )
             indexing_tasks[doc_id] = task
             doc["indexing_status"] = "indexing"
-            return doc_to_response(doc)
+            return doc_to_response(doc, away=not is_local_pc(http_request))
 
         finally:
             if temp_path is not None:
@@ -359,6 +457,7 @@ async def upload_by_path(
 
 @router.post("/api/documents/upload", response_model=DocumentResponse)
 async def upload_document_blob(
+    http_request: Request,
     file: UploadFile = File(...),
     db: ChatDatabase = Depends(get_db),
 ):
@@ -370,11 +469,13 @@ async def upload_document_blob(
     required because browser File objects do not expose an absolute
     filesystem path.
 
-    The blob is streamed to ``managed_documents_dir()`` with an abort-on-overflow
+    The blob is streamed to ``document_copies_dir()`` with an abort-on-overflow
     size check, deduplicated by SHA-256 content hash, then indexed via the
     standard RAG pipeline. Files are capped at ``MAX_DOCUMENT_UPLOAD_SIZE``.
 
-    On any failure, partial / orphaned files are cleaned up.
+    On any failure, partial / orphaned files are cleaned up, except when the
+    model server couldn't index it: the copy then stays as a failed row that
+    is indexed again once the server is back.
     """
     # 1. Validate filename
     if not file.filename:
@@ -385,7 +486,8 @@ async def upload_document_blob(
     # Strip any path components the client might have sent (defense in depth;
     # we never use this value as a filesystem path, but it's stored in the
     # db for display and returned to the frontend).
-    display_name = Path(file.filename).name
+    # Composed, so a macOS (decomposed) name matches the one the model writes.
+    display_name = unicodedata.normalize("NFC", Path(file.filename).name)
     ext = Path(display_name).suffix.lower()
 
     # 2. Validate extension against the strict document set
@@ -395,12 +497,13 @@ async def upload_document_blob(
             detail=unsupported_type_message(display_name),
         )
 
-    # 3. Ensure the managed directory exists
-    managed_dir = managed_documents_dir()
+    # 3. Ensure the copies directory exists. Not GAIA's documents folder: every
+    # chat may use that one, and this copy is only for the chats it's attached to.
+    copies_dir = document_copies_dir()
     try:
-        managed_dir.mkdir(parents=True, exist_ok=True)
+        copies_dir.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        logger.error("Failed to create managed docs dir %s: %s", managed_dir, e)
+        logger.error("Failed to create document copies dir %s: %s", copies_dir, e)
         raise HTTPException(
             status_code=500, detail="Failed to prepare document storage"
         )
@@ -408,7 +511,7 @@ async def upload_document_blob(
     # 4. Stream-write to a .partial file, hashing as we go, aborting on
     # oversize. try/finally ensures the partial is cleaned up on any exit
     # path (including ClientDisconnect and CancelledError).
-    partial_path: Path | None = managed_dir / f"{_short_id()}.partial"
+    partial_path: Path | None = copies_dir / f"{_short_id()}.partial"
     final_path: Path | None = None
     hasher = hashlib.sha256()
     bytes_written = 0
@@ -422,12 +525,14 @@ async def upload_document_blob(
                         break
                     bytes_written += len(chunk)
                     if bytes_written > MAX_DOCUMENT_UPLOAD_SIZE:
+                        max_mb = f"{MAX_DOCUMENT_UPLOAD_SIZE // (1024 * 1024)}"
                         raise HTTPException(
                             status_code=413,
-                            detail=(
-                                f"File too large. Maximum size is "
-                                f"{MAX_DOCUMENT_UPLOAD_SIZE // (1024 * 1024)} MB."
-                            ),
+                            detail={
+                                "status": "too_large",
+                                "message": f"File too large. Maximum size is {max_mb} MB.",
+                                "max_mb": max_mb,
+                            },
                         )
                     hasher.update(chunk)
                     out.write(chunk)
@@ -456,22 +561,26 @@ async def upload_document_blob(
                 display_name,
                 existing.get("id"),
             )
-            return doc_to_response(existing)
+            return doc_to_response(existing, away=not is_local_pc(http_request))
 
-        # 6. Promote partial -> final (atomic rename). The on-disk filename
-        # embeds the sanitized original stem so that downstream consumers
-        # (RAG tools, the agent LLM) can recognize the document by its
-        # human-readable name — a pure-UUID filename causes the LLM to
-        # hallucinate paths when it needs to reference the file in a tool
-        # call. The UUID prefix still guarantees uniqueness. After this,
+        # 6. Promote partial -> final (atomic rename) under the sanitized
+        # original name, so the agent reads and quotes the name the person
+        # gave; an id is added only when that name is taken. After this,
         # `partial_path` is cleared so the finally block won't unlink our
         # now-final file.
         safe_stem = _sanitize_stem(Path(display_name).stem)
-        final_path = managed_dir / f"{_short_id()}_{safe_stem}{ext}"
         try:
+            final_path = reserve_copy_path(
+                copies_dir,
+                safe_stem,
+                ext,
+                taken=lambda p: db.path_held_by_other_content(str(p), file_hash),
+            )
             os.replace(partial_path, final_path)
         except OSError as e:
             logger.error("Failed to promote %s -> %s: %s", partial_path, final_path, e)
+            if final_path is not None:
+                _cleanup_temp(final_path)
             raise HTTPException(status_code=500, detail="Failed to save uploaded file")
         partial_path = None  # ownership transferred
     finally:
@@ -503,6 +612,13 @@ async def upload_document_blob(
         raise HTTPException(
             status_code=422, detail={"status": e.kind, "message": str(e)}
         ) from e
+    except ModelServerIndexError as e:
+        # The file is fine: keep it as a row that waits for the server.
+        # The connection error stays in the log; the client words the reason.
+        logger.warning("Could not index uploaded document %s: %s", display_name, e)
+        return _waiting_for_server(
+            db, final_path, display_name, file_hash, bytes_written, e
+        )
     except Exception as e:
         _cleanup_temp(final_path)
         logger.error(
@@ -537,10 +653,14 @@ async def upload_document_blob(
         bytes_written,
         doc.get("chunk_count", 0),
     )
-    return doc_to_response(doc)
+    return doc_to_response(doc, away=not is_local_pc(http_request))
 
 
-@router.get("/api/documents/{doc_id}/status")
+@router.get(
+    "/api/documents/{doc_id}/status",
+    response_model=DocumentStatusResponse,
+    response_model_exclude_unset=True,
+)
 async def get_document_status(
     doc_id: str,
     db: ChatDatabase = Depends(get_db),
@@ -567,21 +687,73 @@ _INLINE_MEDIA_TYPES = {
 }
 
 
-@router.get("/api/documents/{doc_id}/file")
-async def get_document_file(doc_id: str, db: ChatDatabase = Depends(get_db)):
-    """Serve a library document's file inline, so a citation can open it at its page."""
+def _chat_may_open(db: ChatDatabase, session_id: str, doc_id: str, doc, roots) -> bool:
+    """Whether the chat has *doc* attached, or its real file lies in the chat's folders."""
+    if not doc:
+        return False
+    session = db.get_session(session_id)
+    if session is not None and doc_id in session["document_ids"]:
+        return True
+    filepath = doc.get("filepath")
+    return bool(filepath) and _within_roots(Path(os.path.realpath(filepath)), roots)
+
+
+@router.get(
+    "/api/documents/{doc_id}/file",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "content": {"application/octet-stream": {}},
+            "description": "The document's file, in its own media type.",
+        }
+    },
+)
+async def get_document_file(
+    doc_id: str,
+    request: Request,
+    session_id: Optional[str] = None,
+    db: ChatDatabase = Depends(get_db),
+):
+    """Serve a library document's file inline, so a citation can open it at its page.
+
+    Away from the PC the chat *session_id* names must have the document
+    attached, or hold its file in its folders.
+    """
+    roots = _remote_read_roots(request, session_id)
     doc = db.get_document(doc_id)
+    if roots is not None and not _chat_may_open(db, session_id, doc_id, doc, roots):
+        # One refusal whether or not the id exists, so ids can't be probed.
+        raise _device_refusal(
+            "document_not_in_chat",
+            f"{_AWAY_FROM_PC} This document isn't in this chat.",
+        )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     path = Path(doc.get("filepath") or "")
-    real = Path(ensure_document_path_allowed(path))
+    away = not is_local_pc(request)
+    real = Path(ensure_document_path_allowed(path, away=away))
+    # Judged at read time, so rows recorded before the policy are covered too.
+    if away:
+        _refuse_remote_secret(real)
     if path.is_symlink():
         raise HTTPException(status_code=403, detail="Symbolic links are not served")
     if not real.is_file():
+        where = "" if away else f" at {path}"
         raise HTTPException(
             status_code=404,
-            detail=f"{doc.get('filename') or doc_id} is no longer on disk at {path}",
+            detail=f"{doc.get('filename') or doc_id} is no longer on disk{where}",
         )
+    # FileResponse opens the file only once headers are out, cutting the reply.
+    try:
+        with open(real, "rb"):
+            pass
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=f"{doc.get('filename') or doc_id} can't be opened: "
+            "this account isn't allowed to read it, or another program has it "
+            "locked.",
+        ) from e
     response = FileResponse(
         path=str(real),
         media_type=_INLINE_MEDIA_TYPES.get(
@@ -593,7 +765,11 @@ async def get_document_file(doc_id: str, db: ChatDatabase = Depends(get_db)):
     return harden_served_file(response, path.name)
 
 
-@router.post("/api/documents/{doc_id}/cancel")
+@router.post(
+    "/api/documents/{doc_id}/cancel",
+    response_model=DocumentCancelResponse,
+    response_model_exclude_unset=True,
+)
 async def cancel_indexing(
     doc_id: str,
     db: ChatDatabase = Depends(get_db),
@@ -615,6 +791,7 @@ async def cancel_indexing(
 @router.post("/api/documents/{doc_id}/reindex", response_model=DocumentResponse)
 async def reindex_document(
     doc_id: str,
+    http_request: Request,
     db: ChatDatabase = Depends(get_db),
 ):
     """Re-run the RAG indexing pipeline for a document.
@@ -675,15 +852,19 @@ async def reindex_document(
         raise HTTPException(
             status_code=404, detail="Document was deleted during reindex"
         )
-    return doc_to_response(updated)
+    return doc_to_response(updated, away=not is_local_pc(http_request))
 
 
-@router.delete("/api/documents/{doc_id}")
+@router.delete(
+    "/api/documents/{doc_id}",
+    response_model=DocumentDeleteResponse,
+    response_model_exclude_unset=True,
+)
 async def delete_document(doc_id: str, db: ChatDatabase = Depends(get_db)):
     """Remove a document from the library.
 
     For blob-uploaded documents (files the server owns under
-    ``managed_documents_dir()``), the on-disk file is also unlinked as a
+    ``document_copies_dir()``), the on-disk file is also unlinked as a
     best-effort cleanup. User-owned files from ``upload-path`` are left
     alone.
     """
@@ -706,19 +887,108 @@ async def delete_document(doc_id: str, db: ChatDatabase = Depends(get_db)):
     return {"deleted": True}
 
 
+_SERVER_OUT = {
+    "model_server_down": "GAIA's model server isn't answering. GAIA adds this "
+    "document once it is back.",
+    "model_server_busy": "GAIA's model server was too busy to add this "
+    "document. Retry it.",
+}
+
+
+def _waiting_for_server(
+    db: ChatDatabase,
+    copy: Path,
+    display_name: str,
+    file_hash: str,
+    file_size: int,
+    error: ModelServerIndexError,
+) -> DocumentResponse:
+    """Record a dropped file the model server couldn't index as a failed row.
+
+    The app retries a ``model_server_down`` row by itself once the server is
+    back; a ``model_server_busy`` one waits on the row's Retry. The copy stays.
+    """
+    try:
+        doc = db.add_document(
+            filename=display_name,
+            filepath=str(copy),
+            file_hash=file_hash,
+            file_size=file_size,
+            chunk_count=0,
+            file_mtime=copy.stat().st_mtime,
+        )
+    except (OSError, sqlite3.Error):
+        _cleanup_temp(copy)
+        raise
+    if Path(doc["filepath"]).resolve() != copy.resolve():
+        # The same content went in meanwhile; that row stands for this file.
+        _cleanup_temp(copy)
+    if doc.get("indexing_status") in ("pending", "indexing") or (
+        doc.get("indexing_status") == "complete" and doc.get("chunk_count")
+    ):
+        return doc_to_response(doc)
+    db.update_document_status(
+        doc["id"],
+        "failed",
+        last_error=_SERVER_OUT.get(error.kind, str(error)),
+        error_kind=error.kind,
+    )
+    return doc_to_response(db.get_document(doc["id"]))
+
+
+def _record_failed_document(
+    db: ChatDatabase, filepath: Path, file_hash: str, error: Exception
+) -> None:
+    """Give a file that failed to index a library row saying why, to retry from."""
+    try:
+        file_stat = filepath.stat()
+    except OSError:
+        file_stat = None
+    doc = db.add_document(
+        filename=filepath.name,
+        filepath=str(filepath),
+        file_hash=file_hash,
+        file_size=file_stat.st_size if file_stat else 0,
+        chunk_count=0,
+        file_mtime=file_stat.st_mtime if file_stat else None,
+    )
+    # The same bytes indexed fine, or are indexing, from elsewhere: leave that row.
+    if doc.get("indexing_status") in ("pending", "indexing") or (
+        doc.get("indexing_status") == "complete" and doc.get("chunk_count")
+    ):
+        return
+    db.update_document_status(
+        doc["id"],
+        "failed",
+        last_error=str(error),
+        error_kind=getattr(error, "kind", None),
+    )
+
+
 @router.post("/api/documents/index-folder", response_model=IndexFolderResponse)
-async def index_folder(request: IndexFolderRequest, db: ChatDatabase = Depends(get_db)):
+async def index_folder(
+    http_request: Request,
+    request: IndexFolderRequest,
+    session_id: Optional[str] = None,
+    db: ChatDatabase = Depends(get_db),
+):
     """Index all supported documents in a folder.
 
     Scans the given folder for files with extensions in
     FOLDER_INDEX_EXTENSIONS and indexes each one using the RAG pipeline.
-    Images are skipped: they index only when picked one by one.
+    Images are skipped and counted apart: they index only when picked one by
+    one. A file that fails gets a ``failed`` library row with the reason, so
+    it can be retried, and is left out of ``documents``.
     Indexing runs in a thread-pool executor to avoid blocking the
     event loop.
+
+    Away from the PC the folder must be in the chat *session_id* names, and
+    files holding credentials are skipped.
 
     Args:
         request: Contains folder_path and recursive flag.
     """
+    roots = _remote_read_roots(http_request, session_id)
     folder_path = request.folder_path
 
     # Security: reject null bytes
@@ -729,7 +999,12 @@ async def index_folder(request: IndexFolderRequest, db: ChatDatabase = Depends(g
 
     # Same check as upload-path, and before any filesystem access
     # (is_symlink/exists/is_dir can throw PermissionError on protected paths).
-    resolved = Path(ensure_document_path_allowed(raw_folder))
+    resolved = Path(
+        ensure_document_path_allowed(raw_folder, away=not is_local_pc(http_request))
+    )
+    _refuse_remote_read(resolved, roots)
+    if _withheld_from_device(http_request, resolved):
+        raise _device_refusal("credentials_withheld", CREDENTIALS_WITHHELD_REFUSAL)
 
     # Check symlink after home restriction
     try:
@@ -749,13 +1024,24 @@ async def index_folder(request: IndexFolderRequest, db: ChatDatabase = Depends(g
     # Collect all candidate files
     candidate_files: List[Path] = []
     skipped = 0
+    skipped_images = 0
     try:
         pattern_iter = resolved.rglob("*") if request.recursive else resolved.iterdir()
         for item in pattern_iter:
             if item.is_symlink() or not item.is_file():
                 continue
-            if item.suffix.lower() in FOLDER_INDEX_EXTENSIONS:
+            if (
+                roots is not None
+                and (
+                    secret_read_refusal(item)
+                    or not _within_roots(Path(os.path.realpath(item)), roots)
+                )
+            ) or _withheld_from_device(http_request, item):
+                skipped += 1
+            elif item.suffix.lower() in FOLDER_INDEX_EXTENSIONS:
                 candidate_files.append(item)
+            elif item.suffix.lower() in IMAGE_EXTENSIONS:
+                skipped_images += 1
             else:
                 skipped += 1
     except PermissionError:
@@ -766,7 +1052,12 @@ async def index_folder(request: IndexFolderRequest, db: ChatDatabase = Depends(g
 
     if not candidate_files:
         return IndexFolderResponse(
-            indexed=0, failed=0, skipped=skipped, documents=[], errors=[]
+            indexed=0,
+            failed=0,
+            skipped=skipped,
+            skipped_images=skipped_images,
+            documents=[],
+            errors=[],
         )
 
     logger.info(
@@ -784,6 +1075,7 @@ async def index_folder(request: IndexFolderRequest, db: ChatDatabase = Depends(g
 
     with one_embedder_load():
         for filepath in candidate_files:
+            file_hash = None
             try:
                 file_hash = await asyncio.get_running_loop().run_in_executor(
                     None, compute_file_hash, filepath
@@ -793,6 +1085,8 @@ async def index_folder(request: IndexFolderRequest, db: ChatDatabase = Depends(g
                 file_mtime = file_stat.st_mtime
 
                 chunk_count = await _index_document(filepath)
+                if chunk_count == 0:
+                    raise ValueError("indexing produced 0 chunks")
 
                 doc = db.add_document(
                     filename=filepath.name,
@@ -802,11 +1096,34 @@ async def index_folder(request: IndexFolderRequest, db: ChatDatabase = Depends(g
                     chunk_count=chunk_count,
                     file_mtime=file_mtime,
                 )
-                indexed_docs.append(doc_to_response(doc))
+                indexed_docs.append(
+                    doc_to_response(doc, away=not is_local_pc(http_request))
+                )
             except Exception as e:
-                error_msg = f"{filepath.name}: {e}"
+                error_msg = (
+                    f"{filepath.name}: {e}"
+                    if is_local_pc(http_request)
+                    else f"{filepath.name}: {INDEX_FAILURE_AWAY}"
+                )
                 logger.warning("Failed to index %s: %s", filepath, e)
                 errors.append(error_msg)
+                # Unhashable means unreadable: no content key to file a row under.
+                if file_hash is not None:
+                    try:
+                        _record_failed_document(db, filepath, file_hash, e)
+                    except Exception as record_err:  # pylint: disable=broad-except
+                        # One file's failure must not lose the folder's results.
+                        logger.error(
+                            "Could not record the failed row for %s: %s",
+                            filepath,
+                            record_err,
+                            exc_info=True,
+                        )
+                        errors[-1] += (
+                            f" (no library row: {record_err})"
+                            if is_local_pc(http_request)
+                            else " (no library row)"
+                        )
 
     logger.info(
         "Folder indexing complete: %d indexed, %d failed",
@@ -818,6 +1135,7 @@ async def index_folder(request: IndexFolderRequest, db: ChatDatabase = Depends(g
         indexed=len(indexed_docs),
         failed=len(errors),
         skipped=skipped,
+        skipped_images=skipped_images,
         documents=indexed_docs,
         errors=errors,
     )

@@ -215,10 +215,13 @@ class TestPutGrantRouteTranslation:
     def _put(connector_id, agent_id, scopes):
         import asyncio
 
+        from starlette.requests import Request
+
         from gaia.ui.routers.connectors import GrantRequest, put_grant
 
+        on_pc = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 50000)})
         return asyncio.run(
-            put_grant(connector_id, agent_id, GrantRequest(scopes=scopes))
+            put_grant(on_pc, connector_id, agent_id, GrantRequest(scopes=scopes))
         )
 
     @pytest.mark.allow_network
@@ -270,7 +273,7 @@ class TestEveryCredentialDoorIsGuarded:
                 provider="google",
                 scopes=[],
                 agent_id="builtin:chat",
-                account_email="default",
+                slot="default",
             )
         assert "named no scopes" in str(exc.value)
 
@@ -283,7 +286,7 @@ class TestEveryCredentialDoorIsGuarded:
                 provider="google",
                 scopes=[_GMAIL_READ],
                 agent_id="builtin:chat",
-                account_email="default",
+                slot="default",
             )
         assert exc.value.reason is AuthRequiredError.Reason.AGENT_NOT_GRANTED
 
@@ -304,7 +307,7 @@ class TestEveryCredentialDoorIsGuarded:
                 provider="google",
                 scopes=[],
                 agent_id=None,
-                account_email="default",
+                slot="default",
             )
         assert exc.value.reason is AuthRequiredError.Reason.NOT_CONNECTED
 
@@ -320,7 +323,7 @@ class TestEveryCredentialDoorIsGuarded:
                     provider="google",
                     scopes=[_GMAIL_READ],
                     agent_id=None,
-                    account_email="default",
+                    slot="default",
                 )
         assert exc.value.reason is AuthRequiredError.Reason.AGENT_NOT_GRANTED
         assert exc.value.agent_id is None

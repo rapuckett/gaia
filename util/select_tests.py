@@ -4,23 +4,37 @@
 """Pick the unit-test files a change can affect, so a PR runs those and not all.
 
 **Narrowing is an allowlist.** A PR runs a subset only when every changed file
-is either a unit-test file or shipped ``.py`` code under a root the coverage map
-measures (``src/gaia``, and ``hub/agents`` when the map includes it) with an
-entry in the map. Everything else runs the whole suite: data files, ``util/``
-scripts, test helpers and fixtures, ``eval/``, configs, workflows, any
-``conftest.py``, a deleted or renamed file, a missing or stale map, this script
-and the workflow that runs it. Tests load such files by path
+is a unit-test file, shipped ``.py`` code under a root the coverage map
+measures (``src/gaia``, and ``hub/agents`` when the map includes it), or a
+file tests only ever read (``read_only_class``: docs pages, Agent UI sources,
+the Go TUI tree, hub data), which reaches just the tests that name it or scan
+its folder. Everything else runs the whole suite: other data files, pinned
+manifests and lockfiles, ``util/`` scripts, test helpers and fixtures,
+``eval/``, configs, workflows, any ``conftest.py``, a deleted or renamed file,
+a missing or stale map, this script and the workflow that runs it. Tests load
+such files by path
 (``spec_from_file_location``, ``runpy``, ``open``), and neither imports nor
-coverage can follow what those scripts import or read. A selection over
-``FULL_FRACTION`` of the suite also runs everything, since the saving is gone.
+coverage can follow what those scripts import or read.
+
+A read-only file runs the tests that can read it: code naming it, tests and
+scripts naming a folder above it, every directory listing that can return it
+(by its glob pattern and the folders its root spells out; a listing of a
+variable, by a folder name the file spells), and the tests that load a script
+that does. Shipped code naming a bare file name that other files share, from
+the Python package the changed file sits in, runs everything.
+
+A selection over ``FULL_FRACTION`` of the suite runs everything, since the
+saving is gone.
 
 For a change that passes the allowlist, two sources say which tests it reaches:
 
 **The coverage map** (``build-map``), from a full run with per-test coverage
 contexts on main. It lists, for each source file, the test files that executed
-it. This is what makes the selection tight: most of ``src/gaia`` imports most of
-the rest inside function bodies, so static reading alone would run nearly
-everything for nearly any change.
+it, except lines that more than ``FULL_FRACTION`` of the suite runs in the
+setup or teardown phase (an autouse fixture's work), which say nothing about
+what a test uses. This is what makes the selection tight: most of
+``src/gaia`` imports most of the rest inside function bodies, so static reading
+alone would run nearly everything for nearly any change.
 
 **Static rules**, added on top for what coverage can't see:
 
@@ -33,13 +47,19 @@ everything for nearly any change.
 - Tests and tooling that list a directory (``rglob``, ``os.walk``) are affected
   by any file under a directory whose name they spell out.
 - A ``conftest.py`` below the suite root reaches every file beneath it.
+- A change to a module the root ``conftest.py`` imports always adds
+  ``CONFTEST_SMOKE_TEST``, since the map drops that conftest's suite-wide setup.
 - A package ``__init__`` reaches everything under it when it changes, but the
   walk never continues *through* one: ``gaia/__init__`` imports the agent base
   eagerly, and following that would make every test depend on everything.
 - Code run in a child process (``python -m gaia.daemon``), by a test or by
   shipped code, counts with all its imports, since coverage can't see inside.
-- A test the map never ran (added since the nightly build) follows imports
-  inside functions too.
+  A module named only in a docstring is not run that way: docstrings never run.
+  Shipped code names a child only by a whole module name, never by part of a
+  URL, a file name (``gaia.log``) or a logger name (``getLogger("gaia.llm")``,
+  or a key of a table of logging levels).
+- A test the map never ran, or source file it has no entry for (added since
+  the nightly build), follows imports inside functions too.
 
 **The workflow's own paths filter** (``--trigger-paths-from``) decides only
 whether anything runs, as GitHub does for a pull request: a merge-queue group
@@ -49,6 +69,14 @@ files outside the filter (``docs/``, ``.claude/``, the root instruction files),
 so a code change shipped beside one of those runs everything, as on its PR.
 The root instruction files, ``.claude/`` and ``scripts/`` also force the full
 suite on their own, since the doc-path tests read them.
+
+On a pull request the macOS lane runs only when ``os_reason`` finds a changed
+file that touches the operating system. The ``ci:full`` label passes
+``--force-full`` and runs everything on every OS.
+
+``lane-scope`` makes the same kind of call for a whole workflow: build_tui.yml
+runs one core freeze, not its Go and installer matrix, when only the Agent UI
+changed.
 
 This is a speed-up for pull requests and the merge queue, not the coverage of
 record: test_unit.yml runs the full suite on Linux on every push to main, on
@@ -68,6 +96,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import fnmatch
 import json
 import os
 import re
@@ -81,6 +110,9 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TEST_ROOT = "tests/unit"
+# Always selected when a change touches a module the root conftest imports: the
+# map drops that conftest's suite-wide setup lines, and this test runs them.
+CONFTEST_SMOKE_TEST = "tests/unit/test_unit_daemon_isolation.py"
 MAP_VERSION = 1
 # The nightly run rebuilds the map; older than this means it stopped.
 MAX_MAP_AGE = timedelta(days=3)
@@ -91,10 +123,14 @@ MAX_BASENAME_FANOUT = 25
 _IGNORED_BASENAMES = {"__init__.py", "README.md", "LICENSE", ".gitignore"}
 _PATH_JOINERS = {"join", "joinpath", "Path", "PurePath", "PurePosixPath"}
 _SCANNER_RE = re.compile(r"\.rglob\(|\.glob\(|os\.walk\(|\.iterdir\(|os\.listdir\(")
+# A scan rooted here lists a throwaway directory, never the repo.
+_TMP_ROOT_RE = re.compile(r"tmp|temp", re.IGNORECASE)
+_GIT_LISTING_RE = re.compile(r"ls-files|\bgit\b[^\n]{0,40}\bgrep\b")
 _DOTTED_RE = re.compile(r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*)+(:[A-Za-z_]\w*)?$")
 _PATH_SPLIT_RE = re.compile(r"[\\/]")
 _ISOLATION_RE = re.compile(r"isolate|guard|restore|block|forbid")
 _SPAWN_RE = re.compile(r"sys\.executable|\bsubprocess\b|\bPopen\b|create_subprocess")
+_LEVEL_NAMES = {"NOTSET", "DEBUG", "INFO", "WARN", "WARNING", "ERROR", "CRITICAL"}
 
 FULL_RUN_FILES = {
     "setup.py",
@@ -114,6 +150,19 @@ FULL_RUN_FILES = {
 }
 FULL_RUN_PREFIXES = (".claude/", "scripts/")
 FULL_RUN_BASENAMES = {"conftest.py"}
+# Pinned or generated files several lanes read; they keep forcing a full run
+# even inside a folder that otherwise narrows.
+PINNED_BASENAMES = {
+    "binaries.lock.json",
+    "package.json",
+    "package-lock.json",
+    "go.mod",
+    "go.sum",
+    "pyproject.toml",
+    "setup.cfg",
+}
+WEBUI_ROOT = "src/gaia/apps/webui/"
+
 # Filter syntax beyond `*` and `**`, refused rather than misread.
 _UNSUPPORTED_GLOB_RE = re.compile(r"[!?+\[\]]")
 
@@ -141,6 +190,65 @@ PLATFORM_MODULE_PREFIXES = (
     "gaia.electron",
     "gaia.audio",
 )
+# Changed code that touches the operating system, so the macOS lane runs on a
+# PR: processes, shells, paths, locks, ports, keyring and the installer. Push,
+# merge queue and nightly runs ignore this and still run macOS.
+OS_MODULE_PREFIXES = PLATFORM_MODULE_PREFIXES + (
+    "gaia.agents.tools.shell_session",
+    "gaia.agents.tools.shell_deletes",
+    "gaia.agents.tools.path_access",
+    "gaia.agents.tools.workspace_paths",
+    "gaia.agents.base.credential_reads",
+    "gaia.connectors",
+    "gaia.mcp.client.transports.stdio",
+    "gaia.mcp.ports",
+    "gaia.messaging.discord.credentials",
+    "gaia.messaging.slack.credentials",
+    "gaia.schedule.lock",
+    "gaia.skills.lock",
+    "gaia.skills.binaries",
+    "gaia.skills.binary_setup",
+    "gaia.utils.paths",
+    "gaia.utils.process_owner",
+    "gaia.utils.process_tree",
+    "gaia.ports",
+    "gaia.env",
+    "gaia.device",
+    "gaia.ui.devices.listener",
+    "gaia.login_path",
+    "gaia.log_rotation",
+    "gaia.program_lookup",
+    "gaia.cli",
+    "gaia.llm.lemonade_client",
+    "gaia.llm.lemonade_embedded",
+    "gaia.llm.lemonade_tls",
+    "gaia.llm.gpu_memory",
+    "gaia.llm.cloud_keys",
+    "gaia.hub.native_launcher",
+    "gaia.hub.compatibility",
+    "gaia.agents.registry",
+    "gaia.agents.base.console",
+    "gaia.agents.base.discovery",
+    "gaia.agents.base.memory",
+    "gaia.agents.base.system_context",
+    "gaia.agents.tools.protected_folders",
+    "gaia.agents.tools.screenshot_tools",
+    "gaia.utils.user_folders",
+    "gaia.utils.terminal",
+    "gaia.ui.routers.files",
+    "gaia.ui.tunnel",
+    "gaia.mcp.client.mcp_client",
+    "gaia.eval.bench.config",
+    "gaia.eval.bench.sandbox",
+)
+OS_PATH_PREFIXES = ("installer/",)
+# A changed test that spawns processes, sends signals or reads the platform.
+OS_CALL_RE = re.compile(
+    r"\bsubprocess\b|\bPopen\b|create_subprocess|\bpsutil\b|\bmultiprocessing\b|"
+    r"\bos\.(?:kill|killpg|setsid|chmod|symlink|startfile|name)\b|\bsignal\.\w|"
+    r"\bfcntl\b|\bmsvcrt\b|\bctypes\b|\bwinreg\b|\bkeyring\b|\bsymlink_to\b|"
+    r"\bsys\.platform\b|\bplatform\.system\b"
+)
 
 
 def _edges() -> Dict[str, Set[str]]:
@@ -160,6 +268,16 @@ class Graph:
     # Files named by a string: followed one hop, from the changed file.
     read_deps: Dict[str, Set[str]] = field(default_factory=_edges)
     scanner_tokens: Dict[str, Set[str]] = field(default_factory=dict)
+    # Folders a test names by path and reads a file from by a computed name
+    # (`LOCALES / f"{locale}.ts"`): any non-Python file under one reaches it.
+    folder_reads: Dict[str, Set[str]] = field(default_factory=_edges)
+    # Each directory listing in a non-shipped file.
+    scans: Dict[str, List["Scan"]] = field(default_factory=dict)
+    # Multi-part path strings in non-shipped files ("tui/internal/lemonade"):
+    # a directory named so is read through names the selector can't see.
+    dir_refs: Dict[str, Set[str]] = field(default_factory=_edges)
+    # Bare non-.py names shipped code reads that too many files share to link.
+    vague_names: Dict[str, Set[str]] = field(default_factory=_edges)
     # Modules a test runs in a child process (`python -m gaia.cli`): coverage
     # can't see inside it, so their function-level imports always count.
     subprocess_targets: Dict[str, Set[str]] = field(default_factory=_edges)
@@ -168,6 +286,20 @@ class Graph:
     spawn_deps: Dict[str, Set[str]] = field(default_factory=_edges)
     imported_modules: Dict[str, Set[str]] = field(default_factory=_edges)
     sources: Dict[str, str] = field(default_factory=dict)
+    # Files the top-level conftests import, at module level or in any fixture.
+    conftest_imports: Set[str] = field(default_factory=set)
+
+
+@dataclass(frozen=True)
+class Scan:
+    """One directory listing: None in a field means it could be anything."""
+
+    pattern: Optional[str] = None
+    # Folder names spelled out in the listed path ("hub", "skills").
+    root: Tuple[str, ...] = ()
+    temporary: bool = False
+    # The path starts at the repo or the file itself, not at a variable.
+    anchored: bool = False
 
 
 @dataclass
@@ -248,12 +380,73 @@ class _Imports(ast.NodeVisitor):
         self.module_level: List[ast.AST] = []
         self.in_function: List[ast.AST] = []
         self.strings: List[str] = []
+        # Never executed, so they name modules but never a child process.
+        self.docstrings: List[str] = []
+        # Logger names, not child processes: getLogger()'s first argument, and
+        # the keys of (and lookups in) a table of logging levels.
+        self.logger_names: List[str] = []
         # Pieces of a joined path: "SKILL.md" there is not a bare file name.
         self.path_pieces: List[str] = []
         self._joined: Set[int] = set()
+        # Constant folders a joined path continues past with a computed name
+        # (`ROOT / "hub" / "skills" / name`).
+        self.folder_strings: List[str] = []
+        # Inner links of a `/` chain, already read with the whole chain.
+        self._chained: Set[int] = set()
+        self._docstring_ids: Set[int] = set()
+        self._logger_ids: Set[int] = set()
         self._depth = 0
 
+    def _mark_docstring(self, node: ast.AST) -> None:
+        body = getattr(node, "body", None)
+        if (
+            isinstance(body, list)
+            and body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            self._docstring_ids.add(id(body[0].value))
+
+    def visit_Module(self, node: ast.Module) -> None:
+        self._mark_docstring(node)
+        self._mark_level_tables(node)
+        self.generic_visit(node)
+
+    def _mark_level_tables(self, tree: ast.Module) -> None:
+        """Mark the keys of every dict assigned a logging level per key, and
+        the string keys later looked up in it by the name it was assigned to."""
+        tables: Set[str] = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            if not _is_level_table(node.value):
+                continue
+            self._logger_ids.update(id(k) for k in node.value.keys if k is not None)
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            tables.update(ast.unparse(t) for t in targets)
+        if not tables:
+            return
+        for node in ast.walk(tree):
+            key = None
+            if isinstance(node, ast.Subscript):
+                table, key = node.value, node.slice
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in ("get", "setdefault", "pop")
+                and node.args
+            ):
+                table, key = node.func.value, node.args[0]
+            if isinstance(key, ast.Constant) and ast.unparse(table) in tables:
+                self._logger_ids.add(id(key))
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._mark_docstring(node)
+        self.generic_visit(node)
+
     def _function(self, node: ast.AST) -> None:
+        self._mark_docstring(node)
         self._depth += 1
         self.generic_visit(node)
         self._depth -= 1
@@ -279,6 +472,10 @@ class _Imports(ast.NodeVisitor):
         if isinstance(node.value, str):
             if id(node) in self._joined:
                 self.path_pieces.append(node.value)
+            elif id(node) in self._docstring_ids:
+                self.docstrings.append(node.value)
+            elif id(node) in self._logger_ids:
+                self.logger_names.append(node.value)
             else:
                 self.strings.append(node.value)
 
@@ -294,21 +491,71 @@ class _Imports(ast.NodeVisitor):
             self._joined.update(id(c) for c in tail)
 
     def visit_BinOp(self, node: ast.BinOp) -> None:
-        if isinstance(node.op, ast.Div):
+        if isinstance(node.op, ast.Div) and id(node) not in self._chained:
             parts: List[ast.AST] = []
             current: ast.AST = node
             while isinstance(current, ast.BinOp) and isinstance(current.op, ast.Div):
+                self._chained.add(id(current))
                 parts.insert(0, current.right)
                 current = current.left
             if _joins_a_path(current):
                 parts = list(current.args) + parts
             self._add_path(parts)
+            self._add_folders(parts)
         self.generic_visit(node)
+
+    def _add_folders(self, parts: List[ast.AST]) -> None:
+        """Record each run of constant pieces a computed piece follows."""
+        run: List[str] = []
+        for part in parts:
+            if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                run.append(part.value)
+                continue
+            if len(run) > 1:
+                self.folder_strings.append("/".join(run))
+            run = []
 
     def visit_Call(self, node: ast.Call) -> None:
         if _joins_a_path(node):
             self._add_path(node.args)
+        name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
+        if name == "getLogger" and node.args and isinstance(node.args[0], ast.Constant):
+            self._logger_ids.add(id(node.args[0]))
         self.generic_visit(node)
+
+
+def _is_level_table(node: Optional[ast.AST]) -> bool:
+    """A dict literal whose every value is a logging level (``logging.INFO``
+    or ``"INFO"``)."""
+    if not isinstance(node, ast.Dict) or not node.values:
+        return False
+    for value in node.values:
+        if isinstance(value, ast.Attribute):
+            name = value.attr
+        elif isinstance(value, ast.Constant) and isinstance(value.value, str):
+            name = value.value
+        else:
+            return False
+        if name not in _LEVEL_NAMES:
+            return False
+    return True
+
+
+def _names_a_child(
+    text: str, match: "re.Match[str]", module_files: Dict[str, str]
+) -> bool:
+    """Whether a dotted name in shipped code's string can be a module it runs.
+
+    Only a whole module name counts, so a file name ("gaia.log") or a module
+    path with an attribute is not one, and neither is part of a URL or a host
+    ("amd-gaia.ai").
+    """
+    if match.group() not in module_files:
+        return False
+    if text[match.start() - 1 : match.start()] in ("-", ".", "/", "@"):
+        return False
+    start = max(text.rfind(c, 0, match.start()) for c in " \t\n'\"") + 1
+    return "://" not in text[start : match.end()]
 
 
 def _joins_a_path(node: ast.AST) -> bool:
@@ -325,11 +572,16 @@ def build_graph(repo: Path = REPO_ROOT, files: Optional[List[str]] = None) -> Gr
     stems: Dict[str, Set[str]] = defaultdict(set)
     basenames: Dict[str, Set[str]] = defaultdict(set)
     path_suffixes: Dict[str, Set[str]] = defaultdict(set)
+    dir_suffixes: Dict[str, Set[str]] = defaultdict(set)
     for path in files:
         basenames[PurePosixPath(path).name].add(path)
         parts = PurePosixPath(path).parts
         for start in range(len(parts) - 1):
             path_suffixes["/".join(parts[start:])].add(path)
+        for end in range(1, len(parts)):
+            folder = "/".join(parts[:end])
+            for start in range(end):
+                dir_suffixes["/".join(parts[start:end])].add(folder)
         if path.endswith(".py"):
             stems[PurePosixPath(path).stem].add(path)
             for root in roots:
@@ -379,6 +631,15 @@ def build_graph(repo: Path = REPO_ROOT, files: Optional[List[str]] = None) -> Gr
         if name in _IGNORED_BASENAMES or len(targets) > MAX_BASENAME_FANOUT:
             return set()
         return targets
+
+    def folder_targets(pieces: List[str]) -> Set[str]:
+        """The tracked folders a string of two or more path pieces can mean."""
+        # One piece alone ("src", "docs") says nothing about which folder.
+        for start in range(len(pieces) - 1):
+            found = dir_suffixes.get("/".join(pieces[start:]))
+            if found and len(found) <= MAX_BASENAME_FANOUT:
+                return found
+        return set()
 
     def link(src: str, name: str, edges: Dict[str, Set[str]], parent_only=False):
         found = resolve(name)
@@ -462,13 +723,22 @@ def build_graph(repo: Path = REPO_ROOT, files: Optional[List[str]] = None) -> Gr
         tokens: Set[str] = {
             p for text in found.path_pieces for p in _PATH_SPLIT_RE.split(text) if p
         }
-        for text in found.strings:
+        if not package_code:
+            for text in found.folder_strings:
+                folders = folder_targets([p for p in _PATH_SPLIT_RE.split(text) if p])
+                graph.folder_reads[path].update(folders)
+        texts = [(s, "code") for s in found.strings]
+        texts += [(s, "docstring") for s in found.docstrings]
+        texts += [(s, "logger") for s in found.logger_names]
+        for text, kind in texts:
             value = text.strip()
-            if package_code and spawns and "." in value:
-                for name in embedded.findall(value):
-                    target = resolve(name)
-                    if target and module_files[target] != path:
-                        graph.spawn_deps[path].add(module_files[target])
+            if package_code and spawns and kind == "code":
+                for match in embedded.finditer(value):
+                    if not _names_a_child(value, match, module_files):
+                        continue
+                    target = module_files[match.group()]
+                    if target != path:
+                        graph.spawn_deps[path].add(target)
             if not package_code:
                 head = value.split(".")[0]
                 named: List[str] = []
@@ -480,18 +750,30 @@ def build_graph(repo: Path = REPO_ROOT, files: Optional[List[str]] = None) -> Gr
                     named = embedded.findall(value)
                 for name in named:
                     link(path, name, graph.deps, parent_only=True)
-                    found = resolve(name)
-                    if spawns and found:
-                        graph.subprocess_targets[path].add(module_files[found])
+                    module = resolve(name)
+                    if spawns and module and kind != "docstring":
+                        graph.subprocess_targets[path].add(module_files[module])
             pieces = [p for p in _PATH_SPLIT_RE.split(value) if p]
             if not pieces:
                 continue
             tokens.update(p for p in pieces if "\n" not in p and len(p) < 80)
+            multi = len(pieces) > 1 and "\n" not in value and len(value) < 200
+            if multi and not package_code:
+                graph.dir_refs[path].add("/".join(pieces))
             targets = read_targets(pieces, package_code)
             graph.read_deps[path].update(t for t in targets if t != path)
+            if not package_code and not targets:
+                graph.folder_reads[path].update(folder_targets(pieces))
+            name = pieces[-1]
+            if package_code and not targets and not name.endswith(".py"):
+                if len(basenames.get(name, ())) > 1:
+                    graph.vague_names[path].add(name)
         # Shipped code that lists a directory is linked by the names it reads.
         if not package_code and _SCANNER_RE.search(source):
             graph.scanner_tokens[path] = tokens
+            graph.scans[path] = _scan_calls(tree)
+        if not package_code and _GIT_LISTING_RE.search(source):
+            graph.scans.setdefault(path, []).append(Scan(anchored=True))
 
     # A conftest's fixtures reach every file below it. The top-level ones mostly
     # stub shared services, so there a test depends on the fixtures it asks for
@@ -512,10 +794,13 @@ def build_graph(repo: Path = REPO_ROOT, files: Optional[List[str]] = None) -> Gr
                 graph.deps[path].add(conftest)
             continue
         fixtures, autouse = _fixture_imports(graph.sources.get(conftest, ""), conftest)
-        if not fixtures:
-            continue
         package = _module_name(conftest, "")
         package = package.rpartition(".")[0] if package else None
+        for node in ast.walk(ast.parse(graph.sources.get(conftest, ""))):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                graph.conftest_imports |= import_files(node, package)
+        if not fixtures:
+            continue
         patched: Set[str] = set()
         for name in autouse:
             for node in fixtures.get(name, ()):
@@ -527,6 +812,81 @@ def build_graph(repo: Path = REPO_ROOT, files: Optional[List[str]] = None) -> Gr
                 for node in fixtures[name]:
                     link_import(path, node, package, graph.deps)
     return graph
+
+
+def _root_pieces(
+    node: Optional[ast.AST], assigned: Dict[str, ast.AST], depth: int = 0
+) -> Tuple[List[str], bool]:
+    """The folder names a path expression spells out, through module names,
+    and whether it starts at a constant or ``__file__`` rather than a variable."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        names = [
+            p for p in _PATH_SPLIT_RE.split(node.value) if p not in ("", ".", "..")
+        ]
+        return names, True
+    if isinstance(node, ast.Name):
+        if node.id == "__file__":
+            return [], True
+        if node.id in assigned and depth < 3:
+            return _root_pieces(assigned[node.id], assigned, depth + 1)
+        return [], False
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        left, anchored = _root_pieces(node.left, assigned, depth)
+        return left + _root_pieces(node.right, assigned, depth)[0], anchored
+    if isinstance(node, ast.Call):
+        if _joins_a_path(node):
+            base = getattr(node.func, "value", None)
+            parts = ([base] if base is not None else []) + list(node.args)
+            if not parts:
+                return [], False
+            pieces, anchored = _root_pieces(parts[0], assigned, depth)
+            for arg in parts[1:]:
+                pieces = pieces + _root_pieces(arg, assigned, depth)[0]
+            return pieces, anchored
+        if isinstance(node.func, ast.Attribute):
+            return _root_pieces(node.func.value, assigned, depth)
+        if getattr(node.func, "id", None) in ("str", "fspath") and node.args:
+            return _root_pieces(node.args[0], assigned, depth)
+    if isinstance(node, (ast.Attribute, ast.Subscript)):
+        return _root_pieces(node.value, assigned, depth)
+    return [], False
+
+
+def _scan_calls(tree: ast.Module) -> List[Scan]:
+    """Every directory listing in a file."""
+    assigned: Dict[str, ast.AST] = {}
+    for stmt in tree.body:
+        if isinstance(stmt, (ast.Assign, ast.AnnAssign)) and stmt.value is not None:
+            targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+            for target in targets:
+                if isinstance(target, ast.Name):
+                    assigned[target.id] = stmt.value
+    found: List[Scan] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = ast.unparse(node.func)
+        attr = getattr(node.func, "attr", None)
+        if func in ("os.walk", "os.listdir", "os.scandir", "glob.glob", "glob.iglob"):
+            root = node.args[0] if node.args else None
+        elif attr in ("rglob", "glob", "iterdir") and isinstance(
+            node.func, ast.Attribute
+        ):
+            root = node.func.value
+        else:
+            continue
+        pattern = None
+        if attr in ("rglob", "glob") and node.args:
+            arg = node.args[0]
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                pattern = arg.value
+        if root is None:
+            found.append(Scan(pattern, anchored=True))
+            continue
+        temporary = bool(_TMP_ROOT_RE.search(ast.unparse(root)))
+        pieces, anchored = _root_pieces(root, assigned)
+        found.append(Scan(pattern, tuple(pieces), temporary, anchored))
+    return found
 
 
 def _fixture_imports(
@@ -613,25 +973,47 @@ def load_map(path: Path) -> Tuple[Dict[str, Set[str]], bool]:
     return files, stale
 
 
+_SETUP_PHASES = ("setup", "teardown")
+
+
+def _split_context(context: str) -> Tuple[str, str]:
+    """A pytest-cov context ``<nodeid>|<phase>`` as (test file, phase)."""
+    nodeid, _, phase = context.partition("|")
+    return nodeid.split("::", 1)[0].replace("\\", "/"), phase
+
+
 def build_map(coverage_file: Path, repo: Path = REPO_ROOT) -> dict:
     from coverage import CoverageData
 
     data = CoverageData(basename=str(coverage_file))
     data.read()
-    tests: Dict[str, int] = {}
-    files: Dict[str, Set[int]] = {}
+    lines: Dict[str, List[Set[str]]] = {}
+    suite: Set[str] = set()
     for measured in data.measured_files():
         try:
             rel = Path(measured).resolve().relative_to(repo.resolve()).as_posix()
         except ValueError:
             continue
-        hit: Set[int] = set()
-        for contexts in (data.contexts_by_lineno(measured) or {}).values():
+        lines[rel] = list((data.contexts_by_lineno(measured) or {}).values())
+        for contexts in lines[rel]:
             for context in contexts:
-                test = context.split("::", 1)[0]
+                test, _ = _split_context(context)
+                if test.endswith(".py"):
+                    suite.add(test)
+    tests: Dict[str, int] = {}
+    files: Dict[str, Set[int]] = {}
+    for rel, per_line in lines.items():
+        hit: Set[int] = set()
+        for contexts in per_line:
+            split = [_split_context(c) for c in contexts]
+            fixture_files = {t for t, phase in split if phase in _SETUP_PHASES}
+            shared = len(fixture_files) > FULL_FRACTION * len(suite)
+            for test, phase in split:
                 if not test.endswith(".py"):
                     continue
-                hit.add(tests.setdefault(test.replace("\\", "/"), len(tests)))
+                if shared and phase in _SETUP_PHASES:
+                    continue
+                hit.add(tests.setdefault(test, len(tests)))
         if hit:
             files[rel] = hit
     names = sorted(tests, key=tests.get)
@@ -641,6 +1023,60 @@ def build_map(coverage_file: Path, repo: Path = REPO_ROOT) -> dict:
         "tests": names,
         "files": {f: sorted(ix) for f, ix in sorted(files.items())},
     }
+
+
+def _lists(scan: Scan, path: str, tokens: Set[str]) -> bool:
+    """Whether a directory listing can return the file, or a folder above it.
+
+    A listing of a variable whose folders the file never spells out is linked
+    as the other scanner rule links it: by a folder name the file names."""
+    if scan.temporary:
+        return False
+    parts = path.split("/")
+    if not scan.anchored and not scan.root and tokens.isdisjoint(parts[:-1]):
+        return False
+    if scan.root:
+        folders, k = parts[:-1], len(scan.root)
+        if not any(
+            tuple(folders[i : i + k]) == scan.root for i in range(len(folders) - k + 1)
+        ):
+            return False
+    if scan.pattern is None:
+        return True
+    last = scan.pattern.rsplit("/", 1)[-1].lower()
+    return any(fnmatch.fnmatch(part.lower(), last) for part in parts)
+
+
+def data_readers(
+    graph: Graph, path: str, rev_read: Optional[Dict[str, Set[str]]] = None
+) -> Set[str]:
+    """Files that can read a non-.py file: those naming it or a folder above
+    it, every listing that can return it, and whatever loads a script that
+    does, by path."""
+    rev_read = _reverse(graph.read_deps) if rev_read is None else rev_read
+    parts = PurePosixPath(path).parts
+    folders = {
+        "/".join(parts[start:end])
+        for end in range(2, len(parts))
+        for start in range(end - 1)
+    }
+    readers = set(rev_read.get(path, ()))
+    readers.update(f for f, refs in graph.dir_refs.items() if refs & folders)
+    readers.update(
+        f
+        for f, scans in graph.scans.items()
+        if any(_lists(s, path, graph.scanner_tokens.get(f, set())) for s in scans)
+    )
+    roots = _module_roots(graph.files)
+    stack = [r for r in readers if r.endswith(".py") and not is_package_code(r, roots)]
+    while stack:
+        for loader in rev_read.get(stack.pop(), ()):
+            if loader not in readers:
+                readers.add(loader)
+                if loader.endswith(".py") and not is_package_code(loader, roots):
+                    stack.append(loader)
+    readers.discard(path)
+    return readers
 
 
 def affected_files(
@@ -654,8 +1090,18 @@ def affected_files(
     rev_init = _reverse(graph.init_deps)
     for path in changed:
         affected.update(rev_read.get(path, ()))
+        if not path.endswith(".py"):
+            affected.update(data_readers(graph, path, rev_read))
         if path.endswith("__init__.py"):
             affected.update(rev_init.get(path, ()))
+        # Python reaches its readers through imports; a folder read is how a
+        # test finds a data file by a name it computes.
+        if not path.endswith(".py"):
+            affected.update(
+                reader
+                for reader, folders in graph.folder_reads.items()
+                if any(path.startswith(folder + "/") for folder in folders)
+            )
         dirs = PurePosixPath(path).parts[:-1]
         for scanner, tokens in graph.scanner_tokens.items():
             if any(d in tokens for d in dirs):
@@ -739,11 +1185,14 @@ def full_run_reason(
 ) -> Optional[str]:
     """Why the whole suite must run, or None if the selection can narrow.
 
-    Narrowing is an allowlist: every changed file must be a unit-test file, or
-    shipped .py code the coverage map measures and has an entry for. Anything
-    else (data files, util/ scripts, test helpers and fixtures, eval/, configs,
-    workflows) can be loaded by path or read by a script, which neither imports
-    nor coverage can follow, so it runs everything.
+    Narrowing is an allowlist: every changed file must be a unit-test file,
+    shipped .py code the coverage map measures, or a read-only file
+    (``read_only_class``). Anything else (other data files, util/ scripts, test
+    helpers and fixtures, eval/, configs, workflows) can be loaded by path or
+    read by a script, which neither imports nor coverage can follow, so it runs
+    everything.
+    A read-only file narrows to its readers (``data_readers``), unless shipped
+    code names its bare file name, which too many files share to link.
     """
     if coverage is None:
         return "no coverage map"
@@ -759,10 +1208,34 @@ def full_run_reason(
             return f"{path} is not tracked by git, so its imports were not read"
         if is_test_file(path, test_root):
             continue
+        # Read by path, never imported: the tests that name the file or scan
+        # its folder are the ones it reaches (affected_files follows read_deps).
+        if read_only_class(path):
+            vague = _vague_reader(graph, path)
+            if vague:
+                return vague
+            continue
         if not is_measured(path, coverage):
             return f"{path} is outside the code the coverage map measures"
-        if path not in coverage:
-            return f"{path} has no entry in the coverage map"
+    return None
+
+
+def _vague_reader(graph: Graph, path: str) -> Optional[str]:
+    """Why shipped code beside a file may read it by a name shared too widely."""
+    name = PurePosixPath(path).name
+    for reader in sorted(graph.vague_names):
+        if name not in graph.vague_names[reader]:
+            continue
+        here = PurePosixPath(reader).parent.as_posix()
+        folder = PurePosixPath(path).parent.as_posix()
+        # Shipped code reads its own package's data by bare name, never files
+        # outside a Python package (a web app's index.ts).
+        inside = folder == here or f"{folder}/__init__.py" in graph.files
+        if inside and (folder + "/").startswith(here + "/"):
+            return (
+                f"{path}: {reader} reads a file named {name!r}, which too many "
+                "files share to say which"
+            )
     return None
 
 
@@ -772,6 +1245,69 @@ def forces_full_run(path: str) -> bool:
         or path.startswith(FULL_RUN_PREFIXES)
         or PurePosixPath(path).name in FULL_RUN_BASENAMES
     )
+
+
+def read_only_class(path: str) -> Optional[str]:
+    """The kind of non-Python file that only reaches the tests reading it, or None.
+
+    Docs pages, Agent UI sources, the Go TUI tree and hub data are never
+    imported by a test; a test reads them by a path it spells out or by
+    scanning their folder, and the graph records both. Anything else that
+    isn't Python (fixtures, configs, eval data) still runs the full suite, and
+    so do skills and the data inside a hub agent's Python package: shipped
+    code loads those by scanning a folder, which the graph can't follow.
+    """
+    p = PurePosixPath(path)
+    if p.suffix == ".py" or p.name in PINNED_BASENAMES or forces_full_run(path):
+        return None
+    if path.startswith("tests/"):
+        return None
+    if path.startswith(WEBUI_ROOT):
+        return "webui"
+    if path.startswith("tui/"):
+        return "tui"
+    if path.startswith("hub/skills/") or re.match(r"hub/agents/[^/]+/python/", path):
+        return None
+    if path.startswith("hub/"):
+        return "hub data"
+    # eval/ prompts and corpora and the installer tree are inputs, not pages.
+    if p.suffix in {".md", ".mdx"} and not path.startswith(
+        ("src/", "eval/", "installer/")
+    ):
+        return "docs"
+    return None
+
+
+def is_os_touching_path(path: str) -> bool:
+    """Whether a path is in the installer tree or an OS_MODULE_PREFIXES module."""
+    module = _module_name(path, "src") or ""
+    return path.startswith(OS_PATH_PREFIXES) or any(
+        module == prefix or module.startswith(prefix + ".")
+        for prefix in OS_MODULE_PREFIXES
+    )
+
+
+def os_reason(changed: Iterable[str], graph: Graph) -> Optional[str]:
+    """Why a change needs the macOS lane on a pull request, or None.
+
+    It does for OS-touching code (OS_MODULE_PREFIXES, the installer tree), a
+    test that makes OS calls itself, a file that forces a full run, or Python
+    whose source can't be read. Anything else runs on Linux and Windows only;
+    a macOS-only break in it surfaces on the push to main instead.
+    """
+    for path in sorted(changed):
+        if forces_full_run(path):
+            return f"{path} changed"
+        if is_os_touching_path(path):
+            return f"{path} is OS-touching code"
+        if not path.endswith(".py"):
+            continue
+        source = graph.sources.get(path)
+        if source is None:
+            return f"{path} was deleted or is untracked, so its OS calls can't be read"
+        if is_test_file(path) and OS_CALL_RE.search(source):
+            return f"{path} is a test that makes OS calls"
+    return None
 
 
 def workflow_trigger_paths(workflow: Path) -> List[str]:
@@ -842,9 +1378,14 @@ def select(
     platform_only: bool = False,
     stale: bool = False,
     trigger_paths: Optional[List[str]] = None,
+    force_full: Optional[str] = None,
 ) -> Selection:
     changed = sorted(set(changed))
     all_tests = sorted(p for p in graph.files if is_test_file(p, test_root))
+    if force_full:
+        return Selection(
+            full=True, reason=force_full, tests=all_tests, total=len(all_tests)
+        )
     # The filter only gates whether anything runs: tests read files outside it.
     if trigger_paths is not None and not triggering_changes(changed, trigger_paths):
         return Selection(
@@ -862,15 +1403,59 @@ def select(
         if len(tests) > FULL_FRACTION * len(all_tests):
             reason = f"{len(tests)} of {len(all_tests)} test files affected"
             tests = all_tests
+    if reason is None and graph.conftest_imports.intersection(changed):
+        if CONFTEST_SMOKE_TEST not in all_tests:
+            raise SystemExit(
+                f"select_tests: {CONFTEST_SMOKE_TEST} is missing from {test_root}, "
+                "but a change touches a module the root conftest imports. Restore "
+                "it, or point CONFTEST_SMOKE_TEST at another fast test."
+            )
+        tests = sorted(set(tests) | {CONFTEST_SMOKE_TEST})
     if platform_only:
         tests = [p for p in tests if is_platform_sensitive(graph, p)]
     detail = reason or f"{len(changed)} changed file(s)"
+    if reason is None and coverage is not None:
+        detail += _data_file_report(graph, changed, coverage, set(all_tests))
+    if reason is None and coverage is not None:
+        unmapped = [
+            p
+            for p in changed
+            if p.endswith(".py")
+            and p not in coverage
+            and not is_test_file(p, test_root)
+        ]
+        if unmapped:
+            detail += "; read statically, no map entry yet: " + ", ".join(unmapped)
     return Selection(
         full=reason is not None and not platform_only,
         reason=detail,
         tests=tests,
         total=len(all_tests),
     )
+
+
+def _data_file_report(
+    graph: Graph, changed: List[str], coverage: Dict[str, Set[str]], tests: Set[str]
+) -> str:
+    """How many tests each changed non-.py file reaches, for the landing log."""
+    read: List[str] = []
+    unread: List[str] = []
+    for path in changed:
+        if path.endswith(".py"):
+            continue
+        hit = len(affected_files(graph, [path], coverage) & tests)
+        if hit:
+            read.append(f"{path} ({hit} test file{'s' if hit > 1 else ''})")
+        else:
+            unread.append(path)
+    out = ""
+    if read:
+        out += "; read by tests: " + ", ".join(read)
+    if unread:
+        shown = ", ".join(unread[:5])
+        more = f" and {len(unread) - 5} more" if len(unread) > 5 else ""
+        out += f"; no test reads: {shown}{more}"
+    return out
 
 
 def changed_since(base: str, repo: Path = REPO_ROOT) -> List[str]:
@@ -915,14 +1500,18 @@ def _cmd_select(args: argparse.Namespace) -> int:
         args.platform_only,
         stale,
         trigger_paths,
+        args.force_full,
     )
     kind = "full suite" if sel.full else "selected"
     summary = f"{kind}: {len(sel.tests)} of {sel.total} test files ({sel.reason})"
-    print(f"select_tests: {summary}", file=sys.stderr)
-    step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
-    if step_summary:
-        with open(step_summary, "a", encoding="utf-8") as fh:
-            fh.write(f"**Test selection** — {summary}\n\n")
+    touches_os = args.force_full or os_reason(changed, graph)
+    if args.platform_only:
+        summary += (
+            f"; macOS on a PR: runs ({touches_os})"
+            if touches_os
+            else "; macOS on a PR: skipped (no OS-touching file changed)"
+        )
+    _report(summary, "Test selection")
     if args.explain:
         print("\n".join(sel.tests))
     if args.out:
@@ -932,6 +1521,55 @@ def _cmd_select(args: argparse.Namespace) -> int:
             fh.write(f"{args.github_output}_full={str(sel.full).lower()}\n")
             fh.write(f"{args.github_output}_count={len(sel.tests)}\n")
             fh.write(f"{args.github_output}_triggered={str(sel.triggered).lower()}\n")
+            fh.write(f"{args.github_output}_os={str(bool(touches_os)).lower()}\n")
+    return 0
+
+
+def _report(summary: str, title: str) -> None:
+    print(f"select_tests: {summary}", file=sys.stderr)
+    step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if step_summary:
+        with open(step_summary, "a", encoding="utf-8") as fh:
+            fh.write(f"**{title}** — {summary}\n\n")
+
+
+def lane_scope(
+    changed: Iterable[str],
+    patterns: Iterable[str],
+    narrow_prefixes: Iterable[str],
+    force_full: Optional[str] = None,
+) -> Tuple[bool, str]:
+    """``(full, reason)``: whether a workflow needs its full job set.
+
+    Narrow only when every changed file the workflow's paths filter matches is
+    under one of ``narrow_prefixes``; files outside the filter never triggered
+    the workflow, so they don't decide its scope.
+    """
+    if force_full:
+        return True, force_full
+    rx = path_filter(patterns)
+    matched = sorted(p for p in changed if rx.match(p))
+    if not matched:
+        return True, "no changed file matches the paths filter, so nothing narrows"
+    prefixes = tuple(narrow_prefixes)
+    for path in matched:
+        if not path.startswith(prefixes):
+            return True, f"{path} needs the full job set"
+    return False, f"only {', '.join(prefixes)} changed ({len(matched)} file(s))"
+
+
+def _cmd_lane_scope(args: argparse.Namespace) -> int:
+    changed = changed_since(args.base) if args.base else args.changed
+    full, reason = lane_scope(
+        changed,
+        workflow_trigger_paths(Path(args.workflow)),
+        args.narrow_prefix,
+        args.force_full,
+    )
+    _report(f"{'full' if full else 'narrow'}: {reason}", "Job scope")
+    if args.github_output:
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+            fh.write(f"{args.github_output}_full={str(full).lower()}\n")
     return 0
 
 
@@ -974,11 +1612,38 @@ def main(argv: Optional[List[str]] = None) -> int:
     sel.add_argument("--out", help="write one test path per line here")
     sel.add_argument("--explain", action="store_true", help="print the selection")
     sel.add_argument(
+        "--force-full",
+        metavar="REASON",
+        help="run the whole suite for this logged reason (the ci:full label)",
+    )
+    sel.add_argument(
         "--github-output",
         metavar="PREFIX",
-        help="write PREFIX_full, PREFIX_count and PREFIX_triggered to $GITHUB_OUTPUT",
+        help="write PREFIX_full, PREFIX_count, PREFIX_triggered and PREFIX_os "
+        "to $GITHUB_OUTPUT",
     )
     sel.set_defaults(func=_cmd_select)
+
+    scope = sub.add_parser(
+        "lane-scope", help="decide whether a workflow needs its full job set"
+    )
+    scope_src = scope.add_mutually_exclusive_group(required=True)
+    scope_src.add_argument("--base", help="git ref to diff HEAD against")
+    scope_src.add_argument("--changed", nargs="+", help="changed paths, repo-relative")
+    scope.add_argument(
+        "--workflow", required=True, help="workflow whose pull_request paths to read"
+    )
+    scope.add_argument(
+        "--narrow-prefix",
+        action="append",
+        required=True,
+        help="a path prefix that alone needs only the narrow jobs (repeatable)",
+    )
+    scope.add_argument("--force-full", metavar="REASON")
+    scope.add_argument(
+        "--github-output", metavar="PREFIX", help="write PREFIX_full to $GITHUB_OUTPUT"
+    )
+    scope.set_defaults(func=_cmd_lane_scope)
 
     bm = sub.add_parser("build-map", help="turn a coverage file into a test map")
     bm.add_argument("--coverage", required=True, help="a .coverage data file")

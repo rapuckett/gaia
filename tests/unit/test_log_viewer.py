@@ -22,10 +22,17 @@ from gaia.llm import lemonade_client as lc
 from gaia.llm import lemonade_logs as logs
 
 SECRET = "embedded-key-0123456789"
+# Made-up values in each credential's real shape.
+FAKE_DEVICE = "gaiad_FAKEfake0123456789FAKEfake0123456789abc"
+FAKE_DISCORD = "MTAwMDAwMDAwMDAwMDAwMDAw.GFAKE1.fakefakefakefakefakefakefakefake"
+# Joined at run time so secret scanners never see a token-shaped literal.
+FAKE_TELEGRAM = "123456789" + ":" + "AAFAKEfakeFAKEfakeFAKEfakeFAKEfake0"
 
 
 @pytest.fixture(autouse=True)
-def _clean_env(monkeypatch, tmp_path):
+def _clean_env(monkeypatch, tmp_path, in_memory_keyring):
+    # Never the PC's own credential store: redaction reads every saved secret.
+    in_memory_keyring._store.clear()
     for name in ("LEMONADE_BASE_URL", "LEMONADE_API_KEY", "GAIA_LEMONADE_EMBEDDED"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("GAIA_HOME", str(tmp_path / "gaia-home"))
@@ -66,12 +73,21 @@ class TestRedact:
             ("HF hf_abcdefghijklmnopqrstuvwxyz", "hf_abcdefghijklmnopqrstuvwxyz"),
             ("key sk-abcdefghijklmnopqrstu", "sk-abcdefghijklmnopqrstu"),
             ("gh ghp_abcdefghijklmnopqrstuvwx", "ghp_abcdefghijklmnopqrstuvwx"),
+            ("key fw_Fake0123456789abcdEF", "fw_Fake0123456789abcdEF"),
+            (f"device {FAKE_DEVICE}", FAKE_DEVICE),
+            (f"bot {FAKE_DISCORD}", FAKE_DISCORD),
+            (f"bot {FAKE_TELEGRAM} up", FAKE_TELEGRAM),
+            (f"GET https://api.telegram.org/bot{FAKE_TELEGRAM}/getMe", FAKE_TELEGRAM),
+            ("app xapp-1-AFAKE0001-1111111111111-fakefakefake", "xapp-1-AFAKE0001"),
+            ("bot xoxb-1111111111-fakefakefake", "xoxb-1111111111-fakefakefake"),
+            ("user xoxp-1111111111-fakefakefake", "xoxp-1111111111-fakefakefake"),
         ],
     )
     def test_secret_shapes_are_removed(self, line, leaked):
         out = reader.redact(line)
         assert leaked not in out
         assert reader.REDACTED in out
+        assert leaked.encode() not in reader.redact_lines(line.encode())
 
     def test_known_secrets_are_removed_wherever_they_appear(self):
         out = reader.redact(f"loaded with {SECRET} inline", [SECRET])
@@ -124,6 +140,102 @@ class TestRedact:
     )
     def test_llama_cpp_token_talk_is_not_a_secret(self, line):
         assert reader.redact(line) == line
+
+
+@pytest.fixture
+def saved_secrets(tmp_path):
+    """One made-up secret in each place GAIA saves one, by what it is."""
+    from gaia.connectors import store
+    from gaia.connectors._keyring import keyring
+    from gaia.connectors.mcp_server import _keyring_ref
+    from gaia.llm.gateway import GATEWAY_SECRET_NAME
+    from gaia.llm.providers.fireworks import API_KEY_SECRET_NAME
+    from gaia.messaging.discord import credentials as discord
+    from gaia.messaging.slack import credentials as slack
+
+    saved = {
+        "fireworks key": "fake-fireworks-key-001",
+        "gateway token": "fake-gateway-token-002",
+        "discord bot": "fake-discord-bot-003",
+        "slack bot": "fake-slack-bot-004",
+        "slack app": "fake-slack-app-005",
+        "oauth client secret": "fake-client-secret-006",
+        "oauth refresh token": "fake-refresh-token-007",
+        "mcp connector": "fake-tavily-key-008",
+        "hand-added mcp env": "fake-handmade-env-009",
+        "hand-added mcp keyring": "fake-handmade-slot-010",
+        "hand-added mcp header": "fake-handmade-header-011",
+    }
+    store.save_secret(API_KEY_SECRET_NAME, saved["fireworks key"])
+    store.save_secret(GATEWAY_SECRET_NAME, saved["gateway token"])
+    for slot, name in (
+        (discord.BOT_TOKEN_KEY, "discord bot"),
+        (slack.BOT_TOKEN_KEY, "slack bot"),
+        (slack.APP_TOKEN_KEY, "slack app"),
+        ("mcp-tavily:TAVILY_API_KEY", "mcp connector"),
+        ("mine:API_TOKEN", "hand-added mcp keyring"),
+    ):
+        keyring.set_password(store.SERVICE_NAME, slot, saved[name])
+    store.save_provider_credentials(
+        "google", client_id="fake-client-id", client_secret=saved["oauth client secret"]
+    )
+    store.save_connection(
+        provider="google",
+        account_email="someone@example.com",
+        refresh_token=saved["oauth refresh token"],
+        scopes=[],
+        client_id_hash="fake-hash",
+    )
+    home = tmp_path / "gaia-home"
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "mcp_servers.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "mine": {
+                        "command": "x",
+                        "env": {
+                            "MY_SECRET": saved["hand-added mcp env"],
+                            "API_TOKEN": {
+                                "$keyring": _keyring_ref("mine", "API_TOKEN")
+                            },
+                        },
+                        "headers": {
+                            "Authorization": f"Bearer {saved['hand-added mcp header']}"
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    return saved
+
+
+class TestStoredSecrets:
+    def test_every_saved_secret_is_redacted_from_a_log_line(self, saved_secrets):
+        secrets, note = logs.known_secrets()
+        assert note is None
+        line = "sent " + " ".join(saved_secrets.values())
+        out = reader.redact(line, secrets)
+        for what, value in saved_secrets.items():
+            assert value not in out, what
+        assert reader.redact_lines(line.encode(), secrets) == out.encode()
+
+    def test_an_unreadable_store_still_redacts_and_says_so(
+        self, saved_secrets, monkeypatch
+    ):
+        from gaia.connectors import store
+        from gaia.connectors.errors import ConnectorsError
+
+        def locked(*a, **k):
+            raise ConnectorsError("keyring locked")
+
+        monkeypatch.setattr(store, "peek_provider_credentials", locked)
+        secrets, note = logs.known_secrets()
+        assert "connector sign-ins (ConnectorsError)" in note
+        assert saved_secrets["discord bot"] in secrets
+        assert saved_secrets["oauth client secret"] not in secrets
 
 
 class TestParseLine:
@@ -189,6 +301,16 @@ class TestReadLogFile:
         path.write_text(_lines(1), encoding="utf-8")
         r = reader.read_log_file(path, after=cursor)
         assert r.reset and len(r.lines) == 1
+
+    def test_a_cursor_inside_a_line_reads_the_tail_instead(self, tmp_path):
+        path = tmp_path / "lemond.log"
+        path.write_text(f"2026-11-04 10:00:00.000 [Info] (main) key {SECRET}\n")
+        r = reader.read_log_file(
+            path,
+            after=len("2026-11-04 10:00:00.000 [Info] (main) key ") + 1,
+            secrets=[SECRET],
+        )
+        assert r.reset and SECRET[1:] not in r.lines[0].text
 
     def test_redacts_known_secrets(self, tmp_path):
         path = tmp_path / "lemond.log"
@@ -486,7 +608,9 @@ class TestRouter:
     def test_only_listed_logs_can_be_read(self, client, gaia_logs, url):
         assert client.get(url, headers=self.H).status_code == 404
 
-    def test_a_source_with_nothing_written_says_so(self, client):
+    def test_a_source_with_nothing_written_says_so(self, client, tmp_path, monkeypatch):
+        # Its own daemon home: an earlier test may have written a daemon log.
+        monkeypatch.setenv("GAIA_DAEMON_HOME", str(tmp_path / "daemon-home"))
         body = client.get("/api/logs/service", headers=self.H).json()
         assert not body["available"] and body["reason"] == "no_file"
 

@@ -7,14 +7,10 @@ import { Popover } from './Popover';
 import { ContextPanel } from './ContextPanel';
 import { pluralKey } from '../i18n/registry';
 import { useT } from '../i18n/useT';
+import { formatTokens } from '../utils/format';
+import { formatWindow } from './modelMeta';
 import type { ContextUsage } from '../types';
 import './ContextMeter.css';
-
-export function formatTokens(n: number): string {
-    if (n < 1000) return String(n);
-    if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}K`;
-    return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
-}
 
 const PARTS = [
     { key: 'system', label: 'ctx.meter.part.system' },
@@ -59,7 +55,7 @@ export function ContextMeter({ usage, unavailable, sessionId, busy = false, onUs
     const free = Math.max(0, usage.window - usage.used - usage.reply_reserve);
     // The meter fills against GAIA's admitted window, which can be far below a cloud model's own.
     const modelWindow = usage.model_window != null && usage.model_window > usage.window ? usage.model_window : null;
-    const cap = modelWindow ? { gaia: formatTokens(usage.window), model: formatTokens(modelWindow) } : null;
+    const cap = modelWindow ? { gaia: formatWindow(usage.window), model: formatWindow(modelWindow) } : null;
     // A new chat already reads 16-36%: say that most of it is GAIA's own set-up, not the user's doing.
     const setup = usage.system + usage.tools;
     const mostlySetup = usage.used > 0 && setup / usage.used >= 0.6;
@@ -75,7 +71,7 @@ export function ContextMeter({ usage, unavailable, sessionId, busy = false, onUs
                 onClick={() => setOpen((v) => !v)}
                 aria-expanded={open}
                 aria-label={t.compose((say) => {
-                    const fill = say('ctx.meter.aria', { pct, used: formatTokens(usage.used), window: formatTokens(usage.window) });
+                    const fill = say('ctx.meter.aria', { pct, used: formatTokens(usage.used), window: formatWindow(usage.window) });
                     return cap ? `${fill} (${say('ctx.meter.capNote', cap)})` : fill;
                 })}
                 title={[cap ? t('ctx.meter.titleCapped', cap) : t('ctx.meter.title'), setupNote].filter(Boolean).join('\n')}
@@ -86,7 +82,7 @@ export function ContextMeter({ usage, unavailable, sessionId, busy = false, onUs
             <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} label={t('ctx.meter.window')} align="end">
                 <div className="context-meter-panel">
                     <div className="context-meter-head">
-                        <strong><bdi dir="ltr">{formatTokens(usage.used)}</bdi></strong> {t.bare('ctx.of')} <bdi dir="ltr">{formatTokens(usage.window)}</bdi> {t.bare('ctx.tokensWord')}
+                        <strong><bdi dir="ltr">{formatTokens(usage.used)}</bdi></strong> {t.bare('ctx.of')} <bdi dir="ltr">{formatWindow(usage.window)}</bdi> {t.bare('ctx.tokensWord')}
                         {cap && (
                             <span className="context-meter-cap" title={t('ctx.windowTitle')}>
                                 {' · '}{t.bare('ctx.gaiaUses')} <bdi dir="ltr">{cap.gaia}</bdi>

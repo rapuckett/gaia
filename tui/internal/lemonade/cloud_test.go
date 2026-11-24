@@ -5,11 +5,14 @@ package lemonade
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/amd/gaia/tui/internal/daemon"
 )
 
 func TestConfigureKeepsKeyOutOfInstallAndDiscoversModels(t *testing.T) {
@@ -173,46 +176,114 @@ func TestLocalCatalogExcludesCloudAndNonChat(t *testing.T) {
 	}
 }
 
-func TestAMDGatewayCustomHeaderAndRuntimeKey(t *testing.T) {
-	var installed, authenticated, cleared bool
+// The gateway's address and key change inside the daemon, under the
+// machine-wide gateway key lock, never by the TUI calling Lemonade itself.
+func TestAMDGatewayConfigureGoesThroughTheDaemon(t *testing.T) {
+	var cleared bool
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]any
-		if r.Method == http.MethodPost {
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Error(err)
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-		}
-		switch r.URL.Path {
-		case "/api/v1/install":
-			installed = body["provider"] == "amd" && body["base_url"] == "https://gateway.example/v1" && body["auth_header_name"] == "api-key" && body["auth_header_prefix"] == "" && body["wire_format"] == "openai" && body["api_key"] == nil
-		case "/api/v1/cloud/auth":
-			authenticated = body["provider"] == "amd" && body["api_key"] == "test-key"
-		case "/api/v1/models":
+		switch r.Method + " " + r.URL.Path {
+		case "GET /api/v1/models":
 			fmt.Fprint(w, `{"data":[{"id":"amd.gemma","recipe":"cloud","cloud_provider":"amd"},{"id":"fireworks.gemma","recipe":"cloud","cloud_provider":"fireworks"}]}`)
 			return
-		case "/api/v1/cloud/auth/amd":
-			cleared = r.Method == http.MethodDelete
+		case "DELETE /api/v1/cloud/auth/amd":
+			cleared = true
 		default:
-			t.Errorf("unexpected path: %s", r.URL.Path)
+			t.Errorf("the gateway change reached Lemonade directly: %s %s", r.Method, r.URL.Path)
 		}
 		fmt.Fprint(w, `{}`)
 	}))
 	defer s.Close()
+	calls := stubDaemonCalls(t, func(daemonCall) ([]byte, error) {
+		return []byte(`{"configured":true,"models_discovered":true}`), nil
+	})
 	c := New(s.URL)
 	if err := c.Configure(context.Background(), Provider{Name: "amd", BaseURL: "https://gateway.example/v1", Header: "api-key"}, "test-key"); err != nil {
 		t.Fatal(err)
+	}
+	if len(*calls) != 1 {
+		t.Fatalf("daemon calls = %+v, want one", *calls)
+	}
+	call := (*calls)[0]
+	if call.method != http.MethodPost || call.path != daemon.APIPrefix+"/gateway/configure" || !call.start {
+		t.Fatalf("daemon call = %s %s start=%v", call.method, call.path, call.start)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(call.body, &body); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"base_url": "https://gateway.example/v1", "auth_header_name": "api-key", "auth_header_prefix": "", "api_key": "test-key", "lemonade_url": c.BaseURL}
+	if fmt.Sprint(body) != fmt.Sprint(want) {
+		t.Fatalf("daemon body = %v, want %v", body, want)
 	}
 	models, err := c.Models(context.Background(), "amd")
 	if err != nil || len(models) != 1 || models[0].ID != "amd.gemma" {
 		t.Fatalf("AMD discovery failed: %v", err)
 	}
-	if err := c.Clear(context.Background(), "amd"); err != nil {
-		t.Fatal(err)
+	if err := c.Clear(context.Background(), "amd"); err != nil || !cleared {
+		t.Fatalf("clearing the key failed: %v", err)
 	}
-	if !installed || !authenticated || !cleared {
-		t.Fatal("gateway configuration or key lifecycle failed")
+}
+
+// A window reading another Lemonade than the daemon's is refused by the daemon,
+// and says so with the app's remedy.
+func TestAMDGatewayConfigureOnAnotherLemonadeIsRefused(t *testing.T) {
+	const served = "http://localhost:13305/api/v1"
+	stubDaemonCalls(t, func(call daemonCall) ([]byte, error) {
+		var body map[string]string
+		if err := json.Unmarshal(call.body, &body); err != nil {
+			return nil, err
+		}
+		if body["lemonade_url"] == served {
+			return []byte(`{"configured":true}`), nil
+		}
+		return nil, &daemon.StatusError{Status: 409, Detail: "This window talks to a different model server (" +
+			body["lemonade_url"] + ") than GAIA's background service (" + served + "). Restart GAIA, then try again."}
+	})
+	amd := Provider{Name: "amd", BaseURL: "https://gateway.example/v1", Header: "api-key"}
+	if err := New(served).Configure(context.Background(), amd, ""); err != nil {
+		t.Fatalf("the daemon's own Lemonade was refused: %v", err)
+	}
+	err := New("http://localhost:13306/api/v1").Configure(context.Background(), amd, "test-key")
+	if err == nil || !strings.Contains(err.Error(), "localhost:13306") || !strings.Contains(err.Error(), "Restart GAIA") ||
+		strings.Contains(err.Error(), "`") || strings.Contains(err.Error(), "gaia ") {
+		t.Fatalf("err = %v, want the mismatch named with the app's remedy and no command", err)
+	}
+}
+
+// Without the daemon the gateway is not changed at all, and the message names
+// the app's own remedy, never a command or the wrapped error's remedy.
+func TestAMDGatewayConfigureFailsLoudlyWithoutTheDaemon(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("nothing may reach Lemonade, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer s.Close()
+	amd := Provider{Name: "amd", BaseURL: "https://gateway.example/v1", Header: "api-key"}
+	for _, tc := range []struct {
+		name  string
+		err   error
+		brief string
+	}{
+		{"not running", fmt.Errorf("could not reach the GAIA daemon: %w", &daemon.NotRunningError{Path: "instance.json"}), "didn't answer"},
+		{"too old", &daemon.RouteMissingError{Op: "change the AMD LLM Gateway", Path: "/daemon/v1/gateway/configure"}, "out of date"},
+	} {
+		stubDaemonCalls(t, func(daemonCall) ([]byte, error) { return nil, tc.err })
+		err := New(s.URL).Configure(context.Background(), amd, "test-key")
+		var service *GatewayServiceError
+		if !errors.As(err, &service) || !errors.Is(err, tc.err) {
+			t.Fatalf("%s: err = %v, want a GatewayServiceError wrapping the cause", tc.name, err)
+		}
+		for _, text := range []string{err.Error(), daemon.Brief(err)} {
+			if !strings.Contains(text, tc.brief) || strings.Contains(text, "`") || strings.Contains(text, "gaia ") {
+				t.Errorf("%s: %q must say %q and name no command", tc.name, text, tc.brief)
+			}
+		}
+	}
+	stubDaemonCalls(t, func(daemonCall) ([]byte, error) {
+		return nil, &daemon.StatusError{Status: 409, Detail: "Another GAIA process is changing the gateway key"}
+	})
+	err := New(s.URL).Configure(context.Background(), amd, "test-key")
+	if err == nil || !strings.Contains(err.Error(), "Another GAIA process is changing the gateway key") {
+		t.Fatalf("err = %v, want the daemon's own refusal", err)
 	}
 }
 
@@ -310,5 +381,133 @@ func TestIsAMDGateway(t *testing.T) {
 		if got := IsAMDGateway(base); got != want {
 			t.Errorf("IsAMDGateway(%q) = %v, want %v", base, got, want)
 		}
+	}
+}
+
+func TestRequestClassifiesCloud404(t *testing.T) {
+	cases := []struct {
+		name    string
+		body    string
+		want    []string
+		notWant []string
+	}{
+		{
+			name:    "unregistered provider",
+			body:    `{"error":{"message":"Cloud provider 'amd' is not installed. Call POST /v1/install first.","type":"invalid_request"}}`,
+			want:    []string{"registered for this provider yet", "Connect it again from this panel"},
+			notWant: []string{"older than", "gaia gateway install"},
+		},
+		{
+			name:    "detail wins over not_found type",
+			body:    `{"error":{"message":"Cloud provider 'amd' is not installed. Call POST /v1/install first.","type":"not_found"}}`,
+			want:    []string{"Connect it again from this panel"},
+			notWant: []string{"older than", "gaia gateway install"},
+		},
+		{
+			name:    "old server with not_found type",
+			body:    `{"error":{"message":"not found","type":"not_found"}}`,
+			want:    []string{"older than", MinExternalVersion, UpgradeHint},
+			notWant: []string{"gaia gateway install", "Connect it again from this panel"},
+		},
+		{
+			name:    "old server with no type",
+			body:    `{"error":{"message":"missing"}}`,
+			want:    []string{"older than", MinExternalVersion},
+			notWant: []string{"gaia gateway install", "Connect it again from this panel"},
+		},
+		{
+			name:    "other error keeps Lemonade's detail",
+			body:    `{"error":{"message":"provider is misconfigured","type":"invalid_request"}}`,
+			want:    []string{"provider is misconfigured"},
+			notWant: []string{"older than", "gaia gateway install", "Connect it again from this panel"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("LEMONADE_API_KEY", "local-key")
+			s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprint(w, tc.body)
+			}))
+			defer s.Close()
+			err := New(s.URL).request(context.Background(), http.MethodPost, "/cloud/auth", map[string]string{"provider": "amd"}, nil)
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not contain %q", err, want)
+				}
+			}
+			for _, notWant := range tc.notWant {
+				if strings.Contains(err.Error(), notWant) {
+					t.Errorf("error %q unexpectedly contains %q", err, notWant)
+				}
+			}
+		})
+	}
+}
+
+func TestInstall404KeepsTheVersionHint(t *testing.T) {
+	t.Setenv("LEMONADE_API_KEY", "local-key")
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `{"error":{"message":"Cloud provider 'amd' is not installed.","type":"invalid_request"}}`)
+	}))
+	defer s.Close()
+	err := New(s.URL).request(context.Background(), http.MethodPost, "/install", map[string]any{"backend": "cloud"}, nil)
+	if err == nil || !strings.Contains(err.Error(), "older than") ||
+		strings.Contains(err.Error(), "gaia gateway install") ||
+		strings.Contains(err.Error(), "Connect it again from this panel") {
+		t.Fatalf("install 404 should keep the version hint: %v", err)
+	}
+}
+
+func TestClearClassifiesTheDelete404(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		wantCleared bool
+		wantError   string
+	}{
+		{
+			name:        "unregistered provider",
+			body:        `{"error":{"message":"Cloud provider 'fireworks' is not installed. Call POST /v1/install first.","type":"invalid_request"}}`,
+			wantCleared: true,
+		},
+		{
+			name:      "old server",
+			body:      `{"error":{"message":"not found","type":"not_found"}}`,
+			wantError: "older than",
+		},
+		{
+			name:      "other error",
+			body:      `{"error":{"message":"provider is misconfigured","type":"invalid_request"}}`,
+			wantError: "provider is misconfigured",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("LEMONADE_API_KEY", "local-key")
+			s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodDelete ||
+					!strings.HasSuffix(r.URL.Path, "/cloud/auth/fireworks") {
+					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+				}
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprint(w, tc.body)
+			}))
+			defer s.Close()
+			err := New(s.URL).Clear(context.Background(), "fireworks")
+			if tc.wantCleared {
+				if err != nil {
+					t.Fatalf("an unregistered provider should clear: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+				t.Fatalf("expected %q, got %v", tc.wantError, err)
+			}
+		})
 	}
 }

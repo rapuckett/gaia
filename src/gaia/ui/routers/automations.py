@@ -1,0 +1,172 @@
+# Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
+# SPDX-License-Identifier: MIT
+"""Settings → Automations: list, pause, resume and remove what GAIA runs on its own.
+
+Reads and writes the same store as ``gaia automation`` (``gaia.automations.
+store``), so the app, the terminal and chat always show the same list. A
+change made here is the user's own click, so it asks nothing further.
+
+The PC and an allowed paired device may list, pause, resume and remove, as the
+desktop does; mobile access and another computer may not, since a trigger's
+check is a command that runs on this PC and its prompts can carry private
+detail. Nothing here adds or edits one: that is chat's job.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List, Literal, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from gaia.automations import files, store
+from gaia.logger import get_logger
+
+from ..models import WireModel
+from ..security import (
+    is_local_pc,
+    require_local_pc,
+    require_pc_or_allowed_device,
+    require_ui_header,
+)
+
+log = get_logger(__name__)
+
+router = APIRouter(
+    prefix="/api/automations",
+    tags=["automations"],
+    dependencies=[Depends(require_pc_or_allowed_device)],
+)
+
+HEARTBEAT_NAME = "heartbeat"
+
+#: What a paired device may do: the desktop's own buttons. Any other action stays PC-only.
+DEVICE_ACTIONS = frozenset({"pause", "resume"})
+
+
+def device_action_allowed(request: Request, action: str) -> None:
+    """Refuse a device an action outside ``DEVICE_ACTIONS``, as a PC-only route would."""
+    if action not in DEVICE_ACTIONS:
+        require_local_pc(request)
+
+
+class AutomationRow(WireModel):
+    """One automation, in raw values the app words and formats itself."""
+
+    id: str
+    name: str
+    #: One of ``store.KINDS``; the file is not checked on load, so not narrowed here.
+    kind: str
+    heartbeat: bool
+    paused: bool
+    every_seconds: int
+    next_at: float
+    last_run_at: float
+    runs: int
+    prompt: str
+    say: str
+    check: str
+    quiet: str
+    days: str
+    failures: int
+
+
+class AutomationList(WireModel):
+    """Every automation; ``delivers`` is null when Discord's state can't be read."""
+
+    automations: List[AutomationRow]
+    delivers: Optional[bool]
+
+
+def _row(item: store.Automation) -> Dict[str, Any]:
+    """Raw values; the app words and formats them in the user's language."""
+    return {
+        "id": item.id,
+        "name": item.name,
+        "kind": item.kind,
+        "heartbeat": item.kind == store.KIND_ALERT
+        and item.name.strip().lower() == HEARTBEAT_NAME,
+        "paused": item.paused,
+        "every_seconds": item.every_seconds,
+        "next_at": item.next_at,
+        "last_run_at": item.last_run_at,
+        "runs": item.runs,
+        "prompt": item.prompt,
+        "say": item.say,
+        "check": item.check,
+        "quiet": item.quiet,
+        "days": item.days,
+        "failures": item.failures,
+    }
+
+
+def _delivers() -> Optional[bool]:
+    """Whether a paired Discord DM would receive what these send; None when
+    the Discord state can't be read, so the app says it couldn't check."""
+    from gaia.messaging.discord import state
+
+    try:
+        return state.load_config().paired
+    except files.StateFileError as e:
+        log.warning("Discord state unreadable, so delivery is unknown: %s", e)
+        return None
+
+
+DEVICE_STORE_ERROR = (
+    "GAIA couldn't read its automations on the PC. "
+    "Open Settings \u203a Automations on the PC to see why."
+)
+
+
+def _store_failure(request: Request, e: files.StateFileError) -> HTTPException:
+    """A 500 whose detail names the PC's file path only for the PC itself."""
+    if is_local_pc(request):
+        return HTTPException(status_code=500, detail=str(e))
+    log.error("Automations store unreadable: %s", e, exc_info=True)
+    return HTTPException(status_code=500, detail=DEVICE_STORE_ERROR)
+
+
+def _load(request: Request):
+    try:
+        return store.load()
+    except files.StateFileError as e:
+        raise _store_failure(request, e) from e
+
+
+@router.get("", response_model=AutomationList, response_model_exclude_unset=True)
+def list_automations(request: Request) -> Dict[str, Any]:
+    items = _load(request)
+    return {"automations": [_row(a) for a in items], "delivers": _delivers()}
+
+
+@router.post(
+    "/{ref}/{action}",
+    dependencies=[Depends(require_ui_header), Depends(device_action_allowed)],
+    response_model=AutomationRow,
+    response_model_exclude_unset=True,
+)
+def set_automation(
+    request: Request, ref: str, action: Literal["pause", "resume"]
+) -> Dict[str, Any]:
+    try:
+        item = store.update(ref, paused=action == "pause")
+    except store.AutomationError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except files.StateFileError as e:
+        raise _store_failure(request, e) from e
+    return _row(item)
+
+
+@router.delete(
+    "/{ref}",
+    dependencies=[Depends(require_ui_header)],
+    response_model=AutomationRow,
+    response_model_exclude_unset=True,
+)
+def remove_automation(request: Request, ref: str) -> Dict[str, Any]:
+    try:
+        item = store.remove(ref)
+    except store.AutomationError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except files.StateFileError as e:
+        raise _store_failure(request, e) from e
+    return _row(item)

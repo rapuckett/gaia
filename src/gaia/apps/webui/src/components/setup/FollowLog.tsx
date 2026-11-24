@@ -27,7 +27,7 @@ export function FollowLog({ lines, className, id }: { lines: string[]; className
                 pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
             }}
         >
-            {text}
+            {lines.map((line, i) => <div key={i} dir="auto" className="follow-log-line">{line}</div>)}
         </pre>
     );
 }

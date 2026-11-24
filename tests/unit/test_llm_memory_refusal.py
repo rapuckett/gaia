@@ -16,6 +16,8 @@ from gaia.llm.lemonade_client import InsufficientMemoryError, LemonadeStatus
 from gaia.llm.lemonade_manager import LemonadeManager
 from gaia.version import LEMONADE_VERSION
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 REFUSAL = (
     "Not enough free memory to load Gemma-4-E4B-it-GGUF at 32,768 tokens: it "
     "needs about 9.1 GB and only 6.0 GB is free. Close other applications, or "
@@ -150,6 +152,7 @@ def test_an_unreachable_server_gets_the_start_hint(monkeypatch, capsys):
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         closed = sock.getsockname()[1]
+    monkeypatch.delenv("LEMONADE_BASE_URL", raising=False)
     monkeypatch.setattr(LemonadeManager, "is_lemonade_installed", lambda: True)
     _answering_fails(monkeypatch, ConnectionError("connection refused"), server_up=None)
     monkeypatch.setattr(

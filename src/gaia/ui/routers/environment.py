@@ -5,8 +5,9 @@
 from __future__ import annotations
 
 import asyncio
+from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from gaia.agents.base import file_snapshots
@@ -18,6 +19,10 @@ from .. import session_environment as env
 from .. import session_outputs
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import record_folder_added, record_folder_removed
+from ..models import WireModel
+from ..security import allowed_device, audit_approval, detail_for
+from .files import DevicePickCode, device_pick_refusal
 
 logger = get_logger(__name__)
 
@@ -30,6 +35,92 @@ class FolderRequest(BaseModel):
 
 class InternetRequest(BaseModel):
     on: bool
+
+
+class ScopeEntry(WireModel):
+    """A folder or file the chat may touch, and why."""
+
+    path: str
+    name: Optional[str]
+    kind: Literal["folder", "file"]
+    source: Literal[
+        "added",
+        "gaia_documents",
+        "scratch",
+        "document",
+        "working_folder",
+        "approved",
+        "allowed_paths",
+    ]
+    removable: bool
+
+
+class SessionEnvironment(WireModel):
+    """The folders this chat may touch and whether it may use the internet."""
+
+    session_id: str
+    folders: List[ScopeEntry]
+    removed: List[str]
+    internet: bool
+    enforced: bool
+    internet_enforced: bool
+
+
+class FolderCheckResponse(WireModel):
+    """Why a chat can't be given the folder, or null when it can."""
+
+    refusal: Optional[str]
+    code: Optional[DevicePickCode] = Field(
+        default=None,
+        description="Set only on a paired device's refusal, for the phone to word it.",
+    )
+
+
+class OutputItem(WireModel):
+    """Something the chat produced, tied to the answer that made it."""
+
+    id: str
+    kind: Literal["file", "export", "image", "audio", "document", "memory", "schedule"]
+    name: str
+    path: Optional[str]
+    detail: Optional[str]
+    message_id: Optional[int]
+    created_at: Optional[str]
+    change: Optional[Literal["edited", "created", "deleted"]]
+    state: Literal["present", "undone", "gone"]
+    openable: bool
+    revealable: bool
+
+
+class SessionOutputs(WireModel):
+    """Everything the chat produced, newest first."""
+
+    session_id: str
+    items: List[OutputItem]
+
+
+class AgentTool(WireModel):
+    """One tool the chat's agent can call."""
+
+    name: str
+    description: str
+    category: str
+
+
+class ActiveSkill(WireModel):
+    """A skill loaded in the chat, and how it came to be."""
+
+    name: str
+    how: Literal["model", "auto", "always"]
+
+
+class AgentCapabilities(WireModel):
+    """The chat's agent, its tools, and its loaded skills (null when it runs elsewhere)."""
+
+    session_id: str
+    agent_type: str
+    tools: List[AgentTool]
+    skills: Optional[List[ActiveSkill]]
 
 
 async def _describe(db: ChatDatabase, session: dict) -> dict:
@@ -50,40 +141,100 @@ def _session(db: ChatDatabase, session_id: str) -> dict:
     return session
 
 
-@router.get("/api/sessions/{session_id}/environment")
+@router.get(
+    "/api/sessions/{session_id}/environment",
+    response_model=SessionEnvironment,
+    response_model_exclude_unset=True,
+)
 async def get_environment(session_id: str, db: ChatDatabase = Depends(get_db)):
     """The folders this chat may touch and whether it may use the internet."""
     session = _session(db, session_id)
     return await _describe(db, session)
 
 
-@router.post("/api/sessions/{session_id}/environment/folders")
+@router.post(
+    "/api/sessions/{session_id}/environment/folders",
+    response_model=SessionEnvironment,
+    response_model_exclude_unset=True,
+)
 async def add_folder(
-    session_id: str, body: FolderRequest, db: ChatDatabase = Depends(get_db)
+    session_id: str,
+    body: FolderRequest,
+    http_request: Request,
+    db: ChatDatabase = Depends(get_db),
 ):
-    """Let the chat read and write a folder from its next step."""
+    """Let the chat read and write a folder from its next step.
+
+    An allowed paired device is held to the picker's scope: a folder outside
+    the home folder, or one holding credentials, is a 403 that names no path.
+    """
     session = _session(db, session_id)
+    if allowed_device(http_request) is not None:
+        refusal = await asyncio.to_thread(device_pick_refusal, body.path)
+        if refusal:
+            raise refusal.http_error()
     try:
         await asyncio.to_thread(env.add_folder, db, session_id, body.path)
     except env.EnvironmentChangeError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(
+            status_code=400, detail=detail_for(http_request, str(e))
+        ) from e
+    audit_approval(http_request, f"folder {body.path} given to chat {session_id}")
+    record_folder_added(http_request, body.path)
     return await _describe(db, session)
 
 
-@router.post("/api/sessions/{session_id}/environment/folders/remove")
+@router.post(
+    "/api/environment/folders/check",
+    response_model=FolderCheckResponse,
+    response_model_exclude_unset=True,
+)
+async def check_folder(body: FolderRequest, http_request: Request) -> dict:
+    """Why a chat can't be given a folder, or None: the add step's own rule.
+
+    An allowed paired device picks from the PC picker's home-wide scope, so a
+    folder that scope refuses is refused here too, without naming its path.
+    """
+    if allowed_device(http_request) is not None:
+        refusal = await asyncio.to_thread(device_pick_refusal, body.path)
+        if refusal:
+            return {"refusal": refusal.message, "code": refusal.code}
+    try:
+        await asyncio.to_thread(env.check_folder, body.path)
+    except env.EnvironmentChangeError as e:
+        return {"refusal": detail_for(http_request, str(e))}
+    return {"refusal": None}
+
+
+@router.post(
+    "/api/sessions/{session_id}/environment/folders/remove",
+    response_model=SessionEnvironment,
+    response_model_exclude_unset=True,
+)
 async def remove_folder(
-    session_id: str, body: FolderRequest, db: ChatDatabase = Depends(get_db)
+    session_id: str,
+    body: FolderRequest,
+    http_request: Request,
+    db: ChatDatabase = Depends(get_db),
 ):
     """Take a folder or file away from the chat; refused from its next step."""
     session = _session(db, session_id)
     try:
         await asyncio.to_thread(env.remove_folder, db, session_id, body.path)
     except env.EnvironmentChangeError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+        raise HTTPException(
+            status_code=409, detail=detail_for(http_request, str(e))
+        ) from e
+    audit_approval(http_request, f"folder {body.path} taken from chat {session_id}")
+    record_folder_removed(http_request, body.path)
     return await _describe(db, session)
 
 
-@router.put("/api/sessions/{session_id}/environment/internet")
+@router.put(
+    "/api/sessions/{session_id}/environment/internet",
+    response_model=SessionEnvironment,
+    response_model_exclude_unset=True,
+)
 async def set_internet(
     session_id: str, body: InternetRequest, db: ChatDatabase = Depends(get_db)
 ):
@@ -98,7 +249,11 @@ async def set_internet(
     return await _describe(db, session)
 
 
-@router.get("/api/sessions/{session_id}/outputs")
+@router.get(
+    "/api/sessions/{session_id}/outputs",
+    response_model=SessionOutputs,
+    response_model_exclude_unset=True,
+)
 async def get_outputs(session_id: str, db: ChatDatabase = Depends(get_db)):
     """Everything the chat produced, newest first, each tied to its turn."""
     _session(db, session_id)
@@ -108,7 +263,11 @@ async def get_outputs(session_id: str, db: ChatDatabase = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/api/sessions/{session_id}/capabilities")
+@router.get(
+    "/api/sessions/{session_id}/capabilities",
+    response_model=AgentCapabilities,
+    response_model_exclude_unset=True,
+)
 async def get_capabilities(session_id: str, db: ChatDatabase = Depends(get_db)):
     """The tools this chat's agent has: name, description and category each.
 

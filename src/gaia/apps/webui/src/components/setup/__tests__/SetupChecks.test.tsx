@@ -25,6 +25,15 @@ function show(over: { hardware?: PreflightReport | null; hardwareError?: string 
 }
 
 describe('Checking this PC', () => {
+    it('keeps the failed first row\'s label in the same wrapper as every other row', () => {
+        show({ hardwareError: 'timed out' });
+        const failed = row('Processor, GPU and NPU');
+        expect(failed).toHaveClass('is-failed');
+        expect(failed.querySelector(':scope > .setup-result-label')).not.toBeNull();
+        expect(failed.querySelector(':scope > .setup-result-value')).toHaveTextContent('timed out');
+        expect(row('Memory for models').querySelector(':scope > .setup-result-label')).not.toBeNull();
+    });
+
     it('shows the server check as a question, not work, while it waits on the user', () => {
         show({ hardware: HARDWARE, plan: DOWN, awaitingChoice: true });
         const server = row('Model server');

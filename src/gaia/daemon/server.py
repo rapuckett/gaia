@@ -147,7 +147,10 @@ def _build_clock(
     oversight — reconciling jobs before an executor exists would permanently
     fail-mark every one of them on first fire.
     """
-    return DaemonClock(db_path, executors=executors or {})
+    from gaia.automations.daemon_tick import AutomationsTick
+
+    # GAIA automations keep their own store; the clock only gives them a pass.
+    return DaemonClock(db_path, executors=executors or {}, on_pass=[AutomationsTick()])
 
 
 def _build_register(
@@ -249,7 +252,7 @@ def _build_deregister(
         # finishing a model call, and pulling the server out from under it
         # would turn a clean shutdown into a wave of connection errors in the
         # logs. The supervisor reaps only a system server THIS daemon started;
-        # GAIA's own embedded server is stopped whoever started it.
+        # GAIA's own embedded server is stopped unless another live daemon owns it.
         lemonade.shutdown()
         install_supervisor(None)
         try:
@@ -282,13 +285,24 @@ def run(host: str = HOST) -> None:
     from gaia.logger import configure
 
     configure()
+    from gaia.daemon.singleton import hold_daemon_home
+
+    # First, before anything is touched: a second daemon for this GAIA home
+    # would take over the first one's Lemonade Server and stop it on exit.
+    try:
+        home_lock = hold_daemon_home()
+    except DaemonStartError as e:
+        logger.error("daemon: %s", e)
+        raise
     import uvicorn
 
+    from gaia.env import expose_shipped_gaia
     from gaia.login_path import apply_login_path
     from gaia.tls import use_os_trust_store
 
     use_os_trust_store()
     apply_login_path()
+    expose_shipped_gaia()
 
     from gaia.daemon.custody.auth import CustodyAuth
     from gaia.daemon.custody.store import CustodyStore
@@ -301,6 +315,7 @@ def run(host: str = HOST) -> None:
     )
     from gaia.daemon.migrate import run_migrations
     from gaia.daemon.paths import custody_db_path, scheduler_db_path
+    from gaia.daemon.retired_agents import clean_up_retired_agents
     from gaia.daemon.sidecars.spec import builtin_specs
 
     exit_with_pid = exit_with_pid_from_env()
@@ -312,6 +327,9 @@ def run(host: str = HOST) -> None:
     # propagates and the daemon exits) rather than serving over ambiguous state.
     result = run_migrations()
     logger.info("daemon: custody schema %s", result)
+    # An upgrade from a GAIA that shipped a since-retired agent leaves its
+    # binary behind with nothing to supervise it.
+    clean_up_retired_agents()
 
     port = _find_free_port(host)
     token = secrets.token_urlsafe(32)
@@ -373,9 +391,15 @@ def run(host: str = HOST) -> None:
     # The front ends using it: unload its models when the last app closes, and
     # stop it after the configured idle time with nobody connected.
     from gaia.daemon.lemonade_clients import LemonadeClients
+    from gaia.daemon.relay import RelayTurns
 
+    relay_turns = RelayTurns()
+    # An idle sidecar does not hold the models; a turn relayed to one does.
     lemonade_clients = LemonadeClients(
-        lemonade_owner, busy=lambda: bool(registry.running_connections())
+        lemonade_owner,
+        busy=lambda: relay_turns.count > 0,
+        agent_pids=registry.process_ids,
+        stop_agents=registry.stop_idle,
     )
 
     # The machine's model server. The daemon owns the process: front-ends ask
@@ -459,6 +483,7 @@ def run(host: str = HOST) -> None:
         lemonade=lemonade,
         lemonade_owner=lemonade_owner,
         lemonade_clients=lemonade_clients,
+        relay_turns=relay_turns,
     )
 
     config = uvicorn.Config(
@@ -473,7 +498,10 @@ def run(host: str = HOST) -> None:
     app.state.server = server
 
     logger.info("daemon: starting on http://%s:%s (pid=%s)", host, port, pid)
-    server.run()
+    try:
+        server.run()
+    finally:
+        home_lock.release()
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised via `python -m gaia.daemon`

@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, field_validator
 
 # Category sets come from the data layer. The dashboard may write the
@@ -39,6 +39,15 @@ from gaia.ui.memory_settings import MEMORY_ENABLED_KEY, memory_enabled
 
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import record_device_change
+from ..models import WireModel
+from ..security import (
+    allowed_device,
+    audit_approval,
+    is_local_pc,
+    require_local_pc,
+    require_pc_or_allowed_device,
+)
 from ..security import require_ui_header as _require_ui_header
 
 logger = logging.getLogger(__name__)
@@ -224,6 +233,260 @@ class KnowledgeUpdate(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class MemoryEmbeddingCoverage(WireModel):
+    """Share of active knowledge rows that have an embedding."""
+
+    total_items: int
+    with_embedding: int
+    without_embedding: int
+    coverage_pct: float
+
+
+class MemoryKnowledgeStats(WireModel):
+    """Knowledge-table aggregates for the dashboard header."""
+
+    total: int
+    total_retrievals: int
+    by_category: Dict[str, int]
+    by_context: Dict[str, int]
+    sensitive_count: int
+    entity_count: int
+    avg_confidence: float
+    oldest: Optional[str]
+    newest: Optional[str]
+
+
+class MemoryConversationStats(WireModel):
+    """Conversation-table aggregates."""
+
+    total_turns: int
+    total_sessions: int
+    first_session: Optional[str]
+    last_session: Optional[str]
+
+
+class MemoryToolStats(WireModel):
+    """Tool-history aggregates."""
+
+    total_calls: int
+    unique_tools: int
+    overall_success_rate: float
+    total_errors: int
+    denied_calls: int
+
+
+class MemoryTemporalStats(WireModel):
+    """Counts of time-sensitive knowledge rows."""
+
+    upcoming_count: int
+    overdue_count: int
+
+
+class MemoryProcedureStats(WireModel):
+    """Procedural-memory aggregates."""
+
+    total: int
+    active: int
+    last_recalled: Optional[str]
+
+
+class MemoryStatsResponse(WireModel):
+    """Memory dashboard header stats."""
+
+    knowledge: MemoryKnowledgeStats
+    conversations: MemoryConversationStats
+    tools: MemoryToolStats
+    temporal: MemoryTemporalStats
+    procedures: MemoryProcedureStats
+    db_size_bytes: int
+    embedding: Optional[MemoryEmbeddingCoverage]
+    embedding_error: Optional[str] = None
+
+
+class MemoryActivityDay(WireModel):
+    """One day of the activity chart."""
+
+    date: str
+    conversations: int
+    tool_calls: int
+    knowledge_added: int
+    errors: int
+
+
+class MemoryKnowledgeItem(WireModel):
+    """One knowledge row (the embedding BLOB is never sent)."""
+
+    id: str
+    category: str
+    content: str
+    domain: Optional[str]
+    source: str
+    confidence: float
+    metadata: Any  # free-form per-row JSON, None when absent or corrupt
+    use_count: int
+    context: str
+    sensitive: bool
+    entity: Optional[str]
+    created_at: str
+    updated_at: str
+    last_used: Optional[str]
+    due_at: Optional[str]
+    reminded_at: Optional[str]
+    superseded_by: Optional[str]
+
+
+class MemoryKnowledgePage(WireModel):
+    """A page of knowledge rows."""
+
+    items: List[MemoryKnowledgeItem]
+    total: int
+    offset: int
+    limit: int
+
+
+class MemoryKnowledgeWriteResponse(WireModel):
+    """Result of creating, editing or deleting a knowledge row."""
+
+    status: Literal["created", "updated", "deleted"]
+    knowledge_id: str
+    embedded: Optional[bool] = None
+    embed_error: Optional[str] = None
+    knowledge_ids: Optional[List[str]] = None
+
+
+class MemoryEntity(WireModel):
+    """An entity with how many rows mention it."""
+
+    entity: str
+    count: int
+    last_updated: str
+
+
+class MemoryToolSummary(WireModel):
+    """Per-tool performance stats."""
+
+    tool_name: str
+    total_calls: int
+    success_count: int
+    failure_count: int
+    denied_count: int
+    success_rate: float
+    avg_duration_ms: Optional[int]
+    last_used: str
+    last_error: Optional[str]
+
+
+class MemorySession(WireModel):
+    """A conversation session summary."""
+
+    session_id: str
+    turn_count: int
+    started_at: str
+    last_activity: str
+    first_message: str
+
+
+class MemoryConversationTurn(WireModel):
+    """One stored conversation turn."""
+
+    id: int
+    session_id: str
+    role: str
+    content: str
+    context: Optional[str]
+    timestamp: str
+
+
+class MemoryConsolidateResponse(WireModel):
+    """Counts from a consolidation run."""
+
+    consolidated: int
+    windows: int
+    extracted_items: int
+
+
+class MemoryRebuildEmbeddingsResponse(WireModel):
+    """Counts from an embedding backfill."""
+
+    backfilled: int
+    total_without: int
+
+
+class MemoryReconcileResponse(WireModel):
+    """Counts from a reconciliation run."""
+
+    pairs_checked: int
+    reinforced: int
+    contradicted: int
+    weakened: int
+    neutral: int
+
+
+class MemoryRebuildFtsResponse(WireModel):
+    """Result of an FTS rebuild."""
+
+    status: Literal["rebuilt"]
+
+
+class MemoryClearCounts(WireModel):
+    """Rows deleted per table."""
+
+    knowledge: int
+    tool_history: int
+    conversations: int
+
+
+class MemoryPruneResponse(WireModel):
+    """Rows pruned per table, and conversation turns kept for pending summaries."""
+
+    tool_history_deleted: int
+    conversations_deleted: int
+    knowledge_deleted: int
+    conversations_retained: int
+
+
+class MemorySystemContextRefresh(WireModel):
+    """Result of a system-context refresh; ``error`` only when discovery failed."""
+
+    stored: int
+    skipped: Optional[bool] = None
+    reason: Optional[str] = None
+    error: Optional[str] = None
+
+
+class MemoryReinitializeResponse(WireModel):
+    """Result of wiping memory and re-running discovery."""
+
+    cleared: MemoryClearCounts
+    system_context: MemorySystemContextRefresh
+
+
+class MemoryCommitResponse(WireModel):
+    """How many approved items were stored."""
+
+    stored: int
+
+
+class MemorySettingsResponse(WireModel):
+    """Memory feature settings."""
+
+    memory_enabled: bool
+    mcp_memory_enabled: bool
+    system_discovery_consent: bool
+
+
+class MemorySettingsUpdateResponse(MemorySettingsResponse):
+    """Settings after an update, plus the consent-triggered refresh outcome."""
+
+    system_context_refresh: Optional[MemorySystemContextRefresh] = None
+    system_context_error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
 # MemoryStore access
 # ---------------------------------------------------------------------------
 
@@ -286,7 +549,11 @@ def close_store() -> None:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/memory/stats")
+@router.get(
+    "/api/memory/stats",
+    response_model=MemoryStatsResponse,
+    response_model_exclude_unset=True,
+)
 def memory_stats() -> Dict:
     """Aggregate stats for dashboard header cards.
 
@@ -309,7 +576,11 @@ def memory_stats() -> Dict:
     return stats
 
 
-@router.get("/api/memory/activity")
+@router.get(
+    "/api/memory/activity",
+    response_model=List[MemoryActivityDay],
+    response_model_exclude_unset=True,
+)
 def memory_activity(days: int = Query(30, ge=1, le=365)) -> List[Dict]:
     """Daily activity timeline for the activity chart."""
     return _get_store().get_activity_timeline(days=days)
@@ -320,7 +591,11 @@ def memory_activity(days: int = Query(30, ge=1, le=365)) -> List[Dict]:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/memory/knowledge")
+@router.get(
+    "/api/memory/knowledge",
+    response_model=MemoryKnowledgePage,
+    response_model_exclude_unset=True,
+)
 def list_knowledge(
     category: Optional[List[str]] = Query(None),
     context: Optional[str] = None,
@@ -349,7 +624,7 @@ def list_knowledge(
         pattern="^(updated_at|confidence|created_at|category|context|content|use_count)$",
     ),
     order: str = Query("desc", pattern="^(asc|desc)$"),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=2**63 - 1),
     limit: int = Query(50, ge=1, le=200),
     about_user: bool = Query(
         False,
@@ -432,13 +707,13 @@ def _embed_row(store, knowledge_id: str) -> Dict[str, Any]:
     The row stays saved either way; a failure is reported to the caller as
     ``embedded: false`` plus the reason, never swallowed.
     """
-    from gaia.agents.base.memory import EMBEDDING_MODEL
+    from gaia.agents.registry import machine_embedding_model
 
     item = store.get_item(knowledge_id)
     if item is None:
         raise HTTPException(404, f"Knowledge entry {knowledge_id} not found")
-    # The stored vectors' embedder, not a hardcoded default (#1744).
-    model = store.get_embedder_id() or EMBEDDING_MODEL
+    # The one every chat on this PC uses; the agent re-stamps the store with it.
+    model = machine_embedding_model()
     try:
         store.store_embedding(knowledge_id, _make_embed_fn(model)(item["content"]))
     except Exception as exc:  # the row is saved; only its vector is missing
@@ -455,7 +730,11 @@ def _embed_row(store, knowledge_id: str) -> Dict[str, Any]:
     return {"embedded": True}
 
 
-@router.post("/api/memory/knowledge")
+@router.post(
+    "/api/memory/knowledge",
+    response_model=MemoryKnowledgeWriteResponse,
+    response_model_exclude_unset=True,
+)
 def create_knowledge(body: KnowledgeCreate) -> Dict:
     """Create a knowledge entry from the dashboard and embed it."""
     store = _get_store()
@@ -481,7 +760,11 @@ def create_knowledge(body: KnowledgeCreate) -> Dict:
     }
 
 
-@router.put("/api/memory/knowledge/{knowledge_id}")
+@router.put(
+    "/api/memory/knowledge/{knowledge_id}",
+    response_model=MemoryKnowledgeWriteResponse,
+    response_model_exclude_unset=True,
+)
 def edit_knowledge(knowledge_id: str, body: KnowledgeUpdate) -> Dict:
     """Edit a knowledge entry from the dashboard; re-embed changed content."""
     kwargs = {k: v for k, v in body.model_dump().items() if v is not None}
@@ -502,7 +785,11 @@ def edit_knowledge(knowledge_id: str, body: KnowledgeUpdate) -> Dict:
     return result
 
 
-@router.delete("/api/memory/knowledge/{knowledge_id}")
+@router.delete(
+    "/api/memory/knowledge/{knowledge_id}",
+    response_model=MemoryKnowledgeWriteResponse,
+    response_model_exclude_unset=True,
+)
 def delete_knowledge(knowledge_id: str) -> Dict:
     """Delete an entry; one about the user is also recorded as forgotten.
 
@@ -528,7 +815,11 @@ def delete_knowledge(knowledge_id: str) -> Dict:
     return result
 
 
-@router.get("/api/memory/knowledge/{knowledge_id}")
+@router.get(
+    "/api/memory/knowledge/{knowledge_id}",
+    response_model=MemoryKnowledgeItem,
+    response_model_exclude_unset=True,
+)
 def get_knowledge_item(knowledge_id: str) -> Dict:
     """Fetch one knowledge entry by ID, including superseded rows.
 
@@ -576,7 +867,7 @@ def _require_memory_admin() -> None:
         )
 
 
-@router.post("/api/memory/admin/clear")
+@router.post("/api/memory/admin/clear", dependencies=[Depends(require_local_pc)])
 def admin_clear(body: AdminClearRequest) -> Dict:
     """Wipe memory for an eval scenario reset.  Eval-only.
 
@@ -601,7 +892,7 @@ def admin_clear(body: AdminClearRequest) -> Dict:
     return {"scope": body.scope, "cleared": cleared}
 
 
-@router.post("/api/memory/admin/seed")
+@router.post("/api/memory/admin/seed", dependencies=[Depends(require_local_pc)])
 def admin_seed(body: AdminSeedRequest) -> Dict:
     """Bulk-insert knowledge items, bypassing dedup.  Eval-only.
 
@@ -634,7 +925,11 @@ def admin_seed(body: AdminSeedRequest) -> Dict:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/memory/entities")
+@router.get(
+    "/api/memory/entities",
+    response_model=List[MemoryEntity],
+    response_model_exclude_unset=True,
+)
 def list_entities(limit: int = Query(100, ge=1, le=500)) -> List[Dict]:
     """List all unique entities with their knowledge counts."""
     return _get_store().get_entities(limit=limit)
@@ -651,7 +946,11 @@ def get_entity(entity: str, limit: int = Query(20, ge=1, le=200)) -> List[Dict]:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/memory/tools")
+@router.get(
+    "/api/memory/tools",
+    response_model=List[MemoryToolSummary],
+    response_model_exclude_unset=True,
+)
 def tool_summary() -> List[Dict]:
     """Per-tool performance stats."""
     return _get_store().get_tool_summary()
@@ -662,13 +961,21 @@ def tool_summary() -> List[Dict]:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/memory/conversations")
+@router.get(
+    "/api/memory/conversations",
+    response_model=List[MemorySession],
+    response_model_exclude_unset=True,
+)
 def list_sessions(limit: int = Query(20, ge=1, le=100)) -> List[Dict]:
     """List conversation sessions with timestamps and turn counts."""
     return _get_store().get_sessions(limit=limit)
 
 
-@router.get("/api/memory/conversations/search")
+@router.get(
+    "/api/memory/conversations/search",
+    response_model=List[MemoryConversationTurn],
+    response_model_exclude_unset=True,
+)
 def search_conversations(
     query: str = Query(..., min_length=1, max_length=500),
     limit: int = Query(20, ge=1, le=100),
@@ -677,7 +984,11 @@ def search_conversations(
     return _get_store().search_conversations(query, limit=limit)
 
 
-@router.get("/api/memory/conversations/{session_id}")
+@router.get(
+    "/api/memory/conversations/{session_id}",
+    response_model=List[MemoryConversationTurn],
+    response_model_exclude_unset=True,
+)
 def get_session(
     session_id: str,
     limit: int = Query(200, ge=1, le=500),
@@ -691,7 +1002,11 @@ def get_session(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/memory/upcoming")
+@router.get(
+    "/api/memory/upcoming",
+    response_model=List[MemoryKnowledgeItem],
+    response_model_exclude_unset=True,
+)
 def upcoming_items(
     days: int = Query(7, ge=1, le=90),
     include_sensitive: bool = Query(
@@ -713,7 +1028,11 @@ def upcoming_items(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/api/memory/consolidate")
+@router.post(
+    "/api/memory/consolidate",
+    response_model=MemoryConsolidateResponse,
+    response_model_exclude_unset=True,
+)
 def trigger_consolidation(
     max_sessions: int = Query(5, ge=1, le=50),
 ) -> Dict:
@@ -738,21 +1057,23 @@ def trigger_consolidation(
         raise HTTPException(500, f"Consolidation failed: {type(exc).__name__}")
 
 
-@router.post("/api/memory/rebuild-embeddings")
+@router.post(
+    "/api/memory/rebuild-embeddings",
+    response_model=MemoryRebuildEmbeddingsResponse,
+    response_model_exclude_unset=True,
+)
 def rebuild_embeddings() -> Dict:
     """Trigger embedding backfill for items missing embeddings.
 
     Returns ``{backfilled: int, total_without: int}``.
     """
     try:
-        from gaia.agents.base.memory import EMBEDDING_MODEL
+        from gaia.agents.registry import machine_embedding_model
 
         store = _get_store()
-        # Re-embed with the embedder that produced the stored vectors, not a
-        # hardcoded default. On the NPU profile that is the FLM-native embedder;
-        # the GGUF default would mix vector spaces in one table and reload a
-        # Vulkan GGUF embedder that evicts the FLM chat model (#1744).
-        embedder_model = store.get_embedder_id() or EMBEDDING_MODEL
+        # Re-embed with the embedder every chat on this PC uses, which the
+        # agent stamps on its next start anyway; the stamp may be a profile old.
+        embedder_model = machine_embedding_model()
         store.reconcile_embedder(embedder_model)
         result = store.backfill_embeddings(_make_embed_fn(embedder_model))
         return result
@@ -773,7 +1094,11 @@ Item B (stored {date_b}): {content_b}"""
 _RECONCILE_SIMILARITY_THRESHOLD = 0.85
 
 
-@router.post("/api/memory/reconcile")
+@router.post(
+    "/api/memory/reconcile",
+    response_model=MemoryReconcileResponse,
+    response_model_exclude_unset=True,
+)
 def trigger_reconciliation(max_pairs: int = Query(20, ge=1, le=100)) -> Dict:
     """Manually trigger background memory reconciliation.
 
@@ -988,7 +1313,11 @@ def trigger_reconciliation(max_pairs: int = Query(20, ge=1, le=100)) -> Dict:
         raise HTTPException(500, f"Reconciliation failed: {type(exc).__name__}: {exc}")
 
 
-@router.get("/api/memory/embedding-coverage")
+@router.get(
+    "/api/memory/embedding-coverage",
+    response_model=MemoryEmbeddingCoverage,
+    response_model_exclude_unset=True,
+)
 def embedding_coverage() -> Dict:
     """Return embedding status for all knowledge items.
 
@@ -1005,7 +1334,11 @@ def embedding_coverage() -> Dict:
         )
 
 
-@router.post("/api/memory/rebuild-fts")
+@router.post(
+    "/api/memory/rebuild-fts",
+    response_model=MemoryRebuildFtsResponse,
+    response_model_exclude_unset=True,
+)
 def rebuild_fts() -> Dict:
     """Rebuild all FTS5 indexes from source tables.
 
@@ -1019,7 +1352,11 @@ def rebuild_fts() -> Dict:
         raise HTTPException(500, f"FTS rebuild failed: {type(exc).__name__}")
 
 
-@router.post("/api/memory/prune")
+@router.post(
+    "/api/memory/prune",
+    response_model=MemoryPruneResponse,
+    response_model_exclude_unset=True,
+)
 def prune_memory(days: int = Query(90, ge=7, le=365)) -> Dict:
     """Prune old tool history, conversations, and low-confidence knowledge.
 
@@ -1032,25 +1369,56 @@ def prune_memory(days: int = Query(90, ge=7, le=365)) -> Dict:
         raise HTTPException(500, f"Prune failed: {type(exc).__name__}")
 
 
-@router.delete("/api/memory/all", dependencies=[Depends(_require_ui_header)])
-def clear_all_memory() -> Dict:
+@router.delete(
+    "/api/memory/all",
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+    response_model=MemoryClearCounts,
+    response_model_exclude_unset=True,
+)
+def clear_all_memory(request: Request) -> Dict:
     """Permanently delete all knowledge, tool history, and conversation data.
 
     This is irreversible.  Returns counts of deleted rows per table:
     ``{knowledge: int, tool_history: int, conversations: int}``.
     """
     try:
-        return _get_store().clear_all()
+        cleared = _get_store().clear_all()
     except MemoryScrubError as exc:
         logger.error("[memory router] clear_all scrub failed: %s", exc)
-        raise HTTPException(500, str(exc)) from exc
+        raise HTTPException(
+            500,
+            (
+                str(exc)
+                if is_local_pc(request)
+                else "Memory was erased, but the deleted text could not be "
+                "scrubbed from the file on the PC. Close other GAIA windows on "
+                "the PC and erase again."
+            ),
+        ) from exc
     except Exception as exc:
         logger.error("[memory router] clear_all failed: %s", exc)
         raise HTTPException(500, f"Clear failed: {type(exc).__name__}")
+    if not is_local_pc(request):
+        audit_approval(request, "memory wiped")
+        record_device_change(request, "memoryWiped")
+    return cleared
 
 
-@router.post("/api/memory/reinitialize", dependencies=[Depends(_require_ui_header)])
-def reinitialize_memory() -> Dict:
+def _failed_for(request: Request, what: str, exc: Exception) -> str:
+    """*what* failed: the PC sees why, a device only a log id (paths stay on the PC)."""
+    if is_local_pc(request):
+        return f"{what} failed: {type(exc).__name__}: {exc}"
+    cid = _log_server_error(f"{what} failed", exc)
+    return f"{what} failed on the PC; see its server logs (id={cid})."
+
+
+@router.post(
+    "/api/memory/reinitialize",
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+    response_model=MemoryReinitializeResponse,
+    response_model_exclude_unset=True,
+)
+def reinitialize_memory(request: Request) -> Dict:
     """Wipe all memory and re-run initialization from scratch.
 
     Sequence:
@@ -1083,11 +1451,13 @@ def reinitialize_memory() -> Dict:
             cleared,
             system_context,
         )
-        return {"cleared": cleared, "system_context": system_context}
-
     except Exception as exc:
         logger.error("[memory router] reinitialize failed: %s", exc)
-        raise HTTPException(500, f"Reinitialize failed: {type(exc).__name__}: {exc}")
+        raise HTTPException(500, _failed_for(request, "Reinitialize", exc)) from exc
+    if not is_local_pc(request):
+        audit_approval(request, "memory wiped and rebuilt")
+        record_device_change(request, "memoryWiped")
+    return {"cleared": cleared, "system_context": system_context}
 
 
 # ---------------------------------------------------------------------------
@@ -1138,8 +1508,13 @@ def _do_system_context_refresh() -> Dict:
     return {"stored": stored, "skipped": False}
 
 
-@router.post("/api/memory/refresh-system-context")
-def refresh_system_context() -> Dict:
+@router.post(
+    "/api/memory/refresh-system-context",
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+    response_model=MemorySystemContextRefresh,
+    response_model_exclude_unset=True,
+)
+def refresh_system_context(request: Request) -> Dict:
     """Re-collect OS, hardware, installed apps, and version facts.
 
     Deletes stale category='system' entries and stores fresh ones.
@@ -1148,12 +1523,15 @@ def refresh_system_context() -> Dict:
     Returns ``{stored: int, skipped: bool}``.
     """
     try:
-        return _do_system_context_refresh()
+        refreshed = _do_system_context_refresh()
     except Exception as exc:
         logger.error("[memory router] refresh-system-context failed: %s", exc)
         raise HTTPException(
-            500, f"System context refresh failed: {type(exc).__name__}: {exc}"
-        )
+            500, _failed_for(request, "System context refresh", exc)
+        ) from exc
+    if not is_local_pc(request):
+        audit_approval(request, "system context refreshed")
+    return refreshed
 
 
 # ---------------------------------------------------------------------------
@@ -1247,9 +1625,13 @@ def _scan_or_reason(source_key: str, scanner) -> Tuple[List[Dict], Optional[str]
     Returns:
         ``(items, message)``. `message` is a user-facing line to stream when the
         source cannot run or failed, and is None when the scan succeeded.
+
+    Raises:
+        _ConsentWithdrawn: System discovery is off now.
     """
     from gaia.agents.base.discovery import covered_by_twin, unsupported_reason
 
+    _require_discovery_consent()
     if covered_by_twin(source_key):
         return [], None
     reason = unsupported_reason(source_key)
@@ -1278,8 +1660,57 @@ def _downloaded_on_this_pc(model_id: str) -> bool:
     )
 
 
-@router.get("/api/memory/stream-discovery")
-def stream_discovery():
+#: Said instead of scanning while the user has not turned System discovery on.
+NO_DISCOVERY_CONSENT = (
+    "System discovery is off, so GAIA read nothing on this PC. Turn it on in "
+    "Memory › Advanced › System discovery, then run the scan again."
+)
+
+
+def _without_discovery_consent():
+    """The events that refuse a profile scan when discovery is off, else None.
+
+    The scan reads the PC's files, apps and browsing, so it runs only once the
+    user has turned System discovery on.
+    """
+    from gaia.agents.base.memory import _system_context_is_enabled
+
+    if _system_context_is_enabled():
+        return None
+    logger.info("[memory router] profile scan refused: system discovery is off")
+    return iter(_consent_refusal())
+
+
+def _consent_refusal(total: int = 0) -> List[str]:
+    """The consent ``error`` event and the closing ``done``."""
+    return [
+        _sse({"type": "error", "source": "consent", "message": NO_DISCOVERY_CONSENT}),
+        _sse({"type": "done", "total": total}),
+    ]
+
+
+class _ConsentWithdrawn(Exception):
+    """System discovery was turned off while a profile scan ran."""
+
+
+def _require_discovery_consent() -> None:
+    """Stop a running scan once the user turns System discovery off."""
+    from gaia.agents.base.memory import _system_context_is_enabled
+
+    if not _system_context_is_enabled():
+        logger.info("[memory router] profile scan stopped: system discovery is off")
+        raise _ConsentWithdrawn()
+
+
+#: Finding keys holding absolute PC paths, which the PC's scan view never shows.
+_PC_PATH_KEYS = ("path", "paths")
+
+
+@router.get(
+    "/api/memory/stream-discovery",
+    dependencies=[Depends(require_pc_or_allowed_device)],
+)
+def stream_discovery(request: Request):
     """Stream system discovery findings as SSE.
 
     Events:
@@ -1290,13 +1721,20 @@ def stream_discovery():
     """
     from fastapi.responses import StreamingResponse
 
+    refused = _without_discovery_consent()
+    to_device = allowed_device(request) is not None
+
     def _generate():
+        if refused is not None:
+            yield from refused
+            return
         try:
             from gaia.agents.base.discovery import (
                 SystemDiscovery,
                 covered_by_twin,
                 unsupported_reason,
             )
+            from gaia.agents.base.memory import _system_context_is_enabled
 
             discovery = SystemDiscovery()
 
@@ -1322,6 +1760,12 @@ def stream_discovery():
             for source_key in _DISCOVERY_SOURCES:
                 if covered_by_twin(source_key):
                     continue
+                if not _system_context_is_enabled():
+                    logger.info(
+                        "[memory router] profile scan stopped: system discovery is off"
+                    )
+                    yield from _consent_refusal(total)
+                    return
                 label = _DISCOVERY_SOURCE_LABELS.get(source_key, source_key)
                 yield _sse({"type": "log", "message": f"Scanning {label}..."})
                 reason = unsupported_reason(source_key)
@@ -1341,6 +1785,9 @@ def stream_discovery():
                     items = scanner()
                     for item in items:
                         item["_source_name"] = source_key
+                        if to_device:
+                            for key in _PC_PATH_KEYS:
+                                item.pop(key, None)
                         yield _sse(
                             {"type": "finding", "source": source_key, "item": item}
                         )
@@ -1387,7 +1834,10 @@ def stream_discovery():
     )
 
 
-@router.get("/api/memory/stream-inference")
+@router.get(
+    "/api/memory/stream-inference",
+    dependencies=[Depends(require_pc_or_allowed_device)],
+)
 def stream_inference(include_browser: bool = Query(False)):
     """Stream LLM-assisted profile inference as SSE.
 
@@ -1399,12 +1849,18 @@ def stream_inference(include_browser: bool = Query(False)):
     """
     from fastapi.responses import StreamingResponse
 
+    refused = _without_discovery_consent()
+
     def _generate():
+        if refused is not None:
+            yield from refused
+            return
         try:
             from gaia.agents.base.discovery import SystemDiscovery
             from gaia.llm import create_client
             from gaia.llm.lemonade_client import (
                 LemonadeClientError,
+                resolve_chat_model,
                 resolve_default_chat_model,
             )
             from gaia.ui._chat_helpers import _runs_on_this_pc
@@ -1532,6 +1988,7 @@ def stream_inference(include_browser: bool = Query(False)):
                     lines = [f"  {r['content']}" for r in non_sensitive]
                     sections.append("PROJECT MANIFESTS (sample):\n" + "\n".join(lines))
 
+            _require_discovery_consent()
             if not sections:
                 yield _sse(
                     {
@@ -1545,10 +2002,28 @@ def stream_inference(include_browser: bool = Query(False)):
             prompt_sections = "\n\n".join(sections)
             prompt = _INFER_PROMPT.format(sections=prompt_sections)
 
-            # The machine's default chat model, so no second model loads. Never
-            # the UI's custom_model: that may be cloud, and this data stays local.
+            # The local model chat runs, so no second model loads; the machine's
+            # default when that pick is a cloud one, since this data stays local.
             model = resolve_default_chat_model()
             try:
+                from gaia.llm.hybrid import HybridConfigError, start_model
+
+                try:
+                    picked = start_model(resolve_chat_model())
+                except HybridConfigError as e:
+                    # The default stays local and on disk; say why the pick wasn't used.
+                    logger.warning(
+                        "Profile inference uses %s: the hybrid setting can't be read (%s)",
+                        model,
+                        e,
+                    )
+                    picked = model
+                if (
+                    picked != model
+                    and _runs_on_this_pc(picked)
+                    and _downloaded_on_this_pc(picked)
+                ):
+                    model = picked
                 local = _runs_on_this_pc(model)
                 # Lemonade downloads a missing model on first use, unasked.
                 downloaded = local and _downloaded_on_this_pc(model)
@@ -1573,7 +2048,7 @@ def stream_inference(include_browser: bool = Query(False)):
                         "type": "error",
                         "message": (
                             f"Profile inference runs only on a local model, but "
-                            f"the default model '{model}' isn't one this PC runs. "
+                            f"the chat model '{model}' isn't one this PC runs. "
                             "Open Settings > Setup, press Run setup again and "
                             "choose a local chat model, then try again."
                         ),
@@ -1588,7 +2063,7 @@ def stream_inference(include_browser: bool = Query(False)):
                         "message": (
                             "Profile inference runs only on a local model, and "
                             f"'{model}' isn't downloaded on this PC. Download it "
-                            "under Settings > Model > Manage downloads and disk "
+                            "under Settings > Agent & model > Manage downloads and disk "
                             "space, then try again."
                         ),
                     }
@@ -1680,6 +2155,8 @@ def stream_inference(include_browser: bool = Query(False)):
 
             yield _sse({"type": "done", "total": sent})
 
+        except _ConsentWithdrawn:
+            yield from _consent_refusal()
         except Exception as exc:
             cid = _log_server_error("stream-inference failed", exc)
             yield _sse(
@@ -1724,8 +2201,13 @@ class InferenceCommit(BaseModel):
     insights: List[InferenceCommitItem]
 
 
-@router.post("/api/memory/commit-discovery")
-def commit_discovery(body: DiscoveryCommit) -> Dict:
+@router.post(
+    "/api/memory/commit-discovery",
+    dependencies=[Depends(require_pc_or_allowed_device)],
+    response_model=MemoryCommitResponse,
+    response_model_exclude_unset=True,
+)
+def commit_discovery(request: Request, body: DiscoveryCommit) -> Dict:
     """Store approved discovery findings. Returns ``{stored: int}``.
 
     Items are validated as ``KnowledgeCreate`` at the request boundary, so a
@@ -1761,11 +2243,19 @@ def commit_discovery(body: DiscoveryCommit) -> Dict:
             f"— see server logs (id={cid}).",
         ) from exc
     logger.info("[memory router] commit-discovery: stored %d items", stored)
+    if not is_local_pc(request):
+        audit_approval(request, f"{stored} discovery findings saved to memory")
+        record_device_change(request, "memoryCommit", source="discovery", count=stored)
     return {"stored": stored}
 
 
-@router.post("/api/memory/commit-inference")
-def commit_inference(body: InferenceCommit) -> Dict:
+@router.post(
+    "/api/memory/commit-inference",
+    dependencies=[Depends(require_pc_or_allowed_device)],
+    response_model=MemoryCommitResponse,
+    response_model_exclude_unset=True,
+)
+def commit_inference(request: Request, body: InferenceCommit) -> Dict:
     """Store approved inference insights, replacing old inferred entries.
 
     The old inferred profile is replaced in one transaction, so a failed save
@@ -1800,6 +2290,9 @@ def commit_inference(body: InferenceCommit) -> Dict:
         ) from exc
     stored = len(ids)
     logger.info("[memory router] commit-inference: stored %d insights", stored)
+    if not is_local_pc(request):
+        audit_approval(request, f"profile replaced with {stored} inferred insights")
+        record_device_change(request, "memoryCommit", source="inference", count=stored)
     return {"stored": stored}
 
 
@@ -1843,7 +2336,140 @@ def _get_memory_settings_dict(db: ChatDatabase) -> Dict:
     }
 
 
-@router.get("/api/memory/settings")
+class EmbedderBody(BaseModel):
+    """``npu`` or ``gpu``; None is the default (the GPU)."""
+
+    device: Optional[Literal["npu", "gpu"]] = None
+
+
+def _embedder_for(device: str) -> Tuple[str, str]:
+    """``(model, recipe)`` of the embedder that runs on *device*."""
+    from gaia.agents.registry import DEFAULT_DEVICE_CONFIGS
+
+    config = next(dc for dc in DEFAULT_DEVICE_CONFIGS if dc.device == device)
+    return config.embedding_model, config.recipe
+
+
+_UNPROVEN_REASON = "its search results aren't reliable yet, so GAIA embeds on the GPU"
+
+
+def _embedder_option(device: str) -> Dict[str, Any]:
+    """One device the embedder may run on, and whether this PC can use it now."""
+    from gaia.config import GaiaConfig
+    from gaia.llm.lemonade_client import LemonadeClient, LemonadeClientError
+
+    from .providers import ProviderError, device_unavailable_reason, display_name
+
+    model, recipe = _embedder_for(device)
+    proven = device in GaiaConfig.TESTED_EMBEDDING_DEVICES
+    option: Dict[str, Any] = {
+        "device": device,
+        "model": model,
+        "display_name": display_name(model),
+        "proven": proven,
+        "present": None,
+        "available": None,
+        "reason": None,
+        "downloaded": None,
+    }
+    try:
+        option["reason"] = device_unavailable_reason(recipe)
+        option["present"] = option["reason"] is None
+        option["available"] = option["present"]
+        option["downloaded"] = bool(
+            LemonadeClient(verbose=False).get_model_info(model)["downloaded"]
+        )
+    except (ProviderError, LemonadeClientError) as e:
+        # Unknown, not refused: the model server isn't answering yet.
+        option["reason"] = str(e)
+    if not proven:
+        option["available"] = False
+        if option["present"]:
+            option["reason"] = _UNPROVEN_REASON
+    return option
+
+
+def _embedder_view() -> Dict[str, Any]:
+    from gaia.agents.registry import machine_embedding_device
+    from gaia.config import GaiaConfig
+
+    config = GaiaConfig.load()
+    device = machine_embedding_device()
+    return {
+        "device": device,
+        "chosen": config.embedding_device is not None,
+        "default_device": "gpu",
+        "options": [_embedder_option(d) for d in GaiaConfig.EMBEDDING_DEVICE_CHOICES],
+    }
+
+
+@router.get("/api/memory/embedder")
+def get_embedder() -> Dict[str, Any]:
+    """Where every chat embeds documents and memory, and where it could instead."""
+    from gaia.config import GaiaConfigError
+
+    try:
+        return _embedder_view()
+    except GaiaConfigError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.put("/api/memory/embedder", dependencies=[Depends(_require_ui_header)])
+def set_embedder(body: EmbedderBody) -> Dict[str, Any]:
+    """Run the embedder on *device* for every chat; None is the default (GPU).
+
+    Each chat moves to it on its next turn, and stored memory is re-embedded
+    with it. ``changed`` is False when the embedder stays the same. Refused
+    while a reply runs here: its agent holds the old embedder.
+    """
+    from gaia.agents.registry import machine_embedding_model
+    from gaia.config import GaiaConfig, GaiaConfigError
+
+    from .._chat_helpers import _active_sse_handlers, evict_all_session_agents
+    from .providers import ProviderError, device_unavailable_reason
+
+    if _active_sse_handlers:
+        raise HTTPException(
+            status_code=409,
+            detail="A reply is running. Change the embedder once it finishes.",
+        )
+    if (
+        body.device is not None
+        and body.device not in GaiaConfig.TESTED_EMBEDDING_DEVICES
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=f"GAIA doesn't embed on the {body.device.upper()}: {_UNPROVEN_REASON}.",
+        )
+    if body.device is not None:
+        _, recipe = _embedder_for(body.device)
+        try:
+            reason = device_unavailable_reason(recipe)
+        except ProviderError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
+        if reason:
+            raise HTTPException(
+                status_code=409,
+                detail=f"This PC can't run the embedder on the {body.device.upper()}: {reason}",
+            )
+    try:
+        before = machine_embedding_model()
+        GaiaConfig.save_key("embedding_device", body.device or "auto")
+        changed = machine_embedding_model() != before
+    except GaiaConfigError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    if changed:
+        # This process's agents picked theirs as they were built; GAIA's agent
+        # sidecar rebuilds each session on its next turn.
+        evict_all_session_agents()
+    return {**_embedder_view(), "changed": changed}
+
+
+@router.get(
+    "/api/memory/settings",
+    response_model=MemorySettingsResponse,
+    response_model_exclude_unset=True,
+)
 def get_memory_settings(db: ChatDatabase = Depends(get_db)) -> Dict:
     """Return memory-related feature settings.
 
@@ -1856,9 +2482,15 @@ def get_memory_settings(db: ChatDatabase = Depends(get_db)) -> Dict:
     return _get_memory_settings_dict(db)
 
 
-@router.put("/api/memory/settings", dependencies=[Depends(_require_ui_header)])
+@router.put(
+    "/api/memory/settings",
+    dependencies=[Depends(_require_ui_header)],
+    response_model=MemorySettingsUpdateResponse,
+    response_model_exclude_unset=True,
+)
 def update_memory_settings(
     body: MemorySettingsBody,
+    request: Request,
     db: ChatDatabase = Depends(get_db),
 ) -> Dict:
     """Update memory-related feature settings.
@@ -1871,8 +2503,12 @@ def update_memory_settings(
       for debug/troubleshooting. Default false.
     - ``system_discovery_consent`` (bool): allow system scanning. Default false.
       When toggled ON, also persists the consent to ``~/.gaia/memory_settings.json``
-      and triggers an immediate system context refresh.
+      and triggers an immediate system context refresh. Turning it on is
+      for the PC or an allowed paired device, like the scan, and is audited;
+      turning it off works from anywhere.
     """
+    if body.system_discovery_consent:
+        require_pc_or_allowed_device(request)
     if body.system_discovery_consent is not None:
         # The file is the source of truth; write it before any DB key so a
         # failed save leaves the whole request unapplied.
@@ -1897,6 +2533,12 @@ def update_memory_settings(
     if body.system_discovery_consent is not None:
         consented = body.system_discovery_consent
         db.set_setting(_SYSTEM_DISCOVERY_KEY, "true" if consented else "false")
+        audit_approval(
+            request, f"system discovery turned {'on' if consented else 'off'}"
+        )
+        record_device_change(
+            request, "profileScanOn" if consented else "profileScanOff"
+        )
         if consented:
             try:
                 refresh_result = _do_system_context_refresh()

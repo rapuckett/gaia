@@ -11,6 +11,8 @@ import './VersionPicker.css';
 
 interface VersionPickerProps {
     onClose: () => void;
+    /** This build can't install a version itself (macOS): link to its release page. */
+    manualInstall?: boolean;
 }
 
 type PickerView =
@@ -35,7 +37,7 @@ function getUpdaterBridge(): GaiaUpdaterBridge | undefined {
  *
  * Accessibility: role=dialog, focus trap, Esc to close, keyboard-navigable rows.
  */
-export function VersionPicker({ onClose }: VersionPickerProps) {
+export function VersionPicker({ onClose, manualInstall = false }: VersionPickerProps) {
     const t = useT();
     const [view, setView] = useState<PickerView>({ kind: 'loading' });
     const dialogRef = useRef<HTMLDivElement>(null);
@@ -44,7 +46,7 @@ export function VersionPicker({ onClose }: VersionPickerProps) {
     useEffect(() => {
         const bridge = getUpdaterBridge();
         if (!bridge) {
-            setView({ kind: 'error', message: "Couldn't reach GitHub to list releases — check your connection; you can still download installers from the Releases page." });
+            setView({ kind: 'error', message: t('update.picker.githubUnreachable') });
             return;
         }
 
@@ -58,7 +60,7 @@ export function VersionPicker({ onClose }: VersionPickerProps) {
                 }
             })
             .catch(() => {
-                setView({ kind: 'error', message: "Couldn't reach GitHub to list releases — check your connection; you can still download installers from the Releases page." });
+                setView({ kind: 'error', message: t('update.picker.githubUnreachable') });
             });
     }, []);
 
@@ -240,12 +242,18 @@ export function VersionPicker({ onClose }: VersionPickerProps) {
 
                     {view.kind === 'confirm' && (
                         <div className="version-picker-confirm">
-                            <p>
-                                {t('update.picker.confirm', { version: view.release.version })}
-                            </p>
-                            <p className="vp-confirm-note">
-                                {t('update.picker.confirmNote', { version: view.release.version })}
-                            </p>
+                            {manualInstall ? (
+                                <p>{t('update.picker.manual', { version: view.release.version })}</p>
+                            ) : (
+                                <>
+                                    <p>
+                                        {t('update.picker.confirm', { version: view.release.version })}
+                                    </p>
+                                    <p className="vp-confirm-note">
+                                        {t('update.picker.confirmNote', { version: view.release.version })}
+                                    </p>
+                                </>
+                            )}
                             <div className="vp-confirm-actions">
                                 <button
                                     type="button"
@@ -254,13 +262,24 @@ export function VersionPicker({ onClose }: VersionPickerProps) {
                                 >
                                     {t('update.picker.back')}
                                 </button>
-                                <button
-                                    type="button"
-                                    className="vp-btn-confirm"
-                                    onClick={() => confirmInstall(view.release)}
-                                >
-                                    {t('update.picker.install')}
-                                </button>
+                                {manualInstall ? (
+                                    <a
+                                        className="vp-btn-confirm"
+                                        href={view.release.notesUrl ?? 'https://github.com/amd/gaia/releases'}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        {t('update.picker.openRelease')}
+                                    </a>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        className="vp-btn-confirm"
+                                        onClick={() => confirmInstall(view.release)}
+                                    >
+                                        {t('update.picker.install')}
+                                    </button>
+                                )}
                             </div>
                         </div>
                     )}

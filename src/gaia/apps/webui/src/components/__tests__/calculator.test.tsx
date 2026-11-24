@@ -1,14 +1,16 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { RenderCard } from '../render/RenderCard';
+import { useChatStore } from '../../stores/chatStore';
 import {
     formatCalculatorText,
     formatValue,
     isCalculatorWire,
     loanResults,
+    currencySymbol,
     specFor,
     tipResults,
 } from '../render/calculator/calculatorDoc';
@@ -119,11 +121,23 @@ describe('CalculatorCard', () => {
         expect(screen.getByText('$694.44')).toBeInTheDocument();
     });
 
+    it('shows an amount with thousands separators until it is edited', () => {
+        render(<RenderCard render="calculator" data={loan} />);
+        const price = screen.getByLabelText('Price');
+        expect(price).toHaveValue('250,000');
+
+        fireEvent.focus(price);
+        expect(price).toHaveValue(250000);
+        fireEvent.blur(price);
+        expect(price).toHaveValue('250,000');
+    });
+
     it('splits the bill and keeps a half-typed value without breaking the math', () => {
         render(<RenderCard render="calculator" data={tip} />);
         expect(screen.getByText('$33.24')).toBeInTheDocument();
 
         const people = screen.getByLabelText('People');
+        fireEvent.focus(people);
         fireEvent.change(people, { target: { value: '' } });
         expect(people).toHaveValue(null);
         expect(screen.getByText('$33.24')).toBeInTheDocument();
@@ -135,5 +149,46 @@ describe('CalculatorCard', () => {
     it('shows the unsupported card for a payload that breaks the shape', () => {
         render(<RenderCard render="calculator" data={{ ...tip, inputs: { bill: 'lots' } }} />);
         expect(screen.getByText('Invalid calculator payload')).toBeInTheDocument();
+    });
+});
+
+describe('CalculatorCard in Arabic', () => {
+    afterEach(() => useChatStore.setState({ locale: 'en' }));
+
+    it('labels the fields and results in Arabic', () => {
+        useChatStore.setState({ locale: 'ar' });
+        render(<RenderCard render="calculator" data={tip} />);
+        expect(screen.getByRole('textbox', { name: /الفاتورة/ })).toBeInTheDocument();
+        expect(screen.getByRole('textbox', { name: /عدد الأشخاص/ })).toBeInTheDocument();
+        expect(screen.getByText(/لكل شخص/)).toBeInTheDocument();
+        expect(screen.queryByText('Per person')).toBeNull();
+    });
+
+    it('titles an untitled loan card in Arabic', () => {
+        useChatStore.setState({ locale: 'ar' });
+        render(<RenderCard render="calculator" data={loan} />);
+        expect(screen.getByRole('heading', { name: /حاسبة القرض/ })).toBeInTheDocument();
+    });
+});
+
+describe('currencySymbol without Intl formatToParts (Hermes)', () => {
+    const original = Intl.NumberFormat.prototype.formatToParts;
+    beforeEach(() => {
+        // @ts-expect-error simulate an engine that lacks it
+        delete Intl.NumberFormat.prototype.formatToParts;
+    });
+    afterEach(() => {
+        Intl.NumberFormat.prototype.formatToParts = original;
+    });
+
+    it.each([
+        ['en', 'USD', '$'],
+        ['en', 'EUR', '\u20ac'],
+        ['ar', 'USD', 'US$'],
+        ['ar', 'EUR', '\u20ac'],
+        ['ar-EG', 'EGP', '\u062c.\u0645.'],
+    ])('gives the %s symbol for %s', (locale, currency, symbol) => {
+        expect(new Intl.NumberFormat('en').formatToParts).toBeUndefined();
+        expect(currencySymbol({ locale, currency })).toBe(symbol);
     });
 });

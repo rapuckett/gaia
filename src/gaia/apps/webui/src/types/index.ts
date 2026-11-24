@@ -4,6 +4,7 @@
 /** Types shared across the GAIA Agent UI frontend. */
 
 import type { TurnSummaryResponse } from './api.gen';
+import type { PageElementWire } from '../../services/browser-pane/contract';
 import type { SetupNpuProblem } from './setup';
 
 export * from './setup';
@@ -27,7 +28,7 @@ export interface Session {
     agent_type?: string;
     /** Device used for this session (cpu / gpu / npu). */
     device?: string;
-    /** Mail provider for email-triage sessions ("google" | "microsoft"). */
+    /** Mailbox the session's mail tools read ("google" | "microsoft"). */
     mail_provider?: string | null;
     /** Whether chat leaves this machine; null/absent when the backend can't tell. */
     inference_remote?: boolean | null;
@@ -163,7 +164,17 @@ export interface ConnectorRow {
      * ``product_url`` in that case.
      */
     docs_url: string | null;
-    configured: boolean;
+    /**
+     * ``null`` only with ``key_store`` set: the PC's OS key store
+     * held back the read, so whether it is connected is unknown.
+     */
+    configured: boolean | null;
+    /**
+     * Set when the OS key store held back this connector's read:
+     * ``waiting`` while its unlock prompt is open, ``locked`` once it was
+     * refused or closed. Absent once the read finished.
+     */
+    key_store?: 'waiting' | 'locked' | null;
     /**
      * ``false`` when the connector cannot be instantiated as configured —
      * for example, an ``oauth_pkce`` provider whose required environment
@@ -188,7 +199,10 @@ export interface ConnectorRow {
      * apply.
      */
     enabled: boolean;
+    /** The default account's address. */
     account_id: string | null;
+    /** Every signed-in account of an OAuth connector, oldest first; absent for MCP servers. */
+    accounts?: ConnectorAccount[];
     scopes: string[];
     /**
      * Per-agent MCP-tool-visibility activation snapshot (issue #1005).
@@ -238,6 +252,14 @@ export interface ConnectorRow {
         client_id: string | null;
         has_secret: boolean;
     } | null;
+}
+
+/** One signed-in account of an OAuth connector. `account_id` is the provider's stable id. */
+export interface ConnectorAccount {
+    account_id: string;
+    email: string;
+    status: 'ok' | 'reauth_required' | 'error';
+    is_default: boolean;
 }
 
 /** A catalog connector whose live state the backend failed to read; its summary raised. */
@@ -297,6 +319,18 @@ export interface InferenceStats {
     retried?: boolean | null;
     /** Where the turn was answered: "on your GPU", "via Fireworks AI". */
     place?: string | null;
+    /** Set on a `hybrid` chat's turns: the model the turn was routed to, and why. */
+    route?: TurnRoute | null;
+}
+
+/** The model a `hybrid` turn was routed to (`inference_stats.route`). */
+export interface TurnRoute {
+    model: string;
+    reason?: string;
+    /** True once the router's classifier has failed several turns in a row. */
+    degraded?: boolean;
+    /** The warning to show while `degraded`; empty otherwise. */
+    notice?: string;
 }
 
 /** Estimated tokens the next model call holds, by kind (GET /api/chat/context). */
@@ -375,8 +409,8 @@ export interface TurnPerformance {
     /** A null name is tool time measured outside any recorded step. */
     tools: Array<{ name: string | null; seconds: number | null }>;
     loads: Array<{ model: string | null; seconds: number; replaced?: string[]; during?: 'request' }>;
-    /** `unreported`: the model is priced, but its usage never came back (a stopped answer). */
-    cost: { kind: 'local' | 'estimate' | 'unknown' | 'unreported'; usd: number | null };
+    /** `unreported`: the model is priced, but its usage never came back (a stopped answer). `no_reply`: a cloud turn that failed or was stopped before any reply; spending leaves it out. */
+    cost: { kind: 'local' | 'estimate' | 'unknown' | 'unreported' | 'no_reply'; usd: number | null };
     /** Why a value is unknown, keyed by field. */
     unknown?: Partial<Record<'first_token_seconds' | 'prefill_tokens_per_second' | 'generation_tokens_per_second' | 'tokens' | 'tokens_cached' | 'time', string>>;
 }
@@ -462,7 +496,7 @@ export interface Message {
     stopState?: 'stopped' | 'unconfirmed';
     /** Error the server reported while a stopped turn was closing. */
     stopError?: string;
-    /** Client-side: this reply stands in for a turn that failed before answering. */
+    /** A model failure ended this turn (saved by the server, or on `done`), or, client-side, this reply stands in for a turn that failed before answering. */
     failed?: boolean;
     /** Client-side: the raw error, to recognize the server's saved copy of this failure. */
     failureText?: string;
@@ -472,6 +506,8 @@ export interface Message {
     historyNotice?: string;
     /** Sources, files and data flow of the turn, for the side rail (#5222). */
     turnSummary?: TurnSummary;
+    /** Elements the user picked in the browser pane and sent with this message. */
+    page_elements?: PageElementWire[] | null;
     /** Notices from adding indexed files to the document library. */
     libraryNotices?: string[];
 }
@@ -533,6 +569,40 @@ export interface ModelStatus {
     checked: boolean;
 }
 
+/** The Python agent (every tool, the default) or the native C++ one (fast, fewer tools). */
+export type FlagshipAgent = 'gaiapy' | 'gaiacpp';
+
+/** A download of gaiacpp, polled while `state` is downloading. */
+export interface AgentDownload {
+    state: 'idle' | 'downloading' | 'done' | 'failed';
+    bytes_done: number;
+    bytes_total: number | null;
+    error: string | null;
+}
+
+export interface AgentProgram {
+    id: FlagshipAgent;
+    installed: boolean;
+    /** Null when the size couldn't be read. */
+    size_bytes: number | null;
+    /** gaiacpp isn't on this PC and this release offers it. */
+    can_download: boolean;
+    /** Why gaiacpp can't be had here, when it isn't installed and can't be downloaded. */
+    unavailable_reason: string | null;
+    /** Set when the reason is one the UI has its own words for; any other reason is shown as it is. */
+    unavailable_code?: 'no_release' | 'unreachable' | 'unverifiable' | null;
+    /** A newer build is offered; not shown yet. */
+    update_available?: boolean;
+}
+
+/** `GET /api/agent-programs`: both agent programs and any running download. */
+export interface AgentPrograms {
+    /** The saved choice as written; may name a harness this version can't run (none of `programs`). */
+    current: string;
+    programs: AgentProgram[];
+    download: AgentDownload;
+}
+
 export interface Settings {
     custom_model: string | null;
     model_status: ModelStatus | null;
@@ -546,8 +616,13 @@ export interface Settings {
     agent_mode: 'manual' | 'goal_driven';
     /** Shared network policy controlling cloud AI use. */
     network_policy: 'cloud_allowed' | 'local_ai_only';
+    /** The program that runs the GAIA agent; "gaiapy" when the user never chose. May name a
+     *  harness a newer GAIA saved that this one can't run, until the user picks another. */
+    flagship_agent: string;
+    /** False when the gaiacpp program isn't installed on this PC, so it can't be chosen. */
+    gaiacpp_available: boolean;
     policy_warnings?: string[];
-    policy_notices?: Array<{ code: string; severity: 'info' | 'warning'; url?: string; reason?: string }>;
+    policy_notices?: Array<{ code: string; severity: 'info' | 'warning'; url?: string; reason?: string; cause?: string | null; models?: string[] | null }>;
 }
 
 /**
@@ -632,7 +707,8 @@ export interface SystemStatus {
     download_progress: DownloadProgress | null;
     // Boot-time initialization tracking
     init_state?: 'initializing' | 'ready' | 'degraded';
-    init_tasks?: Array<{ name: string; status: string }>;
+    /** `step` picks the banner's translated line; `name` is an English log label, never shown. */
+    init_tasks?: Array<{ name: string; step?: string | null; status: string }>;
     /** Priming of a new chat's prompt; never blocks sending. */
     warm_up?: WarmUpStatus | null;
     /** Devices detected on this system (e.g. ['cpu', 'gpu', 'npu']). */
@@ -699,6 +775,8 @@ export interface BrowseResponse {
     parent_path: string | null;
     entries: FileEntry[];
     quick_links: QuickLink[];
+    /** Why a chat can't be given this folder; absent when it can. */
+    folder_refusal?: string | null;
 }
 
 /** Response from the /documents/index-folder endpoint. */
@@ -707,6 +785,8 @@ export interface IndexFolderResponse {
     failed: number;
     /** Files in the folder of a type GAIA doesn't index. */
     skipped?: number;
+    /** Images in the folder; GAIA reads an image only when it is added on its own. */
+    skipped_images?: number;
     documents: Document[];
     errors: string[];
 }
@@ -854,10 +934,16 @@ export interface AgentStep {
     result?: string;
     /** Whether this step completed successfully. */
     success?: boolean;
+    /** A finished status the user waited on, such as a download; drawn with the turn (for type='status'). */
+    kept?: boolean;
     /** The user said no to this call, so it never ran (for type='tool'). */
     declined?: boolean;
     /** Nobody answered its permission prompt in time, so it never ran (for type='tool'). */
     timedOut?: boolean;
+    /** GAIA's own rule stopped this call; nobody was asked (for type='tool'). */
+    refused?: boolean;
+    /** GAIA turned this call down itself without asking, so it never ran (for type='tool'). */
+    autoDeclined?: boolean;
     /** Whether this step is currently running. */
     active?: boolean;
     /** Plan steps (for type='plan'). */
@@ -922,9 +1008,12 @@ export interface ProviderInfo {
      * user's permission (a macOS keychain dialog): `key_source` is then unknown,
      * not absent, and `key_message` says what to do. `store_locked` once the
      * user closed the store's unlock prompt: GAIA holds off asking for five
-     * minutes, or until Try again.
+     * minutes, or until Try again. Those two values are deprecated: read `key_store` (via
+     * `keyStoreOf`); `read` and `unknown` stay.
      */
     key_state?: 'read' | 'waiting_for_os_permission' | 'store_locked';
+    /** `waiting` while the OS key store's prompt is open, `locked` once it was refused or closed; null when it answered. */
+    key_store?: 'waiting' | 'locked' | null;
     key_message?: string | null;
     models_discovered?: boolean;
     /** The provider's model list is down, so GAIA offers models it already knows. */
@@ -991,6 +1080,8 @@ export interface ProviderModel {
     size_gb?: number | null;
     /** Fits this PC's memory; null when GAIA can't tell. */
     fits?: boolean | null;
+    /** Fits, but would leave other apps less memory than GAIA keeps for them. */
+    tight?: boolean;
     available?: boolean;
     unavailable_reason?: string | null;
     /** What stops this NPU model on this PC's NPU (Linux setup), in place of the reason. */
@@ -1101,6 +1192,8 @@ export interface LocalModelStatus {
     /** One plain line; `error_detail` carries the raw cause. */
     error: string | null;
     error_detail?: string | null;
+    /** Set when `error` is the server not answering, so the UI words it in its language. */
+    error_cause?: 'model_server_down' | null;
     base_url: string | null;
     /** `gaia` for GAIA's own Lemonade; GAIA asks before reloading on `user` or `remote`. */
     owner: 'gaia' | 'user' | 'remote' | null;

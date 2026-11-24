@@ -7,6 +7,11 @@
  * numbers; every result is computed here.
  */
 
+import { pluralKey } from '../../../i18n/registry';
+import type { MessageKey } from '../../../i18n/registry';
+import { tEn } from '../../../i18n/translator';
+import type { Translate } from '../../../i18n/translator';
+
 export type CalculatorType = 'tip' | 'loan';
 export type ValueFormat = 'currency' | 'percent' | 'count' | 'years';
 
@@ -28,7 +33,7 @@ export type CalculatorWire =
     | { kind: 'calculator'; calculator: 'loan'; title: string; currency: string; inputs: LoanInputs };
 
 export interface FieldSpec {
-    label: string;
+    label: MessageKey;
     /** The editing floor. The wire's own floors, some of them exclusive, are in `validWire`. */
     min: number;
     max: number;
@@ -40,14 +45,14 @@ export interface FieldSpec {
 }
 
 export interface ResultLine {
-    label: string;
+    label: MessageKey;
     value: number;
     format: ValueFormat;
     primary?: boolean;
 }
 
 export interface CalculatorSpec<I extends object> {
-    defaultTitle: string;
+    defaultTitle: MessageKey;
     fields: { readonly [K in keyof I]: FieldSpec };
     /** The wire's floors and cross-field rules, beyond every field being 0 to its `max`. */
     validWire: (inputs: I) => boolean;
@@ -72,40 +77,40 @@ export function loanResults({ amount, annualRatePercent, years, downPayment }: L
 }
 
 const TIP: CalculatorSpec<TipInputs> = {
-    defaultTitle: 'Tip calculator',
+    defaultTitle: 'cards.calc.tipTitle',
     fields: {
-        bill: { label: 'Bill', min: 0, max: 1e9, step: 0.01, format: 'currency', sliderMax: 500 },
-        tipPercent: { label: 'Tip', min: 0, max: 100, step: 1, format: 'percent', sliderMax: 40 },
-        people: { label: 'People', min: 1, max: 50, step: 1, format: 'count', sliderMax: 20, integer: true },
+        bill: { label: 'cards.calc.bill', min: 0, max: 1e9, step: 0.01, format: 'currency', sliderMax: 500 },
+        tipPercent: { label: 'cards.calc.tip', min: 0, max: 100, step: 1, format: 'percent', sliderMax: 40 },
+        people: { label: 'cards.calc.people', min: 1, max: 50, step: 1, format: 'count', sliderMax: 20, integer: true },
     },
     validWire: (inputs) => inputs.bill > 0 && inputs.people >= 1,
-    results: (inputs) => {
+    results: (inputs): ResultLine[] => {
         const { tip, total, perPerson } = tipResults(inputs);
         const split = inputs.people > 1;
         return [
-            { label: 'Tip', value: tip, format: 'currency' },
-            { label: 'Total', value: total, format: 'currency', primary: !split },
-            ...(split ? [{ label: 'Per person', value: perPerson, format: 'currency' as const, primary: true }] : []),
+            { label: 'cards.calc.tip', value: tip, format: 'currency' },
+            { label: 'cards.calc.total', value: total, format: 'currency', primary: !split },
+            ...(split ? [{ label: 'cards.calc.perPerson' as const, value: perPerson, format: 'currency' as const, primary: true }] : []),
         ];
     },
 };
 
 const LOAN: CalculatorSpec<LoanInputs> = {
-    defaultTitle: 'Loan calculator',
+    defaultTitle: 'cards.calc.loanTitle',
     fields: {
-        amount: { label: 'Price', min: 0, max: 1e10, step: 1000, format: 'currency', sliderMax: 1_000_000 },
-        downPayment: { label: 'Down payment', min: 0, max: 1e10, step: 1000, format: 'currency', sliderMax: 300_000 },
-        annualRatePercent: { label: 'Interest rate', min: 0, max: 50, step: 0.05, format: 'percent', sliderMax: 15 },
-        years: { label: 'Term', min: 1, max: 50, step: 1, format: 'years' },
+        amount: { label: 'cards.calc.price', min: 0, max: 1e10, step: 1000, format: 'currency', sliderMax: 1_000_000 },
+        downPayment: { label: 'cards.calc.downPayment', min: 0, max: 1e10, step: 1000, format: 'currency', sliderMax: 300_000 },
+        annualRatePercent: { label: 'cards.calc.rate', min: 0, max: 50, step: 0.05, format: 'percent', sliderMax: 15 },
+        years: { label: 'cards.calc.term', min: 1, max: 50, step: 1, format: 'years' },
     },
     validWire: (inputs) => inputs.amount > 0 && inputs.years >= 1 && inputs.downPayment < inputs.amount,
     results: (inputs) => {
         const { principal, monthly, totalPaid, interest } = loanResults(inputs);
         return [
-            { label: 'Monthly payment', value: monthly, format: 'currency', primary: true },
-            { label: 'Loan amount', value: principal, format: 'currency' },
-            { label: 'Total paid', value: totalPaid, format: 'currency' },
-            { label: 'Total interest', value: interest, format: 'currency' },
+            { label: 'cards.calc.monthly', value: monthly, format: 'currency', primary: true },
+            { label: 'cards.calc.loanAmount', value: principal, format: 'currency' },
+            { label: 'cards.calc.totalPaid', value: totalPaid, format: 'currency' },
+            { label: 'cards.calc.totalInterest', value: interest, format: 'currency' },
         ];
     },
 };
@@ -161,7 +166,7 @@ export function userLocale(): string {
     return (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
 }
 
-export function formatValue(value: number, format: ValueFormat, { locale, currency }: Money): string {
+export function formatValue(value: number, format: ValueFormat, { locale, currency }: Money, t: Translate = tEn): string {
     switch (format) {
         case 'currency':
             return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(value);
@@ -169,16 +174,26 @@ export function formatValue(value: number, format: ValueFormat, { locale, curren
             return new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 2 }).format(value / 100);
         case 'years': {
             const n = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value);
-            return `${n} ${value === 1 ? 'year' : 'years'}`;
+            return t.bare(pluralKey('cards.years', value), { n });
         }
         case 'count':
             return new Intl.NumberFormat(locale).format(value);
     }
 }
 
+// The number inside a formatted zero: ASCII, Arabic-Indic and Extended Arabic-Indic digits with
+// the separators between them. Hermes' Intl has no formatToParts, so the symbol is what is left.
+const NUMBER_RUN =
+    /[0-9\u0660-\u0669\u06F0-\u06F9](?:[0-9\u0660-\u0669\u06F0-\u06F9.,\u066B\u066C\u2019'\s\u00A0\u202F\u2009]*[0-9\u0660-\u0669\u06F0-\u06F9])?/;
+const SPACE_SIGN_BIDI = /[\s\u00A0\u202F\u2009\u2212\-+\u200B-\u200F\u061C\u2066-\u2069\uFEFF]/g;
+
 export function currencySymbol({ locale, currency }: Money): string {
-    const parts = new Intl.NumberFormat(locale, { style: 'currency', currency }).formatToParts(0);
-    return parts.find((p) => p.type === 'currency')?.value ?? '';
+    const symbol = new Intl.NumberFormat(locale, { style: 'currency', currency })
+        .format(0)
+        .replace(NUMBER_RUN, '')
+        .replace(SPACE_SIGN_BIDI, '');
+    if (!symbol) throw new Error(`No currency symbol for currency ${currency} in locale ${locale}`);
+    return symbol;
 }
 
 /** The one plain-text form of a calculator, for copy. */
@@ -187,12 +202,13 @@ export function formatCalculatorText(
     spec: AnySpec,
     inputs: Record<string, number>,
     money: Money,
+    t: Translate = tEn,
 ): string {
     const out = [title];
     for (const [key, field] of Object.entries(spec.fields)) {
-        out.push(`${field.label}: ${formatValue(inputs[key], field.format, money)}`);
+        out.push(`${t.bare(field.label)}: ${formatValue(inputs[key], field.format, money, t)}`);
     }
     out.push('');
-    for (const line of spec.results(inputs)) out.push(`${line.label}: ${formatValue(line.value, line.format, money)}`);
+    for (const line of spec.results(inputs)) out.push(`${t.bare(line.label)}: ${formatValue(line.value, line.format, money, t)}`);
     return out.join('\n');
 }

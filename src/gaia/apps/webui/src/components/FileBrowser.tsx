@@ -15,12 +15,17 @@ import { useDialogFocus } from '../hooks/useDialogFocus';
 import * as api from '../services/api';
 import { log } from '../utils/logger';
 import { formatSize } from '../utils/format';
+import { isMacPlatform } from '../utils/platform';
 import { dateLocale, useT, type Translate } from '../i18n/useT';
-import type { MessageKey } from '../i18n/registry';
-import { UploadErrorToast, isExtensionSupported, getUnsupportedCategory } from './UnsupportedFeature';
+import type { MessageKey, Param } from '../i18n/registry';
+import { ref, stripIsolates } from '../i18n/registry';
+import { requestErrorParam } from '../utils/requestErrors';
+import { unsupportedTypeMessage } from '../utils/uploadErrors.core';
+import { UploadErrorToast, isExtensionSupported } from './UnsupportedFeature';
 import type { FileEntry, BrowseResponse, QuickLink } from '../types';
 import './FileBrowser.css';
 import './UnsupportedFeature.css';
+import { visibleName, markStrayDirection } from './CalendarApproval';
 
 // File type icons mapping
 function getFileIcon(entry: FileEntry) {
@@ -38,8 +43,10 @@ function formatDate(iso: string | null, t: Translate): string {
     const d = new Date(iso);
     const now = new Date();
     const diff = now.getTime() - d.getTime();
-    const hours = Math.floor(diff / 3600000);
-    if (hours < 1) return t('time.justNow');
+    if (diff < 60000) return t('time.justNow');
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return t('time.minutesAgo', { n: mins });
+    const hours = Math.floor(mins / 60);
     if (hours < 24) return t('time.hoursAgo', { n: hours });
     const days = Math.floor(hours / 24);
     if (days < 7) return t('time.daysAgo', { n: days });
@@ -48,8 +55,8 @@ function formatDate(iso: string | null, t: Translate): string {
 
 function formatSearchScope(locations: string[], t: Translate): string {
     if (locations.length === 0) return '';
-    const [first, ...rest] = locations;
-    return rest.length > 0 ? t('fileBrowser.scopeMore', { first, n: rest.length }) : first;
+    const [path, ...rest] = locations;
+    return rest.length > 0 ? t('fileBrowser.searchingInScopeMore', { path, n: rest.length }) : t('fileBrowser.searchingInScope', { path });
 }
 
 // Quick link icon mapping
@@ -99,6 +106,10 @@ interface IndexResult {
     unsupported: string[];
     failed: number;
     lastError: string;
+    /** The last failed document's ``error_kind``, when the server gave one. */
+    lastErrorKind?: string | null;
+    /** Images inside added folders, which GAIA reads only when added one by one. */
+    skippedImages: number;
 }
 
 /**
@@ -110,6 +121,7 @@ async function indexAndAttachFiles(
     entries: FileEntry[],
     sessionId: string | null,
     updateSessionInList: (id: string, patch: Record<string, unknown>) => void,
+    t: Translate,
 ): Promise<IndexResult> {
     const supported: string[] = [];
     const unsupported: string[] = [];
@@ -126,25 +138,34 @@ async function indexAndAttachFiles(
     const succeededFiles: string[] = [];
     let failed = 0;
     let lastError = '';
+    let lastErrorKind: string | null = null;
+    let skippedImages = 0;
     const folderPaths = new Set(entries.filter(e => e.type === 'folder').map(e => e.path));
 
     for (const filepath of supported) {
         try {
             if (folderPaths.has(filepath)) {
-                const result = await api.indexFolder(filepath);
+                const result = await api.indexFolder(filepath, true, sessionId);
                 const newIds: string[] = [];
                 result.documents.forEach(d => { if (d.id) newIds.push(d.id); });
+                skippedImages += result.skipped_images ?? 0;
+                // Each failed file has a library row saying why, to retry from.
+                if (result.failed > 0) {
+                    failed += result.failed;
+                    lastError = result.errors[0] ?? lastError;
+                }
                 if (newIds.length > 0) {
                     newIds.forEach(id => docIds.push(id));
                     succeededFiles.push(filepath);
                 }
             } else {
                 if (!(await ensureModel('embedding'))) break;
-                const doc = await api.uploadDocumentByPath(filepath);
+                const doc = await api.uploadDocumentByPath(filepath, sessionId);
                 if (doc?.indexing_status === 'failed') {
                     // Neither attached nor held for the next chat: GAIA can't search it.
                     failed++;
                     lastError = doc.last_error ?? '';
+                    lastErrorKind = doc.error_kind ?? null;
                 } else if (doc?.id) {
                     docIds.push(doc.id);
                     succeededFiles.push(filepath);
@@ -152,7 +173,8 @@ async function indexAndAttachFiles(
             }
         } catch (err) {
             failed++;
-            lastError = err instanceof Error ? err.message : 'Unknown error';
+            lastError = err instanceof Error ? err.message : t('chat.unknownError');
+            lastErrorKind = (err as { reason?: string | null } | null)?.reason ?? null;
         }
     }
 
@@ -177,8 +199,8 @@ async function indexAndAttachFiles(
         // No chat is open: the agent only sees attached documents, so hold them for the next one.
         useChatStore.getState().addDraftDocuments(docIds);
     }
-    // The chat's document bar lists only documents the store knows about.
-    if (docIds.length > 0) {
+    // The chat's document bar and the library list only documents the store knows about.
+    if (docIds.length > 0 || failed > 0) {
         try {
             const data = await api.listDocuments();
             useChatStore.getState().setDocuments(data.documents || []);
@@ -187,7 +209,7 @@ async function indexAndAttachFiles(
         }
     }
 
-    return { docIds, supported, succeededFiles, unsupported, failed, lastError };
+    return { docIds, supported, succeededFiles, unsupported, failed, lastError, lastErrorKind, skippedImages };
 }
 
 const isHiddenName = (name: string) => name.startsWith('.');
@@ -199,7 +221,7 @@ interface FileBrowserProps {
 
 export function FileBrowser({ onStartChat }: FileBrowserProps) {
     const t = useT();
-    const { setShowFileBrowser, currentSessionId, updateSessionInList, setPendingPrompt } = useChatStore();
+    const { setShowFileBrowser, leaveFileBrowser, currentSessionId, updateSessionInList, setPendingPrompt } = useChatStore();
     const closeBrowser = useCallback(() => setShowFileBrowser(false), [setShowFileBrowser]);
     useEscapeToClose(true, closeBrowser);
     const dialogRef = useRef<HTMLDivElement>(null);
@@ -212,7 +234,8 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
     const [entries, setEntries] = useState<FileEntry[]>([]);
     const [quickLinks, setQuickLinks] = useState<QuickLink[]>([]);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<Param | null>(null);
+    const [deniedName, setDeniedName] = useState<string | null>(null);
     const [showHidden, setShowHidden] = useState(false);
 
     // Search state
@@ -236,24 +259,32 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
     const indexStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Upload error toast state
-    const [indexError, setIndexError] = useState<{ filename: string; error: string } | null>(null);
+    const [indexError, setIndexError] = useState<{ filename: string; error: string; kind?: string | null } | null>(null);
 
     const loadDirectory = useCallback(async (path?: string) => {
         setLoading(true);
         setError(null);
+        setDeniedName(null);
         setSearchResults(null);
         setSearchQuery('');
         setSearchedLocations([]);
         try {
-            const data: BrowseResponse = await api.browseFiles(path);
+            const data: BrowseResponse = await api.browseFiles(path, useChatStore.getState().currentSessionId);
             setCurrentPath(data.current_path);
             setParentPath(data.parent_path);
             setEntries(data.entries);
             if (data.quick_links.length > 0) setQuickLinks(data.quick_links);
             log.ui.info(`Browsing: ${data.current_path} (${data.entries.length} items)`);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Failed to load directory';
-            setError(msg);
+            if (path && (err as { reason?: unknown }).reason === 'os_denied') {
+                const name = path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
+                setCurrentPath(path);
+                setParentPath(null);
+                setEntries([]);
+                setDeniedName(name);
+            } else {
+                setError(err instanceof Error ? requestErrorParam(err) : ref('fileBrowser.loadFailed'));
+            }
             log.ui.error('Browse failed', err);
         } finally {
             setLoading(false);
@@ -281,14 +312,13 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         setIsSearching(true);
         setError(null);
         try {
-            const data = await api.searchFiles(searchQuery.trim(), typeFilter || undefined, 30);
+            const data = await api.searchFiles(searchQuery.trim(), typeFilter || undefined, 30, useChatStore.getState().currentSessionId);
             setSearchResults(data.results);
             setSearchedLocations(data.searched_locations ?? []);
             setSearchTruncated(data.truncated === true);
             log.ui.info(`Search "${searchQuery}": ${data.total} results`);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Search failed';
-            setError(msg);
+            setError(err instanceof Error ? requestErrorParam(err) : ref('fileBrowser.searchFailed'));
             log.ui.error('Search failed', err);
         } finally {
             setIsSearching(false);
@@ -310,7 +340,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
     const handleFilePreview = useCallback(async (path: string) => {
         setPreviewLoading(true);
         try {
-            const data = await api.previewFile(path);
+            const data = await api.previewFile(path, undefined, useChatStore.getState().currentSessionId);
             setPreviewFile(data as FilePreview);
         } catch (err) {
             log.ui.error('Preview failed', err);
@@ -340,16 +370,11 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         });
         if (!hasSupported) {
             const firstFile = files[0];
-            const dotIdx = firstFile.lastIndexOf('.');
-            const ext = dotIdx > 0 ? firstFile.slice(dotIdx).toLowerCase() : '';
-            const category = getUnsupportedCategory(ext);
             setIndexError({
                 filename: files.length === 1
                     ? firstFile.split(/[\\/]/).pop() || firstFile
-                    : `${files.length} files`,
-                error: category
-                    ? category.message
-                    : `File type "${ext}" is not supported for indexing.`,
+                    : t.plural('chg.files', files.length),
+                error: unsupportedTypeMessage(firstFile) ?? t('fileBrowser.unexpectedError'),
             });
             return;
         }
@@ -358,33 +383,39 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         setIndexStatus(t.plural('fileBrowser.adding', files.length));
 
         try {
-            const result = await indexAndAttachFiles(files, entries, currentSessionId, updateSessionInList);
+            const result = await indexAndAttachFiles(files, entries, currentSessionId, updateSessionInList, t);
 
             if (result.failed > 0) {
                 setIndexStatus(t('fileBrowser.addedWithFailures', { added: result.docIds.length, failed: result.failed }));
                 setIndexError({
-                    filename: `${result.failed} file(s)`,
-                    error: result.lastError || 'Indexing failed for some files',
+                    filename: t.plural('chg.files', result.failed),
+                    error: result.lastError || t('fileBrowser.indexFailedSome'),
+                    kind: result.lastErrorKind,
                 });
             } else {
                 const added = t.plural('fileBrowser.added', result.docIds.length);
-                setIndexStatus(result.unsupported.length > 0
-                    ? `${added} ${t.plural('fileBrowser.skipped', result.unsupported.length)}`
-                    : added);
+                const parts = [added];
+                if (result.unsupported.length > 0) parts.push(t.plural('fileBrowser.skipped', result.unsupported.length));
+                if (result.skippedImages > 0) parts.push(t.plural('docs.folder.images', result.skippedImages));
+                setIndexStatus(parts.join(' '));
             }
             if (indexStatusTimerRef.current) clearTimeout(indexStatusTimerRef.current);
             indexStatusTimerRef.current = setTimeout(() => setIndexStatus(null), 5000);
             setSelectedFiles(new Set());
+            // Opened from the library: go back there to see the files land.
+            if (result.failed === 0 && result.unsupported.length === 0 && useChatStore.getState().fileBrowserFromLibrary) {
+                setShowFileBrowser(false);
+            }
         } catch (err) {
             log.doc.error('Index selected failed', err);
             setIndexError({
-                filename: files.length === 1 ? files[0].split(/[\\/]/).pop() || files[0] : `${files.length} files`,
-                error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+                filename: files.length === 1 ? files[0].split(/[\\/]/).pop() || files[0] : t.plural('chg.files', files.length),
+                error: err instanceof Error ? err.message : t('fileBrowser.unexpectedError'),
             });
         } finally {
             setIndexingFiles(new Set());
         }
-    }, [selectedFiles, currentSessionId, updateSessionInList, entries, t]);
+    }, [selectedFiles, currentSessionId, updateSessionInList, entries, setShowFileBrowser, t]);
 
     // A second click can land before the re-render that disables the button.
     const askingRef = useRef(false);
@@ -397,15 +428,12 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         setIndexStatus(t.plural('fileBrowser.adding', files.length));
 
         try {
-            const result = await indexAndAttachFiles(files, entries, currentSessionId, updateSessionInList);
+            const result = await indexAndAttachFiles(files, entries, currentSessionId, updateSessionInList, t);
 
             if (result.supported.length === 0) {
-                const dotIdx = files[0].lastIndexOf('.');
-                const ext = dotIdx > 0 ? files[0].slice(dotIdx).toLowerCase() : '';
-                const category = getUnsupportedCategory(ext);
                 setIndexError({
-                    filename: files.length === 1 ? files[0].split(/[\\/]/).pop() || files[0] : `${files.length} files`,
-                    error: category?.message ?? `File type "${ext}" is not supported for indexing.`,
+                    filename: files.length === 1 ? files[0].split(/[\\/]/).pop() || files[0] : t.plural('chg.files', files.length),
+                    error: unsupportedTypeMessage(files[0]) ?? t('fileBrowser.unexpectedError'),
                 });
                 return;
             }
@@ -414,8 +442,8 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                 setIndexError({
                     filename: result.supported.length === 1
                         ? result.supported[0].split(/[\\/]/).pop() || result.supported[0]
-                        : `${result.supported.length} files`,
-                    error: 'Failed to index selected file(s). Please try again.',
+                        : t.plural('chg.files', result.supported.length),
+                    error: t('fileBrowser.indexFailedSelected'),
                 });
                 return;
             }
@@ -429,28 +457,28 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
             const fileNames = (result.succeededFiles.length > 0 ? result.succeededFiles : result.supported)
                 .map(f => f.split(/[\\/]/).pop() || f);
             const prompt = fileNames.length === 1
-                ? `Please analyze this document for me: ${fileNames[0]}`
-                : `Please analyze these documents for me:\n${fileNames.map(n => `- ${n}`).join('\n')}`;
+                ? stripIsolates(t.bare('mobileApp.files.askOne', { name: fileNames[0] }))
+                : stripIsolates(t.bare('mobileApp.files.askMany', { list: fileNames.map(n => `- ${n}`).join('\n') }));
 
             if (currentSessionId) {
                 setPendingPrompt({ sessionId: currentSessionId, text: prompt });
             } else {
                 await onStartChat(prompt);
             }
-            setShowFileBrowser(false);
+            leaveFileBrowser();
             setSelectedFiles(new Set());
         } catch (err) {
             log.doc.error('Ask Agent failed', err);
             setIndexError({
-                filename: files.length === 1 ? files[0].split(/[\\/]/).pop() || files[0] : `${files.length} files`,
-                error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+                filename: files.length === 1 ? files[0].split(/[\\/]/).pop() || files[0] : t.plural('chg.files', files.length),
+                error: err instanceof Error ? err.message : t('fileBrowser.unexpectedError'),
             });
         } finally {
             askingRef.current = false;
             setIndexingFiles(new Set());
             setIndexStatus(null);
         }
-    }, [selectedFiles, currentSessionId, updateSessionInList, entries, setPendingPrompt, setShowFileBrowser, onStartChat, t]);
+    }, [selectedFiles, currentSessionId, updateSessionInList, entries, setPendingPrompt, leaveFileBrowser, onStartChat, t]);
 
     // Build breadcrumb segments from current path
     const pathSegments = currentPath ? currentPath.replace(/\\/g, '/').split('/').filter(Boolean) : [];
@@ -503,10 +531,10 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                                 key={link.path}
                                 className="fb-quick-link"
                                 onClick={() => loadDirectory(link.path)}
-                                title={link.path}
+                                title={visibleName(link.path)}
                             >
                                 {getQuickLinkIcon(link.icon)}
-                                <span>{QUICK_LINK_LABELS[link.icon] ? t(QUICK_LINK_LABELS[link.icon]) : link.name}</span>
+                                <span>{QUICK_LINK_LABELS[link.icon] ? t(QUICK_LINK_LABELS[link.icon]) : visibleName(link.name)}</span>
                             </button>
                         ))}
                     </div>
@@ -564,7 +592,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                                     <span key={i} className="fb-crumb-item">
                                         <ChevronRight size={12} className="fb-crumb-sep" />
                                         <button className="fb-crumb" onClick={() => loadDirectory(crumb.path)}>
-                                            {crumb.label}
+                                            {visibleName(crumb.label)}
                                         </button>
                                     </span>
                                 ))}
@@ -599,7 +627,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                                         className="fb-search-scope"
                                         title={searchedLocations.join('\n')}
                                     >
-                                        {t('fileBrowser.searchingIn')} <code>{searchScope}</code>
+                                        {searchScope}
                                     </span>
                                 )}
                                 {searchTruncated && (
@@ -615,14 +643,22 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                     )}
 
                     {/* Error */}
-                    {error && <div className="fb-error">{error}</div>}
+                    {(error || deniedName) && (
+                        <div className="fb-error">
+                            {deniedName
+                                ? t(isMacPlatform() ? 'fileBrowser.deniedMac' : 'fileBrowser.denied', { name: deniedName })
+                                : typeof error === 'object' && error
+                                    ? t(error.ref, error.params)
+                                    : <span dir="ltr">{error}</span>}
+                        </div>
+                    )}
 
                     {/* File list + Preview split */}
                     <div className="fb-content">
                         <div className="fb-file-list">
                             {loading && <div className="fb-loading">{t('fileBrowser.loading')}</div>}
 
-                            {!loading && displayItems.length === 0 && (
+                            {!loading && !error && !deniedName && displayItems.length === 0 && (
                                 <div className="fb-empty">
                                     {searchResults
                                         ? t('fileBrowser.noFiles')
@@ -642,7 +678,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                                     className={`fb-entry ${entry.type} ${selectedFiles.has(entry.path) ? 'selected' : ''} ${fileUnsupported ? 'unsupported' : ''}`}
                                     onClick={() => entry.type === 'folder' ? handleEntryClick(entry) : toggleSelection(entry.path)}
                                     onDoubleClick={() => entry.type === 'folder' ? handleEntryClick(entry) : undefined}
-                                    title={fileUnsupported ? t('fileBrowser.notIndexableTitle') : entry.path}
+                                    title={fileUnsupported ? t('fileBrowser.notIndexableTitle') : visibleName(entry.path)}
                                 >
                                     <input
                                         type="checkbox"
@@ -650,10 +686,10 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                                         checked={selectedFiles.has(entry.path)}
                                         onChange={() => toggleSelection(entry.path)}
                                         onClick={(e) => e.stopPropagation()}
-                                        aria-label={t('fileBrowser.selectAria', { name: entry.name })}
+                                        aria-label={t('fileBrowser.selectAria', { name: visibleName(entry.name) })}
                                     />
                                     <span className="fb-entry-icon">{getFileIcon(entry)}</span>
-                                    <span className="fb-entry-name" title={entry.path}>{entry.name}</span>
+                                    <span className="fb-entry-name" title={visibleName(entry.path)}>{visibleName(entry.name)}</span>
                                     {fileUnsupported && (
                                         <span className="fb-unsupported-badge">
                                             {t('fileBrowser.notIndexable')}
@@ -664,7 +700,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                                             type="button"
                                             className="fb-entry-preview-btn"
                                             onClick={(e) => { e.stopPropagation(); handleFilePreview(entry.path); }}
-                                            aria-label={t('fileBrowser.previewAria', { name: entry.name })}
+                                            aria-label={t('fileBrowser.previewAria', { name: visibleName(entry.name) })}
                                             title={t('fileBrowser.previewTitle')}
                                         >
                                             <Eye size={14} />
@@ -681,7 +717,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                         {previewFile && (
                             <div className="fb-preview">
                                 <div className="fb-preview-header">
-                                    <span className="fb-preview-name">{previewFile.name}</span>
+                                    <span className="fb-preview-name">{visibleName(previewFile.name)}</span>
                                     <button className="btn-icon-sm" onClick={() => setPreviewFile(null)} aria-label={t('fileBrowser.closePreview')}>
                                         <X size={14} />
                                     </button>
@@ -701,7 +737,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                                     <div className="fb-preview-loading">{t('fileBrowser.previewLoading')}</div>
                                 ) : previewFile.is_text && previewFile.preview_lines.length > 0 ? (
                                     <pre className="fb-preview-content">
-                                        {previewFile.preview_lines.slice(0, 30).join('\n')}
+                                        {markStrayDirection(previewFile.preview_lines.slice(0, 30).join('\n'))}
                                     </pre>
                                 ) : (
                                     <div className="fb-preview-binary">{t('fileBrowser.binary')}</div>
@@ -715,6 +751,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                         <UploadErrorToast
                             filename={indexError.filename}
                             error={indexError.error}
+                            kind={indexError.kind ?? undefined}
                             onDismiss={() => setIndexError(null)}
                         />
                     )}

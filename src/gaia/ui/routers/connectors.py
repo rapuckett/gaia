@@ -11,14 +11,14 @@ are reachable from the CLI (``gaia connectors ...``) and SDK
 (``import gaia.connectors; ...``) without going through this layer.
 
 Exception → HTTP mapping:
-- ``AuthRequiredError(NOT_CONNECTED)``             → 401
+- ``AuthRequiredError(NOT_CONNECTED)``             → 409
 - ``AuthRequiredError(AGENT_NOT_GRANTED)``         → 403
 - ``AuthRequiredError(CONNECTION_MISSING_SCOPES)`` → 403 + missing_scopes
-- ``AuthRequiredError(REAUTH_REQUIRED)``           → 401
-- ``ConnectionRevokedError``                       → 401
+- ``AuthRequiredError(REAUTH_REQUIRED)``           → 409
+- ``ConnectionRevokedError``                       → 409
 - ``ConnectionBusyError``                          → 503 + Retry-After
 - ``ScopeMismatchError``                           → 403
-- ``ConfigurationError``                           → 503
+- ``ConfigurationError``                           → 503 ``not_configured``
 - ``FlowInProgressError``                          → 409
 - ``FlowTimeoutError``                             → 408
 - ``ConsentDeniedError``                           → 400
@@ -37,16 +37,21 @@ import asyncio
 import json
 import logging
 import os
+import re
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Literal, Optional, Union
 
+import httpx
 import keyring
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+import keyring.errors
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 import gaia.connectors as connections
 import gaia.connectors.catalog  # noqa: F401  # pylint: disable=unused-import
+from gaia.connectors.accounts import list_accounts
 from gaia.connectors.activations import (
     ActivationsLedgerCorrupt,
     list_agent_activations,
@@ -55,7 +60,13 @@ from gaia.connectors.activations import (
 from gaia.connectors.api import activate as activate_connector_for_agent
 from gaia.connectors.api import deactivate as deactivate_connector_for_agent
 from gaia.connectors.api import resolve_declared_scopes
+from gaia.connectors.credential_wait import (
+    CredentialStoreLocked,
+    CredentialStoreWaiting,
+    read_within,
+)
 from gaia.connectors.errors import (
+    AccountChoiceRequiredError,
     AuthRequiredError,
     ConfigurationError,
     ConnectionBusyError,
@@ -63,18 +74,22 @@ from gaia.connectors.errors import (
     ConnectorsError,
     ConsentDeniedError,
     FlowInProgressError,
+    FlowOwnerError,
+    FlowStateMismatchError,
     FlowTimeoutError,
     InvalidConfigValueError,
     NoDeclaredScopesError,
     ScopeMismatchError,
     ScopeNotAllowedError,
+    UnknownAccountError,
     UnknownAgentError,
     UnknownConnectorError,
+    UnknownFlowError,
 )
 from gaia.connectors.events import set_emitter
 from gaia.connectors.flow import _pending as _flow_pending
 from gaia.connectors.grants import (
-    GRANTS_FILE,
+    _grants_path,
     grant_agent,
     list_agent_grants,
     revoke_agent_grant,
@@ -90,14 +105,40 @@ from gaia.connectors.mcp_server import (
     is_mcp_server_configured,
 )
 from gaia.connectors.registry import REGISTRY
-from gaia.connectors.spec import ConfigField
+from gaia.connectors.spec import (
+    _VALID_KINDS,
+    ConfigField,
+    ConnectorSpec,
+    ConnectorType,
+)
 from gaia.connectors.store import (
+    KeyringRefused,
     peek_connection,
     peek_provider_credentials,
     retry_keyring,
 )
+from gaia.ui.shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_opened
 
+from ..devices import DEVICE_CHANGE_PARAM_MAX
+from ..devices.changes import record_device_change
+from ..devices.prompts import DevicePromptTimeout, limit_device_rate, watch_key_store
+from ..key_store import (
+    KEY_STORE_LOCKED,
+    KEY_STORE_WAITING,
+    KeyStoreState,
+    key_store_detail,
+)
+from ..models import WireModel
+from ..security import (
+    allowed_device,
+    audit_approval,
+    is_local_pc,
+    principal,
+    require_local_pc,
+    require_pc_or_allowed_device,
+)
 from ..security import require_ui_header as _require_ui_header
+from .mcp import args_for_caller
 
 logger = logging.getLogger(__name__)
 
@@ -107,16 +148,82 @@ router = APIRouter(prefix="/api/connectors", tags=["connectors"])
 # Issue #1292 — forwarded pre-authenticated connections. Separate prefix
 # (``/v1/connections``) per the issue's REST contract: a host app that already
 # authenticated a user POSTs the forwarded grant here; GAIA persists it and
-# acts on the mailbox as the host app's client — no second OAuth. The UI
-# server binds localhost by default and gates remote/tunnel access behind a
-# token (see ``TunnelAuthMiddleware``); mutating routes also require the
-# ``X-Gaia-UI`` CSRF header below.
+# acts on the mailbox as the host app's client — no second OAuth. Every caller
+# presents the Agent UI API token (see ``ApiTokenMiddleware``); mutating routes
+# also require the ``X-Gaia-UI`` CSRF header below.
 forwarded_router = APIRouter(prefix="/v1/connections", tags=["connections"])
 
 
 # ─────────────────────────────────────────────────────────────────
 # CSRF guard (plan amendment A8)
 # ─────────────────────────────────────────────────────────────────
+
+
+#: ``builtin:<id>``, ``installed:<id>``, ``native:<id>`` or ``custom:<hash>:<id>``.
+_AGENT_ID_RE = re.compile(
+    r"(?:builtin|installed|native|custom:[0-9a-f]{1,64}):[A-Za-z0-9][A-Za-z0-9._-]{0,127}"
+)
+
+
+def _agent_display_name(request: Request, agent_id: str) -> Dict[str, str]:
+    """``{"agent": name}`` for a registered agent id, else ``{}`` (never a guess)."""
+    registry = getattr(request.app.state, "agent_registry", None)
+    if registry is None:
+        return {}
+    for reg in registry.list():
+        if reg.namespaced_agent_id == agent_id and reg.name:
+            return {"agent": reg.name}
+    return {}
+
+
+async def _record_change(
+    request: Request, kind: str, connector_id: str, **params: Any
+) -> None:
+    """A device's change to *connector_id*, for the PC's list of what it changed."""
+    agent_id = params.get("agent_id")
+    if agent_id:
+        params = {**_agent_display_name(request, agent_id), **params}
+    await asyncio.to_thread(
+        record_device_change,
+        request,
+        kind,
+        connector=REGISTRY.get(connector_id).display_name,
+        connector_id=connector_id,
+        **params,
+    )
+
+
+async def _record_removed(request: Request, connector_id: str) -> None:
+    """A device removed *connector_id*: an audit line and a row in its changes."""
+    if is_local_pc(request):
+        return
+    audit_approval(request, f"connector {connector_id} removed")
+    try:
+        name = REGISTRY.get(connector_id).display_name
+    except KeyError:
+        # A forwarded connection's provider need not be a catalog connector.
+        name = connector_id
+    await asyncio.to_thread(
+        record_device_change,
+        request,
+        "connectorRemoved",
+        connector=name[:DEVICE_CHANGE_PARAM_MAX],
+        connector_id=connector_id[:DEVICE_CHANGE_PARAM_MAX],
+    )
+
+
+def _checked_agent_id(agent_id: str) -> str:
+    """422 unless *agent_id* is a namespaced agent id."""
+    if not _AGENT_ID_RE.fullmatch(agent_id):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_agent_id",
+                "message": "An agent id is namespaced, like 'builtin:chat' or "
+                "'installed:email'.",
+            },
+        )
+    return agent_id
 
 
 def _require_mcp_server(connector_id: str) -> None:
@@ -151,12 +258,34 @@ def _require_mcp_server(connector_id: str) -> None:
 
 class AuthorizeRequest(BaseModel):
     scopes: List[str] = Field(default_factory=list)
+    # Show the provider's account picker to sign in to another account.
+    add_account: bool = False
+    # Reconnect this stored account (its account_id or address). Its address
+    # goes to the provider as a sign-in hint.
+    account: Optional[str] = None
     # #2117 — namespaced agent ids to grant this connector once OAuth
     # completes, so connecting a mailbox grants it to the email agent in the
     # same flow. The router resolves each agent's required scopes from its
     # REQUIRED_CONNECTORS declaration (single source of truth) before handing
     # the map to the flow.
     grant_agents: List[str] = Field(default_factory=list)
+    # A paired device's own loopback port: the redirect lands on the device,
+    # which hands the code back through ``POST /flows/{flow_id}/complete``.
+    redirect_port: Optional[int] = Field(default=None, ge=1024, le=65535)
+
+
+class CompleteFlowRequest(BaseModel):
+    """Body for ``POST /api/connectors/flows/{flow_id}/complete``."""
+
+    code: str
+    state: str
+
+
+class AccountUpdateRequest(BaseModel):
+    """Body for ``PATCH /api/connectors/{id}/accounts/{account_id}``. Only
+    ``true`` is accepted: to change the default, make another account it."""
+
+    is_default: bool
 
 
 class GrantRequest(BaseModel):
@@ -189,8 +318,9 @@ class ForwardConnectionRequest(BaseModel):
     OAuth, no consent step.
 
     ``refresh_token`` / ``client_secret`` are secret INPUTS — they are never
-    echoed back in any response. ``account_email`` is display-only in v1
-    (the keyring slot is single-account per provider). ``grant_agents`` is
+    echoed back in any response. ``account_email`` picks which stored account
+    the forward replaces (the one with that address); with other accounts
+    stored and no match, the forward is refused. ``grant_agents`` is
     the list of namespaced agent ids (e.g. ``installed:email``) to grant the
     forwarded scopes so they can resolve the connection ambiently.
     """
@@ -201,6 +331,157 @@ class ForwardConnectionRequest(BaseModel):
     scopes: List[str] = Field(default_factory=list)
     account_email: str = Field(default="")
     grant_agents: List[str] = Field(default_factory=list)
+
+
+ConfigFieldKind = Literal[tuple(sorted(_VALID_KINDS))]  # type: ignore[valid-type]
+
+
+class ConnectorFieldSummary(WireModel):
+    """One field of a connector's setup or configure form."""
+
+    key: str
+    label: str
+    kind: ConfigFieldKind
+    required: bool
+    placeholder: str
+    help_md: str
+    prefix: str
+
+
+class ConnectorOAuthClient(WireModel):
+    """Which OAuth client a provider would use; the secret is never included."""
+
+    source: Optional[Literal["keyring", "env"]]
+    client_id: Optional[str]
+    has_secret: bool
+
+
+class ConnectorSummary(WireModel):
+    """A catalog connector merged with its live state.
+
+    With ``key_store`` set, the OS key store would not give up this connector's
+    secret, so ``configured`` is null: its connection is unknown, not absent.
+    """
+
+    id: str
+    display_name: str
+    icon: str
+    category: str
+    tier: int
+    type: ConnectorType
+    description: str
+    product_url: Optional[str]
+    docs_url: Optional[str]
+    setup_url: Optional[str]
+    configured: Optional[bool]
+    configurable: bool
+    config_error: Optional[str]
+    oauth_client: Optional[ConnectorOAuthClient]
+    account_id: Optional[str]
+    scopes: List[str]
+    enabled: bool
+    activations: Dict[str, bool]
+    mcp_env_keys: List[str]
+    default_scopes: List[str]
+    available_scopes: List[str]
+    supports_device_code: bool
+    oauth_setup_fields: List[ConnectorFieldSummary]
+    config_fields: List[ConnectorFieldSummary]
+    key_store: Optional[KeyStoreState] = None
+
+
+class ConnectorUnavailable(WireModel):
+    """A catalog connector whose live state could not be read."""
+
+    id: str
+    display_name: str
+    error: Literal["unavailable"]
+    reason: Optional[Literal["activations_unreadable"]] = None
+    path: Optional[str] = None
+
+
+class ConnectorListResponse(WireModel):
+    """Result of ``GET /api/connectors``; ``key_store`` is set when any row's is."""
+
+    connectors: List[Union[ConnectorSummary, ConnectorUnavailable]]
+    key_store: Optional[KeyStoreState] = None
+
+
+class ConnectorGrantsResponse(WireModel):
+    """Result of ``GET /api/connectors/{id}/grants``: scopes per agent id."""
+
+    grants: Dict[str, List[str]]
+
+
+class ConnectorActivationsResponse(WireModel):
+    """Result of ``GET /api/connectors/{id}/activations``: on/off per agent id."""
+
+    activations: Dict[str, bool]
+
+
+class AgentMcpServer(WireModel):
+    """An MCP server a custom agent declares in its own ``mcp_servers.json``."""
+
+    agent_id: str
+    agent_name: str
+    config_path: str
+    server_name: str
+    command: str
+    args: List[str]
+    disabled: bool
+
+
+class AgentMcpsResponse(WireModel):
+    """Result of ``GET /api/connectors/agent-mcps``."""
+
+    agent_mcps: List[AgentMcpServer]
+
+
+class ConnectorConfigureResponse(WireModel):
+    """Result of ``POST /api/connectors/{id}/configure``; the keys set depend on the step.
+
+    ``status``/``connector_id``: OAuth client saved. ``flow_id``/
+    ``authorization_url``: browser sign-in started. ``provider`` through
+    ``connected_at``: sign-in finished. ``configured``/``connector_id``/
+    ``command``/``args``: MCP server written.
+    """
+
+    status: Optional[str] = None
+    connector_id: Optional[str] = None
+    flow_id: Optional[str] = None
+    authorization_url: Optional[str] = None
+    provider: Optional[str] = None
+    account_email: Optional[str] = None
+    scopes: Optional[List[str]] = None
+    connected_at: Optional[float] = None
+    configured: Optional[bool] = None
+    command: Optional[str] = None
+    args: Optional[List[str]] = None
+
+
+class ConnectorTestResponse(WireModel):
+    """Result of ``POST /api/connectors/{id}/test``."""
+
+    ok: bool
+    detail: str
+    reason: Optional[Literal["timeout", "disabled"]] = None
+
+
+class ConnectorAuthorizeResponse(WireModel):
+    """Result of ``POST /api/connectors/{id}/authorize``."""
+
+    flow_id: str
+    authorization_url: str
+
+
+class ConnectorDeviceAuthResponse(WireModel):
+    """Result of ``POST /api/connectors/{id}/authorize-device``."""
+
+    user_code: str
+    verification_uri: str
+    expires_in: int
+    interval: int
+    message: str
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -258,6 +539,19 @@ set_emitter(_emitter)
 
 
 def _raise_http_for(exc: ConnectorsError) -> HTTPException:
+    if isinstance(exc, UnknownAccountError):
+        return HTTPException(
+            status_code=404,
+            detail={
+                "error": "unknown_account",
+                "connector_id": exc.connector_id,
+                "account": exc.account,
+                "choices": exc.choices,
+                "message": str(exc),
+            },
+        )
+    if isinstance(exc, AccountChoiceRequiredError):
+        return HTTPException(status_code=409, detail=exc.http_detail())
     if isinstance(exc, UnknownConnectorError):
         return HTTPException(
             status_code=404,
@@ -277,7 +571,11 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
             headers={"Retry-After": "1"},
         )
     if isinstance(exc, ConfigurationError):
-        return HTTPException(status_code=503, detail=str(exc))
+        # Tagged, so a client can tell "set up this provider" from other 503s.
+        return HTTPException(
+            status_code=503,
+            detail={"error": "not_configured", "message": str(exc)},
+        )
     if isinstance(exc, InvalidConfigValueError):
         return HTTPException(status_code=400, detail=str(exc))
     if isinstance(exc, ScopeNotAllowedError):
@@ -296,7 +594,7 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
             AuthRequiredError.Reason.REAUTH_REQUIRED,
         ):
             return HTTPException(
-                status_code=401,
+                status_code=409,
                 detail={
                     "error": exc.reason.value,
                     "connector_id": exc.provider,
@@ -314,7 +612,7 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
         )
     if isinstance(exc, ConnectionRevokedError):
         return HTTPException(
-            status_code=401,
+            status_code=409,
             detail={"error": "connection_revoked", "connector_id": exc.provider},
         )
     if isinstance(exc, ScopeMismatchError):
@@ -328,7 +626,61 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
         return HTTPException(status_code=408, detail=str(exc))
     if isinstance(exc, ConsentDeniedError):
         return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, UnknownFlowError):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, FlowOwnerError):
+        return HTTPException(status_code=403, detail=str(exc))
+    if isinstance(exc, FlowStateMismatchError):
+        return HTTPException(status_code=400, detail=str(exc))
     return HTTPException(status_code=500, detail=str(exc))
+
+
+DEVICE_CONNECTOR_ERROR = (
+    "GAIA couldn't finish this on the PC. "
+    "Open Settings \u203a Connectors on the PC to see why."
+)
+DEVICE_KEY_STORE_LOCKED = (
+    "The PC's key store is locked or its prompt was closed. "
+    "Approve the prompt on the PC, or choose Try again in Settings \u203a Model."
+)
+DEVICE_CHECK_FAILED = (
+    "The check didn't pass. Run it again in Settings \u203a Connectors on the PC "
+    "to see why."
+)
+
+
+def _http_error_for(request: Request, exc: ConnectorsError) -> HTTPException:
+    """``_raise_http_for``, keeping a server failure's text (paths) on the PC."""
+    http = _raise_http_for(exc)
+    if http.status_code < 500 or is_local_pc(request):
+        return http
+    logger.error("connectors: request from %s failed: %s", principal(request), exc)
+    detail: Any = DEVICE_CONNECTOR_ERROR
+    if isinstance(http.detail, dict) and "error" in http.detail:
+        detail = {"error": http.detail["error"], "message": DEVICE_CONNECTOR_ERROR}
+    return HTTPException(
+        status_code=http.status_code, detail=detail, headers=http.headers
+    )
+
+
+def _key_store_locked_error(request: Request, exc: Exception) -> HTTPException:
+    """423 for a locked key store, 409 while its prompt is unanswered; OS text stays on the PC."""
+    logger.warning(
+        "connectors: key store stayed locked for %s: %s", principal(request), exc
+    )
+    locked = isinstance(exc, (CredentialStoreLocked, KeyringRefused))
+    status = 423 if locked else 409
+    message = str(exc) if is_local_pc(request) else DEVICE_KEY_STORE_LOCKED
+    return HTTPException(
+        status_code=status, detail=key_store_detail(exc, status, message)
+    )
+
+
+def _shareable_check(result: Dict[str, Any]) -> Dict[str, Any]:
+    """A health check's result with failure text (server output) left on the PC."""
+    if result.get("ok") or result.get("reason") in ("timeout", "disabled"):
+        return result
+    return {**result, "detail": DEVICE_CHECK_FAILED}
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -391,25 +743,166 @@ def _resolve_grant_scopes(
         ) from e
 
 
-def _widen_empty_scopes(
-    scopes: List[str], grant_map: Dict[str, List[str]]
+def _signin_scopes(
+    connector_id: str, scopes: List[str], grant_map: Dict[str, List[str]]
 ) -> List[str]:
-    """Same contract as the CLI's bare ``connect`` (#2730 D0/AC-8): an empty
-    ``scopes`` body must not silently reach ``start_authorization`` narrower
-    than what the request's own ``grant_agents`` already declare. When the
-    caller supplied scopes explicitly, or resolved no grant map at all,
-    return unchanged — ``start_authorization``'s own D0 guard decides the
-    genuinely-empty case (raise on an existing connection, fall back to
-    ``default_scopes`` on a real first connect)."""
-    if scopes or not grant_map:
+    """What a sign-in that grants agents asks for, as the CLI's ``connect
+    --grant-agent`` does: the scopes sent (or, when none, what the agents
+    declare) plus the provider's identity and refresh scopes, without which
+    the account has no address and Microsoft returns no refresh token. With
+    no grant map the request goes through unchanged, and
+    ``start_authorization``'s own D0 guard decides the empty case."""
+    if not grant_map:
         return scopes
-    union: set = set()
-    for agent_scopes in grant_map.values():
-        union.update(agent_scopes)
-    return sorted(union)
+    requested = set(scopes)
+    if not requested:
+        for agent_scopes in grant_map.values():
+            requested.update(agent_scopes)
+    try:
+        identity = REGISTRY.get(connector_id).default_scopes
+    except KeyError:
+        # Unknown connector: start_authorization names it.
+        return sorted(requested)
+    return sorted(requested | set(identity))
 
 
-def _connector_summary(connector_id: str) -> Dict[str, Any]:
+# Providers whose missing OAuth client was logged; the list is polled.
+_unconfigured_logged: set = set()
+
+
+def _log_unconfigured(provider_ref: str, error: Exception) -> None:
+    """One INFO line per provider per run; the full setup text goes to DEBUG."""
+    if provider_ref in _unconfigured_logged:
+        return
+    _unconfigured_logged.add(provider_ref)
+    logger.info(
+        "connectors: provider %s has no OAuth client set up, so it cannot "
+        "connect until one is",
+        provider_ref,
+    )
+    logger.debug("connectors: provider %s not configured: %s", provider_ref, error)
+
+
+def _oauth_state(provider_ref: str) -> Dict[str, Any]:
+    """An ``oauth_pkce`` connector's live state, read from the OS key store.
+
+    Every read here can block on the store's unlock prompt; callers that must
+    not wait for it go through :func:`_bounded_oauth_state`.
+    """
+    # Lazy import to avoid pulling provider modules at router import time.
+    from gaia.connectors.providers import get as get_provider
+
+    configurable = True
+    config_error: Optional[str] = None
+    try:
+        get_provider(provider_ref)
+    except ConfigurationError as e:
+        configurable = False
+        _log_unconfigured(provider_ref, e)
+        _pref = provider_ref.upper()
+        config_error = (
+            f"OAuth credentials for {provider_ref!r} are not configured. "
+            f"Set GAIA_{_pref}_CLIENT_ID and GAIA_{_pref}_CLIENT_SECRET, "
+            "or use Settings → Connectors to configure them."
+        )
+    except KeyError:
+        configurable = False
+        config_error = (
+            f"OAuth provider {provider_ref!r} is not registered. "
+            "This is a catalog/code mismatch; please file a bug."
+        )
+
+    # Derive configured/account/scopes from the keyring blob — that
+    # IS the source of truth. peek_connection is read-only and never
+    # raises on missing entries.
+    # ``account_id`` and ``scopes`` describe the default account;
+    # ``accounts`` lists every one. Read-only.
+    stored = list_accounts(provider_ref)
+    accounts = [a.to_dict() for a in stored]
+    default = next((a for a in stored if a.is_default), None)
+    blob = (
+        peek_connection(provider_ref, slot=default.slot)
+        if default is not None and default.status == "ok"
+        else None
+    )
+    configured = any(a.status == "ok" for a in stored)
+    account_id: Optional[str] = None
+    scopes: list = []
+    if blob is not None:
+        account_id = blob.get("account_email")
+        scopes = list(blob.get("scopes", []))
+
+    # OAuth *client* status (#2104): which client the provider would
+    # resolve, so Settings can render/rotate it. client_id is not a
+    # secret (it ships inside desktop apps); the secret itself is
+    # NEVER included — only whether one is stored.
+    _env_prefix = f"GAIA_{provider_ref.upper()}"
+    stored_creds = peek_provider_credentials(provider_ref) or {}
+    if stored_creds.get("client_id"):
+        oauth_client = {
+            "source": "keyring",
+            "client_id": stored_creds["client_id"],
+            "has_secret": bool(stored_creds.get("client_secret")),
+        }
+    elif os.environ.get(f"{_env_prefix}_CLIENT_ID"):
+        oauth_client = {
+            "source": "env",
+            "client_id": os.environ[f"{_env_prefix}_CLIENT_ID"],
+            "has_secret": bool(os.environ.get(f"{_env_prefix}_CLIENT_SECRET")),
+        }
+    else:
+        oauth_client = {"source": None, "client_id": None, "has_secret": False}
+
+    return {
+        "configured": configured,
+        # The default account's address (the field predates several accounts).
+        "account_id": account_id,
+        # Every stored account: {account_id, email, status, is_default}.
+        "accounts": accounts,
+        "scopes": scopes,
+        "configurable": configurable,
+        "config_error": config_error,
+        "oauth_client": oauth_client,
+    }
+
+
+def _key_store_unread(state: str) -> Dict[str, Any]:
+    """An ``oauth_pkce`` connector's state when the key store would not be read."""
+    return {
+        "configured": None,
+        "account_id": None,
+        "accounts": [],
+        "scopes": [],
+        "configurable": True,
+        "config_error": None,
+        "oauth_client": None,
+        "key_store": state,
+    }
+
+
+def _bounded_oauth_state(spec: ConnectorSpec) -> Dict[str, Any]:
+    """:func:`_oauth_state`, or ``key_store`` waiting/locked instead of blocking.
+
+    Waits as long as ``read_within`` does (``WAIT_SECONDS``), as the providers
+    routes do; a later call joins the same read once the user answers.
+    """
+    provider_ref = spec.oauth_provider_ref or spec.id
+    try:
+        return read_within(
+            f"connector:{provider_ref}",
+            lambda: _oauth_state(provider_ref),
+            f"your {spec.display_name} connection",
+        )
+    except (CredentialStoreLocked, KeyringRefused) as e:
+        logger.info("connectors: %s unread, key store locked: %s", spec.id, e)
+        return _key_store_unread(KEY_STORE_LOCKED)
+    except CredentialStoreWaiting:
+        return _key_store_unread(KEY_STORE_WAITING)
+
+
+def _connector_summary(
+    connector_id: str, bounded: bool = False, store_waiting: bool = False
+) -> Dict[str, Any]:
     """Build a summary dict for one connector: spec fields + live state.
 
     No state cache: ``configured`` / ``account_id`` / ``scopes`` are
@@ -424,6 +917,11 @@ def _connector_summary(connector_id: str) -> Dict[str, Any]:
     is unset), surface ``configurable=False`` + ``config_error="..."``
     so the AgentUI renders a friendly "needs setup" tile rather than
     letting the user click Connect and hit a 503.
+
+    *bounded* reads the key store through ``read_within``: a read the OS
+    holds for its prompt, or one it refused, sets ``key_store`` instead.
+    *store_waiting* skips the read and reports ``waiting``, so a list opens
+    one prompt at a time.
     """
     try:
         spec = REGISTRY.get(connector_id)
@@ -432,69 +930,27 @@ def _connector_summary(connector_id: str) -> Dict[str, Any]:
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
         )
 
-    configured = False
-    account_id: Optional[str] = None
-    scopes: list = []
-    configurable = True
-    config_error: Optional[str] = None
-    oauth_client: Optional[Dict[str, Any]] = None
+    state: Dict[str, Any] = {
+        "configured": False,
+        "account_id": None,
+        "accounts": [],
+        "scopes": [],
+        "configurable": True,
+        "config_error": None,
+        "oauth_client": None,
+    }
 
     # TODO: when a 3rd connector type lands, push this if/elif into a
     # Handler.summary(spec) method so this becomes a single polymorphic
     # call. The same dispatch lives in cli.py:_handle_list — refactor
     # both together.
     if spec.type == "oauth_pkce":
-        # Lazy import to avoid pulling provider modules at router import time.
-        from gaia.connectors.providers import get as get_provider
-
-        provider_ref = spec.oauth_provider_ref or spec.id
-        try:
-            get_provider(provider_ref)
-        except ConfigurationError as e:
-            configurable = False
-            logger.info("connectors: provider %s not configured: %s", provider_ref, e)
-            _pref = provider_ref.upper()
-            config_error = (
-                f"OAuth credentials for {provider_ref!r} are not configured. "
-                f"Set GAIA_{_pref}_CLIENT_ID and GAIA_{_pref}_CLIENT_SECRET, "
-                "or use Settings → Connectors to configure them."
-            )
-        except KeyError:
-            configurable = False
-            config_error = (
-                f"OAuth provider {provider_ref!r} is not registered. "
-                "This is a catalog/code mismatch; please file a bug."
-            )
-
-        # Derive configured/account/scopes from the keyring blob — that
-        # IS the source of truth. peek_connection is read-only and never
-        # raises on missing entries.
-        blob = peek_connection(provider_ref)
-        if blob is not None:
-            configured = True
-            account_id = blob.get("account_email")
-            scopes = list(blob.get("scopes", []))
-
-        # OAuth *client* status (#2104): which client the provider would
-        # resolve, so Settings can render/rotate it. client_id is not a
-        # secret (it ships inside desktop apps); the secret itself is
-        # NEVER included — only whether one is stored.
-        _env_prefix = f"GAIA_{provider_ref.upper()}"
-        stored_creds = peek_provider_credentials(provider_ref) or {}
-        if stored_creds.get("client_id"):
-            oauth_client = {
-                "source": "keyring",
-                "client_id": stored_creds["client_id"],
-                "has_secret": bool(stored_creds.get("client_secret")),
-            }
-        elif os.environ.get(f"{_env_prefix}_CLIENT_ID"):
-            oauth_client = {
-                "source": "env",
-                "client_id": os.environ[f"{_env_prefix}_CLIENT_ID"],
-                "has_secret": bool(os.environ.get(f"{_env_prefix}_CLIENT_SECRET")),
-            }
+        if store_waiting:
+            state = _key_store_unread(KEY_STORE_WAITING)
+        elif bounded:
+            state = _bounded_oauth_state(spec)
         else:
-            oauth_client = {"source": None, "client_id": None, "has_secret": False}
+            state = _oauth_state(spec.oauth_provider_ref or spec.id)
 
     # ``enabled`` is meaningful only for ``mcp_server`` connectors. We
     # default to ``True`` for both not-configured connectors AND OAuth so
@@ -503,8 +959,8 @@ def _connector_summary(connector_id: str) -> Dict[str, Any]:
     enabled = True
 
     if spec.type == "mcp_server":
-        configured = is_mcp_server_configured(spec.id)
-        if configured:
+        state["configured"] = is_mcp_server_configured(spec.id)
+        if state["configured"]:
             try:
                 entry = _read_mcp_servers_json().get(spec.id, {})
                 enabled = not entry.get("disabled", False)
@@ -538,12 +994,7 @@ def _connector_summary(connector_id: str) -> Dict[str, Any]:
         "product_url": spec.product_url,
         "docs_url": spec.docs_url,
         "setup_url": spec.setup_url,
-        "configured": configured,
-        "configurable": configurable,
-        "config_error": config_error,
-        "oauth_client": oauth_client,
-        "account_id": account_id,
-        "scopes": scopes,
+        **state,
         "enabled": enabled,
         "activations": activations,
         "mcp_env_keys": list(spec.mcp_env_keys),
@@ -577,10 +1028,21 @@ def _field_summary(f: ConfigField) -> Dict[str, Any]:
 # ─────────────────────────────────────────────────────────────────
 
 
-@router.get("")
-@router.get("/")
-async def list_connectors() -> Dict[str, Any]:
-    """Return catalog specs merged with live state for all connectors."""
+@router.get("", response_model=ConnectorListResponse, response_model_exclude_unset=True)
+@router.get(
+    "/", response_model=ConnectorListResponse, response_model_exclude_unset=True
+)
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def list_connectors() -> Dict[str, Any]:
+    """Return catalog specs merged with live state for all connectors.
+
+    A connector whose secret the key store holds back is listed with
+    ``key_store`` instead of blocking the list, on the PC and off it alike:
+    the PC no longer waits on its own prompt. Once one read is waiting,
+    later ones wait too, so a list never opens a second prompt.
+    """
+    bounded = True
+    key_store: Optional[str] = None
     specs = REGISTRY.all()
     # Every summary reads the same ledger; a corrupt one is fixed by deleting it, so name it.
     ledger_cause: Dict[str, Any] = {}
@@ -595,7 +1057,12 @@ async def list_connectors() -> Dict[str, Any]:
     summaries: List[Dict[str, Any]] = []
     for s in specs:
         try:
-            summaries.append(_connector_summary(s.id))
+            summary = _connector_summary(
+                s.id, bounded=bounded, store_waiting=key_store == KEY_STORE_WAITING
+            )
+            if summary.get("key_store") and key_store != KEY_STORE_LOCKED:
+                key_store = summary["key_store"]
+            summaries.append(summary)
         except Exception as exc:
             logger.warning(
                 "connectors-list: summary failed for %s (%s)", s.id, type(exc).__name__
@@ -608,6 +1075,8 @@ async def list_connectors() -> Dict[str, Any]:
                     **ledger_cause,
                 }
             )
+    if key_store:
+        return {"connectors": summaries, "key_store": key_store}
     return {"connectors": summaries}
 
 
@@ -617,11 +1086,14 @@ async def connector_events() -> StreamingResponse:
 
     Event types:
       - ``connector.configured``        ({connector_id, account_id})
-      - ``connector.disconnected``      ({connector_id})
+      - ``connector.disconnected``      ({connector_id, account_id?,
+        account_email?, remaining_accounts, revoke_*})
+      - ``connector.account.changed``   ({connector_id, account_id, is_default})
       - ``connector.tested``            ({connector_id, ok, detail})
       - ``connector.enabled``           ({connector_id})
       - ``connector.disabled``          ({connector_id})
-      - ``connector.oauth.completed``   ({connector_id, account_email})
+      - ``connector.oauth.completed``   ({connector_id, account_email,
+        account_id, added, is_default, requested_account_id})
       - ``connector.oauth.error``       ({connector_id, error})
       - ``connector.grant.changed``     ({connector_id, agent_id, scopes})
       - ``connector.activation.changed`` ({connector_id, agent_id, active})
@@ -629,11 +1101,15 @@ async def connector_events() -> StreamingResponse:
     queue = await _emitter.subscribe()
 
     async def gen() -> AsyncIterator[bytes]:
+        stream_opened()
         try:
             while True:
-                envelope = await queue.get()
+                envelope = await get_or_shutdown(queue)
+                if envelope is SHUTDOWN:
+                    return
                 yield f"data: {json.dumps(envelope)}\n\n".encode("utf-8")
         finally:
+            stream_closed()
             await _emitter.unsubscribe(queue)
 
     return StreamingResponse(
@@ -643,20 +1119,23 @@ async def connector_events() -> StreamingResponse:
     )
 
 
-@router.get("/_debug")
-async def debug_state() -> Dict[str, Any]:
+@router.get("/_debug", dependencies=[Depends(require_local_pc)])
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def debug_state() -> Dict[str, Any]:
     """Diagnostics endpoint, gated by ``GAIA_DEBUG=1``."""
     if os.environ.get("GAIA_DEBUG") != "1":
         raise HTTPException(status_code=404, detail="Not Found")
 
     from gaia.connectors.providers import _registry as provider_registry
 
+    # Resolved now, like every grant write; the import-time constant goes stale.
+    grants_file = _grants_path()
     grants_writable = False
     try:
-        GRANTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        grants_writable = os.access(str(GRANTS_FILE.parent), os.W_OK)
-    except OSError:
-        pass
+        grants_file.parent.mkdir(parents=True, exist_ok=True)
+        grants_writable = os.access(str(grants_file.parent), os.W_OK)
+    except OSError as e:
+        logger.warning("Grants folder %s is not usable: %s", grants_file.parent, e)
 
     # Derive configured ids live by walking the catalog and asking the
     # source-of-truth store for each type.
@@ -670,7 +1149,7 @@ async def debug_state() -> Dict[str, Any]:
         "provider_registered": "google" in provider_registry,
         "env_var_present": bool(os.environ.get("GAIA_GOOGLE_CLIENT_ID")),
         "keyring_backend_class": type(keyring.get_keyring()).__name__,
-        "grants_path": str(GRANTS_FILE),
+        "grants_path": str(grants_file),
         "grants_path_writable": grants_writable,
         "in_flight_flow_count": len(_flow_pending),
         "catalog_size": len(REGISTRY.all()),
@@ -678,7 +1157,9 @@ async def debug_state() -> Dict[str, Any]:
     }
 
 
-@router.get("/agent-mcps")
+@router.get(
+    "/agent-mcps", response_model=AgentMcpsResponse, response_model_exclude_unset=True
+)
 async def list_agent_mcps(request: Request) -> Dict[str, Any]:
     """Return MCP servers declared by custom-Python agents (#1020).
 
@@ -732,6 +1213,8 @@ async def list_agent_mcps(request: Request) -> Dict[str, Any]:
                 continue
             raw_args = server_cfg.get("args", [])
             args = [str(a) for a in raw_args] if isinstance(raw_args, list) else []
+            raw_env = server_cfg.get("env")
+            env = raw_env if isinstance(raw_env, dict) else None
             servers.append(
                 {
                     "agent_id": reg.id,
@@ -739,7 +1222,7 @@ async def list_agent_mcps(request: Request) -> Dict[str, Any]:
                     "config_path": str(config_path),
                     "server_name": server_name,
                     "command": str(server_cfg.get("command", "")),
-                    "args": args,
+                    "args": args_for_caller(request, args, env),
                     "disabled": bool(server_cfg.get("disabled", False)),
                 }
             )
@@ -778,12 +1261,15 @@ def _eval_mailbox_state() -> Dict[str, Any]:
     }
 
 
-@router.get("/eval-mailbox")
+@router.get("/eval-mailbox", dependencies=[Depends(require_local_pc)])
 async def get_eval_mailbox() -> Dict[str, Any]:
     return _eval_mailbox_state()
 
 
-@router.post("/eval-mailbox", dependencies=[Depends(_require_ui_header)])
+@router.post(
+    "/eval-mailbox",
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+)
 async def set_eval_mailbox(body: EvalMailboxRequest) -> Dict[str, Any]:
     """Attach or detach the fixture for sessions that start reading mail next."""
     from gaia.agents.tools._email import fixture
@@ -793,20 +1279,34 @@ async def set_eval_mailbox(body: EvalMailboxRequest) -> Dict[str, Any]:
     return _eval_mailbox_state()
 
 
-@router.get("/{connector_id}/grants")
+@router.get(
+    "/{connector_id}/grants",
+    response_model=ConnectorGrantsResponse,
+    response_model_exclude_unset=True,
+)
 async def get_grants(connector_id: str) -> Dict[str, Any]:
     return {"grants": list_agent_grants(connector_id)}
 
 
-@router.get("/{connector_id}/activations")
+@router.get(
+    "/{connector_id}/activations",
+    response_model=ConnectorActivationsResponse,
+    response_model_exclude_unset=True,
+)
 async def get_activations(connector_id: str) -> Dict[str, Any]:
     return {"activations": list_agent_activations(connector_id)}
 
 
-@router.get("/{connector_id}")
-async def get_connector(connector_id: str) -> Dict[str, Any]:
+@router.get(
+    "/{connector_id}",
+    response_model=ConnectorSummary,
+    response_model_exclude_unset=True,
+)
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def get_connector(request: Request, connector_id: str) -> Dict[str, Any]:
+    """One connector's summary; off the PC, ``key_store`` as the list sets it."""
     try:
-        return _connector_summary(connector_id)
+        return _connector_summary(connector_id, bounded=not is_local_pc(request))
     except HTTPException:
         raise
     except KeyError:
@@ -827,7 +1327,40 @@ async def get_connector(connector_id: str) -> Dict[str, Any]:
 # ─────────────────────────────────────────────────────────────────
 
 
-@router.post("/{connector_id}/configure", dependencies=[Depends(_require_ui_header)])
+def _refuse_device_sign_in(
+    request: Request, connector_id: str, config: Dict[str, Any]
+) -> None:
+    """A paired device may save an OAuth client or an MCP server, never sign in."""
+    if is_local_pc(request):
+        return
+    try:
+        spec = REGISTRY.get(connector_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=404, detail=f"Unknown connector: {connector_id!r}"
+        )
+    if spec.type == "oauth_pkce" and not config.get("save_only"):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Sign in to {spec.display_name} on the PC running GAIA. A "
+            "paired device can only save its OAuth client.",
+        )
+
+
+def _keep_saved_pause(connector_id: str, config: Dict[str, Any]) -> None:
+    """A device can't enable a paused server: its saved ``disabled`` value wins."""
+    config.pop("disabled", None)
+    if REGISTRY.get(connector_id).type == "mcp_server":
+        saved = _read_mcp_servers_json().get(connector_id) or {}
+        config["disabled"] = saved.get("disabled", False)
+
+
+@router.post(
+    "/{connector_id}/configure",
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+    response_model=ConnectorConfigureResponse,
+    response_model_exclude_unset=True,
+)
 async def configure_connector(
     request: Request, connector_id: str, body: ConfigureRequest
 ) -> Dict[str, Any]:
@@ -838,61 +1371,138 @@ async def configure_connector(
     the mailbox is granted to those agents when the flow completes (#2117) — the
     same behaviour as the plain ``authorize`` path.
     """
+    config = dict(body.config)
+    _refuse_device_sign_in(request, connector_id, config)
     # Connecting needs the key store, so it may ask the OS to unlock it again.
     retry_keyring()
-    config = dict(body.config)
     raw_grant_agents = config.get("grant_agents")
     if raw_grant_agents:
         config["grant_agents"] = _resolve_grant_scopes(
             request, connector_id, list(raw_grant_agents)
         )
+        config["scopes"] = _signin_scopes(
+            connector_id, list(config.get("scopes") or []), config["grant_agents"]
+        )
     try:
+        if not is_local_pc(request):
+            _keep_saved_pause(connector_id, config)
         result = await configure(connector_id, config)
     except KeyError:
         raise HTTPException(
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
         )
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
 
+    if not is_local_pc(request):
+        granted = sorted(config.get("grant_agents") or {})
+        audit_approval(
+            request,
+            f"connector {connector_id} set up"
+            + (f" and granted to {', '.join(granted)}" if granted else ""),
+        )
+        await asyncio.to_thread(
+            record_device_change,
+            request,
+            "connectorSetup",
+            connector=REGISTRY.get(connector_id).display_name,
+            connector_id=connector_id,
+        )
     await _emitter.emit(
         "connector.configured",
         {"connector_id": connector_id, "account_id": result.get("account_id")},
     )
+    if "args" in result:
+        result = {**result, "args": args_for_caller(request, list(result["args"]))}
     return result
 
 
-@router.post("/{connector_id}/test", dependencies=[Depends(_require_ui_header)])
-async def test_connector(connector_id: str) -> Dict[str, Any]:
-    """Run the health check for a connector."""
+async def _device_health_check(request: Request, connector_id: str) -> Dict[str, Any]:
+    from gaia.connectors._loop import _get_persistent_loop
+
+    # The checks read the key store synchronously; a prompt must not stall this loop.
+    def start():
+        return asyncio.wrap_future(
+            asyncio.run_coroutine_threadsafe(
+                health_check(connector_id), _get_persistent_loop()
+            )
+        )
+
+    try:
+        return await watch_key_store(request, "connectorTest", start)
+    except DevicePromptTimeout as e:
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "Nobody answered the key store prompt on the PC within 5 minutes. "
+                "Try again, and approve it on the PC."
+            ),
+        ) from e
+
+
+@router.post(
+    "/{connector_id}/test",
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+    response_model=ConnectorTestResponse,
+    response_model_exclude_unset=True,
+)
+async def test_connector(request: Request, connector_id: str) -> Dict[str, Any]:
+    """Run the health check for a connector.
+
+    From a paired device it runs off this loop, so the device hears
+    ``device_prompt`` while the PC's key store prompt is up.
+    """
+    on_pc = is_local_pc(request)
+    if not on_pc:
+        limit_device_rate(request, "connectorTest")
     retry_keyring()
     try:
-        result = await health_check(connector_id)
+        if on_pc:
+            result = await health_check(connector_id)
+        else:
+            result = await _device_health_check(request, connector_id)
     except KeyError:
         raise HTTPException(
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
         )
+    except (CredentialStoreWaiting, KeyringRefused) as e:
+        raise _key_store_locked_error(request, e) from e
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
 
+    shareable = _shareable_check(result)
+    # The event stream reaches paired devices too.
     await _emitter.emit(
         "connector.tested",
         {
             "connector_id": connector_id,
-            "ok": result.get("ok"),
-            "detail": result.get("detail"),
+            "ok": shareable.get("ok"),
+            "detail": shareable.get("detail"),
         },
     )
-    return result
+    return result if is_local_pc(request) else shareable
 
 
 @router.delete(
-    "/{connector_id}", status_code=204, dependencies=[Depends(_require_ui_header)]
+    "/{connector_id}",
+    status_code=204,
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def disconnect_connector(connector_id: str) -> Response:
-    """Disconnect a connector — removes credentials and (for MCP) removes from mcp_servers.json."""
+async def disconnect_connector(
+    request: Request,
+    connector_id: str,
+    all_accounts: bool = Query(False, alias="all"),
+) -> Response:
+    """Disconnect a connector — removes credentials and (for MCP) removes it
+    from mcp_servers.json.
+
+    An OAuth connector with several accounts answers 409
+    ``account_choice_required`` with the ``choices``: remove one with
+    ``DELETE /{connector_id}/accounts/{account_id}``, or every one with
+    ``?all=true``.
+    """
     try:
-        revoke_result = await disconnect(connector_id)
+        revoke_result = await disconnect(connector_id, all_accounts=all_accounts)
     except KeyError:
         raise HTTPException(
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
@@ -904,6 +1514,7 @@ async def disconnect_connector(connector_id: str) -> Response:
     # present a bare "disconnected" that reads as a full revoke when only
     # the local credential was cleared). ``revoke_result`` is ``None`` for
     # handler types with no remote-revoke concept (e.g. MCP servers).
+    await _record_removed(request, connector_id)
     await _emitter.emit(
         "connector.disconnected",
         {"connector_id": connector_id, **(revoke_result or {})},
@@ -911,7 +1522,74 @@ async def disconnect_connector(connector_id: str) -> Response:
     return Response(status_code=204)
 
 
-async def _set_connector_enabled(connector_id: str, enabled: bool) -> Dict[str, Any]:
+@router.delete(
+    "/{connector_id}/accounts/{account_id}",
+    status_code=204,
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+)
+async def disconnect_account(
+    request: Request, connector_id: str, account_id: str
+) -> Response:
+    """Disconnect one account of an OAuth connector (``account_id`` is its
+    stable id or address). The other accounts keep working, and agent grants
+    are kept until the last account goes."""
+    try:
+        revoke_result = await disconnect(connector_id, account_id=account_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=404, detail=f"Unknown connector: {connector_id!r}"
+        )
+    except ConnectorsError as e:
+        raise _raise_http_for(e) from e
+
+    await _record_removed(request, connector_id)
+    await _emitter.emit(
+        "connector.disconnected",
+        {"connector_id": connector_id, **(revoke_result or {})},
+    )
+    return Response(status_code=204)
+
+
+@router.patch(
+    "/{connector_id}/accounts/{account_id}",
+    dependencies=[Depends(_require_ui_header)],
+)
+async def update_account(
+    connector_id: str, account_id: str, body: AccountUpdateRequest
+) -> Dict[str, Any]:
+    """Make one account the connector's default. Returns ``{"accounts": [...]}``."""
+    if not body.is_default:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "is_default can only be set to true. To change the default, "
+                "make another account the default."
+            ),
+        )
+    if connector_id not in REGISTRY:
+        raise HTTPException(
+            status_code=404, detail=f"Unknown connector: {connector_id!r}"
+        )
+    try:
+        chosen = await asyncio.to_thread(
+            connections.set_default_account, connector_id, account_id
+        )
+    except ConnectorsError as e:
+        raise _raise_http_for(e) from e
+    await _emitter.emit(
+        "connector.account.changed",
+        {
+            "connector_id": connector_id,
+            "account_id": chosen.account_id,
+            "is_default": True,
+        },
+    )
+    return {"accounts": [a.to_dict() for a in list_accounts(connector_id)]}
+
+
+async def _set_connector_enabled(
+    connector_id: str, enabled: bool, request: Optional[Request] = None
+) -> Dict[str, Any]:
     """Shared implementation for ``POST /{id}/enable`` and ``POST /{id}/disable``.
 
     The toggle is meaningful only for ``mcp_server`` connectors that have
@@ -953,26 +1631,78 @@ async def _set_connector_enabled(connector_id: str, enabled: bool) -> Dict[str, 
     try:
         await handler.set_enabled(connector_id, enabled)
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        if request is None:
+            raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
 
     event_name = "connector.enabled" if enabled else "connector.disabled"
     await _emitter.emit(event_name, {"connector_id": connector_id})
-    return _connector_summary(connector_id)
+    return await run_in_threadpool(_connector_summary, connector_id)
 
 
-@router.post("/{connector_id}/enable", dependencies=[Depends(_require_ui_header)])
-async def enable_connector(connector_id: str) -> Dict[str, Any]:
-    """Enable a previously-disabled MCP connector. Tools materialize live."""
-    return await _set_connector_enabled(connector_id, True)
+@router.post(
+    "/{connector_id}/enable",
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+    response_model=ConnectorSummary,
+    response_model_exclude_unset=True,
+)
+async def enable_connector(request: Request, connector_id: str) -> Dict[str, Any]:
+    """Enable a previously-disabled MCP connector; open chats get it next message."""
+    summary = await _set_connector_enabled(connector_id, True, request)
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} enabled")
+        await _record_change(request, "connectorEnable", connector_id)
+    return summary
 
 
-@router.post("/{connector_id}/disable", dependencies=[Depends(_require_ui_header)])
-async def disable_connector(connector_id: str) -> Dict[str, Any]:
+@router.post(
+    "/{connector_id}/disable",
+    dependencies=[Depends(_require_ui_header)],
+    response_model=ConnectorSummary,
+    response_model_exclude_unset=True,
+)
+async def disable_connector(request: Request, connector_id: str) -> Dict[str, Any]:
     """Disable a configured MCP connector without clearing its credentials."""
-    return await _set_connector_enabled(connector_id, False)
+    summary = await _set_connector_enabled(connector_id, False, request)
+    if allowed_device(request) is not None:
+        audit_approval(request, f"connector {connector_id} disabled")
+        await _record_change(request, "connectorDisable", connector_id)
+    return summary
 
 
-@router.post("/{connector_id}/authorize", dependencies=[Depends(_require_ui_header)])
+def _device_redirect_port(
+    request: Request, connector_id: str, body: AuthorizeRequest
+) -> Optional[int]:
+    """The device's loopback port for a device flow; None for the PC's own flow."""
+    if is_local_pc(request):
+        if body.redirect_port is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="redirect_port is for a paired device's sign-in. On the PC, "
+                "leave it out: GAIA catches the sign-in on this PC itself.",
+            )
+        return None
+    if body.redirect_port is None:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Connect {connector_id} on the PC running GAIA, or update the "
+            "GAIA app on this device: its sign-in has to finish on the device.",
+        )
+    if body.grant_agents:
+        raise HTTPException(
+            status_code=403,
+            detail="Choose which agents may use this account on the PC running "
+            "GAIA. A paired device can only start the sign-in.",
+        )
+    return body.redirect_port
+
+
+@router.post(
+    "/{connector_id}/authorize",
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+    response_model=ConnectorAuthorizeResponse,
+    response_model_exclude_unset=True,
+)
 async def authorize(
     request: Request, connector_id: str, body: AuthorizeRequest
 ) -> Dict[str, Any]:
@@ -983,17 +1713,83 @@ async def authorize(
     OAuth exchange succeeds — connecting a mailbox grants it to the email agent
     in the same flow (#2117). Scope resolution happens up front so an unknown
     or non-declaring agent fails the request before any browser step.
+
+    ``add_account: true`` shows the provider's account picker to add another
+    account. ``account: "<account_id or address>"`` reconnects that account.
+    Whichever account signs in, an existing one is updated in place and a new
+    one is added; ``connector.oauth.completed`` names it (``account_id``) and
+    says whether it was ``added``.
+
+    A paired device the PC allowed must send ``redirect_port``, the port of a
+    listener it holds on its own loopback; it may not grant agents. The PC
+    then binds nothing, and the device finishes with
+    ``POST /flows/{flow_id}/complete``. The PC must not send it.
     """
+    redirect_port = _device_redirect_port(request, connector_id, body)
+    device = allowed_device(request) if redirect_port is not None else None
     retry_keyring()
     grant_map = _resolve_grant_scopes(request, connector_id, body.grant_agents)
+    device_flow = (
+        {"redirect_port": redirect_port, "owner_device_id": device.device_id}
+        if device is not None
+        else {}
+    )
     try:
-        return await connections.start_authorization(
+        started = await connections.start_authorization(
             connector_id,
-            scopes=_widen_empty_scopes(body.scopes, grant_map),
+            scopes=_signin_scopes(connector_id, body.scopes, grant_map),
             grant_agents=grant_map or None,
+            **device_flow,
+            add_account=body.add_account,
+            account=body.account,
         )
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
+    if device is not None:
+        audit_approval(request, f"sign-in started for {connector_id}")
+    return started
+
+
+@router.post(
+    "/flows/{flow_id}/complete",
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+    response_model=ConnectorSummary,
+    response_model_exclude_unset=True,
+)
+async def complete_flow(
+    request: Request, flow_id: str, body: CompleteFlowRequest
+) -> Dict[str, Any]:
+    """Finish a paired device's sign-in with the code its loopback caught.
+
+    Only the device that started the flow may call this (403 for anyone
+    else, the PC included). An unknown, finished or expired flow is a 404; a
+    ``state`` that does not match is a 400 and ends the flow. The code is
+    exchanged on the PC with the PC's verifier, and the result is the
+    connector's summary: no token, code or secret.
+    """
+    device = allowed_device(request)
+    if device is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the device that started this sign-in can finish it.",
+        )
+    retry_keyring()
+    try:
+        state = await connections.complete_device_authorization(
+            flow_id, device_id=device.device_id, code=body.code, state=body.state
+        )
+    except ConnectorsError as e:
+        raise _http_error_for(request, e) from e
+    except (httpx.HTTPError, keyring.errors.KeyringError) as e:
+        # Type only: the request this failed on carried the code.
+        logger.error(
+            "connectors: device sign-in flow_id=%s failed: %s",
+            flow_id,
+            type(e).__name__,
+        )
+        raise HTTPException(status_code=502, detail=DEVICE_CONNECTOR_ERROR) from e
+    audit_approval(request, f"sign-in finished for {state['provider']}")
+    return await run_in_threadpool(_connector_summary, state["provider"])
 
 
 # Keeps background device-poll tasks referenced so they aren't garbage
@@ -1001,8 +1797,37 @@ async def authorize(
 _device_poll_tasks: set = set()
 
 
+def _refuse_device_unless_device_code(
+    request: Request, connector_id: str, body: AuthorizeRequest
+) -> None:
+    """A paired device may start only a device-code sign-in, and grants no agents."""
+    if is_local_pc(request):
+        return
+    try:
+        spec = REGISTRY.get(connector_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=404, detail=f"Unknown connector: {connector_id!r}"
+        )
+    if not spec.supports_device_code:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Connect {spec.display_name} on the PC running GAIA. Only "
+            "sign-in with a code can start from a paired device.",
+        )
+    if body.grant_agents:
+        raise HTTPException(
+            status_code=403,
+            detail="Choose which agents may use this account on the PC running "
+            "GAIA. A paired device can only start the sign-in.",
+        )
+
+
 @router.post(
-    "/{connector_id}/authorize-device", dependencies=[Depends(_require_ui_header)]
+    "/{connector_id}/authorize-device",
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+    response_model=ConnectorDeviceAuthResponse,
+    response_model_exclude_unset=True,
 )
 async def authorize_device(
     request: Request, connector_id: str, body: AuthorizeRequest
@@ -1019,12 +1844,19 @@ async def authorize_device(
 
     The ``device_code`` is intentionally NOT returned — it is a bearer-equivalent
     for polling and the server owns the poll loop.
+
+    A paired device the PC allowed may call this for a connector with
+    ``supports_device_code``, without ``grant_agents``; it is audited.
     """
+    _refuse_device_unless_device_code(request, connector_id, body)
     retry_keyring()
     grant_map = _resolve_grant_scopes(request, connector_id, body.grant_agents)
     try:
         info = await connections.start_device_flow(
-            connector_id, scopes=_widen_empty_scopes(body.scopes, grant_map)
+            connector_id,
+            scopes=_signin_scopes(connector_id, body.scopes, grant_map),
+            add_account=body.add_account,
+            account=body.account,
         )
     except ConnectorsError as e:
         raise _raise_http_for(e) from e
@@ -1039,6 +1871,7 @@ async def authorize_device(
                 interval=info["interval"],
                 expires_in=info["expires_in"],
                 grant_agents=grant_map or None,
+                intent=info["intent"],
             )
         except ConnectorsError as e:
             await _emitter.emit(
@@ -1062,6 +1895,8 @@ async def authorize_device(
     task = asyncio.create_task(_poll_and_emit())
     _device_poll_tasks.add(task)
     task.add_done_callback(_device_poll_tasks.discard)
+    if not is_local_pc(request):
+        audit_approval(request, f"device-code sign-in started for {connector_id}")
 
     return {
         "user_code": info["user_code"],
@@ -1073,19 +1908,57 @@ async def authorize_device(
 
 
 @router.delete(
-    "/_flows/{flow_id}", status_code=204, dependencies=[Depends(_require_ui_header)]
+    "/_flows/{flow_id}",
+    status_code=204,
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def cancel_flow_endpoint(flow_id: str) -> Response:
-    """Cancel a pending OAuth flow without waiting for the callback."""
+async def cancel_flow_endpoint(request: Request, flow_id: str) -> Response:
+    """Cancel a pending OAuth flow without waiting for the callback.
+
+    The PC may cancel any flow; a paired device only one it started.
+    """
+    device = allowed_device(request)
+    pending = _flow_pending.get(flow_id)
+    if (
+        device is not None
+        and pending is not None
+        and pending.owner_device_id != device.device_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the PC or the device that started this sign-in can "
+            "cancel it.",
+        )
     await connections.cancel_flow(flow_id)
     return Response(status_code=204)
 
 
+class GrantSaved(WireModel):
+    """The agent's grant on the connector, as saved."""
+
+    connector_id: str
+    agent_id: str
+    scopes: List[str]
+
+
+class ActivationSaved(WireModel):
+    """The agent is active on the connector; ``auto_granted`` when a grant was made too."""
+
+    connector_id: str
+    agent_id: str
+    active: Literal[True]
+    auto_granted: bool
+
+
+# Widens what an agent may do with an account, so a device's grant is audited.
 @router.put(
-    "/{connector_id}/grants/{agent_id:path}", dependencies=[Depends(_require_ui_header)]
+    "/{connector_id}/grants/{agent_id:path}",
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+    response_model=GrantSaved,
+    response_model_exclude_unset=True,
 )
 async def put_grant(
-    connector_id: str, agent_id: str, body: GrantRequest
+    request: Request, connector_id: str, agent_id: str, body: GrantRequest
 ) -> Dict[str, Any]:
     """Write the per-agent grant ledger for ``(connector_id, agent_id)``.
 
@@ -1096,10 +1969,16 @@ async def put_grant(
     routes down), and the same 400 ``scope_not_allowed`` body the authorize
     route already returns.
     """
+    _checked_agent_id(agent_id)
     try:
         grant_agent(connector_id, agent_id, body.scopes)
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} granted to {agent_id}")
+        await _record_change(
+            request, "connectorGrant", connector_id, agent_id=agent_id, granted=True
+        )
     await _emitter.emit(
         "connector.grant.changed",
         {"connector_id": connector_id, "agent_id": agent_id, "scopes": body.scopes},
@@ -1112,8 +1991,14 @@ async def put_grant(
     status_code=204,
     dependencies=[Depends(_require_ui_header)],
 )
-async def delete_grant(connector_id: str, agent_id: str) -> Response:
+async def delete_grant(request: Request, connector_id: str, agent_id: str) -> Response:
+    _checked_agent_id(agent_id)
     revoke_agent_grant(connector_id, agent_id)
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} grant to {agent_id} revoked")
+        await _record_change(
+            request, "connectorGrant", connector_id, agent_id=agent_id, granted=False
+        )
     await _emitter.emit(
         "connector.grant.changed",
         {"connector_id": connector_id, "agent_id": agent_id, "scopes": []},
@@ -1134,10 +2019,12 @@ async def delete_grant(connector_id: str, agent_id: str) -> Response:
 
 @router.put(
     "/{connector_id}/activations/{agent_id:path}",
-    dependencies=[Depends(_require_ui_header)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+    response_model=ActivationSaved,
+    response_model_exclude_unset=True,
 )
 async def put_activation(
-    connector_id: str, agent_id: str, body: ActivationRequest
+    request: Request, connector_id: str, agent_id: str, body: ActivationRequest
 ) -> Dict[str, Any]:
     """Activate ``agent_id`` for ``connector_id``.
 
@@ -1146,6 +2033,7 @@ async def put_activation(
     frontend must look up REQUIRED_CONNECTORS scopes for the agent and
     pass them in.
     """
+    _checked_agent_id(agent_id)
     _require_mcp_server(connector_id)
     try:
         auto_granted = activate_connector_for_agent(
@@ -1154,7 +2042,21 @@ async def put_activation(
     except ConfigurationError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
+    if not is_local_pc(request):
+        audit_approval(
+            request,
+            f"connector {connector_id} turned on for {agent_id}"
+            + (" (granted)" if auto_granted else ""),
+        )
+        await _record_change(
+            request,
+            "connectorActivation",
+            connector_id,
+            agent_id=agent_id,
+            active=True,
+            granted=auto_granted,
+        )
 
     if auto_granted:
         # Auto-grant fired — also surface the grant change so subscribed
@@ -1180,9 +2082,11 @@ async def put_activation(
 @router.delete(
     "/{connector_id}/activations/{agent_id:path}",
     status_code=204,
-    dependencies=[Depends(_require_ui_header)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def delete_activation(connector_id: str, agent_id: str) -> Response:
+async def delete_activation(
+    request: Request, connector_id: str, agent_id: str
+) -> Response:
     """Deactivate ``agent_id`` for ``connector_id``. Idempotent.
 
     Non-destructive — the grant is preserved so a later re-activate is
@@ -1193,8 +2097,18 @@ async def delete_activation(connector_id: str, agent_id: str) -> Response:
     # ``connector.activation.changed`` emit fire on one path for all callers
     # (#1226). Previously this called the bare ledger function and emitted
     # inline, bypassing the guard.
+    _checked_agent_id(agent_id)
     _require_mcp_server(connector_id)
     deactivate_connector_for_agent(connector_id, agent_id)
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} turned off for {agent_id}")
+        await _record_change(
+            request,
+            "connectorActivation",
+            connector_id,
+            agent_id=agent_id,
+            active=False,
+        )
     return Response(status_code=204)
 
 
@@ -1209,8 +2123,25 @@ async def delete_activation(connector_id: str, agent_id: str) -> Response:
 # ─────────────────────────────────────────────────────────────────
 
 
+def _require_oauth_provider(provider: str) -> None:
+    """404 for a name that isn't an OAuth connector, before the keyring is touched."""
+    from gaia.connectors.providers import _registry as provider_registry
+
+    known = {s.id for s in REGISTRY.all() if s.type == "oauth_pkce"}
+    known |= set(provider_registry)
+    if provider not in known:
+        shown = provider if len(provider) <= 80 else provider[:80] + "…"
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown OAuth provider {shown!r}. Known: {sorted(known)}",
+        )
+
+
+# Takes a refresh token, so it is the PC running GAIA's to hand over.
 @forwarded_router.post(
-    "/{provider}", status_code=201, dependencies=[Depends(_require_ui_header)]
+    "/{provider}",
+    status_code=201,
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
 )
 async def forward_connection(
     request: Request, provider: str, body: ForwardConnectionRequest
@@ -1229,6 +2160,7 @@ async def forward_connection(
     requirement for ``provider`` is rejected with 400 ``agent_declares_no_scopes``
     rather than silently granting it zero required scopes.
     """
+    _require_oauth_provider(provider)
     # A host that forwards mail only must keep working without calendar scope.
     grant_map = _resolve_grant_scopes(
         request, provider, body.grant_agents, enforced_only=True
@@ -1263,15 +2195,24 @@ async def forward_connection(
 
 @forwarded_router.get("")
 @forwarded_router.get("/")
-async def list_forwarded_connections() -> Dict[str, Any]:
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def list_forwarded_connections() -> Dict[str, Any]:
     """List persisted connections — metadata only, secrets omitted (AC4)."""
     return {"connections": connections.list_connections()}
 
 
 @forwarded_router.get("/{provider}")
-async def get_forwarded_connection(provider: str) -> Dict[str, Any]:
-    """Return one connection's metadata, or 404 — secrets omitted (AC4)."""
-    entry = connections.get_connection(provider)
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def get_forwarded_connection(
+    provider: str, account: Optional[str] = None
+) -> Dict[str, Any]:
+    """Return one connected account's metadata (the default account unless
+    ``?account=<account_id or address>`` names another), or 404 — secrets
+    omitted (AC4)."""
+    try:
+        entry = connections.get_connection(provider, account)
+    except ConnectorsError as e:
+        raise _raise_http_for(e) from e
     if entry is None:
         raise HTTPException(
             status_code=404, detail=f"No connection for provider {provider!r}"
@@ -1280,27 +2221,33 @@ async def get_forwarded_connection(provider: str) -> Dict[str, Any]:
 
 
 @forwarded_router.delete(
-    "/{provider}", status_code=204, dependencies=[Depends(_require_ui_header)]
+    "/{provider}",
+    status_code=204,
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def revoke_forwarded_connection(provider: str) -> Response:
-    """Revoke a forwarded connection: clear the refresh token, the forwarded
-    OAuth client credentials, every per-agent grant, and the cached provider /
-    token state (AC4). Idempotent."""
+async def revoke_forwarded_connection(request: Request, provider: str) -> Response:
+    """Revoke a forwarded connection: clear every account's refresh token, the
+    forwarded OAuth client credentials, every per-agent grant, and the cached
+    provider / token state (AC4). Idempotent."""
     from gaia.connectors.grants import revoke_all_grants_for
     from gaia.connectors.providers import _registry as _provider_registry
     from gaia.connectors.store import clear_provider_credentials
     from gaia.connectors.tokens import _cache as _token_cache
 
+    _require_oauth_provider(provider)
     # #2591: call the async core directly — this handler is already on the
     # event loop, and ``revoke_connection``'s sync wrapper would raise
     # rather than let a nested loop deadlock.
-    revoke_result = await connections.revoke_connection_async(provider)
-    clear_provider_credentials(provider)
+    revoke_result = await connections.revoke_connection_async(
+        provider, all_accounts=True
+    )
+    await run_in_threadpool(clear_provider_credentials, provider)
     revoke_all_grants_for(provider)
     _provider_registry.pop(provider, None)
     for key in [k for k in _token_cache if k[0] == provider]:
         _token_cache.pop(key, None)
 
+    await _record_removed(request, provider)
     await _emitter.emit(
         "connector.disconnected", {"connector_id": provider, **revoke_result}
     )

@@ -11,22 +11,28 @@ whether Lemonade would accept the request. The matching contract test lives in
 
 import json
 import os
+import sys
+import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from gaia.llm import gateway as gateway_module
 from gaia.llm.gateway import (
     DEFAULT_AUTH_HEADER_NAME,
     DEFAULT_GATEWAY_BASE_URL,
     GATEWAY_ENV_VAR,
     GATEWAY_PROVIDER,
+    GATEWAY_SECRET_NAME,
     GatewayError,
+    GatewayKey,
     GatewayManager,
     GatewayModel,
     GatewayState,
 )
 from gaia.llm.lemonade_client import LemonadeClientError
+from gaia.llm.surface_hints import TUI_GATEWAY_INSTALL_HINT, surface_wording
 from gaia.version import LEMONADE_MIN_VERSION, LEMONADE_VERSION
 
 
@@ -60,6 +66,19 @@ def isolated_state(tmp_path, monkeypatch):
     monkeypatch.delenv(GATEWAY_ENV_VAR, raising=False)
     monkeypatch.delenv("GAIA_GATEWAY_TOKEN", raising=False)
     return tmp_path / "gateway.json"
+
+
+@pytest.fixture(autouse=True)
+def vault(monkeypatch):
+    """GAIA's credential store over a dict, so no test here reads the OS keychain."""
+    secrets = {}
+    monkeypatch.setattr("gaia.connectors.store.verify_keyring_backend", lambda: None)
+    monkeypatch.setattr("gaia.connectors.store.save_secret", secrets.__setitem__)
+    monkeypatch.setattr("gaia.connectors.store.peek_secret", secrets.get)
+    monkeypatch.setattr(
+        "gaia.connectors.store.delete_secret", lambda n: secrets.pop(n, None)
+    )
+    return secrets
 
 
 # --------------------------------------------------------------------------
@@ -179,6 +198,34 @@ class TestInstall:
             manager.set_token("tok")
 
         assert "allow_insecure_http" not in request.call_args.kwargs["json"]
+
+    @pytest.mark.parametrize("moved", [True, False])
+    def test_a_new_address_drops_lemonades_key_for_the_old_one_first(
+        self, manager, moved
+    ):
+        registered = {
+            "cloud": {
+                "providers": [
+                    {
+                        "name": GATEWAY_PROVIDER,
+                        "base_url": "https://old.example.com/v1",
+                        "runtime_key_set": True,
+                    }
+                ]
+            }
+        }
+        with patch("gaia.llm.gateway.requests.request") as request:
+            request.return_value = _response(body=registered)
+            manager.install(
+                "https://new.example.com/v1" if moved else "https://old.example.com/v1/"
+            )
+        sent = [
+            (c.args[0], c.args[1].rsplit("/api/v1/", 1)[1])
+            for c in request.mock_calls
+            if c.args
+        ]
+        dropped = [("DELETE", f"cloud/auth/{GATEWAY_PROVIDER}")] if moved else []
+        assert sent == [("GET", "system-info"), *dropped, ("POST", "install")]
 
     def test_remembers_the_base_url(self, manager):
         with patch("gaia.llm.gateway.requests.request") as request:
@@ -323,6 +370,69 @@ class TestErrors:
         ):
             with pytest.raises(GatewayError, match="oldest version GAIA supports"):
                 manager.clear_token()
+
+    def test_404_for_an_uninstalled_cloud_provider_points_at_gateway_install(
+        self, manager
+    ):
+        """A fresh Lemonade has the cloud API but no provider registered yet, and
+        says so in the body. Calling that server too old sends the user to
+        `gaia daemon restart`, which cannot register anything."""
+        body = {
+            "error": {
+                "message": "Cloud provider 'amd' is not installed. Call POST "
+                "/v1/install with backend=cloud, provider, and base_url first.",
+                "type": "invalid_request",
+            }
+        }
+        with patch(
+            "gaia.llm.gateway.requests.request",
+            return_value=_response(status_code=404, body=body),
+        ):
+            with pytest.raises(GatewayError) as excinfo:
+                manager.clear_token()
+        message = str(excinfo.value)
+        assert TUI_GATEWAY_INSTALL_HINT in message
+        assert "older than" not in message
+        assert "daemon restart" not in message
+        # The Agent UI relays this text, so the command appears only after the
+        # CLI surface swap, never in the raw message.
+        assert "gaia gateway install" not in message
+        assert "`gaia gateway install`" in surface_wording(message, "cli")
+
+    def test_404_for_a_missing_cloud_endpoint_keeps_the_version_requirement(
+        self, manager
+    ):
+        body = {
+            "error": {
+                "message": "The requested endpoint does not exist",
+                "type": "not_found",
+            }
+        }
+        with patch(
+            "gaia.llm.gateway.requests.request",
+            return_value=_response(status_code=404, body=body),
+        ):
+            with pytest.raises(GatewayError, match="oldest version GAIA supports"):
+                manager.clear_token()
+
+    def test_404_with_an_unexpected_cloud_body_keeps_lemonades_detail(self, manager):
+        body = {
+            "error": {
+                "message": "the routing table is empty",
+                "type": "invalid_request",
+            }
+        }
+        with patch(
+            "gaia.llm.gateway.requests.request",
+            return_value=_response(status_code=404, body=body),
+        ):
+            with pytest.raises(
+                GatewayError, match="HTTP 404: the routing table is empty"
+            ) as excinfo:
+                manager.clear_token()
+        message = str(excinfo.value)
+        assert "`gaia gateway install`" not in message
+        assert "older than" not in message
 
     @pytest.mark.parametrize("status", [401, 403, 301, 302, 303, 307, 308])
     def test_probe_treats_auth_required_as_reachable(self, manager, status):
@@ -646,7 +756,7 @@ class TestRememberedToken:
         )
         from gaia.llm import gateway as gw
 
-        gw.remember_token("tok-abc")
+        gw.remember_token("tok-abc", "https://gw/v1")
         assert gw.recall_token() == "tok-abc"
         assert gw.forget_token() is True
         assert gw.recall_token() is None
@@ -673,13 +783,11 @@ class TestRememberedToken:
         assert gw.recall_token() is None
 
     def test_ensure_authenticated_restores_after_a_lemonade_restart(
-        self, manager, monkeypatch
+        self, manager, vault
     ):
         """Lemonade forgets its token on restart; without this the user
         re-enters it every time."""
-        monkeypatch.setattr(
-            "gaia.connectors.store.peek_secret", lambda n: "remembered-tok"
-        )
+        vault[GATEWAY_SECRET_NAME] = "remembered-tok"
         sent = {}
 
         def fake_request(method, url, **kwargs):
@@ -699,6 +807,13 @@ class TestRememberedToken:
             assert manager.ensure_authenticated() is True
 
         assert sent["key"] == "remembered-tok"
+        # A key saved before bindings moves to the v2 slot, bound to the
+        # gateway it served, and the slot an older GAIA reads is emptied.
+        assert json.loads(vault[gateway_module.GATEWAY_KEY_SLOT]) == {
+            "key": "remembered-tok",
+            "base_url": "https://gw/v1",
+        }
+        assert GATEWAY_SECRET_NAME not in vault
 
     def test_a_no_op_keyring_fails_loudly_instead_of_pretending(self, monkeypatch):
         """keyring's null backend accepts a write and stores nothing.
@@ -712,7 +827,7 @@ class TestRememberedToken:
         from gaia.llm.gateway import GatewayError, remember_token
 
         with pytest.raises(GatewayError) as excinfo:
-            remember_token("tok")
+            remember_token("tok", "https://gw/v1")
         message = str(excinfo.value)
         # The remedy is platform-specific now; what must always be offered is
         # the environment variable and the opt-out.
@@ -758,7 +873,10 @@ class TestEnsureAuthenticatedReportsRealUsability:
     def test_a_stored_token_the_gateway_rejects_is_not_success(
         self, manager, isolated_state
     ):
-        with patch("gaia.llm.gateway.recall_token", return_value="revoked"):
+        with patch(
+            "gaia.llm.gateway.recall_stored_key",
+            return_value=GatewayKey("revoked", "https://x/v1"),
+        ):
             with patch("gaia.llm.gateway.requests.request") as request:
                 request.side_effect = [
                     # system-info: registered, no key held yet
@@ -893,7 +1011,8 @@ class TestAnUnsupportedServerIsRefusedBeforeRegistering:
         with patch("gaia.llm.gateway.requests.request") as request:
             request.return_value = _response(body={"models_discovered": 2})
             manager.install("https://gw.example.com/v1")
-        request.assert_called_once()
+        assert request.call_args.args[0] == "POST"
+        assert request.call_args.args[1].endswith("/install")
 
     def test_an_unreachable_server_registers_nothing(self, manager):
         manager.client.health_check.side_effect = LemonadeClientError("refused")
@@ -958,6 +1077,21 @@ class TestAKeyThatDiscoversNothingIsRejected:
 # ── check_reachable (#5604) ────────────────────────────────────────────────
 
 
+def _resolve_to(addresses):
+    import socket
+
+    looked_up = []
+
+    def getaddrinfo(host, port, type=0, proto=0):
+        assert (type, proto) == (socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        looked_up.append((host, port))
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", (a, port)) for a in addresses
+        ]
+
+    return getaddrinfo, looked_up
+
+
 def test_check_reachable_dials_the_gateway_host_on_443(monkeypatch):
     import socket
 
@@ -973,14 +1107,38 @@ def test_check_reachable_dials_the_gateway_host_on_443(monkeypatch):
         dialed.append((addr, timeout))
         return _Conn()
 
+    getaddrinfo, looked_up = _resolve_to(["93.184.215.14"])
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
     monkeypatch.setattr(socket, "create_connection", fake_connect)
     gateway.check_reachable("https://llm-api.amd.com/Unified/v1")
     gateway.check_reachable("http://gw.example.test:8080/v1")
+    assert looked_up == [("llm-api.amd.com", 443), ("gw.example.test", 8080)]
     assert [a for a, _ in dialed] == [
-        ("llm-api.amd.com", 443),
-        ("gw.example.test", 8080),
+        ("93.184.215.14", 443),
+        ("93.184.215.14", 8080),
     ]
     assert all(t == gateway.REACH_TIMEOUT for _, t in dialed)
+
+
+def test_check_reachable_dials_at_most_three_addresses(monkeypatch):
+    """A host with many dead addresses answers within three dials."""
+    import socket
+
+    from gaia.llm import gateway
+
+    dialed = []
+
+    def refuse(addr, timeout):
+        dialed.append(addr[0])
+        raise OSError("connection refused")
+
+    addresses = [f"93.184.215.{n}" for n in range(1, 16)]
+    getaddrinfo, _ = _resolve_to(addresses)
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(socket, "create_connection", refuse)
+    with pytest.raises(gateway.GatewayUnreachable, match="gw.example.com"):
+        gateway.check_reachable("https://gw.example.com/v1")
+    assert dialed == addresses[: gateway.REACH_DIAL_LIMIT] == addresses[:3]
 
 
 def test_check_reachable_names_the_vpn_for_an_unresolvable_host(monkeypatch):
@@ -988,10 +1146,10 @@ def test_check_reachable_names_the_vpn_for_an_unresolvable_host(monkeypatch):
 
     from gaia.llm import gateway
 
-    def fail(addr, timeout):
+    def fail(host, port, type=0, proto=0):
         raise socket.gaierror(8, "nodename nor servname provided, or not known")
 
-    monkeypatch.setattr(socket, "create_connection", fail)
+    monkeypatch.setattr(socket, "getaddrinfo", fail)
     with pytest.raises(gateway.GatewayUnreachable) as exc:
         gateway.check_reachable(None)
     assert exc.value.host == "llm-api.amd.com"
@@ -1036,7 +1194,7 @@ def test_gateway_install_restores_a_remembered_token_before_reporting_none(
             }
 
         def ensure_authenticated(self, recall=None):
-            calls.append(recall())
+            calls.append(recall().key)
             return True
 
         def status(self):
@@ -1047,6 +1205,13 @@ def test_gateway_install_restores_a_remembered_token_before_reporting_none(
     )
     monkeypatch.setattr(gateway_module, "GatewayManager", FakeManager)
     monkeypatch.setattr(gateway_module, "recall_token", lambda: "remembered-token")
+    monkeypatch.setattr(
+        gateway_module,
+        "recall_stored_key",
+        lambda: gateway_module.GatewayKey(
+            "remembered-token", "https://gateway.example/v1"
+        ),
+    )
 
     args = SimpleNamespace(
         gateway_action="install",
@@ -1132,7 +1297,7 @@ def test_gateway_install_reports_when_the_remembered_token_is_rejected(
             }
 
         def ensure_authenticated(self, recall=None):
-            calls.append(recall())
+            calls.append(recall().key)
             return False
 
     monkeypatch.setattr(
@@ -1140,6 +1305,13 @@ def test_gateway_install_reports_when_the_remembered_token_is_rejected(
     )
     monkeypatch.setattr(gateway_module, "GatewayManager", FakeManager)
     monkeypatch.setattr(gateway_module, "recall_token", lambda: "remembered-token")
+    monkeypatch.setattr(
+        gateway_module,
+        "recall_stored_key",
+        lambda: gateway_module.GatewayKey(
+            "remembered-token", "https://gateway.example/v1"
+        ),
+    )
 
     args = SimpleNamespace(
         gateway_action="install",
@@ -1171,6 +1343,15 @@ def _run_gateway_install(monkeypatch, *, saved_url, install_url, manager_cls, to
     monkeypatch.setattr(gateway_module, "GatewayManager", manager_cls)
     store = {"token": token} if token else {}
     monkeypatch.setattr(gateway_module, "recall_token", lambda: store.get("token"))
+    monkeypatch.setattr(
+        gateway_module,
+        "recall_stored_key",
+        lambda: (
+            gateway_module.GatewayKey(store["token"], saved_url)
+            if store.get("token")
+            else None
+        ),
+    )
     monkeypatch.setattr(
         gateway_module, "forget_token", lambda: store.pop("token", None) is not None
     )
@@ -1281,7 +1462,7 @@ def test_gateway_install_restores_despite_trailing_slash_or_case(
 
     class Manager(_NoRestoreManager):
         def ensure_authenticated(self, recall=None):
-            sent.append(recall())
+            sent.append(recall().key)
             return True
 
         def status(self):
@@ -1392,7 +1573,12 @@ def test_lemonade_gets_the_stored_token_when_gaia_s_env_has_none(manager):
     with patch(
         "gaia.llm.gateway.requests.request", side_effect=_lemonade_without_a_key(sent)
     ):
-        assert manager.ensure_authenticated(recall=lambda: "stored-token") is True
+        assert (
+            manager.ensure_authenticated(
+                recall=lambda: GatewayKey("stored-token", AMD_GATEWAY)
+            )
+            is True
+        )
     assert sent[0]["api_key"] == "stored-token"
 
 
@@ -1417,7 +1603,12 @@ def test_a_non_amd_gateway_never_receives_gaia_s_env_token(
         "gaia.llm.gateway.requests.request",
         side_effect=_lemonade_without_a_key(sent, gateway_url=registered),
     ):
-        assert manager.ensure_authenticated(recall=lambda: "stored-token") is True
+        assert (
+            manager.ensure_authenticated(
+                recall=lambda: GatewayKey("stored-token", registered)
+            )
+            is True
+        )
 
     assert [body["api_key"] for body in sent] == ["stored-token"]
     assert "did not give it to Lemonade" in caplog.text
@@ -1450,7 +1641,12 @@ def test_the_env_token_follows_the_gateway_lemonade_reports(manager, monkeypatch
             sent, gateway_url="https://gateway.example/v1"
         ),
     ):
-        assert manager.ensure_authenticated(recall=lambda: "stored-token") is True
+        assert (
+            manager.ensure_authenticated(
+                recall=lambda: GatewayKey("stored-token", "https://gateway.example/v1")
+            )
+            is True
+        )
 
     assert [body["api_key"] for body in sent] == ["stored-token"]
 
@@ -1488,6 +1684,11 @@ def test_gateway_install_names_the_env_variable_it_restored_from(monkeypatch, ca
     )
     monkeypatch.setattr(gateway_module, "GatewayManager", Manager)
     monkeypatch.setattr(gateway_module, "recall_token", lambda: "stored-token")
+    monkeypatch.setattr(
+        gateway_module,
+        "recall_stored_key",
+        lambda: gateway_module.GatewayKey("stored-token", AMD_GATEWAY),
+    )
     cli.handle_gateway_command(
         SimpleNamespace(
             gateway_action="install",
@@ -1528,13 +1729,20 @@ def _run_auth(monkeypatch, *, token, no_remember=False, stored=None):
 
     store = {"token": stored} if stored else {}
 
-    def remember(value):
+    def remember(value, base_url):
+        assert base_url == AMD_GATEWAY
         store["token"] = value
+
+    def read_stored_key():
+        token = store.get("token")
+        return gateway_module.GatewayKey(token, AMD_GATEWAY) if token else None
 
     monkeypatch.setattr(gateway_module, "GatewayManager", _AuthManager)
     monkeypatch.setattr(gateway_module, "remember_token", remember)
+    monkeypatch.setattr(gateway_module, "configured_gateway_url", lambda m: AMD_GATEWAY)
     monkeypatch.setattr(gateway_module, "recall_token", lambda: store.get("token"))
     monkeypatch.setattr(gateway_module, "read_stored_token", lambda: store.get("token"))
+    monkeypatch.setattr(gateway_module, "read_stored_key", read_stored_key)
     monkeypatch.setattr(
         gateway_module, "forget_token", lambda: store.pop("token", None) is not None
     )
@@ -1611,3 +1819,247 @@ def test_gateway_token_prompt_without_a_terminal_exits_1_and_names_the_alternati
     assert "needs a terminal" in captured.err
     assert "--token-stdin" in captured.err
     assert "GAIA_GATEWAY_TOKEN" in captured.err
+
+
+# --------------------------------------------------------------------------
+# One replay or move at a time, across every GAIA process
+# --------------------------------------------------------------------------
+
+
+class TestGatewayKeyLock:
+    @pytest.fixture
+    def held_elsewhere(self, tmp_path, monkeypatch):
+        """Another process holding the machine-wide lock, until the test ends."""
+        import subprocess as sp
+
+        monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+        code = (
+            "import os, sys\n"
+            "from gaia.daemon.lock import try_lock\n"
+            "fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT)\n"
+            "assert try_lock(fd)\n"
+            "print('held', flush=True)\n"
+            "sys.stdin.readline()\n"
+        )
+        path = tmp_path / gateway_module.GATEWAY_KEY_LOCK_NAME
+        child = sp.Popen(
+            [sys.executable, "-c", code, str(path)],
+            stdin=sp.PIPE,
+            stdout=sp.PIPE,
+            text=True,
+            env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
+        )
+        assert child.stdout.readline().strip() == "held"
+        try:
+            yield child
+        finally:
+            if child.poll() is None:
+                child.communicate("\n", timeout=10)
+
+    def test_a_replay_waits_out_another_process_then_fails_loudly(
+        self, manager, held_elsewhere, monkeypatch
+    ):
+        monkeypatch.setattr(gateway_module, "GATEWAY_KEY_LOCK_TIMEOUT", 0.3)
+        with patch("gaia.llm.gateway.requests.request") as request:
+            with pytest.raises(gateway_module.GatewayBusy, match="Try again"):
+                manager.ensure_authenticated(
+                    recall=lambda: pytest.fail("read the key under another's move")
+                )
+            with pytest.raises(gateway_module.GatewayBusy):
+                manager.set_token("tok")
+            with pytest.raises(gateway_module.GatewayBusy):
+                manager.install("https://gw.example.com/v1")
+        request.assert_not_called()
+
+    def test_a_replay_goes_ahead_once_the_other_process_lets_go(
+        self, manager, held_elsewhere
+    ):
+        done = []
+        with patch("gaia.llm.gateway.requests.request") as request:
+            request.return_value = _response(body={})
+            waiter = threading.Thread(
+                target=lambda: done.append(manager.set_token("tok"))
+            )
+            waiter.start()
+            waiter.join(timeout=0.5)
+            assert waiter.is_alive() and request.call_count == 0
+            held_elsewhere.communicate("\n", timeout=10)
+            waiter.join(timeout=10)
+        assert done and request.call_args.args[0] == "POST"
+
+    def test_one_thread_may_take_it_again_but_another_waits(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+        lock = gateway_module.GATEWAY_KEY_LOCK
+        errors = []
+        with lock:
+            with lock:
+                pass
+            monkeypatch.setattr(gateway_module, "GATEWAY_KEY_LOCK_TIMEOUT", 0.2)
+
+            def try_it():
+                try:
+                    with lock:
+                        errors.append(None)
+                except gateway_module.GatewayBusy as e:
+                    errors.append(e)
+
+            other = threading.Thread(target=try_it)
+            other.start()
+            other.join(timeout=5)
+        assert isinstance(errors[0], gateway_module.GatewayBusy)
+        with lock:
+            pass
+
+    @staticmethod
+    def _lemonade(gateway, sent):
+        """Lemonade at *gateway*["url"], keyed once anything is in *sent*."""
+
+        def request(method, url, **kwargs):
+            if url.endswith("/system-info"):
+                entry = {
+                    "name": GATEWAY_PROVIDER,
+                    "base_url": gateway["url"],
+                    "env_var_set": False,
+                    "runtime_key_set": bool(sent),
+                    "models_discovered": 3 if sent else 0,
+                }
+                return _response(body={"cloud": {"providers": [entry]}})
+            sent.append(kwargs["json"]["api_key"])
+            return _response(body={"models_discovered": 3})
+
+        return request
+
+    def test_a_slow_key_read_does_not_hold_the_lock(
+        self, manager, tmp_path, monkeypatch
+    ):
+        """A keychain prompt pending on the replay's read holds up no other replay."""
+        monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+        monkeypatch.setattr(gateway_module, "GATEWAY_KEY_LOCK_TIMEOUT", 0.2)
+        took, sent = [], []
+
+        def slow_read():
+            def replay():
+                try:
+                    with gateway_module.GATEWAY_KEY_LOCK:
+                        took.append(True)
+                except gateway_module.GatewayBusy:
+                    took.append(False)
+
+            other = threading.Thread(target=replay)
+            other.start()
+            other.join(timeout=5)
+            return GatewayKey("tok-read-slowly", "https://gw/v1")
+
+        lemonade = self._lemonade({"url": "https://gw/v1"}, sent)
+        with patch("gaia.llm.gateway.requests.request", side_effect=lemonade):
+            assert manager.ensure_authenticated(recall=slow_read) is True
+        assert took == [True]
+        assert sent == ["tok-read-slowly"]
+
+    def test_a_gateway_moved_during_the_read_gets_no_key(
+        self, manager, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+        at, sent = {"url": "https://gw/v1"}, []
+
+        def read_while_it_moves():
+            at["url"] = "https://elsewhere/v1"
+            return GatewayKey("tok-for-gw", "https://gw/v1")
+
+        lemonade = self._lemonade(at, sent)
+        with patch("gaia.llm.gateway.requests.request", side_effect=lemonade):
+            with pytest.raises(gateway_module.GatewayKeyMismatch):
+                manager.ensure_authenticated(recall=read_while_it_moves)
+        assert sent == []
+
+
+# --------------------------------------------------------------------------
+# The v2 slot: a key an older GAIA can't read, and so can't hand anywhere
+# --------------------------------------------------------------------------
+
+
+class TestKeySlots:
+    def test_a_saved_key_goes_to_v2_and_empties_the_legacy_slot(self, vault):
+        vault[GATEWAY_SECRET_NAME] = "old-bare-key"
+        gateway_module.remember_token("new-key", "https://gw.example.com/v1")
+        assert GATEWAY_SECRET_NAME not in vault
+        assert json.loads(vault[gateway_module.GATEWAY_KEY_SLOT]) == {
+            "key": "new-key",
+            "base_url": "https://gw.example.com/v1",
+        }
+        assert gateway_module.read_stored_key() == GatewayKey(
+            "new-key", "https://gw.example.com/v1"
+        )
+
+    def test_reading_never_writes_and_v2_wins(self, vault, monkeypatch):
+        vault[GATEWAY_SECRET_NAME] = "old-bare-key"
+        monkeypatch.setattr(
+            "gaia.connectors.store.save_secret",
+            lambda *a: pytest.fail("a read wrote the credential store"),
+        )
+        record = gateway_module.read_stored_key()
+        assert record.legacy and record.base_url is None
+        assert gateway_module.use_stored_key(record, "https://gw/v1") == "old-bare-key"
+        assert vault == {GATEWAY_SECRET_NAME: "old-bare-key"}
+        vault[gateway_module.GATEWAY_KEY_SLOT] = json.dumps(
+            {"key": "bound", "base_url": "https://gw/v1"}
+        )
+        assert gateway_module.read_stored_key() == GatewayKey("bound", "https://gw/v1")
+
+    @pytest.mark.parametrize(
+        "legacy, bound_to",
+        [
+            ("bare-key", "https://current.example/v1"),
+            (
+                json.dumps({"key": "bare-key", "base_url": "https://own.example/v1"}),
+                "https://own.example/v1",
+            ),
+        ],
+    )
+    def test_migration_moves_a_legacy_key_bound_to_its_gateway(
+        self, vault, legacy, bound_to
+    ):
+        vault[GATEWAY_SECRET_NAME] = legacy
+        record = gateway_module.read_stored_key()
+        moved = gateway_module.migrate_legacy_key(record, "https://current.example/v1")
+        assert moved == GatewayKey("bare-key", bound_to)
+        assert vault == {
+            gateway_module.GATEWAY_KEY_SLOT: json.dumps(
+                {"key": "bare-key", "base_url": bound_to}
+            )
+        }
+
+    def test_a_store_that_refuses_the_move_fails_loudly(self, vault, monkeypatch):
+        from gaia.connectors.errors import ConnectorsError
+
+        vault[GATEWAY_SECRET_NAME] = "bare-key"
+
+        def locked(name, value):
+            raise ConnectorsError("Keyring set_password failed: locked")
+
+        monkeypatch.setattr("gaia.connectors.store.save_secret", locked)
+        record = gateway_module.read_stored_key()
+        with pytest.raises(GatewayError, match="couldn't move the saved gateway key"):
+            gateway_module.migrate_legacy_key(record, "https://gw/v1")
+        assert vault == {GATEWAY_SECRET_NAME: "bare-key"}
+
+    def test_forgetting_empties_both_slots(self, vault):
+        vault[GATEWAY_SECRET_NAME] = "bare-key"
+        vault[gateway_module.GATEWAY_KEY_SLOT] = json.dumps(
+            {"key": "k", "base_url": "https://gw/v1"}
+        )
+        assert gateway_module.forget_token() is True
+        assert vault == {}
+
+    def test_an_unreadable_store_is_logged_as_a_warning(self, monkeypatch, caplog):
+        import logging
+
+        def broken(name):
+            raise RuntimeError("keychain is locked")
+
+        monkeypatch.setattr("gaia.connectors.store.peek_secret", broken)
+        with caplog.at_level(logging.WARNING, logger="gaia.llm.gateway"):
+            assert gateway_module.recall_stored_key() is None
+        assert "keychain is locked" in caplog.text

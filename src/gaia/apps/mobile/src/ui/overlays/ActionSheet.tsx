@@ -1,0 +1,73 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+import type { LucideIcon } from 'lucide-react-native';
+import { useT } from '@/i18n/useT';
+import { Button } from '../controls/Button';
+import { Icon } from '../controls/Icon';
+import { Pressable } from '../controls/Pressable';
+import { Row, Stack } from '../layout/layout';
+import { FirstLine } from '../text/FirstLine';
+import { useLargeText } from '../theme/a11y';
+import { Text } from '../text/Text';
+import { Sheet } from './Sheet';
+
+export interface SheetAction {
+    label: string;
+    icon?: LucideIcon;
+    destructive?: boolean;
+    disabled?: boolean;
+    testID?: string;
+    onPress: () => void;
+}
+
+export interface ActionSheetProps {
+    open: boolean;
+    onClose: () => void;
+    actions: SheetAction[];
+    title?: string;
+    /** A note under the title, shown in full: what the actions will do. */
+    message?: string;
+}
+
+// Picking an action closes the sheet first, then runs it.
+export function ActionSheet({ open, onClose, actions, title, message }: ActionSheetProps) {
+    const t = useT();
+    const largeText = useLargeText();
+    return (
+        <Sheet open={open} onClose={onClose} title={title}>
+            <Stack gap="xs">
+                {message ? (
+                    <Text role="body" tone="secondary">
+                        {message}
+                    </Text>
+                ) : null}
+                {actions.map((a) => (
+                    <Pressable
+                        key={a.label}
+                        accessibilityLabel={a.label}
+                        testID={a.testID}
+                        aria-disabled={!!a.disabled}
+                        disabled={a.disabled}
+                        onPress={() => {
+                            onClose();
+                            a.onPress();
+                        }}
+                    >
+                        <Row gap="md" align={largeText ? 'start' : 'center'}>
+                            {a.icon ? (
+                                <FirstLine role="body">
+                                    <Icon icon={a.icon} size="md" tone={a.destructive ? 'danger' : 'secondary'} />
+                                </FirstLine>
+                            ) : null}
+                            <Text role="body" tone={a.disabled ? 'muted' : a.destructive ? 'danger' : 'primary'} numberOfLines={2}>
+                                {a.label}
+                            </Text>
+                        </Row>
+                    </Pressable>
+                ))}
+                <Button label={t('modelMenu.cancel')} variant="secondary" full onPress={onClose} />
+            </Stack>
+        </Sheet>
+    );
+}

@@ -19,6 +19,13 @@ function rowOf(name: string): HTMLElement {
 }
 
 describe('DownloadProgress', () => {
+    it('fills the bar of a model kept after Stop, even one that reported no byte counts', () => {
+        render(<DownloadProgress status={runStatus([
+            progress({ id: QWEN.id, state: 'unchecked', bytes_done: 0, bytes_total: 0 }),
+        ], { state: 'cancelled' })} names={NAMES} />);
+        expect(within(rowOf('Qwen3.6-35B-A3B')).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
+    });
+
     it('offers no log while it only repeats the row: the model name, its bar, and Downloaded', () => {
         render(<DownloadProgress status={runStatus([
             progress({ id: QWEN.id, state: 'downloading', bytes_done: 7.6e9, bytes_total: 23.3e9, log: ['Downloading: Qwen3.6-35B-A3B-GGUF', '[====------] 33% (7.6 GB/23.3 GB)'] }),
@@ -82,7 +89,7 @@ describe('DownloadProgress', () => {
         ], { state: 'failed' })} names={NAMES} onRetry={vi.fn()} onResume={vi.fn()} />);
         expect(within(rowOf('Qwen3.6-35B-A3B')).getByText('Checking')).toBeInTheDocument();
         expect(within(rowOf('Gemma-4-E4B-it')).getByText('Failed')).toBeInTheDocument();
-        expect(within(rowOf('embeddinggemma-300m')).getByText('Cancelled')).toBeInTheDocument();
+        expect(within(rowOf('embeddinggemma-300m')).getByText('Canceled')).toBeInTheDocument();
         expect(within(rowOf('embeddinggemma-300m')).getByText('100 MB kept. Resume continues from there.')).toBeInTheDocument();
     });
 

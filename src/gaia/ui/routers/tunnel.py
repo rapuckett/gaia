@@ -3,14 +3,18 @@
 
 """Mobile access tunnel endpoints for GAIA Agent UI.
 
-Manages ngrok tunnels for remote/mobile access to the local server.
+Manages ngrok tunnels for remote/mobile access to the local server. Only the
+PC running GAIA may start or stop the tunnel, and only it sees the token.
 """
 
 import logging
+from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..dependencies import get_tunnel
+from ..models import WireModel
+from ..security import is_local_pc, require_local_pc
 from ..tunnel import TunnelManager
 
 logger = logging.getLogger(__name__)
@@ -18,7 +22,37 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["tunnel"])
 
 
-@router.post("/api/tunnel/start")
+class TunnelDevice(WireModel):
+    """The device behind the latest authenticated remote request."""
+
+    name: str
+    lastSeen: str
+
+
+class TunnelStatus(WireModel):
+    """The tunnel's state; ``token`` is null for any caller but the PC."""
+
+    active: bool
+    url: Optional[str]
+    token: Optional[str]
+    startedAt: Optional[str]
+    error: Optional[str]
+    reason: Optional[Literal["ngrok_not_installed"]]
+    installCommands: List[str]
+    publicIp: Optional[str]
+    device: Optional[TunnelDevice]
+
+
+class TunnelStopped(WireModel):
+    active: Literal[False]
+
+
+@router.post(
+    "/api/tunnel/start",
+    dependencies=[Depends(require_local_pc)],
+    response_model=TunnelStatus,
+    response_model_exclude_unset=True,
+)
 async def start_tunnel(tunnel: TunnelManager = Depends(get_tunnel)):
     """Start ngrok tunnel for mobile access."""
     try:
@@ -33,7 +67,12 @@ async def start_tunnel(tunnel: TunnelManager = Depends(get_tunnel)):
         )
 
 
-@router.post("/api/tunnel/stop")
+@router.post(
+    "/api/tunnel/stop",
+    dependencies=[Depends(require_local_pc)],
+    response_model=TunnelStopped,
+    response_model_exclude_unset=True,
+)
 async def stop_tunnel(tunnel: TunnelManager = Depends(get_tunnel)):
     """Stop ngrok tunnel."""
     try:
@@ -48,7 +87,14 @@ async def stop_tunnel(tunnel: TunnelManager = Depends(get_tunnel)):
         )
 
 
-@router.get("/api/tunnel/status")
-async def tunnel_status(tunnel: TunnelManager = Depends(get_tunnel)):
-    """Get current tunnel status."""
-    return tunnel.get_status()
+@router.get(
+    "/api/tunnel/status",
+    response_model=TunnelStatus,
+    response_model_exclude_unset=True,
+)
+async def tunnel_status(request: Request, tunnel: TunnelManager = Depends(get_tunnel)):
+    """Get current tunnel status; the token is shown to the PC only."""
+    status = tunnel.get_status()
+    if not is_local_pc(request):
+        status["token"] = None
+    return status

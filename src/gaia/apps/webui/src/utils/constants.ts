@@ -23,5 +23,26 @@ export const DOWNLOAD_SPINNER_TIMEOUT_MS = 1_800_000;
 /** Polling interval (ms) for checking model operation completion. */
 export const MODEL_POLL_INTERVAL_MS = 10_000;
 
-/** Composer text while the backend runs its boot tasks; sending waits until they finish. */
-export const STARTING_REASON = 'GAIA is starting…';
+/** The product's name, which no language translates. */
+export const APP_NAME = 'GAIA';
+
+/** Decimal gigabytes, the unit the backend reports downloads in. */
+export const GB_UNIT = 'GB';
+
+/** The title a chat is created with until it is named; `isPlaceholderTitle` and the draft cleanup match it. */
+export const NEW_CHAT_TITLE = 'New chat'; // english: matched against the backend's chat title
+
+/** How the backend's periodic "still working" status tick starts (`gaia/ui/run_manager.py`). */
+export const PROGRESS_TICK_PREFIX = 'Model is processing'; // english: matched against the backend's status text
+
+/** The notices the server stores in a turn cut off before its answer. Must match `gaia/ui/restart_recovery.py` and `gaia/ui/scheduler.py`. */
+export const CUT_OFF_NOTICE_TEXT = {
+    interrupted: 'This answer was interrupted when GAIA closed. Send again to retry.', // english: matched against the backend's stored notice
+    cancelled: 'This answer was interrupted before it finished. Send again to retry.', // english: matched against the backend's stored notice
+    noReply: 'This answer ended before GAIA could save a reply. Send again to retry.', // english: matched against the backend's stored notice
+    scheduleDeleted: 'This run was stopped because its schedule was deleted.', // english: matched against the backend's stored notice
+    schedulePaused: 'This run was stopped because its schedule was paused.', // english: matched against the backend's stored notice
+} as const;
+
+/** The live line's phase while a dead stream is being re-attached; the line's own words are the user's language. */
+export const RECONNECTING_PHASE = 'reconnecting';

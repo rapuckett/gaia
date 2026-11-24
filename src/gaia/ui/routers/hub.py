@@ -6,9 +6,10 @@ The Agent UI's flagship install drives these. They are the
 HTTP surface over :mod:`gaia.hub.catalog` (remote catalog + local merge) and
 :mod:`gaia.hub.installer` (download/verify/install lifecycle).
 
-Like the rest of the local-first UI backend, the mutating endpoints are guarded
-to localhost + the ``X-Gaia-UI`` header (a lightweight CSRF guard — custom
-headers force a CORS preflight that drive-by POSTs cannot satisfy).
+Like the rest of the local-first UI backend, the mutating endpoints answer only
+the PC running GAIA (a paired device the PC allowed may install the flagship)
+and need the ``X-Gaia-UI`` header (a lightweight CSRF guard — custom headers
+force a CORS preflight that drive-by POSTs cannot satisfy).
 """
 
 from __future__ import annotations
@@ -24,13 +25,19 @@ from gaia.hub import installer as installer_mod
 from gaia.logger import get_logger
 from gaia.utils.file_lock import FileLockError
 
+from ..devices.changes import record_device_change
+from ..security import (
+    FLAGSHIP_AGENT_ID,
+    audit_approval,
+    is_local_pc,
+    require_local_pc,
+    require_pc_or_allowed_device,
+)
 from ..security import require_ui_header as _require_ui_header
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["hub"])
-
-_LOCALHOST_HOSTS = {"127.0.0.1", "::1", "localhost", ""}
 
 
 def _registry(request: Request):
@@ -38,40 +45,6 @@ def _registry(request: Request):
     if registry is None:
         raise HTTPException(status_code=503, detail="Agent registry not initialized")
     return registry
-
-
-def _require_localhost(request: Request) -> None:
-    host = (request.client.host if request.client else "") or ""
-    if host not in _LOCALHOST_HOSTS:
-        raise HTTPException(
-            status_code=403, detail="endpoint only available on localhost"
-        )
-
-
-def _shutdown_email_sidecar(agent_id: str) -> None:
-    """Stop a running email sidecar before mutating its install directory.
-
-    The email agent's install dir doubles as the sidecar's own binary cache,
-    and a warm sidecar holds the executable open — install/uninstall would
-    hit a locked file (Windows) or mutate a live process's dir. Since #2142
-    the daemon owns the sidecar: this asks it to stop (attach-only —
-    no daemon running is a genuine no-op). A stop failure (the process
-    survived the tree-kill) raises 500 and ABORTS the mutation — proceeding
-    would corrupt a live process's dir. Only the router may bridge the two
-    layers (``gaia.hub`` never imports ``gaia.ui``).
-    """
-    if agent_id != "email":
-        return
-    from gaia.daemon.sidecars.errors import SidecarError
-    from gaia.ui.email_sidecar import daemon_client
-
-    logger.info(
-        "hub: stopping any daemon-supervised email sidecar before mutating its dir"
-    )
-    try:
-        daemon_client.stop_sidecar("email")
-    except SidecarError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 class InstallRequest(BaseModel):
@@ -181,21 +154,56 @@ def _record_failure(agent_id: str, version: Optional[str], exc: Exception) -> No
         )
 
 
+DEVICE_INSTALL_ERROR = (
+    "GAIA couldn't install the agent on the PC. Open GAIA on the PC to see why."
+)
+
+
+def _refuse_device_install(request: Request, body: InstallRequest) -> None:
+    """A device installs the flagship only, as the desktop app does: no other
+    agent, version pin or trust override."""
+    if is_local_pc(request):
+        return
+    if body.id != FLAGSHIP_AGENT_ID or body.trust_native or body.version is not None:
+        raise HTTPException(
+            status_code=403,
+            detail="A paired device can install the GAIA agent only, at its "
+            "latest version. Install other agents on the PC.",
+        )
+
+
 @router.post(
     "/api/agents/install",
     status_code=202,
-    dependencies=[Depends(_require_localhost), Depends(_require_ui_header)],
+    dependencies=[Depends(require_pc_or_allowed_device), Depends(_require_ui_header)],
 )
 def install_agent(request: Request, body: InstallRequest):
     """Start an install in the background; poll install-status for progress.
 
     Returns 202 immediately. A duplicate request while an install for the same
     id is running returns 409. A plain ``def`` so the slot wait, the manifest
-    fetch and the sidecar stop run in a worker thread, not on the event loop.
+    fetch run in a worker thread, not on the event loop.
     """
+    _refuse_device_install(request, body)
+    try:
+        queued = _start_install(request, body)
+    except HTTPException as exc:
+        if exc.status_code < 500 or is_local_pc(request):
+            raise
+        logger.error("hub: install of %s for a device failed: %s", body.id, exc.detail)
+        raise HTTPException(
+            status_code=exc.status_code, detail=DEVICE_INSTALL_ERROR
+        ) from exc
+    if not is_local_pc(request):
+        audit_approval(request, f"Agent {body.id!r} install started")
+        record_device_change(request, "agentInstalled")
+    return queued
+
+
+def _start_install(request: Request, body: InstallRequest) -> dict:
     registry = _registry(request)
-    # Claimed before the email sidecar is stopped, so a second install can't
-    # take the slot between that stop and this install's start.
+    # Claimed before the checks, so a second install can't take the slot
+    # between them and this install's start.
     slot = _claim_slot(body.id)
     handed_off = False
     try:
@@ -224,7 +232,7 @@ def install_agent(request: Request, body: InstallRequest):
 
 
 def _prepare_install(body: InstallRequest) -> dict:
-    """Run every check that may refuse the install, then stop the email sidecar.
+    """Run every check that may refuse the install.
 
     Returns the agent's manifest.
     """
@@ -238,16 +246,12 @@ def _prepare_install(body: InstallRequest) -> dict:
         installer_mod.ensure_trust_ack(body.id, manifest, trusted=body.trust_native)
     except installer_mod.TrustRequiredError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    # Before the sidecar shutdown: an update this core cannot run must not
-    # take the running agent down.
     try:
         installer_mod.ensure_core_can_install(body.id, manifest, body.version)
     except installer_mod.CoreTooOldError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except installer_mod.InstallError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-    _shutdown_email_sidecar(body.id)
 
     installer_mod.clear_progress(body.id)
     installer_mod._set_progress(  # noqa: SLF001 - seed state for the poller
@@ -257,13 +261,18 @@ def _prepare_install(body: InstallRequest) -> dict:
 
 
 @router.get("/api/agents/{agent_id}/install-status")
-async def install_status(agent_id: str):
-    """Poll the progress of an in-flight or completed install."""
+async def install_status(request: Request, agent_id: str):
+    """Poll the progress of an in-flight or completed install.
+
+    A failure's ``error`` can name PC paths, so only the PC sees it.
+    """
     state = installer_mod.get_install_status(agent_id)
     if state is None:
         raise HTTPException(
             status_code=404, detail=f"No install status for '{agent_id}'."
         )
+    if state.get("error") and not is_local_pc(request):
+        state = {**state, "error": DEVICE_INSTALL_ERROR}
     return state
 
 
@@ -274,14 +283,12 @@ async def install_status(agent_id: str):
 
 @router.delete(
     "/api/agents/{agent_id}",
-    dependencies=[Depends(_require_localhost), Depends(_require_ui_header)],
+    dependencies=[Depends(require_local_pc), Depends(_require_ui_header)],
 )
 def uninstall_agent(agent_id: str, request: Request):
     """Uninstall a hub-installed agent. Refuses builtins (400)."""
     registry = _registry(request)
-    # Claimed before the email sidecar is stopped, as for install.
     with _claim_slot(agent_id) as slot:
-        _shutdown_email_sidecar(agent_id)
         try:
             installer_mod.uninstall(agent_id, registry=registry, slot=slot)
         except installer_mod.NotInstalledError as exc:

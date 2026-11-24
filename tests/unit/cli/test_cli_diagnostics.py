@@ -17,8 +17,10 @@ DAEMON_TOKEN = "daemon-token-must-not-ship"
 
 
 @pytest.fixture
-def install(tmp_path, monkeypatch):
+def install(tmp_path, monkeypatch, in_memory_keyring):
     """A GAIA home with a daemon, embedded Lemonade, sidecar and UI backend."""
+    # Never the PC's own credential store: the bundle reads every saved secret.
+    in_memory_keyring._store.clear()
     gaia_dir = tmp_path / ".gaia"
     daemon_dir = tmp_path / "daemon-home"
     for d in (gaia_dir / "lemonade", gaia_dir / "agents/gaia/logs", daemon_dir):
@@ -44,6 +46,8 @@ def install(tmp_path, monkeypatch):
     sidecar = gaia_dir / "agents" / "gaia" / "logs" / "sidecar-51003.log"
     sidecar.write_bytes(b"sidecar\n")
     (gaia_dir / "backend.pid").write_text("4242\n", encoding="utf-8")
+    (gaia_dir / "backend-pids").mkdir()
+    (gaia_dir / "backend-pids" / "777.pid").write_text("4343", encoding="utf-8")
 
     calls = []
 
@@ -114,6 +118,7 @@ def test_macos_uses_macos_tools_and_gaias_real_ports(install, monkeypatch):
     assert "daemon: pid=" in info and "port=51001" in info
     assert "lemonade: pid=" in info and "port=51002" in info
     assert "ui backend: pid=4242" in info
+    assert "ui backend: pid=4343" in info
 
 
 def test_linux_keeps_its_tools(install, monkeypatch):
@@ -193,3 +198,39 @@ def test_failure_records_are_redacted_for_sharing(install):
 
     assert b"abcdef1234567" not in record
     assert b"[redacted]" in record
+
+
+def test_every_file_is_redacted_of_saved_secrets_and_token_shapes(install):
+    from gaia.connectors import store
+    from gaia.connectors._keyring import keyring
+    from gaia.llm.providers.fireworks import API_KEY_SECRET_NAME
+    from gaia.messaging.discord import credentials as discord
+
+    tmp_path, _ = install
+    gaia_dir = tmp_path / ".gaia"
+    saved_key, bot_token = "fake-saved-cloud-key-01", "fake-saved-bot-token-02"
+    store.save_secret(API_KEY_SECRET_NAME, saved_key)
+    keyring.set_password(store.SERVICE_NAME, discord.BOT_TOKEN_KEY, bot_token)
+    shapes = [
+        "fw_Fake0123456789abcdEF",
+        "gaiad_FAKEfake0123456789FAKEfake0123456789abc",
+        "xapp-1-AFAKE0001-1111111111111-fakefakefake",
+        "123456789" + ":" + "AAFAKEfakeFAKEfakeFAKEfakeFAKEfake0",
+    ]
+    leaks = [saved_key, bot_token, *shapes]
+    (gaia_dir / "gaia.log").write_text(" ".join(leaks) + "\n", encoding="utf-8")
+    state = {"stage": "done", "env": {"note": f"key {saved_key}"}, "shapes": shapes}
+    (gaia_dir / "electron-install-state.json").write_text(
+        json.dumps(state), encoding="utf-8"
+    )
+    (gaia_dir / "setup-report.json").write_text(
+        json.dumps({"log": f"Authorization: Bot {bot_token} " + " ".join(shapes)}),
+        encoding="utf-8",
+    )
+    for no_logs in (False, True):
+        members = _bundle(tmp_path, no_logs=no_logs)
+        assert {"electron-install-state.json", "setup-report.json"} <= set(members)
+        for name, blob in members.items():
+            for leak in leaks:
+                assert leak.encode() not in blob, (name, leak)
+        assert json.loads(members["electron-install-state.json"])["stage"] == "done"

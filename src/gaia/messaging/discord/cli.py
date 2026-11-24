@@ -17,7 +17,7 @@ import threading
 import time
 import webbrowser
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Collection, Dict, List, Optional, Sequence
 
 from gaia.logger import get_logger
 from gaia.messaging import onboarding as offer
@@ -37,6 +37,10 @@ SETUP_STEPS = (
 DETACH_WAIT_SECONDS = 90.0
 #: How long ``stop`` waits for a graceful exit before ending the process.
 STOP_WAIT_SECONDS = 15.0
+# How often a running bridge re-checks that its linked devices are still allowed.
+DEVICE_LINK_CHECK_SECONDS = 60.0
+# Consecutive unreadable device-store checks after which the bridge stops.
+DEVICE_LINK_MAX_FAILURES = 3
 
 _DISCORD_ENTITY = "app:discord"
 _DISCORD_CONTENT = offer.installed_content_pattern("discord")
@@ -103,8 +107,12 @@ def conflict_message() -> str:
 # ----------------------------------------------------------------------
 
 
-def connect(token: str) -> Dict[str, Any]:
+def connect(token: str, *, started_by: str = "") -> Dict[str, Any]:
     """Validate and store a bot token. Returns what the apps show next.
+
+    *started_by* is the paired device connecting, or empty for the PC. It is
+    recorded as the token's device, and as the pairing's when the token starts
+    a new one.
 
     Raises:
         ValueError: the token is empty or belongs to the connector's bot.
@@ -130,6 +138,9 @@ def connect(token: str) -> Dict[str, Any]:
     if config.bot_id != identity["bot_id"]:
         # A different bot means a different DM channel; pair again.
         config.owner_id = config.owner_name = config.dm_channel_id = ""
+    if not config.paired:
+        config.pairing_device_id = started_by
+    config.token_device_id = started_by
     config.bot_id = identity["bot_id"]
     config.bot_name = identity["bot_name"]
     config.application_id = identity["application_id"]
@@ -248,6 +259,24 @@ def _acquire_lock(retry_seconds: float = 2.0) -> state.BridgeLock:
             time.sleep(0.1)
 
 
+def _drop_stale_device_links(emit: Callable[[str], None]) -> bool:
+    """Before a start: undo what a device no longer paired set up. False, with
+    the bridge's status saying why, when that couldn't be done."""
+    import sqlite3
+
+    from gaia.ui.devices.storage import UnsafeDeviceFolderError
+
+    try:
+        unlink_stale_devices()
+    except (PairingKept, UnsafeDeviceFolderError, sqlite3.Error) as e:
+        detail = f"The Discord bridge did not start: {e}"
+        log.error(detail)
+        state.write_status(state.STATE_ERROR, detail)
+        emit(f"❌ {detail}")
+        return False
+    return True
+
+
 def run_foreground(
     *,
     agent_command: Optional[str] = None,
@@ -256,11 +285,19 @@ def run_foreground(
     deny_gated_tools: bool = False,
     upload_roots: Optional[Sequence[str]] = None,
     emit: Callable[[str], None] = print,
+    link_check_seconds: float = DEVICE_LINK_CHECK_SECONDS,
 ) -> int:
-    """Run the bridge in this process until stopped."""
+    """Run the bridge in this process until stopped.
+
+    Every *link_check_seconds* it checks that the devices behind its approver
+    and token are still live and allowed; if not, it exits and undoes them.
+    """
     from gaia.messaging.discord.adapter import DiscordAdapter
     from gaia.messaging.discord.transport import DiscordTokenError, GatewayTransport
 
+    if not _drop_stale_device_links(emit):
+        return 1
+    link_watch: Optional[_LinkWatch] = None
     try:
         lock = _acquire_lock()
     except state.BridgeAlreadyRunning as e:
@@ -317,6 +354,11 @@ def run_foreground(
             target=_watch_stop_request, args=(transport,), daemon=True
         )
         watcher.start()
+        link_watch = _LinkWatch(transport)
+        link_done = threading.Event()
+        threading.Thread(
+            target=link_watch.run, args=(link_check_seconds, link_done), daemon=True
+        ).start()
         emit("Discord bridge starting. Stop it from the GAIA app or with Ctrl-C.")
         try:
             transport.run(token, adapter, take_over=take_over)
@@ -332,6 +374,7 @@ def run_foreground(
             emit(f"❌ The Discord bridge stopped: {e}")
             return 1
         finally:
+            link_done.set()
             adapter.close()
         if state.read_status().state in state.LIVE_STATES:
             state.write_status(state.STATE_STOPPED, "Stopped.")
@@ -339,6 +382,74 @@ def run_foreground(
     finally:
         lock.release()
         stop_request_path().unlink(missing_ok=True)
+        if link_watch is not None and link_watch.stale:
+            _finish_stale_links(link_watch.stale, emit)
+
+
+class _LinkWatch:
+    """Checks the bridge's device links on a timer, independent of device pairing."""
+
+    def __init__(self, transport: Any) -> None:
+        self.transport = transport
+        self.stale: set = set()
+        self.failures = 0
+
+    def tick(self) -> bool:
+        """One check. True when a linked device is stale and the bridge was stopped."""
+        import sqlite3
+
+        from gaia.ui.devices.storage import UnsafeDeviceFolderError
+
+        try:
+            stale = stale_device_links()
+        except (UnsafeDeviceFolderError, sqlite3.Error) as e:
+            self.failures += 1
+            if self.failures < DEVICE_LINK_MAX_FAILURES:
+                log.warning(
+                    "Discord bridge could not check its linked devices (%s), "
+                    "failure %d of %d; it keeps running and checks again",
+                    e,
+                    self.failures,
+                    DEVICE_LINK_MAX_FAILURES,
+                )
+                return False
+            detail = (
+                "The Discord bridge stopped: the device store couldn't be read "
+                f"{self.failures} times in a row ({e}), so it stopped instead of "
+                "running with unchecked approvers. Start it again once the "
+                "device store is readable."
+            )
+            log.error(detail)
+            state.write_status(state.STATE_ERROR, detail)
+            self.transport.stop()
+            return True
+        self.failures = 0
+        if not stale:
+            return False
+        self.stale = stale
+        log.warning("Discord bridge stopping: linked device(s) %s not allowed", stale)
+        self.transport.stop()
+        return True
+
+    def run(self, interval: float, done: threading.Event) -> None:
+        while not done.wait(interval):
+            if self.tick():
+                return
+
+
+def _finish_stale_links(stale: Collection[str], emit: Callable[[str], None]) -> None:
+    """After the bridge has exited: undo what the stale devices set up, and bring
+    the bridge back after a pairing reset (a full disconnect leaves it off)."""
+    try:
+        outcome = unlink_devices(stale)
+    except PairingKept as e:
+        detail = f"The Discord bridge could not undo a removed device's link: {e}"
+        log.error(detail)
+        state.write_status(state.STATE_ERROR, detail)
+        emit(f"❌ {detail}")
+        return
+    if outcome == "reset":
+        start_detached(emit=lambda _line: None)
 
 
 def _watch_stop_request(transport: Any) -> None:
@@ -374,15 +485,20 @@ def start_detached(
 ) -> int:
     """Start the bridge as its own process and wait until it reports in.
 
+    A start is also the user's word that it should come back with the apps.
+
     It outlives the TUI or Agent UI that started it: a hidden console of its
     own (never ``DETACHED_PROCESS``, which pops a window for every shell command
     the agent runs) and outside the caller's Windows job object.
     """
     from gaia.utils.file_lock import file_lock
 
+    if not _drop_stale_device_links(emit):
+        return 1
     # One start at a time across processes: the TUI and the Agent UI both
     # autostart at launch, and two spawns would each report the other as failed.
     with file_lock(state.start_lock_target(), timeout=DETACH_WAIT_SECONDS + 30):
+        _set_autostart(True)
         return _start_detached_locked(
             model=model, take_over=take_over, agent_command=agent_command, emit=emit
         )
@@ -440,8 +556,23 @@ def _start_detached_locked(
     return 0 if info["state"] in state.LIVE_STATES else 1
 
 
-def stop(*, wait_seconds: float = STOP_WAIT_SECONDS) -> bool:
-    """Ask a running bridge to stop; end it if it does not. True if it stopped."""
+def _set_autostart(value: bool) -> None:
+    config = state.load_config()
+    if config.connected and config.autostart != value:
+        config.autostart = value
+        state.save_config(config)
+
+
+def stop(
+    *, wait_seconds: float = STOP_WAIT_SECONDS, stay_stopped: bool = False
+) -> bool:
+    """Ask a running bridge to stop; end it if it does not. True if it stopped.
+
+    *stay_stopped* is the user's own Stop: the apps then leave it stopped at
+    their next launch instead of bringing it back.
+    """
+    if stay_stopped:
+        _set_autostart(False)
     if not state.is_running():
         return True
     path = stop_request_path()
@@ -467,6 +598,8 @@ def _kill_tree(pid: int) -> None:
     """End the bridge and its agent child."""
     import psutil
 
+    from gaia.utils.process_tree import kill_pid_tree
+
     try:
         proc = psutil.Process(pid)
         cmdline = " ".join(proc.cmdline())
@@ -475,19 +608,11 @@ def _kill_tree(pid: int) -> None:
     if "discord" not in cmdline or "start" not in cmdline:
         log.warning("Pid %s is not a Discord bridge (%s); not killing it", pid, cmdline)
         return
-    for child in proc.children(recursive=True):
-        try:
-            child.kill()
-        except psutil.NoSuchProcess:
-            pass
-    try:
-        proc.kill()
-    except psutil.NoSuchProcess:
-        pass
+    kill_pid_tree(proc)
 
 
 def run_stop(*, emit: Callable[[str], None] = print) -> int:
-    if stop():
+    if stop(stay_stopped=True):
         emit("Stopped the Discord bridge.")
         return 0
     emit(f"❌ The Discord bridge did not stop. {stop_failed_hint()}")
@@ -500,6 +625,8 @@ def ensure_started(*, emit: Callable[[str], None] = lambda _: None) -> Optional[
     Called by the TUI at launch and the Agent UI backend at startup. Returns
     ``None`` when there was nothing to do.
     """
+    if not _drop_stale_device_links(emit):
+        return 1
     config = state.load_config()
     if not (config.connected and config.autostart) or state.is_running():
         return None
@@ -507,19 +634,114 @@ def ensure_started(*, emit: Callable[[str], None] = lambda _: None) -> Optional[
         state.write_status(
             state.STATE_CREDENTIALS_UNAVAILABLE,
             "The Discord token could not be read from the OS keyring. Unlock it, "
-            "then press Retry.",
+            "then start Discord again.",
         )
         return 2
     return start_detached(emit=emit)
 
 
-def reset_pairing() -> None:
-    """Forget the paired user; the next start shows a new code."""
+def reset_pairing(*, started_by: str = "") -> None:
+    """Forget the paired user; the next start shows a new code.
+
+    *started_by* is the paired device asking, or empty for the PC.
+    """
     config = state.load_config()
     config.owner_id = config.owner_name = config.dm_channel_id = ""
+    config.pairing_device_id = started_by
     state.save_config(config)
     # Consent was given by the old pairing's account.
     state.forget_always()
+
+
+class PairingKept(RuntimeError):
+    """What a removed device set up in Discord stayed: the bridge would not stop."""
+
+
+def unlink_devices(device_ids: Optional[Collection[str]]) -> Optional[str]:
+    """Undo what one of *device_ids* (None: any device) set up in Discord.
+
+    The device that connected the bot token holds that token, so the bridge is
+    disconnected: stopped, and the token, the approver and the "Always allow"
+    answers forgotten. A device that only started the pairing has the pairing
+    reset; the running bridge holds the owner in memory, so it is stopped
+    first and started again after. Returns ``"disconnected"``, ``"reset"`` or
+    None when none of them set anything up.
+
+    Raises:
+        PairingKept: the bridge did not stop, so nothing was undone.
+    """
+    config = state.load_config()
+
+    def set_by_one(by: str) -> bool:
+        return bool(by) and (device_ids is None or by in device_ids)
+
+    if set_by_one(config.token_device_id):
+        try:
+            disconnect()
+        except RuntimeError as e:
+            raise PairingKept(
+                "The Discord bot that device connected stayed connected, because "
+                "the Discord bridge did not stop. " + stop_failed_hint()
+            ) from e
+        except Exception as e:  # noqa: BLE001 - keyring backends raise anything
+            raise PairingKept(
+                "The Discord bot that device connected stayed connected, because "
+                f"GAIA couldn't remove its token from the OS keyring: {e}. Unlock "
+                "the keyring, then open Settings › Messaging again."
+            ) from e
+        log.warning(
+            "Discord disconnected: device %s that connected its bot is no longer "
+            "paired",
+            config.token_device_id,
+        )
+        return "disconnected"
+    if not set_by_one(config.pairing_device_id):
+        return None
+    was_running = state.is_running()
+    if not stop():
+        raise PairingKept(
+            "The Discord pairing that device set up was kept, because the "
+            "Discord bridge did not stop. " + stop_failed_hint()
+        )
+    reset_pairing()
+    log.warning(
+        "Discord pairing reset: device %s that set it up is no longer paired",
+        config.pairing_device_id,
+    )
+    if was_running:
+        start_detached(emit=lambda _line: None)
+    return "reset"
+
+
+def unlink_stale_devices(live_ids: Optional[Collection[str]] = None) -> Optional[str]:
+    """:func:`unlink_devices` for each device link naming no live, allowed device.
+
+    *live_ids* are those devices; None reads them from the device table. An
+    expired device is never unpaired by name, so this is what catches it.
+
+    Raises:
+        PairingKept: as :func:`unlink_devices`.
+        UnsafeDeviceFolderError, sqlite3.Error: the device table can't be read.
+    """
+    stale = stale_device_links(live_ids)
+    return unlink_devices(stale) if stale else None
+
+
+def stale_device_links(live_ids: Optional[Collection[str]] = None) -> set:
+    """The linked device ids naming no live, allowed device (a store read, no network).
+
+    Raises:
+        UnsafeDeviceFolderError, sqlite3.Error: the device table can't be read.
+    """
+    config = state.load_config()
+    linked = {by for by in (config.token_device_id, config.pairing_device_id) if by}
+    if not linked:
+        return set()
+    if live_ids is None:
+        from gaia.ui.devices.store import allowed_device_ids
+
+        live_ids = allowed_device_ids()
+    return linked - set(live_ids)
 
 
 def stop_failed_hint() -> str:
@@ -583,6 +805,7 @@ def status(detect: bool = True) -> Dict[str, Any]:
         "bot_name": config.bot_name,
         "owner_name": config.owner_name,
         "autostart": config.autostart,
+        "always_allowed": sorted(set(state.always_labels())) if config.paired else [],
         "model": config.model,
         "portal_url": PORTAL_URL,
         "bot_page_url": (
@@ -601,6 +824,15 @@ def status(detect: bool = True) -> Dict[str, Any]:
 
 
 def run_status(*, as_json: bool = False, emit: Callable[[str], None] = print) -> int:
+    import sqlite3
+
+    from gaia.ui.devices.storage import UnsafeDeviceFolderError
+
+    try:
+        unlink_stale_devices()
+    except (PairingKept, UnsafeDeviceFolderError, sqlite3.Error) as e:
+        emit(f"❌ A device that is no longer paired still set up Discord: {e}")
+        return 1
     info = status()
     if as_json:
         emit(json.dumps(info, indent=2))

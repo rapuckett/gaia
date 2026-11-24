@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
+import { useT, type Translate } from '../../i18n/useT';
 import { UnsupportedCard } from './UnsupportedCard';
 
 /**
@@ -33,12 +34,13 @@ function isConfirmationPayload(value: unknown): value is ConfirmationPayload {
 }
 
 /** Generic humanizer — no per-action lookup, so unknown tools stay safe. */
-function humanizeAction(action: string): string {
+function humanizeAction(action: string, t: Translate): string {
     const words = action.replace(/_/g, ' ').trim();
-    return words.length > 0 ? words : 'action';
+    return words.length > 0 ? words : t.bare('cards.confirm.fallbackAction');
 }
 
 export function ConfirmationCard({ data }: { data: unknown }) {
+    const t = useT();
     const [dismissed, setDismissed] = useState(false);
 
     if (!isConfirmationPayload(data)) {
@@ -49,7 +51,7 @@ export function ConfirmationCard({ data }: { data: unknown }) {
         return (
             <div className="render-confirmation render-confirmation--dismissed">
                 <span className="render-confirmation__dismissed-note">
-                    Confirmation dismissed
+                    {t('cards.confirm.dismissed')}
                 </span>
             </div>
         );
@@ -58,23 +60,22 @@ export function ConfirmationCard({ data }: { data: unknown }) {
     return (
         <div className="render-confirmation">
             <div className="render-confirmation__header">
-                <span className="render-confirmation__badge">Approval needed</span>
-                <span className="render-confirmation__label">{humanizeAction(data.action)}</span>
+                <span className="render-confirmation__badge">{t('cards.confirm.badge')}</span>
+                <span className="render-confirmation__label">{humanizeAction(data.action, t)}</span>
                 <code className="render-confirmation__action">{data.action}</code>
             </div>
             {/* Plain text node only — attacker-influenced content. */}
             <pre className="render-confirmation__summary">{data.summary}</pre>
             <div className="render-confirmation__footer">
                 <span className="render-confirmation__note">
-                    Nothing was executed. Follow the assistant&apos;s guidance below to
-                    approve this action.
+                    {t('cards.confirm.note')}
                 </span>
                 <button
                     type="button"
                     className="render-confirmation__dismiss"
                     onClick={() => setDismissed(true)}
                 >
-                    Dismiss
+                    {t('banner.dismiss')}
                 </button>
             </div>
         </div>

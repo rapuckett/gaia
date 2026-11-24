@@ -8,6 +8,7 @@ returning 0 chunks, and that callers set indexing_status='failed'.
 """
 
 import shutil
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -167,8 +168,8 @@ def home_tmp_dir():
     Must be under $HOME because safe_open_document rejects paths
     outside the user's home directory.
     """
-    d = Path.home() / ".gaia_test_indexing"
-    d.mkdir(exist_ok=True)
+    # One per test: a shared name let a parallel worker's teardown delete it.
+    d = Path(tempfile.mkdtemp(prefix=".gaia_test_indexing-", dir=Path.home()))
     yield d
     shutil.rmtree(d, ignore_errors=True)
 
@@ -184,7 +185,7 @@ class TestUploadIndexingFailure:
 
     @pytest.fixture
     def client(self, app):
-        return TestClient(app)
+        return TestClient(app, client=("127.0.0.1", 50000))
 
     @pytest.fixture
     def db(self, app):
@@ -276,7 +277,9 @@ class TestUploadIndexingFailure:
         async def mock_index_zero(path, display_name=None):
             return 0
 
-        error_client = TestClient(app, raise_server_exceptions=False)
+        error_client = TestClient(
+            app, raise_server_exceptions=False, client=("127.0.0.1", 50000)
+        )
         with patch("gaia.ui.server._index_document", mock_index_zero):
             resp = error_client.post(
                 "/api/documents/upload-path",

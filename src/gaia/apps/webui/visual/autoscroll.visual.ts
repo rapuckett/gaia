@@ -137,6 +137,7 @@ for (const locale of ['en', 'ar']) {
         await streamingChat(page, locale);
         // A point on the list's own scrollbar that nothing else (a resize handle) covers.
         const grip = await list(page).evaluate((el) => {
+            if (!(el instanceof HTMLElement)) throw new Error('the message list is not an HTML element');
             const box = el.getBoundingClientRect();
             const gutter = el.offsetWidth - el.clientWidth;
             const rtl = getComputedStyle(el).direction === 'rtl';
@@ -167,3 +168,23 @@ for (const locale of ['en', 'ar']) {
         expect(await distFromBottom(page)).toBeGreaterThan(100);
     });
 }
+
+test('a bar appearing above the list keeps a reader at the end there', async ({ page }) => {
+    await streamingChat(page);
+    await page.evaluate(() => { (window as unknown as { __pauseStream: boolean }).__pauseStream = true; });
+    await expect.poll(() => distFromBottom(page), { timeout: 3_000 }).toBeLessThan(2);
+    // The "N indexed" bar is drawn above the list and takes 46px of its height.
+    const shrunk = await list(page).evaluate((el) => {
+        const before = el.clientHeight;
+        const bar = document.createElement('div');
+        bar.style.height = '46px';
+        bar.style.flexShrink = '0';
+        el.before(bar);
+        return before - el.clientHeight;
+    });
+    expect(shrunk, 'the bar did not take the list\'s height').toBe(46);
+    await expect.poll(() => distFromBottom(page), {
+        message: 'the end of the chat slid under the composer',
+        timeout: 2_000,
+    }).toBeLessThan(2);
+});

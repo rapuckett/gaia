@@ -1,0 +1,224 @@
+# GAIA mobile
+
+The phone app for GAIA, built with Expo and React Native, for iOS and Android.
+
+## What it is
+
+GAIA runs on your PC. The phone is a paired remote for it: it pairs once with a code from the
+PC, then talks to the PC's `/api/*` routes and SSE chat stream, the same ones the web Agent UI
+uses, over TLS pinned to that PC's certificate. It works on your home network. Away from home
+over Tailscale is built but experimental: it is off by default and not yet in the user guide.
+
+The phone shows your chats and lets you continue them, approve permission requests and check on
+scheduled tasks. Models, files, memory and keys stay on the PC, and anything that changes the PC
+itself is done there. For pairing steps, what stays on the PC and user-facing troubleshooting, see
+the [Phone App guide](https://amd-gaia.ai/docs/guides/mobile). This page is for building and
+changing the app.
+
+## Quick start
+
+You need Node 22.13 or newer (what React Native 0.88 declares; the repo-root `.nvmrc` pins 20.20.0
+for the web UI), Xcode with an iOS simulator, and
+the Python environment that runs GAIA ([`docs/reference/dev.mdx`](../../../../docs/reference/dev.mdx)).
+Ruby with Bundler is needed only for the fastlane lanes under [Native builds](#native-builds).
+
+```bash
+cd src/gaia/apps/mobile
+npm ci
+APP_ENV=development npx expo run:ios      # first time: generates ios/ and builds a dev client
+APP_ENV=development npx expo start --dev-client
+```
+
+Every Expo command needs `APP_ENV`; see [Native builds](#native-builds).
+
+**Against a backend you start yourself, without pairing.** Start the Agent UI server
+(`python -m gaia.ui.server`, port 4200 by default) and give Metro its address:
+
+```bash
+EXPO_PUBLIC_GAIA_URL=http://localhost:4200 APP_ENV=development npx expo start --dev-client
+```
+
+A development build with `EXPO_PUBLIC_GAIA_URL` set is already connected over plain HTTP, so it
+skips the pairing screens. Native production builds ignore the variable; a web export reads it,
+and so does a gallery build (below).
+
+**Paired with a real PC.** Leave `EXPO_PUBLIC_GAIA_URL` unset so the app shows the pairing screens
+and uses the pinned transport. On the PC, turn on phone access as the guide describes (the
+`device_pairing` setting in `~/.gaia/config.json`, then Settings › Phones and tablets › Allow
+paired devices to connect). A simulator has no usable camera: choose **Pair a phone or tablet** on
+the PC, use **Copy pairing link**, paste it into the app's paste field, and choose **Allow** on the
+PC. The simulator must reach the PC's home-network address, so run both on the same network.
+
+## How it works
+
+- **Routes vs features.** `src/app` holds thin Expo Router routes. Each screen's logic lives in
+  `src/features/<name>`. Routes are declared in `src/features/nav/routes.ts`, not in the layout.
+- **API and types.** `src/api` has `GaiaClient` (`client.types.ts`, `http.ts`, `sse.ts`) and the
+  endpoint table (`constants.ts`). Shared code is not copied: the app imports it from the web
+  Agent UI through the `@webui/*` alias (`../webui/src/*`): types (type-only), the translator and
+  locale registry, and the web UI's pure helpers (`@webui/utils/*.core`, `@webui/services/*`, a few
+  `@webui/components/*` helpers). API shapes come from the generated `webui/src/types/api.gen.ts`.
+- **State.** `src/data` is TanStack Query (queries, mutations, the chat stream). `src/state` is
+  zustand (the connection, notifications, locale, per-chat stream state). `src/platform` holds
+  per-platform code as file trios: `x.types.ts`, `x.ts`, `x.web.ts`. `src/ui` is the component
+  library and design tokens.
+- **Pairing and the pinned transport.** `src/features/pairing` is the flow
+  (`PairingFlow.tsx`, `pinnedPairingService.ts`; `fakePairingService.ts` serves dev builds
+  and the gallery). The native module `modules/gaia-transport` (Swift in `ios/`, Kotlin in
+  `android/`) opens every request to a paired PC with its certificate pin and keeps the device
+  token in the Keychain, or on Android sealed by a non-exportable Keystore key in storage that is
+  never backed up, so JavaScript never holds it. The Kotlin unit tests run with
+  `./gradlew :gaia-transport:testDebugUnitTest` from a prebuilt `android/`. A pin that no longer matches shows `PinMismatchScreen`. The PC
+  must also **Allow** each new phone before it can reach any chat.
+- **The app's language.** The picker in Settings › General writes the phone's per-app language,
+  so it and the phone's Settings can never disagree: `AppleLanguages` in the app's own domain on
+  iOS, the per-app language on Android 13+ (`modules/gaia-app-language`; Kotlin tests
+  `./gradlew :gaia-app-language:testDebugUnitTest`). Below Android 13 the app keeps the pick
+  itself (`src/state/locale.ts`). Neither path touches the phone's own language.
+- **Google sign-in from the phone.** Google's sign-in returns to a loopback address, so a paired
+  phone catches it itself: `modules/gaia-oauth-loopback` (Swift `NWListener`, Kotlin
+  `ServerSocket`) listens on the phone's `127.0.0.1` for one `GET /callback`, the browser runs in
+  `ASWebAuthenticationSession` or a Custom Tab (`expo-web-browser`), and the PC, which keeps the
+  PKCE verifier and the account, exchanges the code (`src/features/connectors/browserSignIn.ts`).
+  Without a paired PC, Google stays a connect on the PC. Kotlin tests
+  `./gradlew :gaia-oauth-loopback:testDebugUnitTest`.
+- **Route classes.** The PC's route guards define who may call what. `src/api/routeAccess.gen.ts`
+  is generated from them (`python -m gaia.ui.export_route_access` from the repo root) and
+  classifies each route as `pc`, `device`, `remote` and so on; do not edit it. `routeAccess.ts`
+  exposes `isDeviceRefused` and `useDeviceRefused`, which screens use to hide a PC-only action and
+  show the `mobileApp.pcOnly.*` note instead.
+- **Multiple PCs and away routes.** `pairedPcs.ts` and `PairedPcsScreen.tsx` keep several paired PCs.
+  `routeKeeper.ts` picks which of a PC's addresses answers first: home addresses on Wi-Fi, then
+  Tailscale and relay addresses from `/api/devices/me/routes`. Address rules are in
+  `homeNetwork.ts`, with a Swift twin in `HomeNetwork.swift`.
+
+## Strings, Arabic and design rules
+
+New copy goes in the web Agent UI's catalogs, `../webui/src/i18n/locales/en.ts` and `ar.ts`, under a
+`mobileApp.` key, in both languages in the same change. Never edit a desktop key for the phone. Copy
+speaks from the phone: say "your PC", not "this PC". Use `useT`
+(`src/i18n/useT.ts`). Arabic shows the English in brackets as the desktop does, so compact controls
+(chips, tabs, badges) and text-field placeholders use `t.bare(key)`, and their accessibility label
+keeps the full `t(key)`. Layout is right-to-left in Arabic, so use logical properties and keep
+server-sent English text in an `ltr` container.
+
+Design conventions:
+
+- Content never touches the screen sides: use `paddingX="gutter"` (`space.gutter`, 16 pt). `Screen`
+  pads its own footer.
+- Every standalone action is a real `Button` with a border or fill, pressed and disabled states and
+  a target of at least 44 pt. Plain text taps are for links inside running text and breadcrumbs.
+- No colored side rails on cards, notices or banners; show severity with an icon and a tint or a
+  hairline border.
+- Indent only what a disclosure reveals; content at the same level aligns to the gutter.
+- Use the tokens in `src/ui/tokens` (generated from the web UI's CSS by `npm run gen:tokens`), never
+  new hex values.
+- Check screenshots in dark mode as well as light, in English and Arabic.
+
+## Testing
+
+```bash
+npm run typecheck
+npm run lint
+npm test                                  # jest: ios, android and web projects
+npm run check:tokens                      # design tokens match the generated file
+APP_ENV=development npm run export:web    # expo export --platform web
+```
+
+- **Jest** runs each test under the `ios`, `android` and `web` presets (`jest.config.js`). Tests
+  that need native components are named `*.native.test.tsx`. Run jest without `APP_ENV` set, as CI
+  does: a test that imports a module reading the app config must mock `expo-constants`.
+- **Don't put tests under `src/app/`.** Expo Router bundles everything there. Scene and route
+  tests live beside their feature.
+- **Dev scenes.** `src/app/dev/*` is a gallery of screens on fake data, reached at `/dev/<name>`
+  with a query parameter naming the scene: most pages read `?state=`, a few (`file-preview`,
+  `files`, `memory-gallery`) read `?scene=`, and some show every scene on one page; check the
+  page. It is available in development builds and in a native build or web export built with
+  `EXPO_PUBLIC_DEV_GALLERY=1`. Declare each new dev page in `src/features/nav/routes.ts`;
+  `routes.test.ts` fails for one that is missing.
+  On a native dev client the `/dev/*` gallery sits behind the pairing gate unless Metro runs with
+  `EXPO_PUBLIC_GAIA_URL` set, as in the dev command at the top of this file.
+- **A gallery APK** checks the scenes on a device with no Metro and no PC:
+
+  ```bash
+  EXPO_PUBLIC_DEV_GALLERY=1 EXPO_PUBLIC_GAIA_URL=http://127.0.0.1:9 dk-android build <worktree> release
+  ```
+
+  Only a build whose config is `APP_ENV=development` (the `ai.amd.gaia.mobile.dev` scheme, read
+  from the config built into the app) takes `EXPO_PUBLIC_GAIA_URL` and opens `/dev/*` past the
+  setup check. A production build ignores both, flag or not. The address only gets the app past
+  pairing: it is loopback, inside the development build's cleartext list, nothing listens on port
+  9, and a release build's unpinned fetch refuses every request anyway.
+- **End to end.** `e2e/` runs Playwright against the web export and a real Agent UI backend with
+  a scripted fake LLM (`gaia.testing.dev_backend`), in headless Chromium:
+  `GAIA_E2E_PYTHON=<venv>/bin/python GAIA_VISUAL_CHROMIUM=<chromium> npm run test:e2e-web`.
+  It does not cover pairing.
+- **Pairing changes need the real start path.** Check any pairing change against a backend started
+  the normal way (`python -m gaia.ui.server`, with phone access on), not only the test harness. The
+  harness once hid a real listener bug.
+
+## Native builds
+
+The app runs as a development build (`expo-dev-client`), not in Expo Go. Every native module it
+uses is installed up front, so JS changes reach a built app over Metro; only a change that moves
+the native fingerprint needs a new build.
+
+- **`APP_ENV` is required** by every Expo command (`start`, `export`, `prebuild`, `install`,
+  `expo-doctor`). `@expo/fingerprint` doesn't fail without it: it silently hashes without the
+  config, so set it there too. `development` builds `ai.amd.gaia.mobile.dev` and `production`
+  builds `ai.amd.gaia.mobile`; the URL scheme is the same id and stays fixed. To build for your own
+  Apple team, set `GAIA_IOS_BUNDLE_ID` (production) and `GAIA_IOS_BUNDLE_ID_DEV` (development) to
+  your App IDs; they change the iOS bundle id only, and fastlane checks the generated project
+  against them.
+- **`ios/` and `android/` are generated** by `npx expo prebuild` from `app.config.ts` and
+  `plugins/`, and never committed.
+- **Plain HTTP is for development only, and stays local:** iOS allows the local network, Android
+  only `10.0.2.2` (the emulator's alias for this computer), `127.0.0.1` and `localhost`. On the
+  Android emulator, reach Metro at `10.0.2.2`, or at `localhost` through `adb reverse`; a LAN
+  address is refused. A production phone build never sends plain HTTP: it reaches a PC only by
+  pairing, over TLS pinned to the PC's certificate, and ignores `EXPO_PUBLIC_GAIA_URL`. On iOS,
+  App Transport Security's local-network exception is in development builds only; production
+  allows no plain HTTP at all.
+- **Away from home**, a paired phone reaches its PC at whichever of the PC's addresses answers
+  first over the pinned connection: home addresses first on Wi-Fi, then its Tailscale
+  (`100.64.0.0/10`) and relay addresses, which the PC reports at `/api/devices/me/routes`. A pairing
+  code may name home addresses only. `EXPO_PUBLIC_GAIA_RELAY_DOMAIN` builds in the relay's domain;
+  unset, the app refuses every relay address.
+- **Push notifications are off unless `GAIA_PUSH_RELAY_URL` is set** (the https push relay this
+  build registers with). Without it the build has no push entitlement, notification extension,
+  notification permission or messaging service. With it:
+  - iOS gets push, a Notification Service Extension (`<bundle id>.NotificationService`, which
+    needs its own provisioning profile) and a Keychain group shared with it.
+    `GAIA_APS_ENVIRONMENT` (`development` or `production`) follows `APP_ENV` when unset; `none`
+    leaves iOS push out.
+  - Android gets push only from a Firebase project: set `GAIA_FCM_SENDER_ID` and
+    `GAIA_GOOGLE_SERVICES_FILE` (the path to its `google-services.json`) together.
+    `GAIA_ANDROID_APP_ID` (production) and `GAIA_ANDROID_APP_ID_DEV` (development) change the
+    Android package.
+  - The notification text is generated at prebuild from the webui catalogs (`plugins/push/`). The
+    payload's encryption is documented in `src/features/push/pushCrypto.ts`.
+- **Android C++ compiles** run at most `GAIA_BUILD_JOBS` (default 4) at a time in each module.
+- **iOS builds with fastlane:** `bundle exec fastlane ios check` (an unsigned simulator build),
+  `ios device` and `ios sideload` (a signed build on your own iPhone). Every account value comes
+  from environment variables; see [`fastlane/README.md`](fastlane/README.md).
+- **The fingerprint a build must match:**
+  `APP_ENV=development npx @expo/fingerprint fingerprint:generate . --platform ios` (or
+  `android`). npm scripts and `.gitignore` don't count (`fingerprint.config.js`).
+
+## Troubleshooting
+
+- **"APP_ENV must be "development" or "production"".** Set `APP_ENV` on the command, for example
+  `APP_ENV=development npx expo start`. `app.config.ts` refuses to load without it.
+- **"Can't reach your PC".** The PC answers phones only on the network its IPv4 default route uses
+  (not Docker, WSL or VPN networks), and phone access must be on. Put the phone or simulator on
+  that network, then show a new pairing code. Away from home, turn on Tailscale on the phone.
+- **A cleartext request is refused.** Plain HTTP works only in a development build, and on Android
+  only to `10.0.2.2`, `localhost` and `127.0.0.1`. Use the pairing flow, or
+  `EXPO_PUBLIC_GAIA_URL` in development.
+- **Pairing screens don't appear in a dev build.** `EXPO_PUBLIC_GAIA_URL` is set; unset it to use
+  pairing.
+- **The installed dev client ignores a new native module or plugin.** The native fingerprint
+  changed. Compare it as above and rebuild with `npx expo run:ios`; Metro can't deliver native
+  changes.
+- **"This build of the GAIA app can't pair with a PC".** The build predates the native transport
+  (`modules/gaia-transport`) on its platform; rebuild the dev client.

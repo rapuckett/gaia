@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"os"
 	"time"
+
+	"github.com/amd/gaia/tui/internal/netguard"
 )
 
 // GatewayProbeTimeout bounds one reachability check, so an offline network
@@ -56,7 +58,7 @@ func ProbeGatewayFrom(ctx context.Context, lemonadeBase, base string) error {
 
 // dialGateway is a var so tests reach no network.
 var dialGateway = func(ctx context.Context, addr string) error {
-	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	conn, err := netguard.DialContext(&net.Dialer{})(ctx, "tcp", addr)
 	if err != nil {
 		return err
 	}

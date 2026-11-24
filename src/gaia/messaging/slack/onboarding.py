@@ -17,10 +17,10 @@ it would be silently dropped by the next ``gaia config set``.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
+from gaia.home import gaia_home
 from gaia.messaging import onboarding as _shared
 from gaia.messaging.onboarding import (
     STATE_CONNECTED,
@@ -58,10 +58,8 @@ _LABEL = "Slack"
 
 
 def _state_path() -> Path:
-    """Where the onboarding decision is stored; honours ``GAIA_CONFIG_DIR``."""
-    base = os.environ.get("GAIA_CONFIG_DIR")
-    root = Path(base) if base else Path.home() / ".gaia"
-    return root / "slack" / "onboarding.json"
+    """Where the onboarding decision is stored; honours ``GAIA_HOME``."""
+    return gaia_home() / "slack" / "onboarding.json"
 
 
 def slack_is_installed(apps: Iterable[Dict[str, Any]]) -> bool:

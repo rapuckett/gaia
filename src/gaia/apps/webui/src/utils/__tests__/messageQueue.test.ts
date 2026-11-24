@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import * as q from '../messageQueue';
+import { translator } from '../../i18n/translator';
 
 const states = (items: q.QueuedMessage[]) => items.map((m) => [m.text, m.state]);
 
@@ -146,5 +147,19 @@ describe('restoring queues after a reload', () => {
         expect(q.restore(null)).toEqual({});
         expect(q.restore('nope')).toEqual({});
         expect(q.restore({ a: 'x', b: [{ id: 'x', text: 1 }, { id: 1, text: 't', state: 'bogus' }] })).toEqual({});
+    });
+
+    it('shows a saved failure in the chosen language and any other text as written', () => {
+        const ar = translator('ar');
+        expect(q.localizeQueueError(ar, q.UNCONFIRMED_ERROR)).toBe(ar('queue.err.unconfirmed'));
+        expect(q.localizeQueueError(ar, q.INTERRUPTED_ERROR)).toBe(ar('queue.err.interrupted'));
+        expect(q.localizeQueueError(ar, 'HTTP 500')).toBe('HTTP 500');
+    });
+
+    it('keeps a raw error out of the sentence it belongs to', () => {
+        const ar = translator('ar');
+        const saved = `${ar('queue.err.unread')}${q.ERROR_DETAIL_SEP}HTTP 500`;
+        expect(q.splitQueueError(ar, saved)).toEqual({ message: ar('queue.err.unread'), detail: 'HTTP 500' });
+        expect(q.splitQueueError(ar, 'HTTP 500')).toEqual({ message: 'HTTP 500' });
     });
 });

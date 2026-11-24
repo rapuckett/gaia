@@ -11,10 +11,20 @@ export function hasFlagshipAgent(agents: AgentInfo[]): boolean {
     return agents.some((a) => a.id === FLAGSHIP_AGENT_ID);
 }
 
+/** A new chat refused for want of the flagship; the top notice that offers the install explains it. */
+export class FlagshipMissing extends Error {
+    constructor() {
+        // english: callers match the class and show agentNotice.sendRefused; this message is only for logs
+        super("The GAIA agent isn't installed. Install it from the notice above, then send again.");
+        this.name = 'FlagshipMissing';
+    }
+}
+
 /** The 422 a new chat gets when the flagship is not installed (sessions.py `_reject_unknown_agent_type`). */
 export function isFlagshipMissingError(err: unknown): boolean {
     const e = err as { httpStatus?: unknown; detail?: unknown; message?: unknown } | null;
     if (e?.httpStatus !== 422) return false;
     const text = `${typeof e.detail === 'string' ? e.detail : ''} ${typeof e.message === 'string' ? e.message : ''}`;
+    // english: the backend's 422 text, matched
     return text.includes(`Unknown agent_type '${FLAGSHIP_AGENT_ID}'`);
 }

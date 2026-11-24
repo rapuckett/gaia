@@ -8,7 +8,8 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { AgentActivity } from '../../components/AgentActivity';
 import { useChatStore } from '../../stores/chatStore';
 import type { StreamEvent } from '../../types';
-import { applyStatusEvent } from '../statusEvents';
+import { stripIsolates } from '../../i18n/registry';
+import { applyStatusEvent, selectToolStatus } from '../statusEvents';
 
 vi.mock('../../services/api');
 
@@ -36,6 +37,49 @@ it('does not write a warning over the progress row before it', () => {
     expect(screen.getByText(notice)).toBeVisible();
 });
 
+const downloading = 'Downloading the speech model, one time — 37% of 1.6 GB';
+
+function runningTranscription(ids: { current: number }) {
+    useChatStore.getState().addAgentStep({
+        id: ++ids.current, type: 'tool', label: 'Using tool', tool: 'transcribe_media', active: true, timestamp: 1,
+    });
+}
+
+it('shows the speech model download on the running call, as the sidecar relays it', () => {
+    const ids = { current: 0 };
+    runningTranscription(ids);
+    // Relayed: a phase and a message, no `status` field.
+    applyStatusEvent({ type: 'status', phase: 'recording', message: 'Audio ready' } as StreamEvent, ids);
+    applyStatusEvent({ type: 'status', phase: 'speech_model_download', message: downloading } as StreamEvent, ids);
+
+    const toolStatus = selectToolStatus(useChatStore.getState());
+    expect(toolStatus).toBe(downloading);
+    render(<AgentActivity steps={useChatStore.getState().agentSteps} isActive toolStatus={toolStatus} />);
+    expect(screen.getByText(downloading)).toBeVisible();
+    expect(screen.queryByText('Audio ready')).toBeNull();
+});
+
+it('keeps the finished download as a step of the turn, above the call still running', () => {
+    const ids = { current: 0 };
+    runningTranscription(ids);
+    applyStatusEvent({ type: 'status', phase: 'speech_model_download', message: downloading } as StreamEvent, ids);
+    applyStatusEvent({ type: 'status', phase: 'speech_model_downloaded', message: 'Downloaded the speech model (1.6 GB)' } as StreamEvent, ids);
+
+    const steps = useChatStore.getState().agentSteps;
+    // In time order: the download finished before the transcription it was part of (#7865).
+    expect(steps.map((s) => [s.type, s.label, s.active])).toEqual([
+        ['status', 'Downloaded the speech model (1.6 GB)', false],
+        ['tool', 'Using tool', true],
+    ]);
+    expect(useChatStore.getState().liveStatus).toBeNull();
+
+    const { container } = render(<AgentActivity steps={steps} isActive toolStatus="Transcribing 14s of audio" />);
+    const rows = [...container.querySelectorAll('.flow-done, .flow-tool')].map((el) => el.className);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain('flow-done');
+    expect(rows[1]).toContain('flow-tool');
+});
+
 const queued = (queue: NonNullable<StreamEvent['queue']>): StreamEvent => ({
     type: 'status',
     status: 'working',
@@ -56,4 +100,21 @@ it('says where the turn stands in line', () => {
     applyStatusEvent(queued({ event: 'queued', holder: 'gaia', position: 2, queue_length: 3, waited_s: 4 }), { current: 0 });
 
     expect(useChatStore.getState().liveStatus).toBe('Waiting for another chat to finish, #2 of 3 in line (4s)');
+});
+
+it('says the queued-for-the-GPU line in the chosen language, from the position', () => {
+    const queued = { type: 'status', status: 'working', phase: 'queued', queue_position: 2, message: 'Waiting for the GPU — 2nd in line' } as StreamEvent;
+    applyStatusEvent(queued, { current: 0 });
+    expect(stripIsolates(useChatStore.getState().liveStatus ?? '')).toBe('Waiting for the GPU, #2 in line');
+
+    useChatStore.getState().resetStreaming();
+    useChatStore.getState().setLocale('ar');
+    applyStatusEvent(queued, { current: 0 });
+    expect(stripIsolates(useChatStore.getState().liveStatus ?? '')).toContain('في انتظار معالج الرسومات، رقم 2 في الدور');
+    useChatStore.getState().setLocale('en');
+});
+
+it('keeps the server message for a queued line without a position', () => {
+    applyStatusEvent({ type: 'status', status: 'working', phase: 'queued', message: 'Waiting for the GPU' } as StreamEvent, { current: 0 });
+    expect(useChatStore.getState().liveStatus).toBe('Waiting for the GPU');
 });

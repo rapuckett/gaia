@@ -17,8 +17,14 @@ from gaia.logger import GaiaLogger
 
 @pytest.fixture()
 def gaia_logger(tmp_path):
-    """Create a GaiaLogger that writes to a temp file (avoids side-effects)."""
-    return GaiaLogger(log_file=tmp_path / "test.log")
+    """Create a GaiaLogger that writes to a temp file, and remove its handlers after."""
+    root = logging.getLogger()
+    before = root.handlers[:]
+    yield GaiaLogger(log_file=tmp_path / "test.log")
+    for handler in root.handlers[:]:
+        if handler not in before:
+            root.removeHandler(handler)
+            handler.close()
 
 
 class TestFaissLoaderFilter:

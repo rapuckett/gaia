@@ -3,6 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uploadFile } from '../api';
+import { tEn } from '../../i18n/translator';
 
 function fail(status: number, body: string) {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
@@ -22,11 +23,19 @@ describe('a refused attachment upload', () => {
         );
     });
 
+    it('keeps the refusal code and its numbers so the composer can translate it', async () => {
+        fail(413, JSON.stringify({ detail: { status: 'too_large', message: 'File too large (25.0 MB).', size_mb: '25.0', max_mb: '20' } }));
+        const err = await uploadFile(new File(['x'], 'big.txt')).catch((e) => e);
+        expect(err.message).toBe('File too large (25.0 MB).');
+        expect(err.reason).toBe('too_large');
+        expect(err.body).toMatchObject({ size_mb: '25.0', max_mb: '20' });
+    });
+
     it('turns a bare 500 into a plain sentence', async () => {
         fail(500, 'Internal Server Error');
         await expect(uploadFile(new File(['x'], 'a.txt'))).rejects.toHaveProperty(
             'message',
-            'Server error. Please try again.',
+            tEn('apiError.serverError'),
         );
     });
 });

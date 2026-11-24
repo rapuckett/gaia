@@ -4,33 +4,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import {
     Bell, Brain, Check, Clock, EyeOff, FileText, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
-    Pencil, Pin, PinOff, Plug, Search, Settings, Smartphone, Sparkles, SquarePen, Trash2, X,
+    Pencil, Pin, PinOff, Plug, Search, Settings, Smartphone, Sparkles, SquarePen, TabletSmartphone, Trash2, X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useChatStore } from '../stores/chatStore';
 import { ModelStatusPill } from './ModelStatusPill';
 import { DownloadChip } from './setup/DownloadChip';
 import { useNotificationStore, selectUnreadCount, selectPromptingSessionIds } from '../stores/notificationStore';
+import { useDeviceStore } from '../stores/deviceStore';
 import * as api from '../services/api';
 import { log } from '../utils/logger';
 import {
-    groupSessionsForList, hiddenAutomatedCount, sessionRowStatus, type ListGroup, type LiveRuns, type RowStatus,
+    groupSessionsForList, hiddenAutomatedCount, sessionRowStatus, type LiveRuns, type RowStatus,
 } from '../utils/sessionGrouping';
 import { ordinal } from '../utils/chatAlerts';
 import { formatShortcut } from '../utils/platform';
 import { cleanupAbandonedDraft } from '../utils/sessionCleanup';
-import { MAX_SESSION_TITLE_CHARS } from '../utils/constants';
+import { APP_NAME, MAX_SESSION_TITLE_CHARS } from '../utils/constants';
+import { requestErrorParam } from '../utils/requestErrors';
 import { CLAIMS_ESCAPE } from '../hooks/useEscapeToClose';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useToday } from '../hooks/useToday';
 import { Popover } from './Popover';
 import gaiaRobot from '../assets/gaia-robot.png';
 import { useSidebarWidth } from './SidebarResizer';
 import type { Session } from '../types';
 import { pluralKey, ref, type MessageKey } from '../i18n/registry';
-import { useT } from '../i18n/useT';
+import { getT, useT } from '../i18n/useT';
 import type { SessionSearchResult } from '../types/api.gen';
 import { foldText, splitMatch, type MatchParts } from '../utils/chatSearch';
 import './Sidebar.css';
+import { markStrayDirection } from './CalendarApproval';
 
 interface SidebarProps {
     onNewChat: () => void;
@@ -46,22 +50,12 @@ const STATUS_LABEL: Record<RowStatus, MessageKey> = {
     failed: 'row.status.failed',
 };
 
-const GROUP_LABEL: Record<ListGroup['label'], MessageKey> = {
-    'Needs you': 'sidebar.group.needsYou',
-    Pinned: 'sidebar.group.pinned',
-    Today: 'sidebar.group.today',
-    Yesterday: 'sidebar.group.yesterday',
-    'Previous 7 days': 'sidebar.group.prev7',
-    'Previous 30 days': 'sidebar.group.prev30',
-    Older: 'sidebar.group.older',
-};
-
 const SHOW_AUTOMATED_KEY = 'gaia-show-automated-runs';
 const SEARCH_DEBOUNCE_MS = 200;
 const NO_HITS = new Map<string, SessionSearchResult>();
 
 function Highlight({ parts }: { parts: MatchParts }) {
-    return <>{parts.before}<mark className="sb-hit">{parts.match}</mark>{parts.after}</>;
+    return <>{markStrayDirection(parts.before)}<mark className="sb-hit">{markStrayDirection(parts.match)}</mark>{markStrayDirection(parts.after)}</>;
 }
 
 function readShowAutomated(): boolean {
@@ -75,11 +69,13 @@ function readShowAutomated(): boolean {
 
 const resultRowId = (id: string) => `sb-result-${id}`;
 
-function SessionRow({ session, active, phone, moved, status, queuePlace, unsent, failed, onSelect, onDelete, onPin, onRename, rowId, kbdActive, titleMatch, snippet }: {
+function SessionRow({ session, active, phone, moved, focusPin, status, queuePlace, unsent, failed, onSelect, onDelete, onPin, onRename, rowId, kbdActive, titleMatch, snippet }: {
     session: Session;
     active: boolean;
     /** Just pinned or unpinned from the phone menu: the row jumped groups, so scroll to it and mark it. */
     moved: boolean;
+    /** Pinned by keyboard and remounted in its new group: focus its pin button once. */
+    focusPin: boolean;
     /** Phone width: the row's actions sit behind one ⋯ menu instead of three icons. */
     phone: boolean;
     /** DOM id the search box points at while this row is the keyboard pick. */
@@ -96,7 +92,7 @@ function SessionRow({ session, active, phone, moved, status, queuePlace, unsent,
     failed: number;
     onSelect: (id: string) => void;
     onDelete: (id: string) => void;
-    onPin: (id: string, pinned: boolean, follow?: boolean) => void;
+    onPin: (id: string, pinned: boolean, follow?: boolean, byKeyboard?: boolean) => void;
     onRename: (id: string, title: string) => void;
 }) {
     const t = useT();
@@ -108,18 +104,33 @@ function SessionRow({ session, active, phone, moved, status, queuePlace, unsent,
     const editing = draft !== null;
     const settled = useRef(false);
     const startEdit = () => { settled.current = false; setDraft(session.title); };
-    const finishEdit = (save: boolean) => {
+    const mainRef = useRef<HTMLButtonElement>(null);
+    const pinRef = useRef<HTMLButtonElement>(null);
+    const refocus = useRef(false);
+    const finishEdit = (save: boolean, byKey = false) => {
         // Unmounting the focused input fires blur again; ignore it.
         if (draft === null || settled.current) return;
         settled.current = true;
+        refocus.current = byKey;
         setDraft(null);
         if (save) onRename(session.id, draft);
     };
+    // Held while the pointer rests on it: the wider label reverting under a reader puts Pin under the click.
+    const [overDelete, setOverDelete] = useState(false);
     useEffect(() => {
-        if (!confirm) return;
+        if (!confirm || overDelete) return;
         const timer = setTimeout(() => setConfirm(false), 3000);
         return () => clearTimeout(timer);
-    }, [confirm]);
+    }, [confirm, overDelete]);
+    useEffect(() => {
+        if (!editing && refocus.current) {
+            refocus.current = false;
+            mainRef.current?.focus();
+        }
+    }, [editing]);
+    useEffect(() => {
+        if (focusPin) pinRef.current?.focus();
+    }, [focusPin]);
     const rowRef = useRef<HTMLLIElement>(null);
     useEffect(() => {
         if (moved) rowRef.current?.scrollIntoView?.({ block: 'nearest' });
@@ -130,12 +141,14 @@ function SessionRow({ session, active, phone, moved, status, queuePlace, unsent,
     const unread = !!session.unread && !active;
     // Done is news only until read; failed stays until the next turn.
     const dot = status === 'done' && !unread ? null : status;
-    const place = queuePlace > 0 ? `${ordinal(queuePlace)} in line` : null;
+    // English counts places as "1st"; Arabic says "رقم 1".
+    const place = queuePlace > 0 ? t.compose((say, code) => say('row.inLinePlace', { n: code === 'en' ? ordinal(queuePlace) : String(queuePlace) })) : null;
     const label = dot ? [t(STATUS_LABEL[dot]), place].filter(Boolean).join(', ') : undefined;
-    const waiting = failed > 0 ? `${failed} not sent` : unsent > 0 ? `${unsent} to send` : null;
+    const waiting = failed > 0 ? t('row.notSent', { n: failed }) : unsent > 0 ? t('row.toSend', { n: unsent }) : null;
     const note = [place, waiting].filter(Boolean).join(' · ');
     const snippetText = snippet ? `${snippet.before}${snippet.match}${snippet.after}` : null;
-    const title = <span className="sb-row-title">{titleMatch ? <Highlight parts={titleMatch} /> : session.title}</span>;
+    const shownTitle = markStrayDirection(session.title);
+    const title = <span className="sb-row-title" dir="auto">{titleMatch ? <Highlight parts={titleMatch} /> : shownTitle}</span>;
 
     return (
         <li
@@ -151,25 +164,29 @@ function SessionRow({ session, active, phone, moved, status, queuePlace, unsent,
                     onChange={(e) => setDraft(e.target.value)}
                     onBlur={() => finishEdit(true)}
                     onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) finishEdit(true);
-                        if (e.key === 'Escape') { e.preventDefault(); finishEdit(false); }
+                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                            e.preventDefault(); // else the Enter also presses the button that takes focus
+                            finishEdit(true, true);
+                        }
+                        if (e.key === 'Escape') { e.preventDefault(); finishEdit(false, true); }
                     }}
                     {...CLAIMS_ESCAPE}
                     autoFocus
                     onFocus={(e) => e.currentTarget.select()}
-                    aria-label={t('row.renameAria', { title: session.title })}
+                    aria-label={t('row.renameAria', { title: shownTitle })}
                     dir="auto"
                 />
             ) : (
                 <button
+                    ref={mainRef}
                     type="button"
                     id={rowId}
                     className="sb-row-main"
                     onClick={() => onSelect(session.id)}
                     onDoubleClick={startEdit}
                     aria-current={active ? 'page' : undefined}
-                    aria-label={[session.title, label, waiting, unread ? t('row.unread') : null, snippetText].filter(Boolean).join(', ')}
-                    title={session.title}
+                    aria-label={[shownTitle, label, waiting, unread ? t('row.unread') : null, snippetText && markStrayDirection(snippetText)].filter(Boolean).join(', ')}
+                    title={shownTitle}
                 >
                     {dot && <span className={`sb-dot is-${dot}`} aria-hidden="true" title={label} />}
                     {session.private && <EyeOff size={12} className="sb-row-icon" aria-label={t('row.private')} />}
@@ -215,7 +232,7 @@ function SessionRow({ session, active, phone, moved, status, queuePlace, unsent,
                         onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
                         aria-haspopup="dialog"
                         aria-expanded={menuOpen}
-                        aria-label={t('row.moreActions', { title: session.title })}
+                        aria-label={t('row.moreActions', { title: shownTitle })}
                     >
                         <MoreHorizontal size={18} aria-hidden="true" />
                     </button>
@@ -250,17 +267,18 @@ function SessionRow({ session, active, phone, moved, status, queuePlace, unsent,
                             type="button"
                             className="sb-row-rename"
                             onClick={startEdit}
-                            aria-label={t('row.renameAria', { title: session.title })}
+                            aria-label={t('row.renameAria', { title: shownTitle })}
                             title={t('row.rename')}
                         >
                             <Pencil size={13} />
                         </button>
                     )}
                     <button
+                        ref={pinRef}
                         type="button"
                         className={`sb-row-pin${session.pinned ? ' is-pinned' : ''}`}
-                        onClick={() => onPin(session.id, !session.pinned)}
-                        aria-label={t(session.pinned ? 'row.unpinAria' : 'row.pinAria', { title: session.title })}
+                        onClick={(e) => onPin(session.id, !session.pinned, false, e.detail === 0)}
+                        aria-label={t(session.pinned ? 'row.unpinAria' : 'row.pinAria', { title: shownTitle })}
                         aria-pressed={!!session.pinned}
                         title={session.pinned ? t('row.unpin') : t('row.pinToTop')}
                     >
@@ -270,11 +288,13 @@ function SessionRow({ session, active, phone, moved, status, queuePlace, unsent,
                         type="button"
                         className={`sb-row-delete${confirm ? ' is-confirm' : ''}`}
                         onClick={() => (confirm ? onDelete(session.id) : setConfirm(true))}
+                        onPointerEnter={() => setOverDelete(true)}
+                        onPointerLeave={() => setOverDelete(false)}
                         aria-label={confirm
                             ? (unsent > 0
-                                ? t.plural('row.confirmDeleteUnsentAria', unsent, { title: session.title })
-                                : t('row.confirmDeleteAria', { title: session.title }))
-                            : t('row.deleteAria', { title: session.title })}
+                                ? t.plural('row.confirmDeleteUnsentAria', unsent, { title: shownTitle })
+                                : t('row.confirmDeleteAria', { title: shownTitle }))
+                            : t('row.deleteAria', { title: shownTitle })}
                         title={confirm
                             ? `${unsent > 0 ? t.plural('row.clickAgainUnsent', unsent) : t('row.clickAgain')}\n${t('row.deleteMemoryNote')}`
                             : t('row.delete')}
@@ -290,6 +310,8 @@ function SessionRow({ session, active, phone, moved, status, queuePlace, unsent,
 }
 
 export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProps) {
+    // Shown whenever paired devices can reach this PC, so the open port is never a secret.
+    const devicesListening = useDeviceStore((s) => s.available === true && s.status?.listening === true);
     const t = useT();
     const sessions = useChatStore((s) => s.sessions);
     const currentSessionId = useChatStore((s) => s.currentSessionId);
@@ -328,9 +350,16 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
     const [showAutomated, setShowAutomated] = useState(readShowAutomated);
     const phone = useMediaQuery('(max-width: 768px)');
     const searchRef = useRef<HTMLInputElement>(null);
+    // What had focus before search took it, so Esc can give it back.
+    const beforeSearch = useRef<HTMLElement | null>(null);
+
+    // Opening or leaving a chat ends the search, so the full list comes back.
+    useEffect(() => setQuery(''), [currentSessionId]);
 
     useEffect(() => {
         const focusSearch = () => {
+            const active = document.activeElement;
+            if (active instanceof HTMLElement && active !== searchRef.current) beforeSearch.current = active;
             if (collapsed) toggleCollapsed();
             requestAnimationFrame(() => searchRef.current?.focus());
         };
@@ -361,7 +390,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
                 .catch((err) => {
                     if (ctrl.signal.aborted) return;
                     log.chat.error('Chat search failed', err);
-                    setSearchError(`Could not search inside chats: ${err instanceof Error ? err.message : err}`);
+                    setSearchError(getT()('sidebar.searchFailed', { error: requestErrorParam(err) }));
                     setHits({ query: q, results: [], truncated: false });
                 });
         }, SEARCH_DEBOUNCE_MS);
@@ -377,13 +406,14 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
     );
 
     const hiddenCount = hiddenAutomatedCount(sessions);
+    const today = useToday();
     const groups = useMemo(() => {
         const needle = foldText(q);
         const list = q
             ? sessions.filter((s) => foldText(s.title).includes(needle) || contentHits.has(s.id))
             : sessions;
-        return groupSessionsForList(list, live, { showAutomated });
-    }, [sessions, q, contentHits, live, showAutomated]);
+        return groupSessionsForList(list, live, { showAutomated, now: today });
+    }, [sessions, q, contentHits, live, showAutomated, today]);
     const results = useMemo(() => (q ? groups.flatMap((g) => g.sessions) : []), [q, groups]);
     const picked = activeIdx >= 0 && results.length > 0 ? results[Math.min(activeIdx, results.length - 1)] : undefined;
 
@@ -407,7 +437,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
         // No rollback: flipping unread back would re-fire this effect in a tight loop.
         api.markSessionRead(id).catch((err) => {
             log.chat.error(`Could not mark chat ${id} read`, err);
-            setRowError(`Could not mark the chat read: ${err instanceof Error ? err.message : err}`);
+            setRowError(getT()('sidebar.markReadFailed', { error: requestErrorParam(err) }));
         });
     }, [updateSessionInList]);
 
@@ -426,6 +456,11 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
 
     // The row a phone user just pinned or unpinned; it changes groups, so it is followed and marked briefly.
     const [movedId, setMovedId] = useState<string | null>(null);
+    // Pinning regroups the row and remounts it; a keyboard user's focus goes back to its pin button.
+    const [pinFocusId, setPinFocusId] = useState<string | null>(null);
+    useEffect(() => {
+        if (pinFocusId) setPinFocusId(null);
+    }, [pinFocusId]);
     useEffect(() => {
         if (!movedId) return;
         const timer = setTimeout(() => setMovedId(null), 1200);
@@ -440,7 +475,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
         } catch (err) {
             log.chat.error(`Could not ${pinned ? 'pin' : 'unpin'} chat ${id}`, err);
             updateSessionInList(id, { pinned: !pinned });
-            setRowError(err instanceof Error ? err.message : `Could not ${pinned ? 'pin' : 'unpin'} the chat.`);
+            setRowError(err instanceof Error ? err.message : getT()(pinned ? 'sidebar.pinFailed' : 'sidebar.unpinFailed'));
         }
     }, [updateSessionInList]);
 
@@ -457,7 +492,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
         } catch (err) {
             log.chat.error(`Could not rename chat ${id}`, err);
             if (previous !== undefined) updateSessionInList(id, { title: previous });
-            setRowError(err instanceof Error ? err.message : 'Could not rename the chat.');
+            setRowError(err instanceof Error ? err.message : getT()('sidebar.renameFailed'));
         }
     }, [updateSessionInList]);
 
@@ -482,7 +517,11 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
         if (e.key === 'Escape') {
             e.preventDefault();
             setQuery('');
-            searchRef.current?.blur();
+            // Back to where typing was, as closing a dialog does; the message box when nothing had focus.
+            const back = beforeSearch.current;
+            beforeSearch.current = null;
+            const to = back?.isConnected && back !== document.body ? back : document.querySelector<HTMLElement>('.composer-input');
+            if (to) to.focus(); else searchRef.current?.blur();
             return;
         }
         if (!q || results.length === 0 || e.nativeEvent.isComposing) return;
@@ -507,7 +546,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
             removeSession(id);
         } catch (err) {
             log.chat.error(`Delete failed for session ${id}`, err);
-            setDeleteError(err instanceof Error ? err.message : 'Could not delete the chat.');
+            setDeleteError(err instanceof Error ? err.message : getT()('sidebar.deleteFailed'));
         } finally {
             removePendingDelete(id);
         }
@@ -538,7 +577,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
                 {/* The icon stays when collapsed: with no title bar it is the app's mark. */}
                 <div className="sb-brand">
                     <img src={gaiaRobot} alt="" width={22} height={22} />
-                    {!isCollapsed && <span>GAIA</span>}
+                    {!isCollapsed && <span>{APP_NAME}</span>}
                 </div>
                 <button
                     type="button"
@@ -565,8 +604,9 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             onKeyDown={onSearchKey}
+                            onFocus={(e) => { if (e.relatedTarget instanceof HTMLElement) beforeSearch.current = e.relatedTarget; }}
                             {...CLAIMS_ESCAPE}
-                            placeholder={t('sidebar.search')}
+                            placeholder={t.bare('sidebar.search')}
                             aria-label={t.hint(t('sidebar.search'), formatShortcut('Mod+K'))}
                             aria-controls="sb-chat-list"
                             aria-activedescendant={picked ? resultRowId(picked.id) : undefined}
@@ -607,24 +647,27 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
                         <p className="sb-empty">{q ? (pending ? t('sidebar.searching') : t('sidebar.noMatch')) : t('sidebar.empty')}</p>
                     )}
                     {groups.map((g) => (
-                        <section key={g.label} className={`sb-group${g.label === 'Needs you' ? ' is-needs-you' : ''}`}>
-                            <h2 className="sb-group-label">{t(GROUP_LABEL[g.label])}</h2>
+                        <section key={g.label} className={`sb-group${g.label === 'sidebar.group.needsYou' ? ' is-needs-you' : ''}`}>
+                            <h2 className="sb-group-label">{t(g.label)}</h2>
                             <ul>
                                 {g.sessions.map((s) => (
                                     <SessionRow
                                         key={s.id}
                                         session={s}
-                                        active={s.id === currentSessionId}
+                                        // Memory replaces the chat on screen, so its row is the one selected.
+                                        active={s.id === currentSessionId && !showMemory}
                                         phone={phone}
                                         moved={s.id === movedId}
+                                        focusPin={s.id === pinFocusId}
                                         status={sessionRowStatus(s, live)}
                                         queuePlace={queuedSessionIds.indexOf(s.id) + 1}
                                         unsent={messageQueues[s.id]?.length ?? 0}
                                         failed={messageQueues[s.id]?.filter((m) => m.state === 'failed').length ?? 0}
                                         onSelect={select}
                                         onDelete={remove}
-                                        onPin={(id, pinned, follow) => {
+                                        onPin={(id, pinned, follow, byKeyboard) => {
                                             if (follow) setMovedId(id);
+                                            if (byKeyboard) setPinFocusId(id);
                                             void pin(id, pinned);
                                         }}
                                         onRename={(id, title) => void rename(id, title)}
@@ -682,6 +725,17 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
                             title={t('sidebar.mobileAccess')}
                         >
                             <Smartphone size={16} />
+                        </button>
+                    )}
+                    {devicesListening && (
+                        <button
+                            type="button"
+                            className="sb-icon-btn is-active"
+                            onClick={() => openSettings('devices')}
+                            aria-label={t('sidebar.devicesOn')}
+                            title={t('sidebar.devicesOn')}
+                        >
+                            <TabletSmartphone size={16} />
                         </button>
                     )}
                     <button type="button" className="sb-icon-btn" onClick={() => openSettings()} aria-label={t('sidebar.settings')} title={t.hint(t('sidebar.settings'), formatShortcut('Mod+,'))}>

@@ -1,11 +1,13 @@
 # Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 # SPDX-License-Identifier: MIT
 
-"""Cross-origin request defenses for the Agent UI backend.
+"""Request defenses for the Agent UI backend.
 
-The backend binds loopback and has no authentication while the tunnel is
-off, so any web page the user visits could drive it. Three layers close
-that off, all applied in middleware so a route added tomorrow is covered
+Every ``/api`` and ``/v1`` request must present the Agent UI API token
+(:class:`ApiTokenMiddleware`, :mod:`gaia.ui.api_token`), local callers
+included: binding loopback is not access control. Three more layers stop a
+web page the user visits from driving the backend through the user's own
+browser, all applied in middleware so a route added tomorrow is covered
 without its author remembering anything:
 
 1. **CSRF header** -- every mutating (non-GET/HEAD/OPTIONS) request to
@@ -34,12 +36,17 @@ import ipaddress
 import json
 import logging
 import os
+from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request
 from starlette.datastructures import Headers
+from starlette.requests import cookie_parser
 from starlette.types import ASGIApp, Receive, Scope, Send
+
+from gaia.ui import api_token
+from gaia.ui.devices import DEVICE_TOKEN_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +78,12 @@ SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 #: ``gaia.connectors.flow``, not by this app. An entry here is a hole, so
 #: ``tests/unit/chat/ui/test_ui_request_guard.py`` asserts it stays empty.
 CSRF_EXEMPT_PATHS: frozenset = frozenset()
+
+#: Paths that need no token: a liveness probe that returns no user data.
+TOKEN_EXEMPT_PATHS: frozenset = frozenset({"/api/health"})
+
+#: Cookie a phone carries after opening the mobile-access QR link.
+TUNNEL_COOKIE_NAME = "gaia_tunnel_token"
 
 #: Hostnames that always denote this machine.
 _LOOPBACK_NAMES = frozenset({"localhost", "::1"})
@@ -194,25 +207,231 @@ def require_ui_header(request: Request) -> None:
 
 _FORWARDED_HEADERS = ("x-forwarded-for", "x-forwarded-host", "x-forwarded-proto")
 
+#: Scope key a listener other than the main one stamps on every request it
+#: serves. ASGI scope keys come from the server and middleware, never from a
+#: client, so a request cannot claim or shed it.
+LISTENER_SCOPE_KEY = "gaia.listener"
+#: ``scope[LISTENER_SCOPE_KEY]`` on the listener paired devices reach.
+LAN_LISTENER = "lan"
+#: Scope key device auth sets on the listener to a :class:`DevicePrincipal`.
+DEVICE_SCOPE_KEY = "gaia.device"
+#: Set by device auth once it has checked a listener request, so the main
+#: app's own auth can refuse one that skipped it.
+DEVICE_AUTH_SCOPE_KEY = "gaia.device_auth"
+#: Set by device auth to how the device reached the listener: ``home``, or
+#: the kind of the away route that carried it.
+ROUTE_SCOPE_KEY = "gaia.route"
 
-def via_tunnel(request: Request) -> bool:
-    """The request came over mobile access: ngrok adds ``X-Forwarded-*``."""
+PRINCIPAL_PC = "pc"
+PRINCIPAL_TUNNEL = "tunnel"
+DEVICE_PRINCIPAL_PREFIX = "device:"
+
+
+@dataclass(frozen=True)
+class DevicePrincipal:
+    """The paired device whose token a listener request carried."""
+
+    device_id: str
+    allowed: bool
+
+
+class ListenerScopeMiddleware:
+    """Mark every request a second listener serves, websockets included.
+
+    Pure ASGI and outermost on that listener, so no route, middleware or
+    relay in front of it can make one of its requests look like the PC.
+    """
+
+    def __init__(self, app: ASGIApp, listener: str = LAN_LISTENER) -> None:
+        self.app = app
+        self.listener = listener
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] in ("http", "websocket"):
+            scope = {**scope, LISTENER_SCOPE_KEY: self.listener}
+        await self.app(scope, receive, send)
+
+
+def _has_forwarded_headers(request: Request) -> bool:
+    """ngrok adds ``X-Forwarded-*`` to every request it carries."""
     return any(h in request.headers for h in _FORWARDED_HEADERS)
 
 
-def require_local_pc(request: Request) -> None:
-    """Refuse a request that did not come from the PC running GAIA.
+def on_device_listener(request: Request) -> bool:
+    """Whether the request reached a listener other than the main one."""
+    return request.scope.get(LISTENER_SCOPE_KEY) is not None
 
-    The tunnel connects from loopback, so the peer address alone can't tell a
-    paired phone from the desktop; the forwarded headers ngrok adds can.
+
+def reached_over_network(request: Request) -> bool:
+    """Whether the request reached this server on a network interface.
+
+    ``scope["server"]`` is the local address the connection arrived at, read
+    from the socket, so it is a non-loopback IP only when the server is bound
+    beyond loopback (``--host 0.0.0.0``) and the peer came over the network.
     """
+    server = request.scope.get("server")
+    host = str(server[0]) if server else ""
+    return _is_ip_literal(host) and not _is_loopback_name(host)
+
+
+def principal(request: Request) -> str:
+    """Who sent the request: ``pc``, ``device:<id>`` or ``tunnel``.
+
+    Decided by the listener the request reached, never by its peer address
+    alone: ngrok's TLS passthrough, ``tailscale serve``, ``ssh -L`` and socat
+    all reach a listener from loopback without forwarded headers. Nothing on
+    the device listener is the PC. On the main listener only a loopback peer
+    with no ``X-Forwarded-*`` header is. Everyone else is ``tunnel``: mobile
+    access, another computer, or a device listener request with no device.
+    """
+    if on_device_listener(request):
+        device = request.scope.get(DEVICE_SCOPE_KEY)
+        if isinstance(device, DevicePrincipal):
+            return DEVICE_PRINCIPAL_PREFIX + device.device_id
+        return PRINCIPAL_TUNNEL
     host = request.client.host if request.client else ""
-    if not _is_loopback_name(host) or via_tunnel(request):
+    if _is_loopback_name(host) and not _has_forwarded_headers(request):
+        return PRINCIPAL_PC
+    return PRINCIPAL_TUNNEL
+
+
+def is_local_pc(request: Request) -> bool:
+    """Whether the request came from the PC running GAIA."""
+    return principal(request) == PRINCIPAL_PC
+
+
+def allowed_device(request: Request) -> Optional[DevicePrincipal]:
+    """The allowed paired device a listener request came from, if any."""
+    device = (
+        request.scope.get(DEVICE_SCOPE_KEY) if on_device_listener(request) else None
+    )
+    if isinstance(device, DevicePrincipal) and device.allowed:
+        return device
+    return None
+
+
+def require_local_pc(request: Request) -> None:
+    """Refuse a request that did not come from the PC running GAIA."""
+    if not is_local_pc(request):
         raise HTTPException(
             status_code=403,
-            detail="Change this on the PC running GAIA. It can't be changed "
-            "over mobile access or from another computer.",
+            detail="Do this on the PC running GAIA. It isn't allowed over mobile "
+            "access, from a paired device or from another computer.",
         )
+
+
+def require_pc_or_device(request: Request) -> None:
+    """First-run setup: the PC, or a paired device the PC allowed; never the tunnel."""
+    if not is_local_pc(request) and allowed_device(request) is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Set GAIA up on the PC running GAIA or on a paired device the "
+            "PC allowed. It isn't allowed over mobile access or from another "
+            "computer.",
+        )
+
+
+def require_pc_or_allowed_device(request: Request) -> None:
+    """The PC, or a paired device the PC allowed; never the tunnel or a pending device."""
+    if not is_local_pc(request) and allowed_device(request) is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Do this on the PC running GAIA or on a paired device the PC "
+            "allowed. It isn't allowed over mobile access or from another computer.",
+        )
+
+
+def require_device_listener(request: Request) -> None:
+    """A route that exists only on the device listener: a 404 anywhere else."""
+    if not on_device_listener(request):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
+def require_allowed_device(request: Request) -> str:
+    """A paired device the PC allowed, acting on itself; its id."""
+    device = allowed_device(request)
+    if device is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a paired device the PC allowed can do this, with its own "
+            "token.",
+        )
+    return device.device_id
+
+
+def require_device(request: Request) -> str:
+    """A paired device acting on itself; its id."""
+    device = (
+        request.scope.get(DEVICE_SCOPE_KEY) if on_device_listener(request) else None
+    )
+    if not isinstance(device, DevicePrincipal):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a paired device can do this, with its own token. On the "
+            "PC, unpair it from the device list.",
+        )
+    return device.device_id
+
+
+def refuse_on_device_listener(request: Request) -> None:
+    """For a read with side effects on the PC that a paired device may not cause."""
+    if on_device_listener(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Do this on the PC running GAIA. It isn't allowed from a "
+            "paired device.",
+        )
+
+
+def hide_pc_folders(text: str) -> str:
+    """*text* with GAIA's folder and the user's home folder named, not spelled out.
+
+    For error text sent to a paired device, which has no use for the PC's paths.
+    """
+    from pathlib import Path
+
+    from gaia.home import gaia_home
+
+    for folder, said in (
+        (gaia_home(), "GAIA's folder"),
+        (Path.home(), "your home folder"),
+    ):
+        text = text.replace(str(folder), said)
+    return text
+
+
+def device_display_path(path: str) -> str:
+    """*path* as a paired device sees it: ``~/…`` inside home, else the file name."""
+    from pathlib import Path
+
+    if not path:
+        return ""
+    resolved = Path(path).resolve()
+    try:
+        inside = resolved.relative_to(Path.home().resolve())
+    except ValueError:
+        return resolved.name or Path(path).name
+    return "~/" + inside.as_posix() if inside.parts else "~"
+
+
+def detail_for(request: Request, text: str) -> str:
+    """*text* as the PC sees it; anyone else gets it with PC folders hidden."""
+    return text if is_local_pc(request) else hide_pc_folders(text)
+
+
+def audit_approval(request: Request, what: str) -> None:
+    """Record a decision that lets GAIA act, and who made it, in the audit log.
+
+    A paired device is named by its id; its token never reaches a log.
+    """
+    from gaia.security import audit_logger, ensure_audit_log_handler, escape_control
+
+    ensure_audit_log_handler()
+    audit_logger.info(
+        "APPROVAL | %s | by %s",
+        escape_control(what),
+        escape_control(principal(request)),
+    )
 
 
 def flagship_only(
@@ -333,3 +552,144 @@ class UIRequestGuardMiddleware:
                 return
 
         await self.app(scope, receive, send)
+
+
+class ApiTokenMiddleware:
+    """Require the Agent UI API token on every ``/api`` and ``/v1`` request.
+
+    Accepted from ``Authorization: Bearer`` or the ``gaia_ui_token`` cookie.
+    While mobile access is on, a request that came through the tunnel may
+    present the tunnel's own token instead, so a paired phone works without
+    the install's token; :func:`require_local_pc` still refuses such requests.
+    ``OPTIONS`` passes so CORS can answer preflights, which carry no
+    credentials.
+
+    The device listener's requests are left to its own device auth, and one
+    that skipped it is refused on any path. A paired device's token is refused
+    off that listener. A server bound beyond loopback serves other computers
+    only through mobile access: the install's token admits no network peer.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        kind = scope["type"]
+        path = scope.get("path", "")
+        method = scope.get("method", "WEBSOCKET")
+        # Whatever the path or protocol: the web UI, the docs, websockets too.
+        if kind in ("http", "websocket") and scope.get(LISTENER_SCOPE_KEY) is not None:
+            if scope.get(DEVICE_AUTH_SCOPE_KEY) is not True:
+                logger.error(
+                    "Device listener served %s %s without device auth; refused",
+                    method,
+                    path,
+                )
+                if kind == "websocket":
+                    await send({"type": "websocket.close", "code": 1008})
+                else:
+                    await _send_rejection(
+                        send, 401, "This request skipped device auth."
+                    )
+                return
+            await self.app(scope, receive, send)
+            return
+        if kind != "http":
+            await self.app(scope, receive, send)
+            return
+        request = Request(scope)
+        if not path.startswith(GUARDED_PREFIXES):
+            await self.app(scope, receive, send)
+            return
+        headers = Headers(scope=scope)
+        presented = api_token.bearer(headers.get("authorization", ""))
+        if presented and presented.startswith(DEVICE_TOKEN_PREFIX):
+            logger.warning(
+                "Refused %s %s: a paired device's token over plain http",
+                method,
+                path,
+            )
+            await _send_rejection(
+                send,
+                401,
+                "A paired device's token works only on GAIA's TLS listener for "
+                "devices, never over plain http.",
+            )
+            return
+        if path in TOKEN_EXEMPT_PATHS or method == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
+
+        app = scope.get("app")
+        expected = getattr(getattr(app, "state", None), "ui_api_token", None)
+        if not expected:
+            raise RuntimeError(
+                "ApiTokenMiddleware is installed but app.state.ui_api_token is "
+                "unset; build the app with gaia.ui.server.create_app()."
+            )
+        cookies = cookie_parser(headers.get("cookie", ""))
+        tunnel = getattr(app.state, "tunnel", None)
+        tunnel_active = tunnel is not None and tunnel.active
+        network_peer = reached_over_network(request)
+        if network_peer and not tunnel_active:
+            client = scope.get("client")
+            logger.warning(
+                "Network auth: rejecting %s %s from %s (mobile access is off)",
+                method,
+                path,
+                client[0] if client else "unknown",
+            )
+            await _send_rejection(
+                send,
+                401,
+                "This GAIA server answers other computers only through mobile "
+                "access. Start mobile access on the PC running GAIA and use its "
+                "link, or open GAIA on the PC.",
+            )
+            return
+        if not network_peer and (
+            api_token.token_matches(expected, presented)
+            or api_token.token_matches(expected, cookies.get(api_token.COOKIE_NAME))
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        forwarded = any(h in headers for h in _FORWARDED_HEADERS)
+        if tunnel_active and (forwarded or network_peer):
+            tunnel_token = presented or cookies.get(TUNNEL_COOKIE_NAME)
+            if tunnel_token and tunnel.validate_token(tunnel_token):
+                tunnel.note_device(headers.get("user-agent", ""))
+                await self.app(scope, receive, send)
+                return
+
+        client = scope.get("client")
+        logger.warning(
+            "Rejecting %s %s from %s: no valid Agent UI API token",
+            method,
+            path,
+            client[0] if client else "unknown",
+        )
+        body = json.dumps(
+            {
+                "detail": (
+                    "This request has no valid GAIA Agent UI token. Open the "
+                    "Agent UI from the GAIA desktop app, or from the sign-in "
+                    "link printed when it started. Scripts send 'Authorization: "
+                    f"Bearer <token>' with the token in the "
+                    f"{api_token.TOKEN_FILE_NAME} file in GAIA's home folder."
+                ),
+                "code": api_token.REJECTION_CODE,
+            }
+        ).encode()
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode()),
+                    (b"www-authenticate", b"Bearer"),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})

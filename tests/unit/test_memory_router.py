@@ -86,7 +86,7 @@ def client(test_store, fake_embedder):
     db = ChatDatabase(":memory:")
     app.dependency_overrides[get_db] = lambda: db
 
-    with TestClient(app, headers={"X-Gaia-UI": "1"}) as c:
+    with TestClient(app, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"}) as c:
         yield c
 
     # Reset singleton so other tests get a fresh one
@@ -785,6 +785,7 @@ class TestConsolidateEndpoint:
         """POST /api/memory/consolidate returns 200 when _consolidate_fn is set."""
         memory_router_mod._consolidate_fn = lambda max_sessions=5: {
             "consolidated": 2,
+            "windows": 2,
             "extracted_items": 8,
         }
         resp = client.post("/api/memory/consolidate")
@@ -799,7 +800,7 @@ class TestConsolidateEndpoint:
 
         def mock_consolidate(max_sessions=5):
             captured["max_sessions"] = max_sessions
-            return {"consolidated": 0, "extracted_items": 0}
+            return {"consolidated": 0, "windows": 0, "extracted_items": 0}
 
         memory_router_mod._consolidate_fn = mock_consolidate
         resp = client.post("/api/memory/consolidate?max_sessions=10")
@@ -826,6 +827,19 @@ class TestConsolidateEndpoint:
 # ===========================================================================
 # v2 Router Tests — Rebuild Embeddings Endpoint
 # ===========================================================================
+
+
+def _npu_pc(monkeypatch, tmp_path, **keys) -> None:
+    """A PC set up with ``gaia init --profile npu``, plus *keys*."""
+    import json
+
+    from gaia import config as config_mod
+
+    config_file = tmp_path / "npu-config.json"
+    config_file.write_text(
+        json.dumps({"default_device": "npu", **keys}), encoding="utf-8"
+    )
+    monkeypatch.setattr(config_mod, "GAIA_CONFIG_FILE", config_file)
 
 
 class TestRebuildEmbeddingsEndpoint:
@@ -863,14 +877,12 @@ class TestRebuildEmbeddingsEndpoint:
             resp = client.post("/api/memory/rebuild-embeddings")
         assert resp.status_code == 500
 
-    def test_rebuild_uses_stamped_embedder_not_default(self, client, test_store):
-        """Re-embed with the stamped embedder, not the GGUF default (#1744).
-
-        On the NPU profile the agent stamps the FLM embedder. The dashboard
-        rebuild button must reuse it — embedding with the default would mix vector
-        spaces in one table and reload a Vulkan embedder that evicts the FLM
-        chat model.
-        """
+    def test_an_npu_pc_re_embeds_its_npu_vectors_on_the_gpu(
+        self, client, test_store, monkeypatch, tmp_path
+    ):
+        """Vectors from the NPU embedder are replaced: its search isn't proven,
+        and the two builds' vectors don't match (#6008)."""
+        _npu_pc(monkeypatch, tmp_path)
         test_store.set_embedder_id("embed-gemma-300m-FLM")
         mock_provider = MagicMock()
         mock_provider.embed.return_value = [[0.1] * 768]
@@ -879,7 +891,25 @@ class TestRebuildEmbeddingsEndpoint:
         ) as ctor:
             resp = client.post("/api/memory/rebuild-embeddings")
         assert resp.status_code == 200
+        ctor.assert_called_once_with(model="user.embeddinggemma-300m-GGUF")
+        assert test_store.get_embedder_id() == "user.embeddinggemma-300m-GGUF"
+
+    def test_rebuild_replaces_a_stamp_left_by_another_profile(
+        self, client, test_store, monkeypatch, tmp_path
+    ):
+        """The next agent start re-stamps the PC's embedder; rebuilding with the
+        old one would only be cleared again."""
+        _npu_pc(monkeypatch, tmp_path, embedding_device="npu")
+        test_store.set_embedder_id("user.embeddinggemma-300m-GGUF")
+        mock_provider = MagicMock()
+        mock_provider.embed.return_value = [[0.1] * 768]
+        with patch(
+            "gaia.llm.providers.lemonade.LemonadeProvider", return_value=mock_provider
+        ) as ctor:
+            resp = client.post("/api/memory/rebuild-embeddings")
+        assert resp.status_code == 200
         ctor.assert_called_once_with(model="embed-gemma-300m-FLM")
+        assert test_store.get_embedder_id() == "embed-gemma-300m-FLM"
 
     def test_rebuild_falls_back_to_default_embedder_when_unstamped(
         self, client, test_store
@@ -1020,7 +1050,13 @@ class TestReconcileEndpoint:
 
         def agent_reconcile(max_pairs):
             seen["max_pairs"] = max_pairs
-            return {"pairs_checked": 0}
+            return {
+                "pairs_checked": 0,
+                "reinforced": 0,
+                "contradicted": 0,
+                "weakened": 0,
+                "neutral": 0,
+            }
 
         memory_router_mod._reconcile_fn = agent_reconcile
 
@@ -1481,16 +1517,18 @@ class TestDashboardWritesAreEmbedded:
             )
         )
 
-    def test_create_embeds_with_the_stored_embedder(
-        self, client, test_store, fake_embedder
+    def test_create_embeds_with_the_pcs_embedder(
+        self, client, test_store, fake_embedder, monkeypatch, tmp_path
     ):
-        test_store.set_embedder_id("embed-gemma-300m-FLM")
+        # A saved NPU choice still loads; the stamp is from before it.
+        _npu_pc(monkeypatch, tmp_path, embedding_device="npu")
+        test_store.set_embedder_id("user.embeddinggemma-300m-GGUF")
         data = _create_knowledge(client, "The gateway listens on port 8080")
 
         assert data["embedded"] is True
         assert "embed_error" not in data
         assert self._has_vector(test_store, data["knowledge_id"])
-        # Same embedder as the stored vectors, not the module default (#1744).
+        # The embedder every chat on this PC uses, not the stale stamp (#1744).
         fake_embedder.assert_called_with(model="embed-gemma-300m-FLM")
         fake_embedder.instance.embed.assert_called_with(
             ["The gateway listens on port 8080"], model="embed-gemma-300m-FLM"
@@ -1716,6 +1754,16 @@ class TestMemorySettings:
 
 
 class TestMemorySettingsFile:
+    def test_settings_live_under_gaia_home(self, tmp_path, monkeypatch):
+        from gaia.agents.base import memory as memory_module
+
+        monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+
+        memory_module._save_memory_settings({"system_context_enabled": True})
+
+        assert (tmp_path / "memory_settings.json").is_file()
+        assert memory_module._load_memory_settings() == {"system_context_enabled": True}
+
     def test_save_refuses_to_overwrite_malformed_settings(self, tmp_path, monkeypatch):
         """A parse failure must preserve unrelated settings instead of replacing the file."""
         from gaia.agents.base import memory as memory_module
@@ -1723,7 +1771,9 @@ class TestMemorySettingsFile:
         settings_path = tmp_path / "memory_settings.json"
         malformed = "{not valid json"
         settings_path.write_text(malformed, encoding="utf-8")
-        monkeypatch.setattr(memory_module, "_MEMORY_SETTINGS_PATH", settings_path)
+        monkeypatch.setattr(
+            memory_module, "_memory_settings_path", lambda: settings_path
+        )
 
         with pytest.raises(RuntimeError, match="Could not read memory settings"):
             memory_module._save_memory_settings({"system_context_enabled": False})
@@ -1735,7 +1785,9 @@ class TestMemorySettingsFile:
 
         settings_path = tmp_path / "memory_settings.json"
         settings_path.write_text("[1, 2]", encoding="utf-8")
-        monkeypatch.setattr(memory_module, "_MEMORY_SETTINGS_PATH", settings_path)
+        monkeypatch.setattr(
+            memory_module, "_memory_settings_path", lambda: settings_path
+        )
 
         with pytest.raises(RuntimeError, match="must be an object"):
             memory_module._save_memory_settings({"system_context_enabled": True})
@@ -1749,7 +1801,9 @@ class TestMemorySettingsFile:
         blocker = tmp_path / "not_a_dir"
         blocker.write_text("", encoding="utf-8")
         monkeypatch.setattr(
-            memory_module, "_MEMORY_SETTINGS_PATH", blocker / "memory_settings.json"
+            memory_module,
+            "_memory_settings_path",
+            lambda: blocker / "memory_settings.json",
         )
 
         with pytest.raises(RuntimeError, match="Could not"):
@@ -1759,7 +1813,9 @@ class TestMemorySettingsFile:
         from gaia.agents.base import memory as memory_module
 
         settings_path = tmp_path / "sub" / "memory_settings.json"
-        monkeypatch.setattr(memory_module, "_MEMORY_SETTINGS_PATH", settings_path)
+        monkeypatch.setattr(
+            memory_module, "_memory_settings_path", lambda: settings_path
+        )
 
         memory_module._save_memory_settings({"onboarding_completed_at": "t0"})
         memory_module._save_memory_settings({"system_context_enabled": True})
@@ -1797,7 +1853,9 @@ class TestMemorySettingsFile:
 
         settings_path = tmp_path / "memory_settings.json"
         settings_path.write_text('{"keep": 1}', encoding="utf-8")
-        monkeypatch.setattr(memory_module, "_MEMORY_SETTINGS_PATH", settings_path)
+        monkeypatch.setattr(
+            memory_module, "_memory_settings_path", lambda: settings_path
+        )
 
         resp = client.put(
             "/api/memory/settings", json={"system_discovery_consent": False}
@@ -1880,6 +1938,60 @@ class TestClearAllMemory:
         assert data["conversations"] == 0
 
 
+@pytest.fixture
+def discovery_on(monkeypatch):
+    """The user has turned System discovery on, so the profile scan may read the PC."""
+    monkeypatch.setattr(
+        "gaia.agents.base.memory._system_context_is_enabled", lambda: True
+    )
+
+
+class TestProfileScanNeedsConsent:
+    """Without System discovery on, the profile scan reads nothing on the PC."""
+
+    @pytest.mark.parametrize(
+        "path", ["/api/memory/stream-discovery", "/api/memory/stream-inference"]
+    )
+    def test_refuses_and_says_how_to_turn_it_on(
+        self, client, tmp_path, monkeypatch, path
+    ):
+        from gaia.agents.base import discovery
+        from gaia.agents.base import memory as memory_module
+
+        monkeypatch.setattr(
+            memory_module, "_memory_settings_path", lambda: tmp_path / "none.json"
+        )
+        touched = []
+
+        class _Discovery:
+            def __init__(self):
+                touched.append("scan")
+
+            def __getattr__(self, name):
+                touched.append(name)
+                return lambda *a, **k: []
+
+        monkeypatch.setattr(discovery, "SystemDiscovery", _Discovery)
+        resp = client.get(path)
+
+        assert resp.status_code == 200
+        events = [
+            json.loads(line[len("data: ") :])
+            for line in resp.text.splitlines()
+            if line.startswith("data: ")
+        ]
+        assert events == [
+            {
+                "type": "error",
+                "source": "consent",
+                "message": memory_router_mod.NO_DISCOVERY_CONSENT,
+            },
+            {"type": "done", "total": 0},
+        ]
+        assert touched == []
+
+
+@pytest.mark.usefixtures("discovery_on")
 class TestStreamDiscoveryPlatformReporting:
     """GET /api/memory/stream-discovery names sources it cannot run (#1956).
 
@@ -1984,6 +2096,7 @@ class TestStreamDiscoveryPlatformReporting:
         assert "linux" in skipped[0]
 
 
+@pytest.mark.usefixtures("discovery_on")
 class TestStreamInferencePlatformReporting:
     """GET /api/memory/stream-inference gates direct scanner calls too (#1956).
 
@@ -2326,6 +2439,7 @@ class TestPrivilegedAdminWriters:
             )
 
 
+@pytest.mark.usefixtures("discovery_on")
 class TestStreamInferenceModel:
     """Profile inference runs on the machine's default local chat model."""
 
@@ -2337,8 +2451,12 @@ class TestStreamInferenceModel:
         custom_model=None,
         reply="[]",
         downloaded=True,
+        picked=None,
     ):
-        """``downloaded=None`` leaves the download check to the patched catalog."""
+        """``downloaded=None`` leaves the download check to the patched catalog.
+
+        *picked* is ``last_model``: the model chat runs after a pick.
+        """
         apps = [{"content": "Installed app: Blender"}]
         fake_llm = MagicMock()
         fake_llm.chat.return_value = reply
@@ -2374,11 +2492,66 @@ class TestStreamInferenceModel:
                     ),
                 )
             )
+            stack.enter_context(
+                patch(
+                    "gaia.llm.lemonade_client.resolve_chat_model",
+                    return_value=picked or default_model,
+                )
+            )
             create = stack.enter_context(
                 patch("gaia.llm.create_client", return_value=fake_llm)
             )
             resp = client.get("/api/memory/stream-inference")
         return resp, create
+
+    def test_uses_the_local_model_chat_was_switched_to(self, client, tmp_path):
+        """The default would load a second chat model behind the one in use."""
+        resp, create = self._stream(
+            client,
+            tmp_path,
+            default_model="Gemma-4-E4B-it-GGUF",
+            picked="gemma4-it-e4b-FLM",
+        )
+
+        assert resp.status_code == 200
+        create.assert_called_once_with(model="gemma4-it-e4b-FLM")
+
+    def test_a_hybrid_pick_runs_on_its_cheap_model(self, client, tmp_path):
+        with patch(
+            "gaia.llm.hybrid.start_model",
+            side_effect=lambda m, *a, **k: "gemma4-it-e4b-FLM" if m == "hybrid" else m,
+        ):
+            resp, create = self._stream(
+                client, tmp_path, default_model="Gemma-4-E4B-it-GGUF", picked="hybrid"
+            )
+        assert resp.status_code == 200
+        create.assert_called_once_with(model="gemma4-it-e4b-FLM")
+
+    def test_a_broken_hybrid_setting_leaves_inference_on_the_default(
+        self, client, tmp_path
+    ):
+        from gaia.llm.hybrid import HybridConfigError
+
+        with patch(
+            "gaia.llm.hybrid.start_model",
+            side_effect=HybridConfigError("no cheap model"),
+        ):
+            resp, create = self._stream(
+                client, tmp_path, default_model="Gemma-4-E4B-it-GGUF", picked="hybrid"
+            )
+        assert resp.status_code == 200
+        create.assert_called_once_with(model="Gemma-4-E4B-it-GGUF")
+
+    def test_a_cloud_pick_leaves_inference_on_the_local_default(self, client, tmp_path):
+        resp, create = self._stream(
+            client,
+            tmp_path,
+            default_model="Gemma-4-E4B-it-GGUF",
+            picked="fireworks.accounts/fireworks/models/kimi-k2",
+        )
+
+        assert resp.status_code == 200
+        create.assert_called_once_with(model="Gemma-4-E4B-it-GGUF")
 
     def test_uses_the_default_chat_model_not_the_cloud_custom_model(
         self, client, tmp_path

@@ -51,7 +51,6 @@ Atomicity guarantees mirror :mod:`gaia.connectors.grants`:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -62,13 +61,9 @@ from pathlib import Path
 from typing import Dict, List
 
 from gaia.connectors.errors import ConnectorsError
+from gaia.home import gaia_home
 
 logger = logging.getLogger(__name__)
-
-
-# Module constant — resolved at import time. Tests use the function path
-# ``_activations_path()`` to pick up monkeypatched ``Path.home`` at call time.
-ACTIVATIONS_FILE = Path.home() / ".gaia" / "connectors" / "activations.json"
 
 
 SCHEMA_VERSION = 1
@@ -88,10 +83,14 @@ class ActivationsLedgerCorrupt(ConnectorsError):
         self.path = path
 
 
+def activations_path() -> Path:
+    """Where the activation ledger lives, resolved now."""
+    return _activations_path()
+
+
 def _activations_path() -> Path:
-    """Resolve the activations path on each call so tests can monkeypatch
-    ``Path.home`` after import."""
-    return Path.home() / ".gaia" / "connectors" / "activations.json"
+    """Resolve the activations path on each call so a late ``GAIA_HOME`` applies."""
+    return gaia_home() / "connectors" / "activations.json"
 
 
 def _ensure_parent(path: Path) -> None:
@@ -294,23 +293,11 @@ def is_agent_active(connector_id: str, agent_id: str) -> bool:
     return bool(load_activations().get(connector_id, {}).get(agent_id, False))
 
 
-async def activate_agent_async(connector_id: str, agent_id: str) -> None:
-    """Async wrapper around :func:`activate_agent` for native-async callers."""
-    await asyncio.to_thread(activate_agent, connector_id, agent_id)
-
-
-async def deactivate_agent_async(connector_id: str, agent_id: str) -> None:
-    """Async wrapper around :func:`deactivate_agent`."""
-    await asyncio.to_thread(deactivate_agent, connector_id, agent_id)
-
-
 __all__ = [
-    "ACTIVATIONS_FILE",
     "SCHEMA_VERSION",
     "activate_agent",
-    "activate_agent_async",
+    "activations_path",
     "deactivate_agent",
-    "deactivate_agent_async",
     "is_agent_active",
     "list_agent_activations",
     "load_activations",

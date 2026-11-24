@@ -1,0 +1,735 @@
+# Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
+# SPDX-License-Identifier: MIT
+"""A throwaway Agent UI backend for end-to-end tests.
+
+Serves GAIA's real Agent UI API on 127.0.0.1 against a scripted, fake
+OpenAI-compatible LLM, with all state under a directory the caller names::
+
+    python -m gaia.testing.dev_backend --port 4210 --home /tmp/gaia-e2e \\
+        --llm-port 4211 [--script replies.json]
+
+It never starts a daemon or Lemonade and never downloads a model, so it can run
+beside an installed GAIA without touching its ports or ``~/.gaia``.
+
+``--script`` is a JSON list; each chat completion consumes the next entry:
+
+* a string, or ``{"text": "..."}``: a text reply;
+* ``{"tool_call": {"name": "...", "arguments": {...}}}``: a tool call, which
+  lets a test drive a tool-approval prompt.
+
+The backend starts already set up: the fake Lemonade lists every model the
+flagship profile needs, and its speech model, as downloaded; the flagship's
+install sentinel is written under ``--home``; and the setup marker is set, so
+``/api/setup/check`` reports ``ready: true`` and a client goes straight to chat.
+``--fresh`` leaves all three out, for flows that drive the first-run Setup wizard.
+
+With no script every completion answers :data:`DEFAULT_REPLY`. When a script
+runs out the fake LLM answers HTTP 500 instead of inventing a reply.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import signal
+import sys
+import threading
+import time
+import urllib.error
+import urllib.request
+import uuid
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+DEFAULT_REPLY = "Hello from the dev backend."
+#: GB of GPU memory the fake machine has beyond what its models need to load.
+GPU_MEMORY_MARGIN_GB = 4.0
+#: Sizes the fake machine's memory pool in GB (``--gpu-memory-gb`` overrides it).
+#: Set, the PC is an AMD integrated GPU sharing N GB of RAM, so GAIA keeps
+#: max(10 GB, 25%) of it for other apps and a big model can come out "tight".
+#: 32 (27 to 36 work) makes Qwen3.6-35B-A3B tight (fits, leaves apps under the
+#: reserve) while Gemma-4-E4B stays a plain fit; the unit test derives it.
+GPU_MEMORY_ENV = "GAIA_DEV_BACKEND_GPU_GB"
+GPU_MEMORY_MAX_GB = 1024.0
+#: Comma-separated model ids listed as already downloaded, after the defaults
+#: (``--downloaded`` overrides it). Device-check recipe for the phone's tight
+#: confirm sheet: GAIA_DEV_BACKEND_GPU_GB=32
+#: GAIA_DEV_BACKEND_DOWNLOADED=Qwen3.6-35B-A3B-GGUF gives a downloaded, tight
+#: Qwen3.6, so Settings > Agent & model > Use shows the sheet.
+DOWNLOADED_ENV = "GAIA_DEV_BACKEND_DOWNLOADED"
+HOST = "127.0.0.1"
+READY_TIMEOUT_SECONDS = 60.0
+#: Exit code for a bad invocation, as ``gaia uninstall`` uses.
+EX_USAGE = 64
+
+# State variables GAIA reads, each placed under --home (mirrors the root
+# conftest's _STATE_ENV, which does the same for the test suite).
+_STATE_PATHS = {
+    "GAIA_CONFIG_FILE": ("config", "config.json"),
+    "GAIA_DAEMON_HOME": ("daemon-home",),
+    "GAIA_MEMORY_DB": ("memory", "memory.db"),
+    "GAIA_GATEWAY_FILE": ("gateway", "gateway.json"),
+    "GAIA_POLICY_FILE": ("policy", "policy.json"),
+    "GAIA_TUI_HOME": ("tui",),
+    "GAIA_LOG_FILE": ("logs", "gaia.log"),
+}
+_STATE_DIRS = {"GAIA_DAEMON_HOME", "GAIA_TUI_HOME"}
+# Inherited values that would point GAIA at a real server or credential.
+_CLEARED_ENV = (
+    "LEMONADE_API_KEY",
+    "GAIA_LEMONADE_EMBEDDED",
+    "GAIA_CONFIG_DIR",
+    "GAIA_ALLOWED_PATHS",
+)
+
+
+class DevBackendError(Exception):
+    """The invocation can't start a safe, isolated backend; the message says why."""
+
+
+# ── Script ──────────────────────────────────────────────────────────────────
+
+
+def load_script(path: Optional[str]) -> List[Dict[str, Any]]:
+    """Parse ``--script`` into a list of ``{"text"}`` / ``{"tool_call"}`` entries."""
+    if path is None:
+        return [{"text": DEFAULT_REPLY}]
+    try:
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        raise DevBackendError(f"Cannot read --script {path}: {e}") from e
+    if not isinstance(raw, list) or not raw:
+        raise DevBackendError(
+            f"--script {path} must be a non-empty JSON list of replies, e.g. "
+            '["hi", {"tool_call": {"name": "read_file", "arguments": {}}}].'
+        )
+    entries = []
+    for i, item in enumerate(raw):
+        if isinstance(item, str):
+            item = {"text": item}
+        if not isinstance(item, dict) or not (
+            isinstance(item.get("text"), str)
+            or (
+                isinstance(item.get("tool_call"), dict)
+                and isinstance(item["tool_call"].get("name"), str)
+            )
+        ):
+            raise DevBackendError(
+                f"--script {path} entry {i} must be a string, "
+                '{"text": "..."} or {"tool_call": {"name": "...", "arguments": {}}}.'
+            )
+        entries.append(item)
+    return entries
+
+
+# ── Home ────────────────────────────────────────────────────────────────────
+
+
+def validate_home(home: Optional[str]) -> Path:
+    """The resolved ``--home``, refusing one that is missing or is/inside ``~/.gaia``."""
+    from gaia.home import default_gaia_home
+
+    if not home:
+        raise DevBackendError(
+            "--home is required: pass a dedicated directory for this backend's "
+            "state, e.g. --home $(mktemp -d)."
+        )
+    resolved = Path(home).expanduser().resolve()
+    real = default_gaia_home().resolve()
+    if resolved == real or real in resolved.parents:
+        raise DevBackendError(
+            f"--home {resolved} is or is inside {real}, the installed GAIA's "
+            "state. Pass a different directory."
+        )
+    return resolved
+
+
+def isolate_environment(home: Path, llm_url: str, memory: bool = False) -> None:
+    """Point every GAIA state variable at *home* and Lemonade at the fake LLM.
+
+    Memory is off unless *memory*: the fake LLM serves no embedder, and with
+    memory on every chat would warn that it is unavailable.
+
+    Must run before anything imports ``gaia.config`` / ``gaia.logger``, which
+    read these at import.
+    """
+    home.mkdir(parents=True, exist_ok=True)
+    os.environ["GAIA_HOME"] = str(home)
+    for name, parts in _STATE_PATHS.items():
+        path = home.joinpath(*parts)
+        (path if name in _STATE_DIRS else path.parent).mkdir(
+            parents=True, exist_ok=True
+        )
+        os.environ[name] = str(path)
+    for name in _CLEARED_ENV:
+        os.environ.pop(name, None)
+    os.environ["LEMONADE_BASE_URL"] = llm_url
+    if memory:
+        os.environ.pop("GAIA_MEMORY_DISABLED", None)
+    else:
+        os.environ["GAIA_MEMORY_DISABLED"] = "1"
+
+
+# ── Fake LLM ────────────────────────────────────────────────────────────────
+
+
+def parse_gpu_gb(raw: Any, source: str) -> float:
+    """*raw* as a memory size in GB, or a :class:`DevBackendError` naming *source*."""
+    try:
+        gb = float(raw)
+    except (TypeError, ValueError):
+        gb = float("nan")
+    if not 0.0 < gb <= GPU_MEMORY_MAX_GB:
+        raise DevBackendError(
+            f"{source} must be a number of GB between 0 and "
+            f"{GPU_MEMORY_MAX_GB:g}, such as 32; got {raw!r}."
+        )
+    return gb
+
+
+def parse_downloaded(raw: Any, source: str) -> List[str]:
+    """Model ids in comma-separated *raw*, each known to GAIA's MODELS catalog."""
+    from gaia.llm.lemonade_client import MODELS
+
+    known = {mr.model_id for mr in MODELS.values()}
+    ids = [part.strip() for part in str(raw).split(",")]
+    bad = [i for i in ids if i not in known]
+    if bad:
+        raise DevBackendError(
+            f"{source} names unknown model id(s) {bad!r}; use ids from MODELS "
+            "in src/gaia/llm/lemonade_client.py, comma-separated, such as "
+            "Qwen3.6-35B-A3B-GGUF."
+        )
+    return list(dict.fromkeys(ids))
+
+
+def fake_system_info(
+    model_ids: List[str], gpu_gb: Optional[float] = None
+) -> Dict[str, Any]:
+    """Lemonade's ``/system-info`` for a PC whose GPU holds *model_ids* with room.
+
+    One GPU, no NPU, llama.cpp on GAIA's proven backend; its memory is what
+    ``model_fit`` needs for every listed model at once, plus the margin.
+    With *gpu_gb* the PC is instead an integrated GPU on *gpu_gb* of shared RAM,
+    whatever the models need, so a model can fit and still leave apps too little.
+    """
+    from gaia.config import GaiaConfig
+    from gaia.llm.lemonade_client import find_model_requirement
+    from gaia.llm.model_fit import kv_cache_gb, required_memory_gb
+
+    need_gb = 0.0
+    for model_id in dict.fromkeys(model_ids):
+        req = find_model_requirement(model_id)
+        if req is not None and req.size_gb:
+            kv = kv_cache_gb(req.kv_bytes_per_token, req.min_ctx_size)
+            need_gb += required_memory_gb(req.size_gb, kv)
+    backend = GaiaConfig.TESTED_LLAMACPP_BACKENDS[0]
+    recipes = {
+        "llamacpp": {
+            "default_backend": backend,
+            "backends": {backend: {"state": "installed"}},
+        }
+    }
+    if gpu_gb is not None:
+        return {
+            "OS Version": "Windows 11",
+            "Physical Memory": f"{gpu_gb:g} GB",
+            "devices": {
+                "amd_igpu": [
+                    {
+                        "name": "Dev backend GPU",
+                        "available": True,
+                        "integrated": True,
+                        "vram_gb": gpu_gb,
+                    }
+                ]
+            },
+            "recipes": recipes,
+        }
+    return {
+        "devices": {
+            "amd_gpu": [
+                {
+                    "name": "Dev backend GPU",
+                    "available": True,
+                    "integrated": False,
+                    "vram_gb": round(need_gb + GPU_MEMORY_MARGIN_GB, 1),
+                }
+            ]
+        },
+        "recipes": recipes,
+    }
+
+
+def build_fake_llm(
+    script: List[Dict[str, Any]],
+    model: str,
+    downloaded: Optional[List[str]] = None,
+    gpu_gb: Optional[float] = None,
+):
+    """A FastAPI app speaking the slice of Lemonade's API a chat turn uses.
+
+    *downloaded* names further models listed as downloaded beside *model*;
+    the speech model is served only when it is among them. *gpu_gb* sizes the
+    machine's memory (:func:`fake_system_info`).
+    """
+    from fastapi import FastAPI
+    from fastapi.responses import JSONResponse, Response, StreamingResponse
+
+    from gaia.audio.lemonade_tts import (
+        DEFAULT_TTS_MODEL,
+        KOKORO_VOICES,
+        TTS_SAMPLE_RATE,
+    )
+    from gaia.llm.lemonade_client import (
+        EMBEDDER_MODELS,
+        GPU_CTX_SIZE,
+        LARGE_DEFAULT_MODEL_NAME,
+    )
+    from gaia.version import LEMONADE_VERSION
+
+    app = FastAPI()
+    lock = threading.Lock()
+    state = {"next": 0}
+    entry_for_default = len(script) == 1 and script[0].get("text") == DEFAULT_REPLY
+
+    def take() -> Optional[Dict[str, Any]]:
+        with lock:
+            if entry_for_default:
+                return script[0]
+            if state["next"] >= len(script):
+                return None
+            entry = script[state["next"]]
+            state["next"] += 1
+            return entry
+
+    loaded = {
+        "type": "llm",
+        "model_name": model,
+        "recipe": "llamacpp",
+        "recipe_options": {"ctx_size": GPU_CTX_SIZE},
+    }
+
+    @app.get("/api/v1/health")
+    def health():
+        return {
+            "status": "ok",
+            "version": LEMONADE_VERSION,
+            "model_loaded": model,
+            "all_models_loaded": [loaded],
+        }
+
+    @app.get("/api/v1/system-info")
+    def system_info():
+        return fake_system_info([model, *(downloaded or [])], gpu_gb)
+
+    @app.get("/api/v1/models")
+    def models(show_all: bool = False):
+        catalog_only = (
+            [
+                {
+                    "id": LARGE_DEFAULT_MODEL_NAME,
+                    "object": "model",
+                    "downloaded": False,
+                    "recipe": "llamacpp",
+                    "labels": [],
+                    "size": 21.7,
+                }
+            ]
+            if show_all and LARGE_DEFAULT_MODEL_NAME not in (downloaded or [])
+            else []
+        )
+        return {
+            "object": "list",
+            "data": catalog_only
+            + [
+                {
+                    "id": model_id,
+                    "object": "model",
+                    "downloaded": True,
+                    "recipe": "llamacpp",
+                    "labels": (
+                        ["tts"]
+                        if model_id == DEFAULT_TTS_MODEL
+                        else ["embeddings"] if model_id in EMBEDDER_MODELS else []
+                    ),
+                }
+                for model_id in dict.fromkeys([model, *(downloaded or [])])
+            ],
+        }
+
+    @app.post("/api/v1/audio/speech")
+    def speech(body: Dict[str, Any]):
+        if body.get("model") != DEFAULT_TTS_MODEL or DEFAULT_TTS_MODEL not in (
+            downloaded or []
+        ):
+            return JSONResponse(
+                status_code=404,
+                content={"error": {"message": f"Model not found: {body.get('model')}"}},
+            )
+        if body.get("voice") not in KOKORO_VOICES:
+            return JSONResponse(
+                status_code=500,
+                content={"error": {"message": f"Unknown voice: {body.get('voice')}"}},
+            )
+        if not body.get("input"):
+            return JSONResponse(
+                status_code=400,
+                content={"error": {"message": "Missing 'input' for speech"}},
+            )
+        # 1.5 s of silence, long enough for a scripted run to tap Stop reading.
+        return Response(
+            content=bytes(2 * int(1.5 * TTS_SAMPLE_RATE)),
+            media_type=f"audio/l16;rate={TTS_SAMPLE_RATE}",
+        )
+
+    @app.get("/api/v1/stats")
+    def stats():
+        return {"input_tokens": 1, "output_tokens": 1, "time_to_first_token": 0.0}
+
+    @app.post("/api/v1/load")
+    def load():
+        return {"status": "success"}
+
+    @app.post("/api/v1/unload")
+    def unload():
+        return {"status": "success"}
+
+    @app.post("/api/v1/chat/completions")
+    async def chat_completions(body: Dict[str, Any]):
+        # The prefix warm-up (one token) must not spend a scripted reply.
+        warm_up = 1 in (body.get("max_tokens"), body.get("max_completion_tokens"))
+        entry = {"text": "."} if warm_up else take()
+        if entry is None:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": {
+                        "message": (
+                            f"dev_backend --script has only {len(script)} "
+                            "replies and a chat completion asked for another. "
+                            "Add entries to the script."
+                        )
+                    }
+                },
+            )
+        message: Dict[str, Any] = {"role": "assistant", "content": ""}
+        finish = "stop"
+        if "tool_call" in entry:
+            call = entry["tool_call"]
+            message["tool_calls"] = [
+                {
+                    "index": 0,
+                    "id": f"call_{uuid.uuid4().hex[:12]}",
+                    "type": "function",
+                    "function": {
+                        "name": call["name"],
+                        "arguments": json.dumps(call.get("arguments") or {}),
+                    },
+                }
+            ]
+            finish = "tool_calls"
+        else:
+            message["content"] = entry["text"]
+
+        cid = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+        created = int(time.time())
+        usage = {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+
+        if not body.get("stream"):
+            return {
+                "id": cid,
+                "object": "chat.completion",
+                "created": created,
+                "model": model,
+                "choices": [{"index": 0, "message": message, "finish_reason": finish}],
+                "usage": usage,
+            }
+
+        def chunk(delta: Dict[str, Any], reason: Optional[str] = None) -> str:
+            payload = {
+                "id": cid,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": model,
+                "choices": [{"index": 0, "delta": delta, "finish_reason": reason}],
+            }
+            return f"data: {json.dumps(payload)}\n\n"
+
+        def events():
+            yield chunk({"role": "assistant"})
+            if message.get("tool_calls"):
+                yield chunk({"tool_calls": message["tool_calls"]})
+            else:
+                yield chunk({"content": message["content"]})
+            final = json.loads(chunk({}, finish)[len("data: ") :])
+            final["usage"] = usage
+            yield f"data: {json.dumps(final)}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(events(), media_type="text/event-stream")
+
+    return app
+
+
+# ── Flagship agent ──────────────────────────────────────────────────────────
+
+_FLAGSHIP_ENTRY_POINT = "gaia_agent:build_gaia"
+
+
+def _ensure_flagship_importable() -> None:
+    """Make ``gaia_agent`` importable, from this checkout's hub package if need be."""
+    import importlib.util
+
+    if importlib.util.find_spec("gaia_agent") is not None:
+        return
+    package_dir = (
+        Path(__file__).resolve().parents[3] / "hub" / "agents" / "gaia" / "python"
+    )
+    if not (package_dir / "gaia_agent").is_dir():
+        raise DevBackendError(
+            "The flagship agent package gaia_agent is not installed and no source "
+            "checkout was found. Run `pip install -e hub/agents/gaia/python` from "
+            "a GAIA checkout."
+        )
+    sys.path.insert(0, str(package_dir))
+
+
+def _register_flagship_without_install() -> None:
+    """Let registry discovery find the flagship when it has no installed entry point.
+
+    A source checkout has the package but no dist-info, so chat would answer
+    "assistant isn't installed".
+    """
+    import importlib.metadata
+
+    from gaia.agents.registry import AgentRegistry
+
+    original = AgentRegistry._discover_installed_agents
+
+    def discover(self) -> None:
+        original(self)
+        if self.get("gaia") is not None:
+            return
+        entry_point = importlib.metadata.EntryPoint(
+            name="gaia", value=_FLAGSHIP_ENTRY_POINT, group="gaia.agent"
+        )
+        self._register(self._load_entry_point_registration(entry_point))
+
+    AgentRegistry._discover_installed_agents = discover
+
+
+def mark_set_up() -> None:
+    """Record the flagship as installed and setup as seen ready, in GAIA_HOME."""
+    from gaia.hub import installer
+    from gaia.ui.setup_runner import mark_initialized
+    from gaia.version import __version__
+
+    install_dir = installer.agent_install_dir("gaia")
+    install_dir.mkdir(parents=True, exist_ok=True)
+    installer._write_sentinel("gaia", __version__, "python", "", install_dir)
+    mark_initialized()
+
+
+def _refuse_set_up_home(home: Path) -> None:
+    from gaia.hub import installer
+    from gaia.ui.setup_runner import _marker, is_initialized
+
+    found = None
+    if is_initialized():
+        found = _marker()
+    elif installer.read_sentinel("gaia") is not None:
+        found = installer.agent_install_dir("gaia") / installer.SENTINEL_NAME
+    if found is not None:
+        raise DevBackendError(
+            f"--fresh needs a home that was never set up, but {home} already has "
+            f"{found}. Use an empty --home for --fresh."
+        )
+
+
+# ── Serving ─────────────────────────────────────────────────────────────────
+
+
+class _Server:
+    """A uvicorn server on a thread, stoppable without signals."""
+
+    def __init__(self, app, port: int, name: str):
+        import uvicorn
+
+        config = uvicorn.Config(
+            app,
+            host=HOST,
+            port=port,
+            log_level="warning",
+            access_log=False,
+            # Never trust X-Forwarded-*: see gaia.ui.server.main().
+            proxy_headers=False,
+            forwarded_allow_ips="",
+        )
+        self.server = uvicorn.Server(config)
+        self.thread = threading.Thread(target=self.server.run, name=name, daemon=True)
+
+    def start(self) -> None:
+        self.thread.start()
+
+    def stop(self) -> None:
+        self.server.should_exit = True
+        self.thread.join(timeout=10)
+
+
+def _wait_for(url: str, what: str, server: _Server, stop: threading.Event) -> None:
+    deadline = time.monotonic() + READY_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        if stop.is_set():
+            raise DevBackendError(f"Stopped while waiting for the {what}.")
+        if not server.thread.is_alive():
+            raise DevBackendError(
+                f"The {what} server stopped while starting; its port is probably "
+                "taken. Pick a free --port / --llm-port."
+            )
+        try:
+            with urllib.request.urlopen(url, timeout=2) as resp:
+                if resp.status == 200:
+                    return
+        except (urllib.error.URLError, OSError):
+            pass
+        time.sleep(0.2)
+    raise DevBackendError(
+        f"{what} did not answer at {url} within {READY_TIMEOUT_SECONDS:g}s."
+    )
+
+
+def run(
+    port: int,
+    home: Path,
+    llm_port: Optional[int],
+    script: List[Dict[str, Any]],
+    memory: bool = False,
+    fresh: bool = False,
+    gpu_gb: Optional[float] = None,
+    extra_downloaded: Optional[List[str]] = None,
+) -> int:
+    llm_port = llm_port if llm_port is not None else port + 1
+    if llm_port == port:
+        raise DevBackendError("--llm-port must differ from --port.")
+    llm_url = f"http://{HOST}:{llm_port}/api/v1"
+    isolate_environment(home, llm_url, memory)
+    if fresh:
+        _refuse_set_up_home(home)
+
+    from gaia.audio.lemonade_tts import DEFAULT_TTS_MODEL
+    from gaia.config import UnsafeGaiaHomeError
+    from gaia.installer.init_command import INIT_PROFILES
+    from gaia.llm.lemonade_client import DEFAULT_MODEL_NAME
+    from gaia.logger import configure
+    from gaia.ui.server import AllowedPathsEnvError, create_app
+
+    configure()
+    _ensure_flagship_importable()
+    _register_flagship_without_install()
+    stop = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
+    signal.signal(signal.SIGINT, lambda *_: stop.set())
+    downloaded = (
+        []
+        if fresh
+        else list(dict.fromkeys([*INIT_PROFILES["gaia"]["models"], DEFAULT_TTS_MODEL]))
+    )
+    downloaded = list(dict.fromkeys([*downloaded, *(extra_downloaded or [])]))
+    if not fresh:
+        mark_set_up()
+    llm = _Server(
+        build_fake_llm(script, DEFAULT_MODEL_NAME, downloaded, gpu_gb),
+        llm_port,
+        "fake-llm",
+    )
+    llm.start()
+    backend: Optional[_Server] = None
+    try:
+        _wait_for(f"{llm_url}/health", "fake LLM", llm, stop)
+        try:
+            app = create_app()
+        except (UnsafeGaiaHomeError, AllowedPathsEnvError) as e:
+            raise DevBackendError(str(e)) from e
+        backend = _Server(app, port, "agent-ui")
+        backend.start()
+        # /api/health is the one /api route that needs no X-Gaia-UI header.
+        _wait_for(f"http://{HOST}:{port}/api/health", "Agent UI backend", backend, stop)
+        print(
+            f"READY backend=http://{HOST}:{port} llm={llm_url} home={home}",
+            flush=True,
+        )
+        while not stop.is_set() and backend.thread.is_alive():
+            stop.wait(0.5)
+    finally:
+        if backend is not None:
+            backend.stop()
+        llm.stop()
+    return 0
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python -m gaia.testing.dev_backend",
+        description="Agent UI backend with a scripted fake LLM, isolated in --home.",
+    )
+    parser.add_argument("--port", type=int, required=True, help="Agent UI port")
+    parser.add_argument(
+        "--home", help="GAIA_HOME for this run (required; never ~/.gaia)"
+    )
+    parser.add_argument(
+        "--llm-port", type=int, help="Fake LLM port (default: --port + 1)"
+    )
+    parser.add_argument("--script", help="JSON list of replies / tool calls")
+    parser.add_argument(
+        "--memory",
+        action="store_true",
+        help="keep memory on (it needs an embedder, which the fake LLM lacks)",
+    )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="start not set up, so a client lands on the first-run Setup wizard",
+    )
+    parser.add_argument(
+        "--gpu-memory-gb",
+        help=f"fake PC memory in GB (default: ${GPU_MEMORY_ENV}); an integrated "
+        "GPU sharing that RAM, so a big model can show as tight",
+    )
+    parser.add_argument(
+        "--downloaded",
+        help=f"comma-separated model ids to list as already downloaded, after "
+        f"the defaults (default: ${DOWNLOADED_ENV})",
+    )
+    args = parser.parse_args(argv)
+    try:
+        home = validate_home(args.home)
+        script = load_script(args.script)
+        gpu_gb = None
+        if args.gpu_memory_gb is not None:
+            gpu_gb = parse_gpu_gb(args.gpu_memory_gb, "--gpu-memory-gb")
+        elif GPU_MEMORY_ENV in os.environ:
+            gpu_gb = parse_gpu_gb(os.environ[GPU_MEMORY_ENV], GPU_MEMORY_ENV)
+        extra = None
+        if args.downloaded is not None:
+            extra = parse_downloaded(args.downloaded, "--downloaded")
+        elif DOWNLOADED_ENV in os.environ:
+            extra = parse_downloaded(os.environ[DOWNLOADED_ENV], DOWNLOADED_ENV)
+        return run(
+            args.port,
+            home,
+            args.llm_port,
+            script,
+            args.memory,
+            args.fresh,
+            gpu_gb,
+            extra,
+        )
+    except DevBackendError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return EX_USAGE
+
+
+if __name__ == "__main__":
+    sys.exit(main())

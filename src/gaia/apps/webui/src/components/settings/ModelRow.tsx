@@ -3,6 +3,7 @@
 
 import { Check, ChevronDown, Loader2 } from 'lucide-react';
 import { useT } from '../../i18n/useT';
+import { measuredText, modelFacts, RANK_NOTES } from '../../utils/modelList.core';
 import { isDownloading } from '../modelMeta';
 import { NpuNotReady } from '../setup/NpuNotReady';
 import { formatPrice } from './cloudPrice';
@@ -15,27 +16,19 @@ interface Props {
     remote: boolean;
     /** What the page is doing: a model id, or `dl:<id>` / `rm:<id>`. */
     busy: string | null;
-    confirmingRemove: boolean;
     onUse: () => void;
     onDownload: () => void;
+    /** Opens the page's confirmation; the row never removes on its own. */
     onAskRemove: () => void;
-    onKeep: () => void;
-    onRemove: () => void;
     /** Read the model list again, after the user fixed what stops the NPU. */
     onNpuRecheck?: () => void;
 }
 
 /** One model: its name and chips, with the long facts one click away. */
-export function ModelRow({ model: m, label, current, remote, busy, confirmingRemove, onUse, onDownload, onAskRemove, onKeep, onRemove, onNpuRecheck }: Props) {
+export function ModelRow({ model: m, label, current, remote, busy, onUse, onDownload, onAskRemove, onNpuRecheck }: Props) {
     const t = useT();
     const progress = isDownloading(m) ? m.download_progress : null;
-    const placement = m.placement?.label;
-    const facts = t.compose((say) => [
-        placement && (m.placement?.source === 'expected' ? say('settings.model.expected', { label: placement }) : placement),
-        m.size_gb ? say(m.downloaded ? 'settings.model.sizeOnDisk' : 'settings.model.sizeDownload', { size: `${m.size_gb} GB` }) : null,
-        m.tokens_per_second ? say('settings.model.speed', { speed: `${Math.round(m.tokens_per_second)} tok/s` }) : null,
-        !m.placement && m.context_length ? say('settings.model.contextTokens', { size: m.context_length.toLocaleString() }) : null,
-    ].filter(Boolean).join(' · '));
+    const facts = modelFacts(t, m);
     const hasDetails = !!(m.display_name || facts || m.evidence || (m.custom && m.source_url));
 
     return (
@@ -44,17 +37,18 @@ export function ModelRow({ model: m, label, current, remote, busy, confirmingRem
                 <bdi className="model-row-name" title={m.id}>{label}</bdi>
                 <div className="model-chips">
                     {m.placement?.device && <span className="model-badge is-device">{m.placement.device.toUpperCase()}</span>}
-                    {m.rank && <span className="model-badge is-rank"><bdi dir="ltr">#{m.rank}</bdi> {m.note}</span>}
+                    {m.rank && <span className="model-badge is-rank"><bdi dir="ltr">#{m.rank}</bdi> {m.note && (RANK_NOTES[m.note] ? t(RANK_NOTES[m.note]) : <bdi>{m.note}</bdi>)}</span>}
                     {m.state === 'loaded' && <span className="model-badge is-loaded">{t('settings.model.loaded')}</span>}
-                    {m.fits === true && m.available !== false && <span className="model-badge is-fit">{t('settings.model.fits')}</span>}
+                    {m.fits === true && m.available !== false && !m.tight && <span className="model-badge is-fit">{t('settings.model.fits')}</span>}
+                    {m.fits === true && m.available !== false && m.tight && <span className="model-badge is-tight" title={t('setup.models.warn.tight')}>{t('settings.model.tight')}</span>}
                     {m.custom && <span className="model-badge is-custom">{t('settings.model.custom')}</span>}
                     {!!m.size_gb && <bdi dir="ltr" className="model-badge is-size">{m.size_gb} GB</bdi>}
                     {hasDetails && (
-                        <details className="settings-more">
+                        <details className="settings-more model-row-facts">
                             <summary><ChevronDown size={13} className="settings-disclosure-chevron" aria-hidden="true" /> {t('settings.model.details')}</summary>
                             {m.display_name && <span className="model-row-meta"><bdi>{m.id}</bdi></span>}
                             {facts && <span className="model-row-meta">{facts}</span>}
-                            {m.evidence && <span className="model-row-meta">{t('settings.model.measured', { evidence: m.evidence })}</span>}
+                            {m.evidence && <span className="model-row-meta">{measuredText(t, m.evidence)}</span>}
                             {m.custom && m.source_url && (
                                 <span className="model-row-meta">{t('settings.model.from', { url: m.source_url })}</span>
                             )}
@@ -76,27 +70,16 @@ export function ModelRow({ model: m, label, current, remote, busy, confirmingRem
             </div>
             <div className="model-row-actions">
                 {m.custom && !current && !progress && (
-                    confirmingRemove ? (
-                        <>
-                            <button type="button" className="btn-danger" onClick={onRemove} disabled={busy !== null}>
-                                {busy === `rm:${m.id}` ? <Loader2 size={13} className="spin" /> : null}
-                                {m.downloaded ? t('settings.model.removeDownload') : t('settings.models.remove')}
-                            </button>
-                            <button type="button" className="btn-secondary" onClick={onKeep} disabled={busy !== null}>
-                                {t('settings.models.keep')}
-                            </button>
-                        </>
-                    ) : (
-                        <button
-                            type="button"
-                            className="btn-secondary"
-                            onClick={onAskRemove}
-                            disabled={busy !== null}
-                            aria-label={t('settings.models.removeAria', { name: label })}
-                        >
-                            {t('settings.models.remove')}
-                        </button>
-                    )
+                    <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={onAskRemove}
+                        disabled={busy !== null}
+                        aria-label={t('settings.models.removeAria', { name: label })}
+                    >
+                        {busy === `rm:${m.id}` ? <Loader2 size={13} className="spin" /> : null}
+                        {t('settings.models.remove')}
+                    </button>
                 )}
                 {current && m.available === false ? (
                     <span className="model-row-current is-blocked">{t('settings.model.inUseBlocked')}</span>

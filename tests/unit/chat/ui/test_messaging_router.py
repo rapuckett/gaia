@@ -76,7 +76,15 @@ def test_a_refused_token_is_a_400_with_discords_reason(monkeypatch):
 
 def test_connect_starts_the_bridge(monkeypatch):
     started = []
-    monkeypatch.setattr(discord_cli, "connect", lambda token: {"connected": True})
+    connected = {
+        "connected": True,
+        "bot_name": "GAIA",
+        "application_id": "42",
+        "invite_url": "https://discord.com/oauth2/authorize?client_id=42",
+        "bot_page_url": "https://discord.com/developers/applications/42/bot",
+        "bot_public": False,
+    }
+    monkeypatch.setattr(discord_cli, "connect", lambda token: connected)
     monkeypatch.setattr(
         discord_cli,
         "start_detached",
@@ -108,3 +116,49 @@ def test_stop_failure_names_this_os_tool(monkeypatch):
     monkeypatch.setattr(discord_cli, "stop", lambda **_: False)
     detail = make_client().post("/api/messaging/discord/stop").json()["detail"]
     assert "gaia discord start" in detail
+
+
+def test_restart_stops_then_starts(monkeypatch):
+    calls = []
+    monkeypatch.setattr(discord_cli, "stop", lambda **_: calls.append("stop") or True)
+    monkeypatch.setattr(
+        discord_cli, "start_detached", lambda **_: calls.append("start") or 0
+    )
+    assert make_client().post("/api/messaging/discord/restart").status_code == 200
+    assert calls == ["stop", "start"]
+
+
+def test_forgetting_always_allow_restarts_a_running_bridge(monkeypatch):
+    from gaia.messaging.discord import state
+
+    calls = []
+    monkeypatch.setattr(state, "is_running", lambda: True)
+    monkeypatch.setattr(state, "forget_always", lambda: calls.append("forget") or 2)
+    monkeypatch.setattr(discord_cli, "stop", lambda **_: calls.append("stop") or True)
+    monkeypatch.setattr(
+        discord_cli, "start_detached", lambda **_: calls.append("start") or 0
+    )
+    response = make_client().post("/api/messaging/discord/forget-always")
+    assert response.status_code == 200
+    assert calls == ["stop", "forget", "start"]
+
+
+def test_forgetting_keeps_everything_when_the_bridge_will_not_stop(monkeypatch):
+    from gaia.messaging.discord import state
+
+    forgot = []
+    monkeypatch.setattr(state, "is_running", lambda: True)
+    monkeypatch.setattr(state, "forget_always", lambda: forgot.append(1))
+    monkeypatch.setattr(discord_cli, "stop", lambda **_: False)
+    response = make_client().post("/api/messaging/discord/forget-always")
+    assert response.status_code == 500 and forgot == []
+
+
+def test_status_lists_what_is_always_allowed(monkeypatch):
+    from gaia.messaging.discord import state
+
+    config = state.BridgeConfig(bot_id="9", owner_id="111", dm_channel_id="5")
+    state.save_config(config)
+    state.remember_always("111", ["k1"], "dir")
+    body = make_client().get("/api/messaging/discord").json()
+    assert body["always_allowed"] == ["dir"]

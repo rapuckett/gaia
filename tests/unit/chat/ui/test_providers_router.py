@@ -26,7 +26,7 @@ from gaia.connectors import credential_wait
 from gaia.connectors.errors import ConnectorsError
 from gaia.llm import cloud_keys
 from gaia.llm import custom_models as cm
-from gaia.llm import lemonade_client, npu_linux
+from gaia.llm import gateway, lemonade_client, npu_linux
 from gaia.llm.cloud_keys import CloudKeyError
 from gaia.llm.gateway import (
     DEFAULT_AUTH_HEADER_NAME,
@@ -78,6 +78,8 @@ class FakeLemonade:
         answer = self.answers.get((method, path))
         if isinstance(answer, Exception):
             raise answer
+        if callable(answer):
+            answer = answer(json)
         if answer is not None:
             return _Resp(*answer)
         if (method, path) == ("GET", "system-info"):
@@ -88,12 +90,16 @@ class FakeLemonade:
             return _Resp(200, {"all_models_loaded": []})
         if (method, path) == ("POST", "install"):
             self.cloud.setdefault(json["provider"], {"name": json["provider"]})
-            self.cloud[json["provider"]]["base_url"] = json["base_url"]
+            for field in ("base_url", "auth_header_name", "auth_header_prefix"):
+                self.cloud[json["provider"]][field] = json[field]
             return _Resp(200, {"status": "ok"})
         if (method, path) == ("POST", "cloud/auth"):
             entry = self.cloud.setdefault(json["provider"], {"name": json["provider"]})
             entry.update(runtime_key_set=True, models_discovered=True)
             return _Resp(200, {"models_discovered": True})
+        if (method, path) == ("POST", "uninstall"):
+            self.cloud.pop(json["provider"], None)
+            return _Resp(200, {"status": "ok"})
         if method == "DELETE" and path.startswith("cloud/auth/"):
             return _Resp(200, {})
         raise AssertionError(f"unexpected Lemonade call {method} {path}")
@@ -121,16 +127,33 @@ def lemonade(monkeypatch):
 @pytest.fixture
 def keys(monkeypatch):
     """The OS credential store and the stored-key replay, faked."""
-    state = {"stored": {}, "remembered": [], "ensure": [], "ensure_result": True}
+    state = {
+        "stored": {},
+        "bound": {},
+        "remembered": [],
+        "ensure": [],
+        "ensure_result": True,
+    }
 
-    def remember_key(provider, key):
+    def remember_key(provider, key, base_url=None):
         if state.get("remember_error"):
             raise CloudKeyError(state["remember_error"])
         state["remembered"].append((provider, key))
         state["stored"][provider] = key
+        if provider == "amd":
+            assert base_url, "the gateway's key must be saved with its address"
+            state["bound"][provider] = base_url
 
     def recall_key(provider):
         return state["stored"].get(provider)
+
+    def recall_gateway_key():
+        key = state["stored"].get("amd")
+        return gateway.GatewayKey(key, state["bound"].get("amd")) if key else None
+
+    def remember_token(token, base_url):
+        state["stored"]["amd"] = token
+        state["bound"]["amd"] = base_url
 
     def forget_key(provider):
         if state.get("forget_error"):
@@ -147,6 +170,8 @@ def keys(monkeypatch):
 
     monkeypatch.setattr(cloud_keys, "remember_key", remember_key)
     monkeypatch.setattr(cloud_keys, "recall_key", recall_key)
+    monkeypatch.setattr(cloud_keys, "recall_gateway_key", recall_gateway_key)
+    monkeypatch.setattr(gateway, "remember_token", remember_token)
     monkeypatch.setattr(cloud_keys, "forget_key", forget_key)
     monkeypatch.setattr(cloud_keys, "ensure_authenticated", ensure_authenticated)
     return state
@@ -170,8 +195,12 @@ def reach(monkeypatch):
 @pytest.fixture(autouse=True)
 def _fresh_restore():
     providers.reset_restore_state()
+    providers._STORED_KEY_SEEN.clear()
+    providers._LAST_ERRORS.clear()
     yield
     providers.reset_restore_state()
+    providers._STORED_KEY_SEEN.clear()
+    providers._LAST_ERRORS.clear()
 
 
 @pytest.fixture
@@ -186,7 +215,7 @@ def client(db):
     app = FastAPI()
     app.include_router(providers.router)
     app.state.db = db
-    return TestClient(app, headers={"X-Gaia-UI": "1"})
+    return TestClient(app, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"})
 
 
 def _config():
@@ -234,17 +263,23 @@ def test_unreachable_lemonade_names_the_app_fix_not_a_command(
     assert "gaia " not in error
 
 
-def test_unreachable_user_run_lemonade_gives_this_machines_start_hint(
+def test_unreachable_user_run_lemonade_is_theirs_to_start_with_no_command(
     client, lemonade, keys, monkeypatch
 ):
+    """A PC with no Lemonade of its own used to read "not installed. Run `gaia init`"."""
     from gaia.llm import lemonade_launcher
+    from gaia.llm.surface_hints import APP_OTHER_SERVER_START_HINT
 
-    hint = lemonade_launcher.StartHint(instruction="Start Lemonade from its tray icon.")
+    hint = lemonade_launcher.StartHint(
+        instruction="Lemonade Server is not installed. Run `gaia init` to install it."
+    )
     monkeypatch.setattr(lemonade_launcher, "gaia_runs_lemonade", lambda *a: False)
-    monkeypatch.setattr(lemonade_launcher, "describe_start_hint", lambda: hint)
+    monkeypatch.setattr(lemonade_launcher, "describe_start_hint", lambda *a, **k: hint)
     lemonade.down = True
     error = client.get("/api/providers").json()["lemonade_error"]
-    assert error.endswith(hint.instruction)
+    assert error.endswith(f"{APP_OTHER_SERVER_START_HINT}, then try again.")
+    assert "not installed" not in error
+    assert "`" not in error and "gaia init" not in error
 
 
 def test_list_does_not_repeat_a_provider_when_a_later_lookup_fails(
@@ -486,7 +521,7 @@ def test_an_env_key_is_not_registered_on_a_remote_lemonade(
     monkeypatch.setattr(providers, "_base_url", lambda: "http://10.0.0.5:13305/api/v1")
     monkeypatch.setattr(providers, "_cloud_entry", lambda p: lemonade.cloud.get(p))
     fw = client.get("/api/providers").json()["providers"][1]
-    assert lemonade.calls == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
     assert replay == []
     assert "not on this PC" in fw["error"]
 
@@ -579,9 +614,11 @@ def test_a_keychain_prompt_is_reported_as_waiting_not_as_no_key(
             _answered_with_the_dialog_open(keychain_prompt)
             fw = body["providers"][1]
             assert fw["key_state"] == "waiting_for_os_permission"
+            assert fw["key_store"] == "waiting"
             assert fw["key_source"] is None
             assert "Look for a system dialog" in fw["key_message"]
             assert body["providers"][2]["key_state"] == "read"
+            assert body["providers"][2]["key_store"] is None
     # One read in flight however often the UI polls, and one warning for it.
     assert keychain_prompt["reads"] == 1
     assert len(_credential_threads()) == 1
@@ -633,8 +670,14 @@ def test_a_dismissed_keyring_prompt_is_not_reopened_by_polling(
     assert asked == 1
     for view in body.json()["providers"][1:]:
         assert view["key_state"] == "store_locked"
+        assert view["key_store"] == "locked"
         assert view["key_source"] is None
         assert "won't ask again for 5 minutes" in view["key_message"]
+    # The summary never reads the store, but says it is held, in both fields.
+    for summary in client.get("/api/providers/list").json()["providers"][1:]:
+        assert summary["key_state"] == "store_locked"
+        assert summary["key_store"] == "locked"
+    assert dismissed_keyring["reads"] == asked
 
     assert client.post("/api/providers/key-store/retry").json() == {"retrying": True}
     client.get("/api/providers")
@@ -650,9 +693,69 @@ def test_connecting_with_a_locked_store_is_not_answered_as_a_wait(
     client.get("/api/providers")
     resp = client.post("/api/providers/fireworks/connect", json={})
     assert resp.status_code == 423, resp.text
-    assert "won't ask again for 5 minutes" in resp.json()["detail"]
+    assert resp.json()["detail"]["code"] == "key_store_locked"
+    assert "won't ask again for 5 minutes" in resp.json()["detail"]["message"]
     # Connect is the user's action: it asked the store once more.
     assert dismissed_keyring["reads"] == 2
+
+
+def _raises(error):
+    def raise_it(*args, **kwargs):
+        raise error
+
+    return raise_it
+
+
+@pytest.mark.parametrize(
+    "error, status, code",
+    [
+        (
+            credential_wait.CredentialStoreWaiting("Look for a system dialog."),
+            409,
+            "key_store_waiting",
+        ),
+        (
+            credential_wait.CredentialStoreLocked("The key store is locked."),
+            423,
+            "key_store_locked",
+        ),
+    ],
+    ids=["waiting", "locked"],
+)
+@pytest.mark.parametrize("route", ["connect", "select", "gateway_move"])
+def test_a_key_store_wait_or_lock_answers_with_its_code_and_the_same_message(
+    client, lemonade, keys, monkeypatch, route, error, status, code
+):
+    if route == "connect":
+        lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+        monkeypatch.setattr(cloud_keys, "ensure_authenticated", _raises(error))
+        resp = client.post("/api/providers/fireworks/connect", json={})
+    elif route == "select":
+        monkeypatch.setattr(providers, "_check_model_available", _raises(error))
+        resp = client.post(
+            "/api/providers/select",
+            json={"model": "fireworks.accounts/fireworks/models/glm-5p3-flash"},
+        )
+    else:
+        lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+        monkeypatch.setattr(providers, "_bounded_gateway_key", _raises(error))
+        resp = client.post(
+            "/api/providers/amd/connect", json={"base_url": "https://gw2.example/v1"}
+        )
+    assert resp.status_code == status, resp.text
+    assert resp.json()["detail"] == {"code": code, "message": str(error)}
+
+
+def test_other_409s_keep_a_plain_detail(client, lemonade, keys, monkeypatch):
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+    monkeypatch.setattr(
+        cloud_keys,
+        "ensure_authenticated",
+        _raises(providers.ProviderError("Lemonade is busy.", 409)),
+    )
+    resp = client.post("/api/providers/fireworks/connect", json={})
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"] == "Lemonade is busy."
 
 
 def test_restore_waits_for_a_keychain_prompt_then_restores(
@@ -685,7 +788,8 @@ def test_select_while_a_keychain_prompt_is_open_says_so(
     resp = client.post("/api/providers/select", json={"model": model})
     _answered_with_the_dialog_open(keychain_prompt)
     assert resp.status_code == 409, resp.text
-    assert "Look for a system dialog" in resp.json()["detail"]
+    assert resp.json()["detail"]["code"] == "key_store_waiting"
+    assert "Look for a system dialog" in resp.json()["detail"]["message"]
     assert db.get_setting("custom_model") is None
 
     keychain_prompt["answered"].set()
@@ -763,6 +867,37 @@ def test_active_names_a_cloud_model_only_lemonade_lists_as_cloud(
     assert body["display_name"] == "big-model"
 
 
+def test_active_names_hybrid_as_a_cloud_model(client, lemonade, keys, db):
+    db.set_setting("custom_model", "hybrid")
+
+    body = client.get("/api/providers/active").json()
+
+    assert body["model"] == "hybrid"
+    assert body["remote"] is True
+    assert body["inference_remote"] is True
+    assert body["downloaded"] is None
+    assert body["provider_name"] == "AMD LLM Gateway"
+    assert body["display_name"] == "Hybrid"
+    assert body["label"] == "Hybrid · AMD LLM Gateway"
+
+
+def test_active_reports_unusable_hybrid_settings(
+    client, lemonade, keys, db, monkeypatch
+):
+    from gaia.llm import hybrid
+
+    def broken(*_a, **_k):
+        raise hybrid.HybridConfigError("hybrid_cheap_model must name a model")
+
+    monkeypatch.setattr(hybrid.HybridSettings, "load", classmethod(broken))
+    db.set_setting("custom_model", "hybrid")
+
+    body = client.get("/api/providers/active").json()
+
+    assert body["model"] is None
+    assert "hybrid_cheap_model" in body["config_error"]
+
+
 def test_active_reads_the_catalog_to_name_a_cloud_model_on_a_cold_start(
     client, lemonade, keys, db, monkeypatch
 ):
@@ -819,6 +954,34 @@ def test_active_restores_the_last_model_once_per_run(client, lemonade, keys, db)
     again = client.get("/api/providers/active").json()
     assert again["restore"]["status"] == "restored"
     assert len(lemonade.calls) == calls
+
+
+def test_a_model_picked_elsewhere_is_restored_as_the_pick(client, lemonade, keys, db):
+    """Not as a Custom model ID, which Settings would then show in that field."""
+    from gaia.ui.routers.providers import PICKED_MODEL_SETTING, custom_model_override
+
+    model = "fireworks.accounts/fireworks/models/glm-5p3-flash"
+    db.set_setting(PICKED_MODEL_SETTING, "Qwen3-4B-GGUF")
+    db.set_setting("custom_model", "Qwen3-4B-GGUF")
+    _write_config({"last_model": model})
+    lemonade.models = _cloud_models()
+
+    assert client.get("/api/providers/active").json()["model"] == model
+    assert db.get_setting(PICKED_MODEL_SETTING) == model
+    assert custom_model_override(db) is None
+
+
+def test_a_restore_keeps_a_custom_model_id_in_force_as_one(client, lemonade, keys, db):
+    from gaia.ui.routers.providers import PICKED_MODEL_SETTING
+
+    model = "fireworks.accounts/fireworks/models/glm-5p3-flash"
+    db.set_setting(PICKED_MODEL_SETTING, "Qwen3-4B-GGUF")
+    db.set_setting("custom_model", "Phi-4-mini-instruct-GGUF")
+    _write_config({"last_model": model})
+    lemonade.models = _cloud_models()
+
+    client.get("/api/providers/active")
+    assert db.get_setting(PICKED_MODEL_SETTING) == "Qwen3-4B-GGUF"
 
 
 def test_active_never_switches_model_when_the_saved_one_cannot_run(
@@ -985,7 +1148,12 @@ def test_active_restore_fails_for_a_local_model_not_downloaded(
 
 # Lemonade lists a registered ``user.X`` model as ``X`` (seen on v2026.40.0).
 _CUSTOM = "user.ggml-gpt-oss-20b-MXFP4-GGUF"
-_CUSTOM_LISTED = {"id": "ggml-gpt-oss-20b-MXFP4-GGUF", "downloaded": True, "labels": []}
+_CUSTOM_LISTED = {
+    "id": "ggml-gpt-oss-20b-MXFP4-GGUF",
+    "recipe": "llamacpp",
+    "downloaded": True,
+    "labels": [],
+}
 
 
 def test_active_custom_model_is_downloaded_under_its_listed_name(
@@ -1041,7 +1209,7 @@ def test_connect_fireworks_sends_the_tui_request_shapes(client, lemonade, keys):
         "provider": "fireworks",
         "api_key": KEY,
     }
-    assert lemonade.paths() == ["install", "cloud/auth", "system-info"]
+    assert lemonade.paths() == ["system-info", "install", "cloud/auth", "system-info"]
     assert all(c["allow_redirects"] is False for c in lemonade.calls)
     body = resp.json()
     assert body["remembered"] is True and body["remember_error"] is None
@@ -1088,6 +1256,159 @@ def test_connect_ignores_gateway_fields_for_fireworks(client, lemonade, keys):
         lemonade.call("POST", "install")["json"]["base_url"]
         == "https://api.fireworks.ai/inference/v1"
     )
+
+
+_CUSTOM_GATEWAY = {
+    "name": "amd",
+    "base_url": "https://gw.example/v1",
+    "auth_header_name": "X-Key",
+    "auth_header_prefix": "Token ",
+    "runtime_key_set": True,
+    "models_discovered": True,
+}
+
+
+def test_a_keyless_reconnect_keeps_a_custom_gateway(client, lemonade, keys):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    resp = client.post("/api/providers/amd/connect", json={})
+    assert resp.status_code == 200, resp.text
+    payload = lemonade.call("POST", "install")["json"]
+    assert payload["base_url"] == "https://gw.example/v1"
+    assert payload["auth_header_name"] == "X-Key"
+    assert payload["auth_header_prefix"] == "Token "
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"base_url": "https://attacker.example/v1"},
+        {"auth_header_name": "X-Leak"},
+        {"base_url": "https://attacker.example/v1", "auth_header_name": "X-Leak"},
+        {"auth_header_prefix": ""},
+    ],
+)
+@pytest.mark.parametrize(
+    "away", [{"X-Forwarded-For": "203.0.113.9"}, {"X-Forwarded-Proto": "https"}]
+)
+def test_only_the_pc_may_move_where_the_saved_key_goes(
+    client, lemonade, keys, fields, away
+):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    resp = client.post("/api/providers/amd/connect", json=fields, headers=away)
+    assert resp.status_code == 403
+    assert "on the PC running GAIA" in resp.json()["detail"]
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
+    assert lemonade.cloud["amd"] == _CUSTOM_GATEWAY
+    assert keys["ensure"] == []
+
+
+def test_the_pc_may_move_a_saved_key_to_another_gateway(client, lemonade, keys):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    resp = client.post(
+        "/api/providers/amd/connect",
+        json={"base_url": "https://gw2.example/v1", "auth_header_name": "X-Other"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert lemonade.cloud["amd"]["base_url"] == "https://gw2.example/v1"
+    assert lemonade.cloud["amd"]["auth_header_name"] == "X-Other"
+    assert lemonade.cloud["amd"]["auth_header_prefix"] == "Token "
+
+
+def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    keys["stored"]["fireworks"] = KEY
+    resp = client.get("/api/providers/list", headers={"X-Forwarded-For": "203.0.113.9"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {
+        "providers": [
+            {
+                "id": "local",
+                "name": "Local",
+                "remote": False,
+                "privacy_notice": providers._PRIVACY["local"],
+                "configured": True,
+                "blocked": False,
+                "network": None,
+                "key_source": None,
+                "key_state": None,
+                "key_store": None,
+                "key_hint": None,
+                "known_models": None,
+                "error": None,
+                "env_var": None,
+                "key_from_gaia_env": None,
+            },
+            {
+                "id": "fireworks",
+                "name": "Fireworks AI",
+                "remote": True,
+                "privacy_notice": providers._PRIVACY["fireworks"],
+                "configured": False,
+                "blocked": False,
+                "network": None,
+                "key_source": None,
+                "key_state": "unknown",
+                "key_store": None,
+                "key_hint": None,
+                "known_models": False,
+                "error": None,
+                "env_var": None,
+                "key_from_gaia_env": False,
+            },
+            {
+                "id": "amd",
+                "name": "AMD LLM Gateway",
+                "remote": True,
+                "privacy_notice": providers._PRIVACY["amd"],
+                "configured": True,
+                "blocked": False,
+                # Only the PC learns whether the gateway answers.
+                "network": {"reachable": None},
+                # Lemonade holds a key the user entered; the hint needs a store read.
+                "key_source": "lemonade",
+                "key_state": "read",
+                "key_store": None,
+                "key_hint": None,
+                "known_models": False,
+                "error": None,
+                "env_var": None,
+                "key_from_gaia_env": False,
+            },
+        ],
+        "lemonade_error": None,
+    }
+    assert lemonade.paths() == ["system-info", "system-info"]
+    assert keys["ensure"] == []
+    assert KEY not in resp.text and "gw.example" not in resp.text
+
+
+def test_provider_summaries_say_an_unreachable_gateway_without_its_address(
+    client, lemonade, keys, reach
+):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    reach["error"] = _offline()
+    resp = client.get("/api/providers/list")
+    assert resp.status_code == 200, resp.text
+    by_id = {p["id"]: p for p in resp.json()["providers"]}
+    assert by_id["amd"]["network"] == {"reachable": False}
+    assert by_id["local"]["network"] is None
+    assert by_id["fireworks"]["network"] is None
+    assert "llm-api.amd.com" not in resp.text and "gw.example" not in resp.text
+
+
+@pytest.mark.parametrize("route", ["/api/providers/list", "/api/providers"])
+def test_only_the_pc_learns_whether_the_gateway_answers(
+    client, lemonade, keys, reach, route
+):
+    """A host rebound to a LAN address would turn the answer into a port scan."""
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    reach["error"] = _offline()
+    resp = client.get(route, headers={"X-Forwarded-For": "203.0.113.9"})
+    assert resp.status_code == 200, resp.text
+    amd = {p["id"]: p for p in resp.json()["providers"]}["amd"]
+    assert amd["network"]["reachable"] is None
+    assert amd["network"].get("detail") is None
+    assert reach["asked"] == []
 
 
 def test_connect_reports_a_key_the_store_did_not_keep(client, lemonade, keys):
@@ -1262,7 +1583,7 @@ def test_a_key_accepted_without_models_names_the_log_to_read(
 
 
 def test_a_missing_ca_file_is_named_instead_of_the_key(
-    client, lemonade, keys, model_list
+    client, device_client, lemonade, keys, model_list
 ):
     problem = "This PC's certificate store has no /etc/ssl/certs/ca-certificates.crt"
     model_list["ca_problem"] = problem
@@ -1271,6 +1592,29 @@ def test_a_missing_ca_file_is_named_instead_of_the_key(
     assert resp.status_code == 503
     assert resp.json()["detail"] == problem
     assert model_list["keys_checked"] == []
+    # A paired device is told to fix it on the PC, without the PC's paths.
+    resp = device_client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 503
+    assert "certificate store needs fixing" in resp.json()["detail"]
+    assert "/etc/ssl" not in resp.text
+
+
+def test_a_missing_ca_file_lemond_was_given_is_not_blamed(
+    client, lemonade, keys, model_list, monkeypatch
+):
+    """#7226: lemond runs with the file supplied, so a key with no models is
+    judged by the key check, not the host's store."""
+    from gaia.llm.lemonade_embedded import EmbeddedLemonade
+
+    monkeypatch.setattr(
+        EmbeddedLemonade, "_read_state", lambda self: {"ca_supplied": True}
+    )
+    model_list["ca_problem"] = "should not be shown"
+    lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 422
+    assert "did not accept that key" in resp.json()["detail"]
+    assert model_list["keys_checked"] == [KEY]
 
 
 def test_a_missing_ca_file_on_the_users_own_server_is_not_claimed(
@@ -1280,7 +1624,7 @@ def test_a_missing_ca_file_on_the_users_own_server_is_not_claimed(
     model_list["ca_problem"] = "should not be shown"
     lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
-    assert resp.status_code == 401
+    assert resp.status_code == 422
     assert "did not accept that key" in resp.json()["detail"]
 
 
@@ -1289,7 +1633,7 @@ def test_connect_drops_a_key_that_discovers_no_models(
 ):
     lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
-    assert resp.status_code == 401
+    assert resp.status_code == 422
     assert "did not accept that key" in resp.json()["detail"]
     assert "DELETE" in [c["method"] for c in lemonade.calls]
     assert lemonade.call("DELETE", "cloud/auth/fireworks")
@@ -1297,11 +1641,254 @@ def test_connect_drops_a_key_that_discovers_no_models(
     assert KEY not in resp.text
 
 
+def _registered(client, provider="fireworks"):
+    view = next(
+        p
+        for p in client.get("/api/providers").json()["providers"]
+        if p["id"] == provider
+    )
+    return view["registered"]
+
+
+def _mutations(lemonade):
+    return [(c["method"], c["path"]) for c in lemonade.calls if c["method"] != "GET"]
+
+
+UNINSTALL = {"backend": "cloud", "provider": "fireworks"}
+
+
+def test_a_rejected_connect_leaves_nothing_registered(
+    client, lemonade, keys, model_list
+):
+    assert _registered(client) is False
+    lemonade.calls.clear()
+    lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 422
+    assert "did not accept that key" in resp.json()["detail"]
+    assert KEY not in resp.text
+    assert _mutations(lemonade) == [
+        ("POST", "install"),
+        ("POST", "cloud/auth"),
+        ("DELETE", "cloud/auth/fireworks"),
+        ("POST", "uninstall"),
+    ]
+    assert lemonade.call("POST", "uninstall")["json"] == UNINSTALL
+    assert _registered(client) is False
+
+
+def test_a_401_connect_leaves_nothing_registered(client, lemonade, keys):
+    lemonade.answers[("POST", "cloud/auth")] = (401, {"error": {"message": KEY}})
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 422
+    assert "rejected the key" in resp.json()["detail"]
+    assert _mutations(lemonade) == [
+        ("POST", "install"),
+        ("POST", "cloud/auth"),
+        ("POST", "uninstall"),
+    ]
+    assert lemonade.call("POST", "uninstall")["json"] == UNINSTALL
+    assert _registered(client) is False
+
+
+OLD_KEY = "fw_OLD_working_key_fixed_456"
+FIREWORKS_INSTALL = {
+    "backend": "cloud",
+    "provider": "fireworks",
+    "wire_format": "openai",
+    "base_url": "https://api.fireworks.ai/inference/v1",
+    "auth_header_name": "Authorization",
+    "auth_header_prefix": "Bearer ",
+}
+
+
+def _holding(lemonade, *, env=False):
+    """Fireworks registered and working on OLD_KEY, or on Lemonade's environment key.
+
+    Lemonade stores any key it is handed; only OLD_KEY discovers models.
+    """
+    lemonade.held = {} if env else {"fireworks": OLD_KEY}
+    entry = {"name": "fireworks", "models_discovered": True}
+    entry["env_var_set" if env else "runtime_key_set"] = True
+    lemonade.cloud["fireworks"] = entry
+
+    def auth(body):
+        lemonade.held["fireworks"] = body["api_key"]
+        works = body["api_key"] == OLD_KEY
+        entry.update(runtime_key_set=True, models_discovered=works)
+        return 200, {"models_discovered": works}
+
+    def clear(_):
+        lemonade.held.pop("fireworks", None)
+        entry.update(runtime_key_set=False, models_discovered=env)
+        return 200, {}
+
+    lemonade.answers[("POST", "cloud/auth")] = auth
+    lemonade.answers[("DELETE", "cloud/auth/fireworks")] = clear
+
+
+def _sequence(lemonade):
+    return [(c["method"], c["path"], c["json"]) for c in lemonade.calls]
+
+
+def _auth(key):
+    return ("POST", "cloud/auth", {"provider": "fireworks", "api_key": key})
+
+
+def test_a_rejected_replace_puts_the_stored_key_back(
+    client, lemonade, keys, model_list
+):
+    _holding(lemonade)
+    keys["stored"]["fireworks"] = OLD_KEY
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 422
+    assert "did not accept that key" in resp.json()["detail"]
+    assert _sequence(lemonade) == [
+        ("GET", "system-info", None),
+        ("POST", "install", FIREWORKS_INSTALL),
+        _auth(KEY),
+        _auth(OLD_KEY),
+        ("GET", "system-info", None),
+    ]
+    assert lemonade.held["fireworks"] == OLD_KEY
+    assert lemonade.cloud["fireworks"]["models_discovered"] is True
+    assert keys["stored"]["fireworks"] == OLD_KEY and keys["remembered"] == []
+    assert KEY not in resp.text and OLD_KEY not in resp.text
+    assert _registered(client) is True
+
+
+def test_a_401_replace_puts_the_stored_key_back(client, lemonade, keys):
+    _holding(lemonade)
+    keys["stored"]["fireworks"] = OLD_KEY
+    auth = lemonade.answers[("POST", "cloud/auth")]
+    lemonade.answers[("POST", "cloud/auth")] = lambda body: (
+        (401, {}) if body["api_key"] == KEY else auth(body)
+    )
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 422
+    assert "rejected the key" in resp.json()["detail"]
+    assert _sequence(lemonade)[2:] == [
+        _auth(KEY),
+        _auth(OLD_KEY),
+        ("GET", "system-info", None),
+    ]
+    assert lemonade.held["fireworks"] == OLD_KEY
+
+
+def test_a_rejected_replace_of_an_environment_key_drops_only_the_new_key(
+    client, lemonade, keys, model_list
+):
+    _holding(lemonade, env=True)
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 422
+    assert _sequence(lemonade) == [
+        ("GET", "system-info", None),
+        ("POST", "install", FIREWORKS_INSTALL),
+        _auth(KEY),
+        ("DELETE", "cloud/auth/fireworks", None),
+        ("GET", "system-info", None),
+    ]
+    assert lemonade.held == {}
+    assert lemonade.cloud["fireworks"]["env_var_set"] is True
+    assert keys["remembered"] == []
+
+
+@pytest.mark.parametrize("stored", [True, False], ids=["refused", "no-copy"])
+def test_a_failed_restore_is_a_loud_502(
+    client, lemonade, keys, model_list, caplog, stored
+):
+    _holding(lemonade)
+    if stored:
+        keys["stored"]["fireworks"] = OLD_KEY
+        auth = lemonade.answers[("POST", "cloud/auth")]
+        lemonade.answers[("POST", "cloud/auth")] = lambda body: (
+            (500, {"error": {"message": body["api_key"]}})
+            if body["api_key"] == OLD_KEY
+            else auth(body)
+        )
+    with caplog.at_level(logging.ERROR):
+        resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == (
+        "Fireworks AI didn't accept the new key, and GAIA couldn't restore the "
+        "old one. Enter a working key in Settings › Model."
+    )
+    assert "fireworks" in caplog.text
+    for key in (KEY, OLD_KEY):
+        assert key not in resp.text and key not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "state,status,said",
+    [("FAILING", 503, "kept the one you had"), ("OK", 502, "accepted that key")],
+)
+def test_an_outage_during_replace_keeps_the_old_key(
+    client, lemonade, keys, model_list, state, status, said
+):
+    from gaia.llm.providers.fireworks import ModelListCheck, ModelListState
+
+    _holding(lemonade)
+    keys["stored"]["fireworks"] = OLD_KEY
+    model_list["check"] = ModelListCheck(ModelListState[state], "HTTP 500")
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == status
+    assert said in resp.json()["detail"]
+    assert "DELETE" not in [c["method"] for c in lemonade.calls]
+    assert lemonade.held["fireworks"] == OLD_KEY
+    assert keys["stored"]["fireworks"] == OLD_KEY and keys["remembered"] == []
+    assert model_list["restarts"] == []
+    assert KEY not in resp.text and OLD_KEY not in resp.text
+
+
+def test_a_failed_cleanup_is_reported_with_the_rejection(
+    client, lemonade, keys, model_list, caplog
+):
+    lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
+    lemonade.answers[("POST", "uninstall")] = (500, {"error": {"message": KEY}})
+    with caplog.at_level(logging.ERROR):
+        resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 502
+    detail = resp.json()["detail"]
+    assert "did not accept that key" in detail
+    assert "could not remove the registration" in detail
+    assert "disconnect Fireworks" in detail
+    assert KEY not in resp.text and KEY not in caplog.text
+    assert "fireworks" in caplog.text
+
+
+def test_forget_clears_a_key_less_leftover(client, lemonade, keys):
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": False}
+    resp = client.delete("/api/providers/fireworks/key")
+    assert resp.status_code == 200
+    assert resp.json() == {"removed": True}
+    assert _mutations(lemonade) == [
+        ("DELETE", "cloud/auth/fireworks"),
+        ("POST", "uninstall"),
+    ]
+    assert lemonade.call("POST", "uninstall")["json"] == UNINSTALL
+    assert _registered(client) is False
+
+
+def test_forget_keeps_the_registration_of_a_provider_that_held_a_key(
+    client, lemonade, keys
+):
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "runtime_key_set": True}
+    client.delete("/api/providers/fireworks/key")
+    assert "uninstall" not in lemonade.paths("POST")
+
+
+def test_forget_reports_a_failed_leftover_cleanup(client, lemonade, keys):
+    lemonade.cloud["fireworks"] = {"name": "fireworks"}
+    lemonade.answers[("POST", "uninstall")] = (500, {})
+    resp = client.delete("/api/providers/fireworks/key")
+    assert resp.status_code == 502
+
+
 @pytest.mark.parametrize("status", [401, 403])
-def test_connect_rejected_key_is_401(client, lemonade, keys, status):
+def test_connect_rejected_key_is_422(client, lemonade, keys, status):
     lemonade.answers[("POST", "cloud/auth")] = (status, {"error": {"message": KEY}})
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
-    assert resp.status_code == 401
+    assert resp.status_code == 422
     assert "rejected the key" in resp.json()["detail"]
     assert KEY not in resp.text
     assert keys["remembered"] == []
@@ -1320,6 +1907,85 @@ def test_connect_old_lemonade_409(client, lemonade, keys):
     assert resp.status_code == 409
     assert "oldest version GAIA supports" in resp.json()["detail"]
     assert "cloud/auth" not in lemonade.paths()
+
+
+def test_connect_unregistered_provider_names_settings_not_a_command(
+    client, lemonade, keys
+):
+    lemonade.answers[("POST", "cloud/auth")] = (
+        404,
+        {
+            "error": {
+                "message": (
+                    "Cloud provider 'fireworks' is not installed. Call POST "
+                    "/v1/install with backend=cloud, provider, and base_url first."
+                ),
+                "type": "invalid_request",
+            }
+        },
+    )
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 409, resp.text
+    detail = resp.json()["detail"]
+    assert "no cloud provider registered" in detail
+    assert "Settings > Agent & model" in detail
+    assert "connect it again" in detail
+    assert "older than" not in detail
+    assert "gaia gateway install" not in detail
+    assert "TUI" not in detail
+    assert "/gateway" not in detail
+
+
+def test_connect_install_404_with_the_marker_keeps_the_version_hint(
+    client, lemonade, keys
+):
+    lemonade.answers[("POST", "install")] = (
+        404,
+        {
+            "error": {
+                "message": (
+                    "Cloud provider 'fireworks' is not installed. Call POST "
+                    "/v1/install with backend=cloud, provider, and base_url first."
+                ),
+                "type": "invalid_request",
+            }
+        },
+    )
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 409, resp.text
+    detail = resp.json()["detail"]
+    assert "oldest version GAIA supports" in detail
+    assert "no cloud provider registered" not in detail
+    assert "cloud/auth" not in lemonade.paths()
+
+
+def test_cloud_error_other_404_keeps_lemonades_detail():
+    err = providers._cloud_error(
+        "fireworks",
+        404,
+        {"error": {"message": "provider is misconfigured", "type": "invalid_request"}},
+    )
+    assert err.status == 502
+    assert "provider is misconfigured" in str(err)
+    assert "oldest version GAIA supports" not in str(err)
+    assert "no cloud provider registered" not in str(err)
+
+
+def test_connect_names_a_plaintext_http_gateway_without_echoing_lemonade(
+    client, lemonade, keys
+):
+    raw = (
+        "Cloud provider 'amd' uses http://. Set allow_insecure_http=true to "
+        f"explicitly opt in before storing or using an API key over plaintext HTTP. {KEY}"
+    )
+    lemonade.answers[("POST", "cloud/auth")] = (400, {"error": {"message": raw}})
+    resp = client.post("/api/providers/amd/connect", json={"api_key": KEY})
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert detail["code"] == "gateway_insecure_http"
+    assert "https://" in detail["message"]
+    assert KEY not in resp.text
+    assert "allow_insecure_http" not in resp.text
 
 
 def test_connect_never_echoes_lemonade_errors_about_the_key(
@@ -1351,7 +2017,7 @@ def test_connect_refuses_a_key_over_the_tunnel(client, lemonade, keys):
         headers={"X-Forwarded-For": "203.0.113.9"},
     )
     assert resp.status_code == 403
-    assert lemonade.calls == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
     assert KEY not in resp.text
 
 
@@ -1376,7 +2042,7 @@ def test_connect_refuses_a_remote_lemonade(client, lemonade, keys, monkeypatch):
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
     assert resp.status_code == 409
     assert "not on this PC" in resp.json()["detail"]
-    assert lemonade.calls == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
 
 
 @pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "[::1]"])
@@ -1401,7 +2067,8 @@ def test_connect_blank_key_while_a_keychain_prompt_is_open_says_so(
     resp = client.post("/api/providers/fireworks/connect", json={})
     _answered_with_the_dialog_open(keychain_prompt)
     assert resp.status_code == 409, resp.text
-    assert "Look for a system dialog" in resp.json()["detail"]
+    assert resp.json()["detail"]["code"] == "key_store_waiting"
+    assert "Look for a system dialog" in resp.json()["detail"]["message"]
 
     keychain_prompt["answered"].set()
     _wait_for_reads_to_drain()
@@ -1415,16 +2082,16 @@ def test_connect_blank_key_replay_failure_is_502(client, lemonade, keys):
     assert resp.status_code == 502
 
 
-def test_connect_registered_without_models_is_401(client, lemonade, keys):
+def test_connect_registered_without_models_is_422(client, lemonade, keys):
     resp = client.post("/api/providers/fireworks/connect", json={})
-    assert resp.status_code == 401
+    assert resp.status_code == 422
     assert "discovered no models" in resp.json()["detail"]
 
 
 def test_connect_local_and_unknown(client, lemonade, keys):
     assert client.post("/api/providers/local/connect", json={}).status_code == 422
     assert client.post("/api/providers/openai/connect", json={}).status_code == 404
-    assert lemonade.calls == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
 
 
 # ── DELETE /api/providers/{p}/key ──────────────────────────────────────────
@@ -1462,6 +2129,686 @@ def test_forget_key_store_error_is_503(client, lemonade, keys):
 
 def test_forget_key_local_is_422(client, lemonade, keys):
     assert client.delete("/api/providers/local/key").status_code == 422
+
+
+# ── Keys from a paired device ──────────────────────────────────────────────
+
+PC_PATH = "/Users/someone/Library/Keychains/login.keychain-db"
+
+
+@pytest.fixture
+def device_client(db, tmp_path):
+    """A request from an allowed paired device on the device listener."""
+    from gaia.ui.devices.access import DeviceAccess
+    from gaia.ui.security import (
+        DEVICE_SCOPE_KEY,
+        LAN_LISTENER,
+        LISTENER_SCOPE_KEY,
+        DevicePrincipal,
+    )
+
+    app = FastAPI()
+    app.include_router(providers.router)
+    app.state.db = db
+    app.state.devices = DeviceAccess(app, folder=tmp_path / "devices")
+
+    async def on_listener(scope, receive, send):
+        scope[LISTENER_SCOPE_KEY] = LAN_LISTENER
+        scope[DEVICE_SCOPE_KEY] = DevicePrincipal("phone-1", True)
+        await app(scope, receive, send)
+
+    return TestClient(
+        on_listener, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"}
+    )
+
+
+def test_a_device_sees_the_pcs_key_hint_without_a_store_read_or_lemonade_write(
+    client, device_client, lemonade, keys, monkeypatch
+):
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+    keys["stored"]["fireworks"] = KEY
+
+    def fireworks(c):
+        body = c.get("/api/providers/list").json()
+        return next(p for p in body["providers"] if p["id"] == "fireworks")
+
+    reads = []
+    real_recall = cloud_keys.recall_key
+    monkeypatch.setattr(
+        cloud_keys, "recall_key", lambda p: reads.append(p) or real_recall(p)
+    )
+    assert fireworks(device_client)["key_state"] == "unknown"
+    assert reads == []
+    pc_view = _fireworks_view(client)  # the PC's own read fills the cache
+    assert reads
+
+    reads.clear()
+    keys["ensure"].clear()
+    lemonade.calls.clear()
+    seen = fireworks(device_client)
+    assert seen["key_source"] == pc_view["key_source"] == "stored"
+    assert seen["key_hint"] == pc_view["key_hint"] == KEY[-4:]
+    assert seen["key_state"] == "read"
+    assert reads == [] and keys["ensure"] == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
+    assert KEY not in device_client.get("/api/providers/list").text
+    # Mobile access sees the source but never a hint.
+    away = client.get("/api/providers/list", headers={"X-Forwarded-For": "203.0.113.9"})
+    assert (
+        next(p for p in away.json()["providers"] if p["id"] == "fireworks")["key_hint"]
+        is None
+    )
+
+
+def _summary(c, provider="fireworks", **kw):
+    body = c.get("/api/providers/list", **kw).json()
+    return next(p for p in body["providers"] if p["id"] == provider)
+
+
+def test_the_summary_error_is_masked_for_a_device_and_null_over_the_tunnel(
+    client, device_client, lemonade, keys, monkeypatch
+):
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+    keys["stored"]["fireworks"] = KEY
+
+    def not_kept(*a, **k):
+        try:
+            raise ConnectorsError(f"Keyring failed: {PC_PATH}")
+        except ConnectorsError as e:
+            raise CloudKeyError(f"not kept ({e})") from e
+
+    monkeypatch.setattr(cloud_keys, "ensure_authenticated", not_kept)
+    pc_error = _fireworks_view(client)["error"]
+    assert PC_PATH in pc_error
+
+    lemonade.calls.clear()
+    monkeypatch.setattr(
+        cloud_keys, "ensure_authenticated", lambda *a, **k: pytest.fail("replayed")
+    )
+    monkeypatch.setattr(
+        cloud_keys, "recall_key", lambda p: pytest.fail("read the key store")
+    )
+    assert _summary(client)["error"] == pc_error
+    seen = _summary(device_client)["error"]
+    assert seen and PC_PATH not in seen and KEY not in seen
+    tunnel = _summary(client, headers={"X-Forwarded-For": "203.0.113.9"})
+    assert tunnel["error"] is None
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
+
+
+def test_the_summary_names_the_env_var_never_its_value(
+    client, device_client, lemonade, keys, monkeypatch
+):
+    monkeypatch.setenv("FIREWORKS_API_KEY", ENV_KEY)
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+    pc_view = _fireworks_view(client)
+    assert pc_view["key_source"] == "environment"
+    monkeypatch.setattr(
+        cloud_keys, "recall_key", lambda p: pytest.fail("read the key store")
+    )
+    lemonade.calls.clear()
+    for c in (client, device_client):
+        seen = _summary(c)
+        assert seen["env_var"] == pc_view["env_var"] == "FIREWORKS_API_KEY"
+        assert seen["key_from_gaia_env"] is pc_view["key_from_gaia_env"] is True
+    assert ENV_KEY not in device_client.get("/api/providers/list").text
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
+    assert _summary(device_client, "amd")["env_var"] is None
+
+
+def test_a_new_key_replaces_the_hint_a_device_sees_at_once(
+    client, device_client, lemonade, keys, monkeypatch
+):
+    old = "fw_OLD_key_value_000000_ABCD"
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+    keys["stored"]["fireworks"] = old
+    _fireworks_view(client)
+
+    def waiting(provider):
+        raise credential_wait.CredentialStoreWaiting("the OS is asking")
+
+    # Connect's own view can't read the store back, so only the save can say.
+    monkeypatch.setattr(providers, "_bounded_recall", waiting)
+    resp = device_client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 200, resp.text
+    lemonade.cloud["fireworks"].pop("runtime_key_set", None)
+    monkeypatch.setattr(
+        cloud_keys, "recall_key", lambda p: pytest.fail("read the key store")
+    )
+    body = device_client.get("/api/providers/list").json()
+    seen = next(p for p in body["providers"] if p["id"] == "fireworks")
+    assert (seen["key_source"], seen["key_hint"]) == ("stored", KEY[-4:])
+
+
+OLD_URL = "https://old.example/v1"
+NEW_URL = "https://new.example/v1"
+OLD_KEY = "old-gateway-key-0123456789abcdef"
+NEW_KEY = "new-gateway-key-fedcba9876543210"
+_OLD_GATEWAY = {
+    "name": "amd",
+    "base_url": OLD_URL,
+    "auth_header_name": DEFAULT_AUTH_HEADER_NAME,
+    "auth_header_prefix": DEFAULT_AUTH_HEADER_PREFIX,
+    "runtime_key_set": True,
+    "models_discovered": True,
+}
+
+
+@pytest.fixture
+def bound_gateway(lemonade, monkeypatch, tmp_path):
+    """A working gateway at OLD_URL whose key is stored bound to it.
+
+    The real key store code runs over an in-memory vault, and the real
+    GatewayManager replays into the fake Lemonade, which accepts only OLD_KEY
+    and notes where its gateway pointed at every call.
+    """
+    import socket
+
+    from gaia.connectors import store
+    from gaia.llm import lemonade_choice
+
+    vault = {}
+    monkeypatch.setattr(store, "verify_keyring_backend", lambda: None)
+    monkeypatch.setattr(store, "save_secret", vault.__setitem__)
+    monkeypatch.setattr(store, "peek_secret", vault.get)
+    monkeypatch.setattr(store, "delete_secret", lambda n: vault.pop(n, None))
+    monkeypatch.setattr(gateway, "GATEWAY_STATE_FILE", tmp_path / "gateway.json")
+    monkeypatch.setattr(
+        lemonade_client.LemonadeClient, "credential_base_url", lambda self: BASE
+    )
+    monkeypatch.setattr(lemonade_choice, "is_users_server", lambda *a: False)
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: False)
+    monkeypatch.setattr(
+        providers.socket,
+        "getaddrinfo",
+        lambda host, port, proto=0: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", port))
+        ],
+    )
+    lemonade.cloud["amd"] = dict(_OLD_GATEWAY)
+
+    def auth(body):
+        ok = body["api_key"] == OLD_KEY
+        lemonade.cloud["amd"].update(runtime_key_set=True, models_discovered=ok)
+        return 200, {"models_discovered": ok}
+
+    def drop_key(body):
+        lemonade.cloud["amd"].update(runtime_key_set=False, models_discovered=False)
+        return 200, {}
+
+    lemonade.answers[("POST", "cloud/auth")] = auth
+    lemonade.answers[("DELETE", "cloud/auth/amd")] = drop_key
+    recorded = lemonade.request
+
+    def request(method, url, json=None, **kwargs):
+        at = (lemonade.cloud.get("amd") or {}).get("base_url")
+        try:
+            return recorded(method, url, json=json, **kwargs)
+        finally:
+            lemonade.calls[-1]["gateway"] = at
+
+    monkeypatch.setattr(providers.requests, "request", request)
+    gateway.remember_token(OLD_KEY, OLD_URL)
+    return vault
+
+
+def _stored(vault):
+    assert gateway.GATEWAY_SECRET_NAME not in vault
+    return json.loads(vault[gateway.GATEWAY_KEY_SLOT])
+
+
+def _keys_went_only_home(lemonade):
+    """Every key Lemonade was handed went to the gateway it belongs to."""
+    home = {OLD_KEY: OLD_URL, NEW_KEY: NEW_URL}
+    sent = [c for c in lemonade.calls if (c["json"] or {}).get("api_key")]
+    assert sent
+    for call in sent:
+        assert call["path"] == "cloud/auth", call["path"]
+        assert call["json"]["provider"] == "amd"
+        assert call["gateway"] == home[call["json"]["api_key"]], call
+    return sent
+
+
+def _move(device_client):
+    return device_client.post(
+        "/api/providers/amd/connect", json={"api_key": NEW_KEY, "base_url": NEW_URL}
+    )
+
+
+def test_a_device_move_sends_only_the_new_key_to_the_new_url(
+    device_client, lemonade, bound_gateway
+):
+    lemonade.answers[("POST", "cloud/auth")] = None
+    without_key = device_client.post(
+        "/api/providers/amd/connect", json={"base_url": NEW_URL}
+    )
+    assert without_key.status_code == 403 and lemonade.calls == []
+
+    resp = _move(device_client)
+    assert resp.status_code == 200, resp.text
+    assert NEW_KEY not in resp.text and OLD_KEY not in resp.text
+    assert [(c["method"], c["path"], c["json"]) for c in lemonade.calls] == [
+        ("GET", "system-info", None),
+        ("DELETE", "cloud/auth/amd", None),
+        (
+            "POST",
+            "install",
+            {
+                "backend": "cloud",
+                "provider": "amd",
+                "wire_format": "openai",
+                "base_url": NEW_URL,
+                "auth_header_name": DEFAULT_AUTH_HEADER_NAME,
+                "auth_header_prefix": DEFAULT_AUTH_HEADER_PREFIX,
+            },
+        ),
+        ("POST", "cloud/auth", {"provider": "amd", "api_key": NEW_KEY}),
+        ("GET", "system-info", None),
+        ("GET", "system-info", None),
+    ]
+    assert [c["json"]["api_key"] for c in _keys_went_only_home(lemonade)] == [NEW_KEY]
+    assert _stored(bound_gateway) == {"key": NEW_KEY, "base_url": NEW_URL}
+
+
+def test_a_replay_after_a_failed_move_never_hands_the_old_key_to_the_new_url(
+    client, device_client, lemonade, bound_gateway, monkeypatch
+):
+    from gaia.llm import fireworks_known_models, lemonade_embedded
+
+    installed = lemonade.answers.get(("POST", "install"))
+
+    def install_new_only(body):
+        if body["base_url"] == OLD_URL:
+            return 500, {"error": {"message": "busy"}}
+        lemonade.cloud["amd"]["base_url"] = body["base_url"]
+        return 200, {"status": "ok"}
+
+    assert installed is None
+    lemonade.answers[("POST", "install")] = install_new_only
+    resp = _move(device_client)
+    assert resp.status_code == 502, resp.text
+    assert lemonade.cloud["amd"]["base_url"] == NEW_URL
+    lemonade.answers.pop(("POST", "install"))
+    mismatch = (
+        "The saved AMD Gateway key belongs to old.example; enter a new key for "
+        "new.example."
+    )
+
+    with pytest.raises(CloudKeyError, match=re.escape(mismatch)):
+        cloud_keys.reconnect_provider("amd")
+
+    listed = {p["id"]: p for p in client.get("/api/providers").json()["providers"]}
+    assert listed["amd"]["error"] == mismatch
+
+    monkeypatch.setattr(fireworks_known_models, "use_known_models", lambda e: None)
+    monkeypatch.setattr(lemonade_embedded, "EmbeddedLemonade", lambda: object())
+    assert mismatch in providers._restore_known_models("amd")
+
+    providers._restore_key("amd", dict(_OLD_GATEWAY))
+    assert lemonade.cloud["amd"]["base_url"] == OLD_URL
+    assert lemonade.cloud["amd"]["runtime_key_set"] is True
+
+    sent = _keys_went_only_home(lemonade)
+    assert [c["json"]["api_key"] for c in sent] == [NEW_KEY, OLD_KEY]
+    assert _stored(bound_gateway) == {"key": OLD_KEY, "base_url": OLD_URL}
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_a_failed_move_puts_the_old_gateway_back_with_its_key(
+    device_client, lemonade, bound_gateway, legacy
+):
+    if legacy:
+        # Saved before bindings: moved to the v2 slot bound to OLD_URL first.
+        del bound_gateway[gateway.GATEWAY_KEY_SLOT]
+        bound_gateway[gateway.GATEWAY_SECRET_NAME] = OLD_KEY
+    resp = _move(device_client)
+    assert resp.status_code == 422, resp.text
+    assert resp.json() == {"detail": providers.DEVICE_GATEWAY_DETAIL}
+    entry = lemonade.cloud["amd"]
+    assert entry["base_url"] == OLD_URL and entry["runtime_key_set"] is True
+    assert [c["json"]["api_key"] for c in _keys_went_only_home(lemonade)] == [
+        NEW_KEY,
+        OLD_KEY,
+    ]
+    assert [
+        c["json"]["base_url"] for c in lemonade.calls if c["path"] == "install"
+    ] == [
+        NEW_URL,
+        OLD_URL,
+    ]
+    # Read back after handing the old key back.
+    assert [(c["method"], c["path"]) for c in lemonade.calls[-2:]] == [
+        ("POST", "cloud/auth"),
+        ("GET", "system-info"),
+    ]
+    assert _stored(bound_gateway) == {"key": OLD_KEY, "base_url": OLD_URL}
+
+
+def test_a_failed_restore_is_a_502_that_names_no_key(
+    device_client, lemonade, bound_gateway, caplog
+):
+    def install_new_only(body):
+        if body["base_url"] == OLD_URL:
+            return 500, {"error": {"message": "busy"}}
+        lemonade.cloud["amd"]["base_url"] = body["base_url"]
+        return 200, {"status": "ok"}
+
+    lemonade.answers[("POST", "install")] = install_new_only
+    with caplog.at_level(logging.DEBUG):
+        resp = _move(device_client)
+    assert resp.status_code == 502
+    assert resp.json() == {
+        "detail": "AMD LLM Gateway didn't accept the new address, and GAIA "
+        "couldn't restore the old one. Enter a working address and key in "
+        "Settings › Model."
+    }
+    assert "restore the previous AMD LLM Gateway gateway" in caplog.text
+    for key in (OLD_KEY, NEW_KEY):
+        assert key not in resp.text and key not in caplog.text
+    _keys_went_only_home(lemonade)
+    assert _stored(bound_gateway) == {"key": OLD_KEY, "base_url": OLD_URL}
+
+
+def test_the_gateway_key_read_never_gets_the_bare_key_reads_answer(monkeypatch):
+    """The key hint's read and the gateway's bound read run at once; each gets its own."""
+    bare_key = "bare-gateway-key-0123456789"
+    in_flight = threading.Event()
+
+    def slow_bare_key(provider):
+        in_flight.set()
+        time.sleep(0.3)
+        return bare_key
+
+    monkeypatch.setattr(cloud_keys, "recall_key", slow_bare_key)
+    monkeypatch.setattr(
+        cloud_keys, "recall_gateway_key", lambda: gateway.GatewayKey(OLD_KEY, OLD_URL)
+    )
+    got = {}
+    hint = threading.Thread(
+        target=lambda: got.update(bare=providers._bounded_recall(providers.AMD))
+    )
+    hint.start()
+    assert in_flight.wait(5)
+    got["record"] = providers._bounded_gateway_key()
+    hint.join(5)
+    assert got == {"bare": bare_key, "record": gateway.GatewayKey(OLD_KEY, OLD_URL)}
+
+    stuck = threading.Event()
+    monkeypatch.setattr(credential_wait, "WAIT_SECONDS", 0.05)
+    monkeypatch.setattr(cloud_keys, "recall_key", lambda p: stuck.wait(5))
+    monkeypatch.setattr(cloud_keys, "recall_gateway_key", lambda: stuck.wait(5))
+    with pytest.raises(credential_wait.CredentialStoreWaiting):
+        providers._bounded_recall(providers.AMD)
+    with pytest.raises(credential_wait.CredentialStoreWaiting):
+        providers._bounded_gateway_key()
+    assert credential_wait.in_flight_count() == 2
+    providers._discard_key_reads(providers.AMD)
+    assert credential_wait.in_flight_count() == 0
+    stuck.set()
+
+
+def test_a_restore_whose_key_read_breaks_still_puts_the_address_back(
+    client, lemonade, bound_gateway, monkeypatch, caplog
+):
+    """An unexpected answer from the key read is a loud 502 with the reason,
+    never a 500 that leaves the gateway half moved."""
+    real_read = cloud_keys.recall_gateway_key
+    rejected = []
+
+    def recall_gateway_key():
+        return "a-bare-key-not-a-record" if rejected else real_read()
+
+    def reject_the_new_key(body):
+        rejected.append(body["api_key"] == NEW_KEY)
+        return 401, {"error": {"message": "unauthorized"}}
+
+    def drop_key(body):
+        # A fresh entry, so the snapshot taken before the move keeps its key.
+        lemonade.cloud["amd"] = {
+            **lemonade.cloud["amd"],
+            "runtime_key_set": False,
+            "models_discovered": False,
+        }
+        return 200, {}
+
+    monkeypatch.setattr(cloud_keys, "recall_gateway_key", recall_gateway_key)
+    lemonade.answers[("POST", "cloud/auth")] = reject_the_new_key
+    lemonade.answers[("DELETE", "cloud/auth/amd")] = drop_key
+    with caplog.at_level(logging.ERROR):
+        resp = client.post(
+            "/api/providers/amd/connect",
+            json={"api_key": NEW_KEY, "base_url": NEW_URL},
+        )
+    assert rejected == [True]
+    assert resp.status_code == 502, resp.text
+    assert "couldn't restore the old one" in resp.json()["detail"]
+    assert lemonade.cloud["amd"]["base_url"] == OLD_URL
+    assert "reading the saved key failed" in caplog.text
+    assert "returned a str" in caplog.text
+    for key in (OLD_KEY, NEW_KEY):
+        assert key not in resp.text and key not in caplog.text
+
+
+def test_device_gateway_moves_wait_for_each_other(
+    device_client, lemonade, bound_gateway, monkeypatch
+):
+    from gaia.ui.devices import prompts
+
+    assert providers._gateway_move_lock is gateway.GATEWAY_KEY_LOCK
+    monkeypatch.setattr(prompts, "limit_device_rate", lambda *a: None)
+    lemonade.answers[("POST", "cloud/auth")] = None
+    results = []
+    with providers._gateway_move_lock:
+        mover = threading.Thread(target=lambda: results.append(_move(device_client)))
+        mover.start()
+        mover.join(timeout=0.5)
+        assert mover.is_alive() and lemonade.calls == []
+    mover.join(timeout=10)
+    assert results[0].status_code == 200, results[0].text
+    assert lemonade.cloud["amd"]["base_url"] == NEW_URL
+
+
+def test_a_device_gateway_is_dialed_before_the_lock_is_taken(
+    device_client, lemonade, bound_gateway, monkeypatch
+):
+    """A slow dial of the new gateway never holds up another process's replay."""
+    monkeypatch.setattr(gateway, "GATEWAY_KEY_LOCK_TIMEOUT", 0.2)
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: True)
+    lemonade.answers[("POST", "cloud/auth")] = None
+    took = []
+
+    def slow_dial(host, port, addresses):
+        def replay():
+            try:
+                with providers._gateway_move_lock:
+                    took.append(True)
+            except gateway.GatewayBusy:
+                took.append(False)
+
+        other = threading.Thread(target=replay)
+        other.start()
+        other.join(timeout=5)
+
+    monkeypatch.setattr(providers, "_dial_checked_addresses", slow_dial)
+    resp = _move(device_client)
+    assert took == [True]
+    assert resp.status_code == 200, resp.text
+    assert lemonade.cloud["amd"]["base_url"] == NEW_URL
+
+
+def test_a_gateway_check_dials_at_most_three_addresses(monkeypatch):
+    dialed = []
+
+    def refuse(address, timeout):
+        dialed.append(address[0])
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(providers.socket, "create_connection", refuse)
+    addresses = [f"93.184.215.{n}" for n in range(1, 16)]
+    with pytest.raises(OSError, match="did not complete a TLS handshake"):
+        providers._dial_checked_addresses("gw.example.com", 443, addresses)
+    assert dialed == addresses[:3]
+
+
+def test_a_pc_gateway_connect_waits_for_another_processs_move(
+    client, lemonade, bound_gateway, monkeypatch
+):
+    monkeypatch.setattr(gateway, "GATEWAY_KEY_LOCK_TIMEOUT", 0.3)
+    with providers._gateway_move_lock:
+        results = []
+        other = threading.Thread(target=lambda: results.append(_move(client)))
+        other.start()
+        other.join(timeout=10)
+    assert results[0].status_code == 409
+    assert results[0].json()["detail"] == gateway._busy_message()
+    assert lemonade.calls == []
+
+
+def test_a_pc_gateway_is_checked_before_the_lock_is_taken(
+    client, lemonade, bound_gateway, monkeypatch
+):
+    """A slow check of the PC's gateway never holds up another process's replay."""
+    monkeypatch.setattr(gateway, "GATEWAY_KEY_LOCK_TIMEOUT", 0.2)
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: True)
+    lemonade.answers[("POST", "cloud/auth")] = None
+    took, checked = [], []
+
+    def slow_check(base_url=None):
+        def replay():
+            try:
+                with providers._gateway_move_lock:
+                    took.append(True)
+            except gateway.GatewayBusy:
+                took.append(False)
+
+        checked.append(base_url)
+        other = threading.Thread(target=replay)
+        other.start()
+        other.join(timeout=5)
+
+    monkeypatch.setattr(providers, "check_gateway_reachable", slow_check)
+    resp = _move(client)
+    assert took == [True]
+    assert checked == [NEW_URL]
+    assert resp.status_code == 200, resp.text
+    assert lemonade.cloud["amd"]["base_url"] == NEW_URL
+
+
+def test_a_pc_gateway_moved_during_its_check_is_refused(
+    client, lemonade, bound_gateway, monkeypatch
+):
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: True)
+
+    def moved_meanwhile(base_url=None):
+        lemonade.cloud["amd"]["base_url"] = NEW_URL
+
+    monkeypatch.setattr(providers, "check_gateway_reachable", moved_meanwhile)
+    resp = client.post("/api/providers/amd/connect", json={})
+    assert resp.status_code == 409
+    assert "changed while GAIA checked it" in resp.json()["detail"]
+    assert not any(c["method"] in ("POST", "DELETE") for c in lemonade.calls)
+
+
+def test_a_keyless_pc_move_drops_lemonades_key_before_the_address_changes(
+    client, lemonade, bound_gateway
+):
+    del bound_gateway[gateway.GATEWAY_KEY_SLOT]
+    client.post("/api/providers/amd/connect", json={"base_url": NEW_URL})
+    sent = [(c["method"], c["path"]) for c in lemonade.calls]
+    assert sent.index(("DELETE", "cloud/auth/amd")) < sent.index(("POST", "install"))
+    installed = [c for c in lemonade.calls if c["path"] == "install"]
+    assert installed[0]["json"]["base_url"] == NEW_URL
+    assert installed[0]["gateway"] == OLD_URL
+    assert not any(
+        c["path"] == "cloud/auth" and c["method"] == "POST" for c in lemonade.calls
+    )
+
+
+def test_a_key_saved_before_bindings_is_bound_to_the_current_gateway(
+    client, lemonade, bound_gateway
+):
+    del bound_gateway[gateway.GATEWAY_KEY_SLOT]
+    bound_gateway[gateway.GATEWAY_SECRET_NAME] = OLD_KEY
+    lemonade.cloud["amd"].update(runtime_key_set=False, models_discovered=False)
+    listed = {p["id"]: p for p in client.get("/api/providers").json()["providers"]}
+    assert listed["amd"].get("error") is None
+    assert _stored(bound_gateway) == {"key": OLD_KEY, "base_url": OLD_URL}
+    assert [c["json"]["api_key"] for c in _keys_went_only_home(lemonade)] == [OLD_KEY]
+
+
+def test_a_paired_device_may_enter_and_remove_a_key(
+    device_client, lemonade, keys, caplog
+):
+    with caplog.at_level(logging.DEBUG):
+        resp = device_client.post(
+            "/api/providers/fireworks/connect", json={"api_key": KEY}
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["remembered"] is True
+        assert lemonade.call("POST", "cloud/auth")["json"]["api_key"] == KEY
+        assert keys["stored"]["fireworks"] == KEY
+        assert KEY not in resp.text
+
+        resp = device_client.delete("/api/providers/fireworks/key")
+        assert resp.json() == {"removed": True}
+        assert device_client.post("/api/providers/key-store/retry").status_code == 200
+    assert KEY not in caplog.text
+
+
+def test_a_device_key_change_is_recorded_without_the_key(
+    device_client, client, db, lemonade, keys
+):
+    assert (
+        client.post(
+            "/api/providers/fireworks/connect", json={"api_key": KEY}
+        ).status_code
+        == 200
+    )
+    assert db.device_changes("phone-1", 20) == ([], 0)
+
+    resp = device_client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 200, resp.text
+    assert device_client.delete("/api/providers/fireworks/key").status_code == 200
+
+    changes, total = db.device_changes("phone-1", 20)
+    assert total == 2
+    assert [(c["kind"], c["params"]) for c in changes] == [
+        (
+            "providerKeyRemoved",
+            {"provider": "Fireworks AI", "provider_id": "fireworks"},
+        ),
+        ("providerKeySet", {"provider": "Fireworks AI", "provider_id": "fireworks"}),
+    ]
+    rows = db._conn.execute("SELECT * FROM device_changes").fetchall()
+    assert KEY not in json.dumps([dict(r) for r in rows])
+
+
+def test_a_paired_device_sees_no_key_or_pc_internals_on_failure(
+    client, device_client, lemonade, keys, monkeypatch, caplog
+):
+    def remember_key(provider, key, base_url=None):
+        try:
+            raise ConnectorsError(f"Keyring set_password failed: {PC_PATH} {key}")
+        except ConnectorsError as e:
+            raise CloudKeyError(f"not kept ({e})") from e
+
+    monkeypatch.setattr(cloud_keys, "remember_key", remember_key)
+    keys["forget_error"] = ConnectorsError(f"Keyring delete failed: {PC_PATH}")
+    with caplog.at_level(logging.DEBUG):
+        resp = device_client.post(
+            "/api/providers/fireworks/connect", json={"api_key": KEY}
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["remember_error"] == providers._AWAY_STORE_DETAIL
+        gone = device_client.delete("/api/providers/fireworks/key")
+        assert gone.status_code == 503
+        assert gone.json()["detail"] == providers._AWAY_STORE_DETAIL
+        # The PC keeps the detail it can act on, but never the key itself.
+        on_pc = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+        assert PC_PATH in on_pc.json()["remember_error"]
+    for text in (resp.text, gone.text, on_pc.text, caplog.text):
+        assert KEY not in text
+    assert PC_PATH not in resp.text + gone.text
 
 
 # ── GET /api/providers/{p}/models ──────────────────────────────────────────
@@ -1671,9 +3018,41 @@ def test_a_single_turn_flm_build_is_no_chat_model(client, lemonade):
     assert "gemma4e-flash-e4b-FLM" not in ids
 
 
+_UNPROVEN_FLM = ("gemma4-it-e2b-FLM", "lfm2-1.2b-FLM", "qwen3.5-4b-FLM")
+
+
+def _flm_on_disk(*ids):
+    return [
+        {"id": i, "downloaded": True, "labels": ["chat"], "recipe": "flm"} for i in ids
+    ]
+
+
+def test_downloaded_npu_models_gaia_has_not_proven_are_not_offered(client, lemonade):
+    """#7975: every FLM build on the PC was offered as Ready."""
+    lemonade.models = _flm_on_disk("gemma4-it-e4b-FLM", *_UNPROVEN_FLM)
+    lemonade.answers[("GET", "system-info")] = (200, _NPU_SYSTEM_INFO)
+    ids = [m["id"] for m in client.get("/api/providers/local/models").json()["models"]]
+    assert "gemma4-it-e4b-FLM" in ids
+    for unproven in _UNPROVEN_FLM:
+        assert unproven not in ids
+    refused = client.post("/api/providers/select", json={"model": "lfm2-1.2b-FLM"})
+    assert refused.status_code == 409
+
+
+def test_an_unproven_npu_model_the_user_already_chose_still_lists(client, lemonade):
+    """A choice saved before it was withdrawn still loads."""
+    _write_config({"last_model": "lfm2-1.2b-FLM", "default_model": "qwen3.5-4b-FLM"})
+    lemonade.models = _flm_on_disk(*_UNPROVEN_FLM)
+    lemonade.answers[("GET", "system-info")] = (200, _NPU_SYSTEM_INFO)
+    ids = [m["id"] for m in client.get("/api/providers/local/models").json()["models"]]
+    assert "lfm2-1.2b-FLM" in ids
+    assert "qwen3.5-4b-FLM" in ids
+    assert "gemma4-it-e2b-FLM" not in ids
+
+
 def test_local_models_keep_chat_models_that_also_take_audio(client, lemonade):
     lemonade.models = [
-        {"id": "gemma4-it-e2b-FLM", "downloaded": True, "labels": ["chat", "audio"]},
+        {"id": "gemma4-it-e4b-FLM", "downloaded": True, "labels": ["chat", "audio"]},
         {"id": "audio-only-FLM", "downloaded": True, "labels": ["audio"]},
         {
             "id": "Whisper-Large-v3-Turbo",
@@ -1684,7 +3063,7 @@ def test_local_models_keep_chat_models_that_also_take_audio(client, lemonade):
         {"id": "kokoro-v1", "downloaded": True, "labels": ["tts"]},
     ]
     ids = [m["id"] for m in client.get("/api/providers/local/models").json()["models"]]
-    assert "gemma4-it-e2b-FLM" in ids
+    assert "gemma4-it-e4b-FLM" in ids
     for non_chat in (
         "audio-only-FLM",
         "Whisper-Large-v3-Turbo",
@@ -1776,7 +3155,9 @@ def test_picking_a_local_model_starts_loading_it(
 
     asked = []
     monkeypatch.setattr(
-        warmup, "request_warm_up", lambda reason, fresh=False: asked.append(fresh)
+        warmup,
+        "request_warm_up",
+        lambda reason, fresh=False, model=None: asked.append((fresh, model)),
     )
     lemonade.models = _CATALOG
     assert (
@@ -1785,7 +3166,7 @@ def test_picking_a_local_model_starts_loading_it(
         ).status_code
         == 200
     )
-    assert asked == [True]
+    assert asked == [(True, "Qwen3-4B-GGUF")]
 
 
 def test_picking_a_cloud_model_loads_nothing_here(
@@ -1795,7 +3176,9 @@ def test_picking_a_cloud_model_loads_nothing_here(
 
     asked = []
     monkeypatch.setattr(
-        warmup, "request_warm_up", lambda reason, fresh=False: asked.append(fresh)
+        warmup,
+        "request_warm_up",
+        lambda reason, fresh=False, model=None: asked.append(fresh),
     )
     lemonade.models = _CATALOG
     resp = client.post("/api/providers/select", json={"model": "fireworks.aa-model"})
@@ -2265,8 +3648,17 @@ def test_add_twice_is_refused(client, custom_server, hf_web, custom_config):
 
 
 def test_remove_deletes_by_the_name_lemonade_lists(
-    client, custom_server, hf_web, custom_config, db
+    client, custom_server, hf_web, custom_config, db, monkeypatch
 ):
+    from gaia.llm.lemonade_client import DEFAULT_MODEL_NAME
+    from gaia.ui import warmup
+
+    asked = []
+    monkeypatch.setattr(
+        warmup,
+        "request_warm_up",
+        lambda reason, fresh=False, model=None: asked.append((fresh, model)),
+    )
     client.post("/api/providers/local/custom", json={"url": CUSTOM_URL})
     custom_server.models = [
         {"id": "Tiny-Q4_K_M-GGUF", "checkpoint": "someone/else:x.gguf"},
@@ -2286,6 +3678,54 @@ def test_remove_deletes_by_the_name_lemonade_lists(
     }
     assert cm.CONFIG_KEY not in json.loads(custom_config.read_text())
     assert db.get_setting("custom_model") is None
+    # Chat is back on the default, which loads now rather than with a message.
+    assert asked == [(True, DEFAULT_MODEL_NAME)]
+
+
+def test_removing_the_custom_model_goes_back_to_the_pick_and_loads_it(
+    client, custom_server, hf_web, custom_config, db, monkeypatch
+):
+    """Clearing the field returns to the pick; removing the model did not."""
+    from gaia.ui import warmup
+    from gaia.ui.routers.providers import PICKED_MODEL_SETTING
+
+    asked = []
+    monkeypatch.setattr(
+        warmup,
+        "request_warm_up",
+        lambda reason, fresh=False, model=None: asked.append((fresh, model)),
+    )
+    client.post("/api/providers/local/custom", json={"url": CUSTOM_URL})
+    db.set_setting(PICKED_MODEL_SETTING, "Qwen3-4B-GGUF")
+    db.set_setting("custom_model", "user.Tiny-Q4_K_M-GGUF")
+
+    resp = client.delete("/api/providers/local/custom/user.Tiny-Q4_K_M-GGUF")
+
+    assert resp.status_code == 200, resp.text
+    assert db.get_setting("custom_model") == "Qwen3-4B-GGUF"
+    saved = json.loads(custom_config.read_text())
+    assert saved["last_model"] == "Qwen3-4B-GGUF", "the next start restores the pick"
+    assert asked == [(True, "Qwen3-4B-GGUF")]
+
+
+def test_removing_a_model_that_runs_nowhere_loads_nothing(
+    client, custom_server, hf_web, custom_config, db, monkeypatch
+):
+    from gaia.ui import warmup
+
+    asked = []
+    monkeypatch.setattr(
+        warmup,
+        "request_warm_up",
+        lambda reason, fresh=False, model=None: asked.append(model),
+    )
+    client.post("/api/providers/local/custom", json={"url": CUSTOM_URL})
+    db.set_setting("custom_model", "Qwen3-4B-GGUF")
+
+    client.delete("/api/providers/local/custom/user.Tiny-Q4_K_M-GGUF")
+
+    assert db.get_setting("custom_model") == "Qwen3-4B-GGUF"
+    assert asked == []
 
 
 def test_remove_before_download_skips_the_server_delete(
@@ -2502,7 +3942,7 @@ def test_selecting_a_cloud_model_is_refused_under_local_only(
     # The app names its own setting, never a command to run.
     assert "Settings > Privacy" in resp.json()["detail"]
     assert "gaia config" not in resp.json()["detail"]
-    assert lemonade.calls == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
     assert db.get_setting("custom_model") is None
 
 
@@ -2575,15 +4015,221 @@ def test_a_new_key_during_known_models_restarts_without_the_old_one(
     assert keys["stored"]["fireworks"] == KEY
 
 
-def test_a_rejected_key_is_never_kept_even_mid_outage(
-    client, lemonade, keys, model_list, known_models_on
+@pytest.fixture
+def serving_known(monkeypatch, lemonade, keys, model_list):
+    """Fireworks served from known models on the stored OLD_KEY, mid list outage.
+
+    Leaving the mode restarts Lemonade with no key and no registration; entering
+    it starts Lemonade on the stored key, as ``start_env`` does.
+    """
+    from gaia.llm import fireworks_known_models as known
+
+    state = {"active": True, "restarts": [], "handed": []}
+    keys["stored"]["fireworks"] = OLD_KEY
+    model_list["check"] = _list_failing()
+
+    def serve():
+        lemonade.cloud["fireworks"] = {
+            "name": "fireworks",
+            "env_var_set": bool(keys["stored"].get("fireworks")),
+            "models_discovered": True,
+        }
+
+    def stop(_):
+        state["restarts"].append("stop")
+        state["active"] = False
+        lemonade.cloud.pop("fireworks", None)
+
+    def start(_):
+        state["restarts"].append("start")
+        state["active"] = True
+        serve()
+
+    def ensure_authenticated(provider, client=None, recall=None):
+        state["handed"].append(recall())
+        return True
+
+    serve()
+    monkeypatch.setattr(
+        providers,
+        "_known_models_active",
+        lambda p: p == "fireworks" and state["active"],
+    )
+    monkeypatch.setattr(known, "stop_using_known_models", stop)
+    monkeypatch.setattr(known, "use_known_models", start)
+    monkeypatch.setattr(cloud_keys, "ensure_authenticated", ensure_authenticated)
+    return state
+
+
+@pytest.mark.parametrize(
+    "auth,check,status,said",
+    [
+        ((401, {}), "FAILING", 422, "rejected the key"),
+        ((200, {"models_discovered": False}), "REJECTED", 422, "did not accept"),
+        ((200, {"models_discovered": False}), "FAILING", 503, "kept the one you had"),
+    ],
+    ids=["401", "no-models", "outage"],
+)
+def test_a_rejected_replace_in_known_models_mode_brings_it_back(
+    client, lemonade, keys, model_list, serving_known, auth, check, status, said
 ):
-    lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
+    from gaia.llm.providers.fireworks import ModelListCheck, ModelListState
+
+    model_list["check"] = ModelListCheck(ModelListState[check], "HTTP 500")
+    lemonade.answers[("POST", "cloud/auth")] = auth
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
-    assert resp.status_code == 401
-    assert keys["remembered"] == []
-    assert model_list["restarts"] == []
-    assert KEY not in resp.text
+    assert resp.status_code == status
+    assert said in resp.json()["detail"]
+    assert _sequence(lemonade) == [
+        ("GET", "system-info", None),
+        ("POST", "install", FIREWORKS_INSTALL),
+        _auth(KEY),
+        ("DELETE", "cloud/auth/fireworks", None),
+        ("GET", "system-info", None),
+    ]
+    assert serving_known["restarts"] == ["stop", "start"]
+    assert serving_known["active"] is True
+    assert serving_known["handed"] == [OLD_KEY]
+    assert lemonade.cloud["fireworks"]["env_var_set"] is True
+    assert keys["stored"]["fireworks"] == OLD_KEY and keys["remembered"] == []
+    assert KEY not in resp.text and OLD_KEY not in resp.text
+    assert _registered(client) is True
+
+
+@pytest.mark.parametrize("fails", ["restart", "keyless"])
+def test_a_failed_known_models_restore_is_a_loud_502(
+    client, lemonade, keys, model_list, serving_known, monkeypatch, caplog, fails
+):
+    from gaia.llm import fireworks_known_models as known
+    from gaia.llm.lemonade_embedded import EmbeddedLemonadeError
+
+    if fails == "restart":
+
+        def boom(_):
+            raise EmbeddedLemonadeError("could not start the model server")
+
+        monkeypatch.setattr(known, "use_known_models", boom)
+    else:
+
+        def keyless(_):
+            lemonade.cloud["fireworks"] = {"name": "fireworks"}
+
+        monkeypatch.setattr(known, "use_known_models", keyless)
+    lemonade.answers[("POST", "cloud/auth")] = (401, {"error": {"message": KEY}})
+    with caplog.at_level(logging.ERROR):
+        resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == (
+        "Fireworks AI didn't accept the new key, and GAIA couldn't restore the "
+        "old one. Enter a working key in Settings › Model."
+    )
+    assert "fireworks" in caplog.text
+    assert "POST" not in [c["method"] for c in lemonade.calls[3:]]
+    for key in (KEY, OLD_KEY):
+        assert key not in resp.text and key not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "fails,sequence",
+    [
+        ("install", [("POST", "install", FIREWORKS_INSTALL)]),
+        (
+            "auth-unreachable",
+            [("POST", "install", FIREWORKS_INSTALL), _auth(KEY)],
+        ),
+    ],
+)
+def test_a_failed_setup_in_known_models_mode_brings_it_back(
+    client, lemonade, keys, model_list, serving_known, fails, sequence
+):
+    if fails == "install":
+        lemonade.answers[("POST", "install")] = (
+            500,
+            {"error": {"message": "disk full"}},
+        )
+        said = "Lemonade could not configure Fireworks AI: disk full."
+    else:
+        lemonade.answers[("POST", "cloud/auth")] = requests.ConnectionError("gone")
+        said = "The local model server is not reachable"
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code in (502, 503)
+    assert said in resp.json()["detail"]
+    assert "couldn't restore" not in resp.json()["detail"]
+    assert _sequence(lemonade) == [
+        ("GET", "system-info", None),
+        *sequence,
+        ("DELETE", "cloud/auth/fireworks", None),
+        ("GET", "system-info", None),
+    ]
+    assert serving_known["restarts"] == ["stop", "start"]
+    assert serving_known["active"] is True
+    assert serving_known["handed"] == [OLD_KEY]
+    assert lemonade.cloud["fireworks"]["env_var_set"] is True
+    assert keys["stored"]["fireworks"] == OLD_KEY and keys["remembered"] == []
+    assert KEY not in resp.text and OLD_KEY not in resp.text
+
+
+def test_a_failed_restore_after_a_failed_setup_is_a_loud_502(
+    client, lemonade, keys, model_list, serving_known, monkeypatch, caplog
+):
+    from gaia.llm import fireworks_known_models as known
+    from gaia.llm.lemonade_embedded import EmbeddedLemonadeError
+
+    def boom(_):
+        raise EmbeddedLemonadeError("could not start the model server")
+
+    monkeypatch.setattr(known, "use_known_models", boom)
+    lemonade.answers[("POST", "install")] = (500, {"error": {"message": "disk full"}})
+    with caplog.at_level(logging.DEBUG):
+        resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == (
+        "Fireworks AI couldn't be set up, and GAIA couldn't restore the models it "
+        "was using. Lemonade could not configure Fireworks AI: disk full. Connect "
+        "Fireworks AI again in Settings › Model."
+    )
+    assert serving_known["restarts"] == ["stop"]
+    assert "restore the known fireworks models" in caplog.text
+    assert keys["stored"]["fireworks"] == OLD_KEY
+    for key in (KEY, OLD_KEY):
+        assert key not in resp.text and key not in caplog.text
+
+
+def test_a_failed_install_outside_known_models_restarts_nothing(
+    client, lemonade, keys, model_list, serving_known
+):
+    serving_known["active"] = False
+    lemonade.answers[("POST", "install")] = (500, {"error": {"message": "disk full"}})
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == (
+        "Lemonade could not configure Fireworks AI: disk full."
+    )
+    assert _sequence(lemonade) == [
+        ("GET", "system-info", None),
+        ("POST", "install", FIREWORKS_INSTALL),
+    ]
+    assert serving_known["restarts"] == []
+    assert serving_known["handed"] == []
+    assert keys["stored"]["fireworks"] == OLD_KEY
+
+
+def test_a_rejected_first_connect_outside_known_models_still_unregisters(
+    client, lemonade, keys, model_list, serving_known
+):
+    serving_known["active"] = False
+    lemonade.cloud.clear()
+    keys["stored"].clear()
+    lemonade.answers[("POST", "cloud/auth")] = (401, {})
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 422
+    assert _mutations(lemonade) == [
+        ("POST", "install"),
+        ("POST", "cloud/auth"),
+        ("POST", "uninstall"),
+    ]
+    assert serving_known["restarts"] == []
+    assert _registered(client) is False
 
 
 def test_only_fireworks_falls_back_to_known_models(client, lemonade, keys, model_list):
@@ -2656,9 +4302,50 @@ def test_selecting_a_listed_cloud_model_is_refused_under_local_only(
     resp = client.post("/api/providers/select", json={"model": _OTHER_CLOUD})
     assert resp.status_code == 409
     detail = resp.json()["detail"]
-    assert "Can't switch to big-model · othercloud: Local only is on." in detail
+    assert (
+        "Can't switch to big-model · othercloud: Local only is on, so it was blocked: it is a cloud model."
+        in detail
+    )
     assert "Settings > Privacy" in detail and "gaia config" not in detail
     assert lemonade.paths() == ["models?show_all=true"]
+    assert db.get_setting("custom_model") is None
+
+
+# ── A router collection under Local only (#7525) ─────────────────────────
+
+_ROUTER = "collection.x"
+_ROUTER_LISTED = {"id": _ROUTER, "recipe": "collection.router", "labels": []}
+
+
+@pytest.mark.parametrize("typed", ["collection.x", "COLLECTION.X", "user.collection.x"])
+def test_selecting_a_router_collection_is_refused_under_local_only(
+    client, lemonade, keys, db, local_only_on, forget_cloud_models, typed
+):
+    # A router collection can forward to a cloud member, so Local only can't
+    # vouch for it, even though the model list never marks it "cloud".
+    lemonade.models = [_ROUTER_LISTED]
+    resp = client.post("/api/providers/select", json={"model": typed})
+    assert resp.status_code == 409, resp.json()
+    detail = resp.json()["detail"]
+    assert "Local only is on" in detail
+    assert (
+        "it is a 'collection.router' model, which can forward requests to the cloud"
+        in detail
+    )
+    assert "Settings > Privacy" in detail and "gaia config" not in detail
+    assert db.get_setting("custom_model") is None
+
+
+def test_selecting_an_unlisted_dotted_id_says_the_catalog_does_not_list_it(
+    client, lemonade, keys, db, local_only_on, forget_cloud_models
+):
+    # A mistyped dotted id is not a privacy problem: the catalog simply
+    # doesn't list it, so the refusal must say that instead of pointing
+    # at the Local only setting.
+    resp = client.post("/api/providers/select", json={"model": "user.mistyped-model"})
+    assert resp.status_code == 409, resp.json()
+    detail = resp.json()["detail"]
+    assert "Lemonade's catalog doesn't list it" in detail
     assert db.get_setting("custom_model") is None
 
 
@@ -2733,6 +4420,60 @@ def test_local_only_names_a_next_step_when_the_model_list_errors(
     resp = client.post("/api/providers/select", json={"model": _OTHER_CLOUD})
     assert resp.status_code == 503
     detail = resp.json()["detail"]
-    assert "HTTP 500" in detail
-    assert "close GAIA and open it again" in detail
+    assert "model list" in detail
+    assert "Check that the model server is running" in detail
     assert db.get_setting("custom_model") is None
+
+
+# ── A model server that answers, but not with a model list ─────────────────
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"object": "list", "data": "x"}, {"data": ["Qwen3-4B-GGUF"]}, {"data": None}],
+)
+@pytest.mark.parametrize("provider", ["local", "fireworks"])
+def test_a_malformed_model_list_is_named_not_a_server_error(
+    client, lemonade, keys, body, provider
+):
+    lemonade.answers[("GET", "models?show_all=true")] = (200, body)
+    resp = client.get(f"/api/providers/{provider}/models")
+    assert resp.status_code == 502
+    detail = resp.json()["detail"]
+    assert "model list came back in an unexpected shape" in detail
+    assert "Settings > Advanced > Model server" in detail
+
+
+def test_a_malformed_model_list_ends_a_switch_or_restore_with_one_full_stop(
+    client, lemonade, keys, db
+):
+    _write_config({"last_model": "Qwen3-4B-GGUF"})
+    lemonade.answers[("GET", "models?show_all=true")] = (200, {"data": "x"})
+    restore = client.get("/api/providers/active").json()["restore"]
+    assert restore["status"] == "failed"
+    assert "points at Lemonade. Pick a model to continue." in restore["message"]
+    resp = client.post("/api/providers/select", json={"model": "Qwen3-4B-GGUF"})
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"].endswith("points at Lemonade.")
+    assert ".." not in restore["message"] + resp.json()["detail"]
+
+
+def test_the_restore_leaves_no_key_behind_for_a_late_recall(monkeypatch):
+    from gaia.llm import fireworks_known_models, lemonade_embedded
+
+    kept = {}
+    monkeypatch.setattr(providers, "_lemonade", lambda *a, **k: (200, {}))
+    monkeypatch.setattr(providers, "_recall", lambda p: lambda: "sk-old-key")
+    monkeypatch.setattr(providers, "_cloud_entry", lambda p: {"runtime_key_set": True})
+    monkeypatch.setattr(providers, "_holds_key", lambda e: True)
+    monkeypatch.setattr(providers, "_known_models_active", lambda p: True)
+    monkeypatch.setattr(fireworks_known_models, "use_known_models", lambda e: None)
+    monkeypatch.setattr(lemonade_embedded, "EmbeddedLemonade", lambda: object())
+    monkeypatch.setattr(
+        cloud_keys,
+        "ensure_authenticated",
+        lambda provider, recall: kept.update(recall=recall),
+    )
+
+    assert providers._restore_known_models("amd") is None
+    assert kept["recall"]() is None

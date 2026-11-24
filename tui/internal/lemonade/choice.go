@@ -36,6 +36,7 @@ import (
 
 	"github.com/amd/gaia/tui/internal/daemon"
 	"github.com/amd/gaia/tui/internal/filelock"
+	"github.com/amd/gaia/tui/internal/netguard"
 )
 
 const (
@@ -494,7 +495,7 @@ func probe(ctx context.Context, base, key string, connect time.Duration) ProbeRe
 		req.Header.Set("Authorization", "Bearer "+key)
 	}
 	httpc := &http.Client{
-		Transport:     &http.Transport{DialContext: (&net.Dialer{Timeout: connect}).DialContext},
+		Transport:     &http.Transport{DialContext: netguard.DialContext(&net.Dialer{Timeout: connect})},
 		Timeout:       10 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}

@@ -16,6 +16,8 @@ from gaia import cli
 from gaia.eval import flagship_tasks as ft
 from gaia.eval.bench import config as bench_config
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 EVAL_TASKS = ["eval", "tasks"]
 
 

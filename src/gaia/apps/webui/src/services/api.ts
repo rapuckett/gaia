@@ -3,119 +3,23 @@
 
 /** API client for GAIA Agent UI backend. */
 
-import type { Session, Message, FeaturedLibrary, LinkAddResult, LinkPreview, Document, SystemStatus, Settings, StreamEvent, TunnelStatus, Schedule, ScheduleResult, ParsedSchedule, BrowseResponse, IndexFolderResponse, MCPServerStatus, AgentInfo, ProvidersResponse, ProviderInfo, ProviderModelsResponse, ActiveModel, ContextChoice, CustomModelReport, CustomModelRemoved, LocalModelStatus, CloudPriceList, SpendingReport, ChatSpending, ConnectProviderBody, SkillInfo, WarmUpStatus, LemonadeTarget, LemonadeFound, LemonadeTargetBody, ResourceUsage } from '../types';
+import type { Session, Message, FeaturedLibrary, LinkAddResult, LinkPreview, Document, SystemStatus, Settings, StreamEvent, TunnelStatus, BrowseResponse, IndexFolderResponse, MCPServerStatus, AgentInfo, ProvidersResponse, ProviderInfo, ProviderModelsResponse, ActiveModel, ContextChoice, CustomModelReport, CustomModelRemoved, LocalModelStatus, CloudPriceList, SpendingReport, ChatSpending, ConnectProviderBody, SkillInfo, WarmUpStatus, LemonadeTarget, LemonadeFound, LemonadeTargetBody, ResourceUsage, AgentPrograms, AgentDownload } from '../types';
 import type { LogReadResponse, LogSourcesResponse, ModelServerInfo, SessionSearchResponse } from '../types/api.gen';
 import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '../types/changes';
-import type { AgentCapabilities, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, UndoAllResult } from '../types/sessionPanel';
+import type { PageElementWire } from '../../services/browser-pane/contract';
 import { getApiBase } from '../utils/apiBase';
+import { isKeyStoreWait } from '../utils/keyStore';
 import { log } from '../utils/logger';
+import { noteBackendAnswer } from '../stores/uiAuthStore';
 import { chatDraftKey, clearSavedDraft } from '../utils/savedDraft';
+import { getT, type Translate } from '../i18n/useT';
+import { ApiError, getFriendlyError as friendlyError, isBareInternalError, parseErrorBody, parseErrorDetail, parseErrorFields, parseErrorStatus, StreamDroppedError, StreamStalledError, StreamTimeoutError } from './apiErrors';
 
-// -- Helpers -------------------------------------------------------------------
+export { ApiError, parseErrorDetail, parseErrorFields, parseErrorStatus, StreamDroppedError, StreamStalledError, StreamTimeoutError } from './apiErrors';
 
-/**
- * Pull a human-readable message out of an error response body.
- *
- * FastAPI's `detail` is a plain string for `HTTPException`, but a *list of
- * error objects* for request-validation failures (422) — interpolating one of
- * those into a message renders "[object Object]" in the UI.
- */
-export function parseErrorDetail(errorText: string): string {
-    try {
-        const parsed = JSON.parse(errorText).detail;
-        if (Array.isArray(parsed)) {
-            return parsed.map((e) => e?.msg ?? JSON.stringify(e)).join('; ') || errorText;
-        }
-        if (parsed && typeof parsed === 'object' && typeof parsed.message === 'string') return parsed.message;
-        if (parsed && typeof parsed !== 'string') return JSON.stringify(parsed);
-        return parsed || errorText;
-    } catch {
-        // Body isn't JSON (proxy HTML, empty response) — the raw text is the useful thing.
-        return errorText;
-    }
-}
-
-/** `detail.status` from a structured error body, e.g. `needs_key`; null otherwise. */
-export function parseErrorStatus(errorText: string): string | null {
-    try {
-        const status = JSON.parse(errorText).detail?.status;
-        return typeof status === 'string' ? status : null;
-    } catch {
-        return null;
-    }
-}
-
-/** Request fields a 422 names, from the last part of each error's `loc` (e.g. `retention_days`). */
-export function parseErrorFields(errorText: string): string[] {
-    try {
-        const parsed = JSON.parse(errorText).detail;
-        if (!Array.isArray(parsed)) return [];
-        return parsed
-            .map((e) => (Array.isArray(e?.loc) ? e.loc[e.loc.length - 1] : undefined))
-            .filter((f): f is string => typeof f === 'string');
-    } catch {
-        return [];
-    }
-}
-
-/** `detail` when the backend sent an object (e.g. a 409 asking to confirm), else null. */
-function parseErrorBody(errorText: string): Record<string, unknown> | null {
-    try {
-        const parsed = JSON.parse(errorText).detail;
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
-    } catch {
-        return null;
-    }
-}
-
-/** A non-2xx answer: the message to show, the backend's own words, and its machine-readable reason. */
-export class ApiError extends Error {
-    readonly httpStatus: number;
-    readonly detail: string;
-    readonly reason: string | null;
-    readonly fields: string[];
-    /** The structured `detail` object, when the backend sent one. */
-    readonly body: Record<string, unknown> | null;
-
-    constructor(message: string, httpStatus: number, detail: string, reason: string | null, fields: string[] = [], body: Record<string, unknown> | null = null) {
-        super(message);
-        this.name = 'ApiError';
-        this.httpStatus = httpStatus;
-        this.detail = detail;
-        this.reason = reason;
-        this.fields = fields;
-        this.body = body;
-    }
-}
-
-/** Starlette's bare body or the UI server's catch-all ("Internal server error") — no cause. */
-function isBareInternalError(detail: string): boolean {
-    return detail.trim().toLowerCase() === 'internal server error';
-}
-
-/**
- * False when a 500 carries no real cause: a bare "Internal Server Error",
- * a proxy HTML page, or a raw JSON body with an empty or missing `detail`.
- */
-function hasUsefulServerDetail(detail: string): boolean {
-    const text = detail.trim();
-    return text !== '' && !isBareInternalError(text) && !/^[<{[]/.test(text);
-}
-
-export function getFriendlyError(status: number, detail: string): string {
-    switch (status) {
-        case 403: return detail || 'Access denied.';
-        // Prefer the backend's detail for 404s — the previous canned string
-        // ("The file or folder may have been moved or deleted.") was misleading
-        // for upload/indexing flows where the real cause was a malformed
-        // filepath, not a missing file. See issue #728.
-        case 404: return detail || 'The requested item was not found.';
-        case 413: return detail || 'File too large to process.';
-        case 500: return hasUsefulServerDetail(detail) ? detail : 'Server error. Please try again.';
-        case 502: return 'Service unavailable. Is the backend running?';
-        case 503: return detail || 'Service unavailable.';
-        default: return detail || `Request failed (HTTP ${status})`;
-    }
+/** `getFriendlyError` in the interface language chosen now, unless `t` is given. */
+export function getFriendlyError(status: number, detail: string, t: Translate = getT(), body: Record<string, unknown> | null = null): string {
+    return friendlyError(status, detail, t, body);
 }
 
 /**
@@ -176,9 +80,11 @@ export async function apiFetch<T>(
     if (!res.ok) {
         const errorText = await res.text().catch(() => '');
         log.api.error(`${method} ${url} - HTTP ${res.status}`, { errorText });
+        noteBackendAnswer(res.status, errorText);
         const detail = parseErrorDetail(errorText);
-        throw new ApiError(getFriendlyError(res.status, detail), res.status, detail, parseErrorStatus(errorText), parseErrorFields(errorText), parseErrorBody(errorText));
+        throw new ApiError(getFriendlyError(res.status, detail, getT(), parseErrorBody(errorText)), res.status, detail, parseErrorStatus(errorText), parseErrorFields(errorText), parseErrorBody(errorText));
     }
+    noteBackendAnswer(res.status);
 
     // Some endpoints (DELETE, fire-and-forget POSTs) intentionally return no
     // body, so there is no JSON to parse. A non-JSON response *with* content,
@@ -250,6 +156,20 @@ export async function updateSettings(data: Partial<Settings>): Promise<Settings>
     return apiFetch<Settings>('PUT', '/settings', data);
 }
 
+/** Both agent programs: installed or not, their size, and any running gaiacpp download. */
+export async function getAgentPrograms(): Promise<AgentPrograms> {
+    return apiFetch<AgentPrograms>('GET', '/agent-programs');
+}
+
+/** Start downloading gaiacpp, or join the download already running. */
+export async function startAgentDownload(): Promise<AgentDownload> {
+    return apiFetch<AgentDownload>('POST', '/agent-programs/gaiacpp/download');
+}
+
+export async function getAgentDownload(): Promise<AgentDownload> {
+    return apiFetch<AgentDownload>('GET', '/agent-programs/gaiacpp/download');
+}
+
 export async function loadModel(modelName: string, ctxSize?: number, force = false): Promise<{ status: string; model: string; ctx_size: number }> {
     return apiFetch('POST', '/system/load-model', { model_name: modelName, ctx_size: ctxSize, force });
 }
@@ -268,9 +188,7 @@ export async function loadModelAskingFirst(
         return true;
     } catch (err) {
         if (!(err instanceof ApiError) || err.httpStatus !== 409) throw err;
-        if (!confirmLoad(`${err.detail}
-
-Load ${modelName} anyway?`)) return false;
+        if (!confirmLoad(`${err.detail}\n\n${getT()('settings.server.loadAnyway', { name: modelName })}`)) return false;
         await loadModel(modelName, ctxSize, true);
         return true;
     }
@@ -285,6 +203,15 @@ export async function downloadModel(
         model_name: modelName,
         force,
         load_after: loadAfter,
+    });
+}
+
+/** Forget a failed download on the server, so it stays dismissed after a reload. */
+export async function dismissDownloadFailure(
+    modelName: string,
+): Promise<{ status: string; model: string }> {
+    return apiFetch('POST', '/system/download-progress/dismiss', {
+        model_name: modelName,
     });
 }
 
@@ -382,8 +309,8 @@ export async function connectProvider(
 export const CONNECT_RETRY_MS = 2000;
 
 /**
- * Connect, waiting out an OS credential-store prompt: a 409 means the OS is
- * still asking the user, so say so and ask again until they answer.
+ * Connect, waiting out an OS credential-store prompt: a 409 `key_store_waiting`
+ * means the OS is still asking the user, so say so and ask again until they answer.
  */
 export async function connectProviderWaitingForOs(
     provider: string,
@@ -395,7 +322,7 @@ export async function connectProviderWaitingForOs(
         try {
             return await connectProvider(provider, body);
         } catch (err) {
-            if (!(err instanceof ApiError) || err.httpStatus !== 409 || stopped()) throw err;
+            if (!(err instanceof ApiError) || !isKeyStoreWait(err.httpStatus, err.body) || stopped()) throw err;
             onWaiting(err.detail);
             await new Promise((resolve) => setTimeout(resolve, CONNECT_RETRY_MS));
         }
@@ -637,13 +564,19 @@ const AGENT_EVENT_TYPES = new Set([
     'status', 'step', 'thinking', 'commentary', 'plan',
     'tool_start', 'tool_end', 'tool_result', 'tool_args', 'tool_confirm', 'skill_use', 'agent_error',
     'permission_request', 'needs_confirmation', 'needs_input', 'policy_alert',
-    'followup_taken', 'followup_returned', 'followup_unavailable', 'context_usage',
+    'followup_taken', 'followup_returned', 'followup_unavailable', 'context_usage', 'draft',
 ]);
+
+/** What a send carries besides its text and callbacks. */
+export interface SendExtras {
+    /** Elements picked in the browser pane, sent as `page_elements`. */
+    pageElements?: PageElementWire[];
+}
 
 export function sendMessageStream(
     sessionId: string,
     message: string,
-    onChunkOrCallbacks: ((event: StreamEvent) => void) | StreamCallbacks,
+    onChunkOrCallbacks: ((event: StreamEvent) => void) | (StreamCallbacks & SendExtras),
     onDone?: (event: StreamEvent) => void,
     onError?: (error: Error) => void,
     agentType?: string,
@@ -675,6 +608,9 @@ export function sendMessageStream(
             session_id: sessionId,
             message,
             stream: true,
+            ...(typeof onChunkOrCallbacks !== 'function' && onChunkOrCallbacks.pageElements
+                ? { page_elements: onChunkOrCallbacks.pageElements }
+                : {}),
             ...(agentType ? { agent_type: agentType } : {}),
             ...(device ? { device } : {}),
         }),
@@ -709,34 +645,11 @@ export const QUEUED_IDLE_MS = 10 * 60_000;
 export const SEND_HEADER_TIMEOUT_MS = 90_000;
 /** When a send not yet started by the backend begins showing as waiting. */
 export const SEND_WAITING_NOTICE_MS = 3_000;
+// english: wire text that liveStatus.ts matches whole and shows in the chosen language
 export const SEND_WAITING_NOTICE_TEXT = 'Waiting for GAIA to start this answer…';
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
 
-/** The stream went silent past STREAM_IDLE_MS; the run may still be going server-side. */
-export class StreamStalledError extends Error {
-    constructor(readonly idleMs: number) {
-        super(`The connection to GAIA went silent for ${Math.round(idleMs / 1000)} s.`);
-        this.name = 'StreamStalledError';
-    }
-}
-
-/** The connection broke after the run started (network switch, proxy reset, restart). */
-export class StreamDroppedError extends Error {
-    /** `unreachable`: the request never reached GAIA, so nothing there is still answering. */
-    constructor(readonly cause: unknown, readonly unreachable = false) {
-        super(`The connection to GAIA was cut: ${cause instanceof Error ? cause.message : String(cause)}`);
-        this.name = 'StreamDroppedError';
-    }
-}
-
-/** The backend never started answering the request. */
-export class StreamTimeoutError extends Error {
-    constructor(readonly endpoint: 'send' | 'attach', readonly timeoutMs: number) {
-        super(`GAIA did not start answering within ${Math.round(timeoutMs / 1000)} s.`);
-        this.name = 'StreamTimeoutError';
-    }
-}
 
 /** Bound the wait for response headers, and say so when it runs long. */
 function watchHeaders(
@@ -805,6 +718,7 @@ async function consumeSSEResponse(
     if (!res.ok) {
         const errText = await res.text().catch(() => '');
         log.stream.error(`SSE connection failed: HTTP ${res.status}`, errText);
+        noteBackendAnswer(res.status, errText);
         // The server's own words when it gave any, never a raw JSON body.
         const detail = parseErrorDetail(errText);
         const message = detail && !isBareInternalError(detail) ? detail : getFriendlyError(res.status, detail);
@@ -997,8 +911,15 @@ export async function listDocuments(): Promise<{ documents: Document[]; total: n
     return apiFetch('GET', '/documents');
 }
 
-export async function uploadDocumentByPath(filepath: string): Promise<Document> {
-    return apiFetch('POST', '/documents/upload-path', { filepath });
+/** Away from the PC, the file must be in the folders of the chat `sessionId` names. */
+export async function uploadDocumentByPath(filepath: string, sessionId?: string | null): Promise<Document> {
+    const params = withChat(new URLSearchParams(), sessionId).toString();
+    return apiFetch('POST', `/documents/upload-path${params ? `?${params}` : ''}`, { filepath });
+}
+
+function uploadError(status: number, errorText: string): ApiError {
+    const detail = parseErrorDetail(errorText);
+    return new ApiError(getFriendlyError(status, detail, getT(), parseErrorBody(errorText)), status, detail, parseErrorStatus(errorText), [], parseErrorBody(errorText));
 }
 
 /**
@@ -1032,8 +953,7 @@ export async function uploadDocumentBlob(file: File): Promise<Document> {
     if (!res.ok) {
         const errorText = await res.text().catch(() => '');
         log.api.error(`POST ${url} - HTTP ${res.status}`, { errorText });
-        const detail = parseErrorDetail(errorText);
-        throw new ApiError(getFriendlyError(res.status, detail), res.status, detail, parseErrorStatus(errorText));
+        throw uploadError(res.status, errorText);
     }
 
     const data = await res.json();
@@ -1045,13 +965,8 @@ export async function deleteDocument(id: string): Promise<void> {
     return apiFetch('DELETE', `/documents/${id}`);
 }
 
-/** How far a running index has got: PDF pages read, then chunks embedded. */
-export interface IndexProgress {
-    phase: 'reading' | 'embedding';
-    done: number;
-    /** Null when the count isn't known upfront (e.g. pages of a non-PDF). */
-    total: number | null;
-}
+import type { IndexProgress } from '../utils/documentLibrary.core';
+export type { IndexProgress };
 
 export async function getDocumentStatus(id: string): Promise<{
     id: string;
@@ -1067,10 +982,12 @@ export async function getDocumentStatus(id: string): Promise<{
 /**
  * Where a library document opens, at `page` when given. Absolute, so it opens
  * the same in a browser tab and, from the desktop app's file:// page, in the
- * system browser (the shell hands http links to it).
+ * system browser (the shell hands http links to it). Away from the PC only the
+ * chat `sessionId` names may open its documents.
  */
-export function documentFileUrl(id: string, page?: number): string {
+export function documentFileUrl(id: string, sessionId?: string | null, page?: number): string {
     const url = new URL(`${getApiBase()}/documents/${encodeURIComponent(id)}/file`, window.location.href);
+    if (sessionId) url.searchParams.set('session_id', sessionId);
     if (page) url.hash = `page=${page}`;
     return url.href;
 }
@@ -1093,13 +1010,21 @@ export async function detachDocument(sessionId: string, documentId: string): Pro
 
 // -- File Browser -----------------------------------------------------------------
 
-export async function browseFiles(path?: string): Promise<BrowseResponse> {
-    const params = path ? `?path=${encodeURIComponent(path)}` : '';
-    return apiFetch('GET', `/files/browse${params}`);
+/** Away from the PC (mobile access, a paired device) file reads name the chat and see only its folders. */
+function withChat(params: URLSearchParams, sessionId?: string | null): URLSearchParams {
+    if (sessionId) params.set('session_id', sessionId);
+    return params;
 }
 
-export async function indexFolder(folderPath: string, recursive: boolean = true): Promise<IndexFolderResponse> {
-    return apiFetch('POST', '/documents/index-folder', { folder_path: folderPath, recursive });
+export async function browseFiles(path?: string, sessionId?: string | null): Promise<BrowseResponse> {
+    const params = withChat(new URLSearchParams(path ? { path } : {}), sessionId).toString();
+    return apiFetch('GET', `/files/browse${params ? `?${params}` : ''}`);
+}
+
+/** Away from the PC, the folder must be in the folders of the chat `sessionId` names. */
+export async function indexFolder(folderPath: string, recursive: boolean = true, sessionId?: string | null): Promise<IndexFolderResponse> {
+    const params = withChat(new URLSearchParams(), sessionId).toString();
+    return apiFetch('POST', `/documents/index-folder${params ? `?${params}` : ''}`, { folder_path: folderPath, recursive });
 }
 
 export async function openFileOrFolder(path: string, reveal: boolean = true): Promise<{ status: string; path: string }> {
@@ -1143,8 +1068,7 @@ export async function uploadFile(file: File): Promise<{
     if (!res.ok) {
         const errorText = await res.text().catch(() => '');
         log.api.error(`POST ${url} - HTTP ${res.status}`, { errorText });
-        const detail = parseErrorDetail(errorText);
-        throw new ApiError(getFriendlyError(res.status, detail), res.status, detail, parseErrorStatus(errorText));
+        throw uploadError(res.status, errorText);
     }
 
     const data = await res.json();
@@ -1165,6 +1089,7 @@ export function uploadMedia(file: File, onProgress: (percent: number) => void, s
             if (event.lengthComputable) onProgress(Math.floor((event.loaded / event.total) * 100));
         };
         request.onerror = () => reject(new ApiError(getFriendlyError(0, 'network error'), 0, 'network error', null));
+        // english: callers match the AbortError name; this message is never shown
         request.onabort = () => reject(new DOMException('Upload cancelled', 'AbortError'));
         signal?.addEventListener('abort', () => request.abort());
         request.onload = () => {
@@ -1174,7 +1099,7 @@ export function uploadMedia(file: File, onProgress: (percent: number) => void, s
             }
             log.api.error(`POST ${url} - HTTP ${request.status}`, { errorText: request.responseText });
             const detail = parseErrorDetail(request.responseText);
-            reject(new ApiError(getFriendlyError(request.status, detail), request.status, detail, parseErrorStatus(request.responseText)));
+            reject(new ApiError(getFriendlyError(request.status, detail, getT(), parseErrorBody(request.responseText)), request.status, detail, parseErrorStatus(request.responseText), [], parseErrorBody(request.responseText)));
         };
         request.send(file);
     });
@@ -1182,7 +1107,7 @@ export function uploadMedia(file: File, onProgress: (percent: number) => void, s
 
 // -- File Search & Preview ----------------------------------------------------------
 
-export async function searchFiles(query: string, fileTypes?: string, maxResults?: number): Promise<{
+export async function searchFiles(query: string, fileTypes?: string, maxResults?: number, sessionId?: string | null): Promise<{
     results: Array<{ name: string; path: string; size: number; size_display: string; extension: string; modified: string; directory: string }>;
     total: number;
     query: string;
@@ -1192,10 +1117,10 @@ export async function searchFiles(query: string, fileTypes?: string, maxResults?
     const params = new URLSearchParams({ query });
     if (fileTypes) params.set('file_types', fileTypes);
     if (maxResults) params.set('max_results', String(maxResults));
-    return apiFetch('GET', `/files/search?${params}`);
+    return apiFetch('GET', `/files/search?${withChat(params, sessionId)}`);
 }
 
-export async function previewFile(path: string, lines?: number): Promise<{
+export async function previewFile(path: string, lines?: number, sessionId?: string | null): Promise<{
     path: string;
     name: string;
     size: number;
@@ -1210,7 +1135,7 @@ export async function previewFile(path: string, lines?: number): Promise<{
 }> {
     const params = new URLSearchParams({ path });
     if (lines) params.set('lines', String(lines));
-    return apiFetch('GET', `/files/preview?${params}`);
+    return apiFetch('GET', `/files/preview?${withChat(params, sessionId)}`);
 }
 
 // -- Mobile Access / Tunnel -------------------------------------------------------
@@ -1239,42 +1164,6 @@ export async function getMCPRuntimeStatus(): Promise<{ servers: MCPServerStatus[
     return apiFetch('GET', '/mcp/status');
 }
 
-// -- Schedules -----------------------------------------------------------------
-
-export async function listSchedules(): Promise<{ schedules: Schedule[]; total: number }> {
-    return apiFetch('GET', '/schedules');
-}
-
-/** The user's IANA time zone, so "daily at 9am" means 9am where they are. */
-export function browserTimeZone(): string | undefined {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-}
-
-export async function createSchedule(name: string, interval: string, prompt: string): Promise<Schedule> {
-    return apiFetch('POST', '/schedules', { name, interval, prompt, timezone: browserTimeZone() });
-}
-
-export async function updateSchedule(name: string, status: string): Promise<Schedule> {
-    return apiFetch('PUT', `/schedules/${encodeURIComponent(name)}`, { status });
-}
-
-/** Run a schedule once now; its next scheduled time stays as it was. */
-export async function runScheduleNow(name: string): Promise<Schedule> {
-    return apiFetch('POST', `/schedules/${encodeURIComponent(name)}/run`);
-}
-
-export async function deleteSchedule(name: string): Promise<void> {
-    return apiFetch('DELETE', `/schedules/${encodeURIComponent(name)}`);
-}
-
-export async function getScheduleResults(name: string, limit: number = 20): Promise<{ results: ScheduleResult[]; total: number }> {
-    return apiFetch('GET', `/schedules/${encodeURIComponent(name)}/results?limit=${limit}`);
-}
-
-export async function parseScheduleInput(input: string): Promise<ParsedSchedule> {
-    return apiFetch('POST', '/schedules/parse', { input, timezone: browserTimeZone() });
-}
-
 // -- Undo a turn's file changes (#5225) --------------------------------------
 
 export async function listTurnChanges(sessionId: string): Promise<{ turns: TurnChanges[] }> {
@@ -1297,51 +1186,6 @@ export async function updateUndoSettings(retentionDays: number, maxMb: number): 
     return apiFetch('PUT', '/settings/undo', { retention_days: retentionDays, max_mb: maxMb });
 }
 
-// -- Session panel: Environment, Outputs, Changes (#5279) --------------------
+// -- Session panel: Environment, Outputs, Changes (#5279): see sessionPanelApi.ts
 
-const sessionPath = (sessionId: string) => `/sessions/${encodeURIComponent(sessionId)}`;
-
-export async function getEnvironment(sessionId: string): Promise<SessionEnvironment> {
-    return apiFetch('GET', `${sessionPath(sessionId)}/environment`);
-}
-
-export async function addEnvironmentFolder(sessionId: string, path: string): Promise<SessionEnvironment> {
-    return apiFetch('POST', `${sessionPath(sessionId)}/environment/folders`, { path });
-}
-
-export async function removeEnvironmentFolder(sessionId: string, path: string): Promise<SessionEnvironment> {
-    return apiFetch('POST', `${sessionPath(sessionId)}/environment/folders/remove`, { path });
-}
-
-export async function setInternet(sessionId: string, on: boolean): Promise<SessionEnvironment> {
-    return apiFetch('PUT', `${sessionPath(sessionId)}/environment/internet`, { on });
-}
-
-export async function getOutputs(sessionId: string): Promise<SessionOutputs> {
-    return apiFetch('GET', `${sessionPath(sessionId)}/outputs`);
-}
-
-/** The tools the chat's agent has; a 409 when it isn't running yet. */
-export async function getCapabilities(sessionId: string): Promise<AgentCapabilities> {
-    return apiFetch('GET', `${sessionPath(sessionId)}/capabilities`);
-}
-
-export async function getSessionChanges(sessionId: string): Promise<SessionChanges> {
-    return apiFetch('GET', `${sessionPath(sessionId)}/changes/total`);
-}
-
-export async function undoAllChanges(sessionId: string, force = false): Promise<UndoAllResult> {
-    return apiFetch('POST', `${sessionPath(sessionId)}/changes/undo`, { force });
-}
-
-export async function getSessionGit(sessionId: string): Promise<SessionGit> {
-    return apiFetch('GET', `${sessionPath(sessionId)}/changes/git`);
-}
-
-export async function commitChanges(sessionId: string, root: string, message: string): Promise<{ root: string; commit: string; files: string[]; ignored: string[] }> {
-    return apiFetch('POST', `${sessionPath(sessionId)}/changes/git/commit`, { root, message, confirmed: true });
-}
-
-export async function createPullRequest(sessionId: string, root: string, title: string, body: string): Promise<{ root: string; url: string }> {
-    return apiFetch('POST', `${sessionPath(sessionId)}/changes/git/pr`, { root, title, body, confirmed: true });
-}
+export * from './sessionPanelApi';

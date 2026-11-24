@@ -4,6 +4,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { isolate } from '../../i18n/registry';
+import { tEn, translator } from '../../i18n/translator';
+import { describeUploadError } from '../../utils/uploadErrors.core';
 import {
     getUnsupportedCategory,
     isExtensionSupported,
@@ -160,8 +163,8 @@ describe('UploadErrorToast', () => {
             />
         );
 
-        expect(screen.getByText("GAIA can't read files in that location")).toBeInTheDocument();
-        expect(screen.getByText(/can only read documents under.*drop the file here instead \(up to 20 MB\)/)).toBeInTheDocument();
+        expect(screen.getByText(tEn('docs.locationRefused'))).toBeInTheDocument();
+        expect(screen.getByText(new RegExp(`can only read documents under.*${tEn('docs.dropInstead').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))).toBeInTheDocument();
         expect(screen.queryByText(/Access denied/)).toBeNull();
         expect(screen.queryByRole('link')).toBeNull();
     });
@@ -177,7 +180,7 @@ describe('UploadErrorToast', () => {
             />
         );
 
-        expect(screen.getByText('"README" has no file extension')).toBeInTheDocument();
+        expect(screen.getByText(tEn('docs.noExtension', { name: 'README' }))).toBeInTheDocument();
         expect(screen.queryByText(/File type not supported: $/)).toBeNull();
         expect(screen.queryByRole('link')).toBeNull();
     });
@@ -194,8 +197,24 @@ describe('UploadErrorToast', () => {
             />
         );
 
-        expect(screen.getByText(`"labs.xlsx" can't be read`)).toBeInTheDocument();
+        expect(screen.getByText(tEn('docs.cantReadFile', { name: 'labs.xlsx' }))).toBeInTheDocument();
         expect(screen.getByText(/save a copy as \.xlsx without a password/)).toBeInTheDocument();
         expect(screen.queryByRole('link')).toBeNull();
+    });
+});
+
+describe('describeUploadError drop hint', () => {
+    const refused = { filename: 'a.pdf', error: 'Outside the readable folders.', status: 403 };
+
+    it('offers dropping the file on the desktop only', () => {
+        expect(describeUploadError(tEn, { ...refused, canDrop: true }).detail).toContain(tEn('docs.dropInstead'));
+        expect(describeUploadError(tEn, refused).detail).toBe(refused.error);
+    });
+});
+
+describe('describeUploadError file type', () => {
+    it('isolates the extension inside the Arabic sentence', () => {
+        const view = describeUploadError(translator('ar'), { filename: 'a.xyz', error: 'Unsupported file type', status: 400 });
+        expect(view.title).toContain(isolate('.xyz', 'ltr'));
     });
 });

@@ -4,6 +4,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionFolderChip } from '../FolderChip';
+import { tEn } from '../../i18n/useT';
 import { useSessionEnvironment } from '../../hooks/useSessionEnvironment';
 import type { SessionEnvironment } from '../../types/sessionPanel';
 
@@ -31,7 +32,7 @@ describe('SessionFolderChip', () => {
     it("shows the chat's working folder by name, on Windows paths too", () => {
         withEnv(ENV);
         render(<SessionFolderChip sessionId="s1" onOpen={vi.fn()} />);
-        expect(screen.getByRole('button', { name: /Working folder gaia/ })).toHaveAttribute('title', 'GAIA works in C:\\Users\\k\\Work\\gaia');
+        expect(screen.getByRole('button', { name: /Working folder gaia/ })).toHaveAttribute('title', tEn('folderChip.worksIn', { path: 'C:\\Users\\k\\Work\\gaia' }));
     });
 
     it('opens where the folder can be changed', () => {

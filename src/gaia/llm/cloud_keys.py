@@ -80,8 +80,11 @@ def env_var_for(provider: str) -> str:
     return f"LEMONADE_{provider.upper()}_API_KEY"
 
 
-def remember_key(provider: str, key: str) -> None:
+def remember_key(provider: str, key: str, *, base_url: Optional[str] = None) -> None:
     """Keep *key* in the OS credential store. Raises when it was not kept.
+
+    The gateway's key is bound to *base_url*, the gateway that accepted it, and
+    is only ever handed to that gateway again; it is required there.
 
     Read back after writing: keyring's null backend (headless Linux,
     ``PYTHON_KEYRING_BACKEND=null``) accepts a write and stores nothing, and
@@ -95,6 +98,21 @@ def remember_key(provider: str, key: str) -> None:
     key = (key or "").strip()
     if not key:
         raise CloudKeyError("No key given, so there is nothing to keep.")
+    if provider == GATEWAY_PROVIDER:
+        from gaia.llm.gateway import GatewayError, remember_token
+
+        if not base_url:
+            raise CloudKeyError(
+                "GAIA can't keep the gateway key without the gateway address it "
+                "belongs to."
+            )
+        try:
+            remember_token(key, base_url)
+        except ConnectorsError as e:
+            raise CloudKeyError(_no_store_message(provider, str(e))) from e
+        except GatewayError as e:
+            raise CloudKeyError(_no_store_message(provider, str(e))) from e
+        return
     try:
         save_secret(slot, key)
         kept = peek_secret(slot) == key
@@ -114,6 +132,10 @@ def recall_key(provider: str) -> Optional[str]:
     from gaia.connectors.store import peek_secret
 
     slot = _check(provider)
+    if provider == GATEWAY_PROVIDER:
+        from gaia.llm.gateway import recall_token
+
+        return recall_token()
     try:
         value = peek_secret(slot)
     except ConnectorsError as e:
@@ -122,12 +144,25 @@ def recall_key(provider: str) -> Optional[str]:
     return value.strip() if value and value.strip() else None
 
 
+def recall_gateway_key() -> Optional[Any]:
+    """The stored gateway key with the address it was saved with
+    (:class:`gaia.llm.gateway.GatewayKey`), or None."""
+    from gaia.llm.gateway import recall_stored_key
+
+    return recall_stored_key()
+
+
 def forget_key(provider: str) -> bool:
     """Remove the kept key. True when one was stored."""
-    from gaia.connectors.store import delete_secret
+    from gaia.connectors.store import delete_secret, secret_in_use
 
     slot = _check(provider)
-    had = recall_key(provider) is not None
+    if provider == GATEWAY_PROVIDER:
+        from gaia.llm.gateway import forget_token
+
+        return forget_token()
+    # A weak keyring refuses the read but not the delete.
+    had = recall_key(provider) is not None or secret_in_use(slot)
     delete_secret(slot)
     return had
 
@@ -145,7 +180,9 @@ def ensure_authenticated(
     reports authenticated and discovers nothing.
 
     *recall* replaces :func:`recall_key` for reading the kept key, so a caller
-    that must not block on the credential store can bound the read.
+    that must not block on the credential store can bound the read. For the
+    gateway it returns a :class:`gaia.llm.gateway.GatewayKey`, which goes only
+    to the address it was saved with; any other raises :class:`CloudKeyError`.
     """
     from gaia.llm.lemonade_choice import is_users_server
 
@@ -164,9 +201,12 @@ def ensure_authenticated(
             return True
         raise CloudKeyError(users_server_provider_message(base_url, provider))
     if provider == GATEWAY_PROVIDER:
-        from gaia.llm.gateway import GatewayManager
+        from gaia.llm.gateway import GatewayBusy, GatewayKeyMismatch, GatewayManager
 
-        return GatewayManager(client).ensure_authenticated(recall=recall)
+        try:
+            return GatewayManager(client).ensure_authenticated(recall=recall)
+        except (GatewayBusy, GatewayKeyMismatch) as e:
+            raise CloudKeyError(str(e)) from e
 
     entry = _provider_entry(base_url, provider)
     if entry is None:
@@ -407,6 +447,7 @@ __all__ = [
     "env_var_for",
     "forget_key",
     "provider_lost",
+    "recall_gateway_key",
     "recall_key",
     "reconnect_provider",
     "remember_key",

@@ -44,9 +44,38 @@ End users don't need to interact with this SDK directly — prebuilt `.exe` /
 [GitHub Releases page](https://github.com/amd/gaia/releases), and
 `npm install -g @amd-gaia/agent-ui` gives the same app on any Node-capable
 platform. This page is for developers embedding or extending the backend.
-See the [Agent UI guide](/guides/agent-ui#install-and-launch) for install
+See the [Agent UI guide](/guides/agent-ui/getting-started#other-ways-to-install) for install
 options.
 </Tip>
+
+---
+
+## Architecture
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#E2A33E', 'primaryTextColor':'#1a1a1a', 'primaryBorderColor':'#A87B2D', 'lineColor':'#A87B2D', 'edgeLabelBackground':'#ffffff', 'fontFamily':'system-ui, -apple-system, sans-serif'}}}%%
+flowchart TD
+    A(["Agent UI (Browser or Electron)"]) --> B(["FastAPI Backend · port 4200"])
+    B --> C(["GAIA Core SDKs"])
+    C --> D(["Lemonade Server · port 13305"])
+
+    B -.- E(["REST API + SSE Streaming"])
+    B -.- F(["SQLite Database"])
+    C -.- G(["Agent · RAGSDK · LemonadeClient"])
+    D -.- H(["Model Serving (NPU / iGPU)"])
+
+    style A fill:#f8f9fa,stroke:#dee2e6,stroke-width:2px,color:#495057
+    style B fill:#E2A33E,stroke:#A87B2D,stroke-width:2px,color:#1a1a1a
+    style C fill:#EFC480,stroke:#E2A33E,stroke-width:2px,color:#1a1a1a
+    style D fill:#2d2d2d,stroke:#1a1a1a,stroke-width:2px,color:#fff
+    style E fill:#f8f9fa,stroke:#dee2e6,stroke-width:1px,color:#6c757d
+    style F fill:#f8f9fa,stroke:#dee2e6,stroke-width:1px,color:#6c757d
+    style G fill:#f8f9fa,stroke:#dee2e6,stroke-width:1px,color:#6c757d
+    style H fill:#f8f9fa,stroke:#dee2e6,stroke-width:1px,color:#6c757d
+
+    linkStyle 0,1,2 stroke:#E2A33E,stroke-width:2px
+    linkStyle 3,4,5,6 stroke:#dee2e6,stroke-width:1px,stroke-dasharray:5
+```
 
 ---
 
@@ -67,15 +96,19 @@ app = create_app(db_path="/path/to/my/chat.db")
 app = create_app(db_path=":memory:")
 ```
 
-Run with uvicorn:
+Run with uvicorn, using the settings GAIA's own runners use:
 
 ```python
 import uvicorn
-from gaia.ui.server import create_app
+from gaia.ui.server import create_app, uvicorn_options
 
 app = create_app()
-uvicorn.run(app, host="localhost", port=4200)
+uvicorn.run(app, **uvicorn_options("localhost", 4200))
 ```
+
+`uvicorn_options()` keeps uvicorn from trusting `X-Forwarded-*` headers. Without
+it, a request through the mobile access tunnel could set its own peer address
+and pass as the PC.
 
 Or from the command line:
 
@@ -453,6 +486,92 @@ class AttachDocumentRequest(BaseModel):
     document_id: str
 ```
 
+### Paired devices
+
+```python
+class DevicePairingOffer(BaseModel):
+    """POST /api/devices/pairing: what the PC's QR code carries, as compact JSON."""
+    v: int              # format version, 1
+    name: str           # the PC's name, to show on the device
+    pc_id: str          # stays the same for this PC, across resets
+    origins: List[str]  # https://<home-network IPv4>:<port>, one per address
+    pin: str            # SHA-256 of the listener's certificate (DER), hex
+    invite: str         # the single-use invitation
+    exp: int            # when the invitation dies, Unix seconds
+
+class DevicePairRequest(BaseModel):
+    """POST /api/devices/pair"""
+    invitation: str
+    device_name: str    # control and bidi characters removed, 64 at most
+    platform: Literal["ios", "ipados", "android"]
+
+class DevicePairResponse(BaseModel):
+    device_id: str
+    token: str          # returned here only; GAIA keeps its SHA-256
+    pc_name: str
+    pc_id: str
+    status: Literal["pending", "allowed"]
+    expires_at: str     # when a pending device stops working
+
+class PairedDevice(BaseModel):
+    id: str
+    name: str
+    platform: Literal["ios", "ipados", "android"]
+    status: Literal["pending", "allowed"]
+    created_at: str
+    last_seen_at: Optional[str] = None
+    expires_at: Optional[str] = None  # while pending
+    changes_count: int = 0            # its changes on record (GET /api/devices)
+
+class PairedDeviceList(BaseModel):
+    devices: List[PairedDevice]
+
+class DeviceRemoved(BaseModel):
+    """DELETE /api/devices/{device_id}"""
+    changes_count: int  # its changes, which stay on the PC
+
+class DeviceChange(BaseModel):
+    id: str             # stable for the row
+    kind: str           # camelCase id, e.g. providerKeySet, connectorSetup
+    params: Dict[str, Union[str, int, float, bool, None]]  # labels, never a secret
+    at: str
+
+class DeviceChangeList(BaseModel):
+    changes: List[DeviceChange]  # newest first
+    total: int                   # every change on record for the device
+
+class FailedRedemption(BaseModel):
+    at: str
+    address: str        # the device's home-network IPv4 address
+    reason: Literal["expired", "used", "wrong", "closed", "rate_limited"]
+
+class DeviceAccessStatus(BaseModel):
+    listening: bool
+    waiting_for_home: bool = False  # left on; starts once the PC has a home network
+    port: int
+    error_code: Optional[Literal["port_in_use", "unsafe_folder", "certificate", "no_home_network", "start_failed"]] = None
+    error_detail: Optional[str] = None
+    pairing_open: bool
+    pairing_expires_at: Optional[str] = None
+    idle_expiry_days: int
+    pending_expiry_minutes: int
+    failed_redemptions: List[FailedRedemption]  # the last 20
+    routes: List[AwayRouteStatus]  # each away route: today, tailnet
+
+class AwayRouteStatus(BaseModel):
+    kind: Literal["tailnet", "relay"]
+    on: bool
+    origin: Optional[str] = None
+    error_code: Optional[str] = None  # listener_off, no_tailscale_address, start_failed
+
+class DeviceRoutes(BaseModel):
+    origins: List[DeviceOrigin]  # home first, then each away route that is on
+
+class DeviceOrigin(BaseModel):
+    kind: Literal["home", "tailnet", "relay"]
+    origin: str  # https://address:port
+```
+
 ---
 
 ## REST API Endpoints
@@ -484,20 +603,29 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
   </Accordion>
 
   <Accordion title="GET /api/health">
-    Health check with database statistics.
+    Liveness probe. The one route that needs no [API token](#api-token), so it
+    returns nothing about the user.
 
     **Response:**
     ```json
     {
       "status": "ok",
-      "service": "gaia-agent-ui",
-      "stats": {
-        "sessions": 12,
-        "messages": 245,
-        "documents": 5,
-        "total_chunks": 320,
-        "total_size_bytes": 15234567
-      }
+      "service": "gaia-agent-ui"
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="POST /api/auth/launch-code">
+    A link that signs a browser in to this Agent UI, for a launcher that holds
+    the [API token](#api-token) and opens a browser. Needs the token and
+    `X-Gaia-UI: 1`. Opening the link sets the `gaia_ui_token` cookie and
+    redirects to the same page without the code. The code works once.
+
+    **Response:**
+    ```json
+    {
+      "path": "/?launch=3q2-Xo...",
+      "expires_in": 600
     }
     ```
   </Accordion>
@@ -589,7 +717,7 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
     { "backend": "vulkan" }
     ```
 
-    `backend` is one of the names in `available_backends`, or `auto` to clear the saved choice. Returns the refreshed `GET /api/system/model-server` body. `400` when the backend isn't one GAIA has tested or this machine can't run it, `503` when Lemonade is not answering.
+    `backend` is one of the names in `available_backends`, or `auto` to clear the saved choice. Returns the refreshed `GET /api/system/model-server` body. `400` when the backend isn't one GAIA has tested or this machine can't run it, `503` when Lemonade is not answering. A setup route: the PC or a paired device the PC allowed, never mobile access (`403`).
   </Accordion>
 
   <Accordion title="POST /api/system/load-model">
@@ -624,7 +752,7 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
   </Accordion>
 
   <Accordion title="POST /api/system/download-model">
-    Trigger downloading a model via the Lemonade server. Returns `202` immediately; the download proceeds in the background. Poll `GET /api/system/status` to detect when the model becomes available. Downloads leave the active model unchanged by default. Set `force` to `true` to re-download even if the file already exists (repairs corrupted or incomplete downloads).
+    Trigger downloading a model via the Lemonade server. Returns `202` immediately; the download proceeds in the background. Poll `GET /api/system/status` to detect when the model becomes available. Downloads leave the active model unchanged by default. Set `force` to `true` to re-download even if the file already exists (repairs corrupted or incomplete downloads). A setup route: the PC or a paired device the PC allowed, never mobile access (`403`).
 
     **Request:**
     ```json
@@ -649,7 +777,28 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
     }
     ```
 
-    **Response (400):** the model cannot be pulled — it is hosted on a gateway (no weights to download), it is a `user.` model GAIA has no checkpoint and recipe for and Lemonade doesn't list either, or Lemonade's model list couldn't be read to check such a model (`detail` asks the user to try again). A `user.` model Lemonade already lists is pulled by name instead. `detail` says which case applies, and for an unknown model tells the user to add it from its Hugging Face link: **Settings > Model > Add a model from Hugging Face** in the Agent UI, or `/provider` → **Local** → `ctrl+a` in the terminal app. The Agent UI shows `detail` next to the Download button that was pressed.
+    **Response (400):** the model cannot be pulled — it is hosted on a gateway (no weights to download), it is a `user.` model GAIA has no checkpoint and recipe for and Lemonade doesn't list either, or Lemonade's model list couldn't be read to check such a model (`detail` asks the user to try again). A `user.` model Lemonade already lists is pulled by name instead. `detail` says which case applies, and for an unknown model tells the user to add it from its Hugging Face link: **Settings > Agent & model > Add a model from Hugging Face** in the Agent UI, or `/provider` → **Local** → `ctrl+a` in the terminal app. The Agent UI shows `detail` next to the Download button that was pressed.
+  </Accordion>
+
+  <Accordion title="POST /api/system/download-progress/dismiss">
+    Forget a failed download, so its warning stays gone after a reload. `GET /api/system/status` reports a failed pull in `download_progress` and keeps reporting it until that model is pulled again; this route clears that one entry. Only a failed entry for the named model is removed: an active download of the same model, and every other model's entry, are left alone.
+
+    **Request:**
+    ```json
+    {
+      "model_name": "Qwen3.6-35B-A3B-GGUF"
+    }
+    ```
+
+    **Response (200):** `status` is `dismissed` when an entry was removed and `unchanged` when there was no failed entry to remove.
+    ```json
+    {
+      "status": "dismissed",
+      "model": "Qwen3.6-35B-A3B-GGUF"
+    }
+    ```
+
+    **Response (400):** `model_name` is empty. The Agent UI's download chip and its connection banner both call this route, so a dismissed failure does not return on the next status poll.
   </Accordion>
 
   <Accordion title="GET /api/system/work-in-progress">
@@ -683,7 +832,7 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
   </Accordion>
 
   <Accordion title="POST /api/system/warm-up">
-    Read a new chat's system prompt and tool schemas into Lemonade's prompt cache, so the first message doesn't wait on them. The UI calls this when a new chat opens, and with `?fresh=true` when the user presses **Try again** on a picked model that failed to load. Only one warm-up runs at a time, a repeat within 30 s of a finished one does nothing, and none starts while a streamed chat turn runs. Cloud models and models that aren't downloaded are skipped, so it never starts a download or a paid request. It is also skipped when the GAIA agent runs in its daemon sidecar (a Hub install), which warms its own prompt, on a PC with under 24 GB of RAM, where the model loads with the first message instead, and before first-run setup has finished, when it would load a model setup didn't pick. A chat turn on the model being warmed waits for the warm-up and reuses what it cached; a turn on any other model, local or cloud, stops it, so the warm-up never loads over the turn's model. A local turn that arrives while the warm-up is loading its model waits for that load to finish first, since it can't be interrupted and holds the memory the turn's own load needs. An NPU (FastFlowLM) model is only loaded, not primed: FastFlowLM reuses a prompt only when the next request continues it, so the first message reads the prompt either way. A fresh request (a model pick, or `?fresh=true`) skips the 30 s debounce, and one made while a warm-up runs starts as soon as that one ends. Returns the warm-up state, with the `model` it loads and its `device` (`npu`, `gpu` or `cpu`) once known. `GET /api/system/warm-up` returns the same state without starting one, and `GET /api/system/status` carries it as `warm_up`.
+    Read a new chat's system prompt and tool schemas into Lemonade's prompt cache, so the first message doesn't wait on them. The UI calls this when a new chat opens, and with `?fresh=true` when the user presses **Try again** on a picked model that failed to load. Only one warm-up runs at a time, a repeat within 30 s of a finished one does nothing, and none starts while a streamed chat turn runs; a fresh request made then starts once no turn is running. Cloud models and models that aren't downloaded are skipped, so it never starts a download or a paid request. When the GAIA agent runs in its daemon sidecar (a Hub install), the model is loaded but the prompt is not read, since the sidecar reads its own. It is skipped on a PC with under 24 GB of RAM, where the model loads with the first message instead, and before first-run setup has finished, when it would load a model setup didn't pick. A chat turn on the model being warmed waits for the warm-up and reuses what it cached; a turn on any other model, local or cloud, stops it, so the warm-up never loads over the turn's model. A local turn that arrives while the warm-up is loading its model waits for that load to finish first, since it can't be interrupted and holds the memory the turn's own load needs. An NPU (FastFlowLM) model is only loaded, not primed: FastFlowLM reuses a prompt only when the next request continues it, so the first message reads the prompt either way. A fresh request (a model pick, or `?fresh=true`) skips the 30 s debounce, and one made while a warm-up runs starts as soon as that one ends, stopping it first when it is loading a different model. Returns the warm-up state, with the `model` it loads and its `device` (`npu`, `gpu` or `cpu`) once known. `GET /api/system/warm-up` returns the same state without starting one, and `GET /api/system/status` carries it as `warm_up`.
 
     **Response:**
     ```json
@@ -717,12 +866,12 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
 
     | Field | Type | Description |
     |-------|------|-------------|
-    | `custom_model` | string or null | HuggingFace model ID overriding the default, or `null` if using the default model. |
+    | `custom_model` | string or null | Model ID typed as a custom override, or `null` when the model picked under Model (or the default model) is in use. |
     | `model_status` | object or null | Status of the custom model on Lemonade. `null` when no custom model is set. Contains `found` (in catalog), `downloaded` (on disk), `loaded` (currently active), and `checked` (the model list was read; when `false`, `found` says nothing). Settings notes a saved ID that is unlisted or could not be checked. |
   </Accordion>
 
   <Accordion title="PUT /api/settings">
-    Update user settings. Set `custom_model` to a model ID to override the default, or to an empty string to clear the override and revert to the default model; omitting it or sending `null` leaves it unchanged. The value is also saved as `last_model` in `~/.gaia/config.json` (cleared with it), so the flagship's start-up warm-up and the next launch use the same model. A cloud model is refused with `409` while Local only is on, including one from a provider GAIA knows only from the model server's list; when that list can't be read to tell, the save is refused with `503`.
+    Update user settings. Set `custom_model` to a model ID to override the default, or to an empty string to clear the override and go back to the model picked under Model (`POST /api/providers/select`); omitting it or sending `null` leaves it unchanged. With no pick on record, clearing reverts to the default model, except for a cloud model whose user has not downloaded the local default, which stays in use. The model left running is also saved as `last_model` in `~/.gaia/config.json`, so the flagship's start-up warm-up and the next launch use the same model. A change that leaves a different local model running starts a fresh warm-up, as picking one does. A cloud model is refused with `409` while Local only is on, including one from a provider GAIA knows only from the model server's list; when that list can't be read to tell, the save is refused with `503`. `network_policy` changes on the PC or on a paired device the PC allowed: a request that carries it from mobile access or a device the PC hasn't allowed is a `403` and saves none of its fields. A paired device may change only what PC Settings shows (`custom_model`, `dynamic_tools`, `flagship_agent` and `network_policy`); a request from one that carries `context_size` or `agent_mode` is a `403` and saves nothing. A device's Local only change is written to the audit log and listed in Settings › Phones and tablets.
 
     **Request:**
     ```json
@@ -734,8 +883,40 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
     | Field | Type | Required | Description |
     |-------|------|----------|-------------|
     | `custom_model` | string or null | No | Model ID to use instead of the default. An empty string clears the override; `null` leaves it unchanged. |
+    | `flagship_agent` | string or null | No | Which program is the GAIA agent: `gaiapy` (the Python agent) or `gaiacpp` (the native C++ agent, beta). Saved as `flagship_agent` in `~/.gaia/config.json`, which the terminal UI reads too, and applied from the next message. Refused with `422` when `gaiacpp` isn't installed, `409` while a chat is answering, and `403` unless the request comes from the PC running GAIA or a paired device the PC allowed (a device's switch is listed in Settings › Phones and tablets). `GET /api/settings` returns the saved one as `flagship_agent` (which can be a name a newer GAIA saved that this version can't run, until another is chosen), and `gaiacpp_available`. |
 
     **Response:** Same shape as `GET /api/settings`.
+  </Accordion>
+
+  <Accordion title="GET /api/agent-programs">
+    List the two programs that can be the GAIA agent, with whether each is on this PC and its download size.
+
+    **Response:**
+    ```json
+    {
+      "current": "gaiapy",
+      "programs": [
+        { "id": "gaiapy", "installed": true, "size_bytes": 163381945, "can_download": false, "update_available": false, "unavailable_reason": null, "unavailable_code": null },
+        { "id": "gaiacpp", "installed": false, "size_bytes": 43909632, "can_download": true, "update_available": false, "unavailable_reason": null, "unavailable_code": null }
+      ],
+      "download": { "state": "idle", "bytes_done": 0, "bytes_total": null, "error": null }
+    }
+    ```
+
+    | Field | Type | Description |
+    |-------|------|-------------|
+    | `current` | string | The saved agent choice: `gaiapy` or `gaiacpp`, or a name a newer GAIA saved that this version can't run (it matches no entry in `programs`; choosing another in Settings fixes it). |
+    | `programs[].size_bytes` | number or null | Download size for this PC; `null` when it could not be read. |
+    | `programs[].can_download` | boolean | `true` for a `gaiacpp` this release offers that is not installed, or is from another release. |
+    | `programs[].unavailable_reason` | string or null | Why `gaiacpp` can be neither used nor downloaded here, for example a development build. |
+    | `programs[].unavailable_code` | string or null | `no_release`, `unreachable` or `unverifiable` when the reason is one of those, so a client can show it in the user's language; `null` for any other reason. |
+    | `download` | object | The `gaiacpp` download: `state` is `idle`, `downloading`, `done` or `failed`, with `bytes_done`, `bytes_total` and `error`. |
+  </Accordion>
+
+  <Accordion title="POST /api/agent-programs/{program_id}/download">
+    Start downloading `gaiacpp` in the background (`program_id` must be `gaiacpp`). The file is checked against the release's SHA-256 list and the version it prints before it is installed in `~/.gaia/bin`. Answers `202` with the `download` object above; a second call while one is running returns the running one. `409` when it is already installed, or when it would replace the agent in use while a chat is answering or setup is still running; `404` for any other id; `403` unless the request comes from the PC running GAIA or a paired device the PC allowed (a device's download is listed in Settings › Phones and tablets). A copy from another GAIA release can be downloaded again, and a download that fails leaves the copy in use and its record as they were.
+
+    `GET /api/agent-programs/{program_id}/download` returns the same `download` object; poll it for the progress bar. Choosing the agent afterwards is `PUT /api/settings`.
   </Accordion>
 </AccordionGroup>
 
@@ -764,8 +945,15 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
     is missing or too broad (a drive root, the home folder, a protected
     folder), or any folder for an agent that can't be given one, is a **400**
     and no chat is created. An agent that runs as its own process can be given
+    folders when its contract is 2.18 or later; an older one or one that fails
+    to start is refused.
     folders when its contract is 2.18 or later; an older one, the email agent,
-    or one that fails to start is refused.
+    or one that fails to start is refused. From an allowed paired device, a
+    folder outside the home folder or one holding credentials is a **403**
+    and no chat is created, with the same `detail` as
+    `POST /api/sessions/{session_id}/environment/folders`. Each folder a chat
+    starts with is audited, and one a paired device gives is listed in the
+    device's changes (`folderAdded`).
 
     From the Agent UI (`X-Gaia-Client: agent-ui`) a chat is always the GAIA
     agent: an omitted `agent_type` becomes `gaia` and any other value is a
@@ -820,7 +1008,8 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
 
   <Accordion title="GET /api/sessions/{session_id}/messages">
     Get messages for a session, ordered oldest first. Each message carries `stopped`:
-    true when the person stopped the answer, kept across restarts.
+    true when the person stopped the answer, and `failed`: true when a model
+    failure ended the turn, as on the stream's `done`. Both are kept across restarts.
 
     **Query params:** `limit` (default 100), `offset` (default 0)
 
@@ -1006,12 +1195,15 @@ Deleting a chat deletes its copies.
     The retention limits and current use:
     `{"retention_days": 7, "max_mb": 500, "used_bytes": 18233, "turns": 3, "path": "..."}`.
     Stored as `undo_retention_days` and `undo_max_mb` in `~/.gaia/config.json`.
+    Away from the PC, `path` names GAIA's folder instead of spelling it out.
   </Accordion>
 
   <Accordion title="PUT /api/settings/undo">
     Set `retention_days` (1–365) and `max_mb` (10–100000), then remove history
     past the new limits. Turns older than the time limit go first, then the
     oldest until the total fits. The size limit never removes the newest turn.
+    A change from a paired device is written to the audit log before the trim
+    and listed in the device's changes (`undoLimitsChanged`).
   </Accordion>
 
   <Accordion title="GET /api/speech/settings">
@@ -1021,7 +1213,9 @@ Deleting a chat deletes its copies.
     "accent": "american", "gender": "female", "quality": "A-"}, ...]}`.
     `speed` is a percentage of normal speed. Stored as `read_aloud_voice`,
     `read_aloud_speed` and `read_aloud_auto` in `~/.gaia/config.json`, which
-    the TUI reads too.
+    the TUI reads too. `available` is false where GAIA doesn't offer its voice
+    (macOS for now), with `unavailable_reason` saying why; the app then hides
+    Read aloud and doesn't auto-read, and the saved settings still load.
   </Accordion>
 
   <Accordion title="PUT /api/speech/settings">
@@ -1034,7 +1228,8 @@ Deleting a chat deletes its copies.
     Whether Lemonade has the `kokoro-v1` voice model on disk:
     `{"downloaded": bool, "size_gb": float | null}`. The app checks it before
     its first read so it can say the model is downloading. **503** when
-    Lemonade is unreachable, **502** when Lemonade doesn't list the model.
+    Lemonade is unreachable, **502** when Lemonade doesn't list the model,
+    **409** where GAIA doesn't offer its voice.
   </Accordion>
 
   <Accordion title="POST /api/speech">
@@ -1043,9 +1238,36 @@ Deleting a chat deletes its copies.
     body names `voice` or `speed`. Downloads the model on first use, which the
     app announces after `GET /api/speech/model`. **422** for
     empty or over-long text or a bad voice or speed, **503** when Lemonade is
-    unreachable, **502** when Lemonade can't make the speech; each `detail`
-    says why. The app splits a long reply into pieces and plays them back to
+    unreachable, **502** when Lemonade can't make the speech or returns far
+    less audio than the text needs (cut-off speech is refused, never sent),
+    **409** where GAIA doesn't offer its voice; each `detail` says why. The app splits a long reply into pieces and plays them back to
     back.
+  </Accordion>
+</AccordionGroup>
+
+### Image creation
+
+<AccordionGroup>
+  <Accordion title="GET /api/images/settings">
+    The saved image model, size and steps, and the models this Lemonade
+    offers: `{"model": "SDXL-Turbo", "size": null, "steps": null,
+    "max_steps": 100, "models": [{"id": "Z-Image-Turbo", "downloaded": true,
+    "downloads_on_first_use": false, "default_size": "1024x1024",
+    "default_steps": 9, "sizes": ["512x512", "1024x1024", ...]}, ...],
+    "model_available": true, "chat_model": "Qwen3.6-35B-A3B-GGUF",
+    "chat_model_creates_images": true}`. `null` size or steps is the model's
+    own default. Models are the downloaded image models plus the legacy SD
+    models that download on first use; sizes stay under each model's
+    `soft_pixel_cap`. Stored as `image_model`, `image_size` and `image_steps`
+    in `~/.gaia/config.json`, which the TUI reads too. **503** when Lemonade's
+    catalog can't be read.
+  </Accordion>
+
+  <Accordion title="PUT /api/images/settings">
+    Save any of `model`, `size` (`WIDTHxHEIGHT`, or `null` for automatic) and
+    `steps` (1–100, or `null`). A new model resets size and steps to automatic
+    unless the request sets them. **422** names a model that isn't on this
+    Lemonade or a size it doesn't take, and nothing is saved.
   </Accordion>
 </AccordionGroup>
 
@@ -1139,7 +1361,7 @@ Deleting a chat deletes its copies.
 
     | Event type | Fields | Description |
     |------------|--------|-------------|
-    | `done` | `message_id` (int), `content` (string), `turn_summary` (object, optional), `failed` (bool, optional), `failure` (string, optional) | Signals the end of the stream. `message_id` is the database ID of the saved assistant message. `content` is the full response text. `turn_summary` is the turn's sources and data flow (below); it is also saved with the message and returned by the messages endpoint. `failed` marks a turn a model failure ended, and `content` then says why. `failure` names a cause the app can fix: `model_server_down` when the local model server took no connection (cloud models go through it too). |
+    | `done` | `message_id` (int), `content` (string), `turn_summary` (object, optional), `failed` (bool, optional), `failure` (string, optional) | Signals the end of the stream. `message_id` is the database ID of the saved assistant message. `content` is the full response text. `turn_summary` is the turn's sources and data flow (below); it is also saved with the message and returned by the messages endpoint. `failed` marks a turn a model failure ended, and `content` then says why; the saved message carries it too. `failure` names a cause the app can fix: `model_server_down` when the local model server took no connection (cloud models go through it too). |
 
     **Example stream** showing a typical multi-step interaction:
     ```
@@ -1168,7 +1390,7 @@ Deleting a chat deletes its copies.
     | `outputs` | What it made besides files, for the session panel's Outputs: `kind` (`image`, `document` indexed, `memory` saved, `schedule` created), `name`, and `path`, `detail` or `ref` (a memory's id) where they apply. |
     | `live_data` | `attempted` and `failed` counts for the internet tools. All failed means the answer has no live data. |
     | `model` | `remote`, `provider`, `provider_name`, `name`. Absent when the location could not be determined. |
-    | `cost` | `kind`: `local`, `estimate` (with `usd`, at list price), `unknown` (no known price), or `unreported` (the model is priced but no usage came back, such as a stopped answer). |
+    | `cost` | `kind`: `local`, `estimate` (with `usd`, at list price), `unknown` (no known price), `unreported` (the model is priced but no usage came back, such as a stopped answer), or `no_reply` (a cloud turn that was stopped or failed before any reply, which spending leaves out). |
     | `error` | Set, with the rest empty, when the summary could not be built. |
 
     **Non-streaming response:**
@@ -1320,6 +1542,8 @@ Deleting a chat deletes its copies.
   <Accordion title="GET /api/documents">
     List all documents in the global library.
 
+    A paired device or tunnel caller gets `filepath` home-relative (`~/Documents/manual.pdf`, or just the file name outside the home folder); the PC gets the full path.
+
     **Response:**
     ```json
     {
@@ -1356,12 +1580,19 @@ Deleting a chat deletes its copies.
     `indexing_status: "failed"`, the reason in `last_error`, and `error_kind`
     set to `corrupted`, `encrypted`, `empty` (no text), `empty_file` (nothing
     to index) or `unsupported_workbook` (a legacy `.xls` or password-protected
-    workbook) when retrying can't help until the file is fixed.
+    workbook) when retrying can't help until the file is fixed, or to
+    `model_server_down` / `model_server_busy` when the file is fine and the
+    model server didn't answer, so Retry works once it does.
 
     **Errors:** 400 with `detail.status: "is_folder"` when the path is a folder
     (index it with `index-folder`); 400 for a file type GAIA doesn't index; 404
     for a missing file inside an allowed root; 403 for any path outside the
     allowed roots, whether or not it exists.
+
+    Away from the PC (mobile access, or a paired device), the request names a
+    chat with the `session_id` query parameter, and the file must be in that
+    chat's folders and not hold credentials, as for [file reads](#files);
+    otherwise **403**.
   </Accordion>
 
   <Accordion title="DELETE /api/documents/{doc_id}">
@@ -1369,7 +1600,7 @@ Deleting a chat deletes its copies.
   </Accordion>
 
   <Accordion title="POST /api/sessions/{session_id}/documents">
-    Attach a document from the library to a session.
+    Attach a document from the library to a session. Returns **404** when the session or document doesn't exist, and **409** when either is removed while the attach is being written (nothing is attached).
 
     **Request:**
     ```json
@@ -1386,9 +1617,25 @@ Deleting a chat deletes its copies.
 
 ### Files
 
+A paired device the PC allowed browses, searches, previews and reads images
+across the home folder, as the PC's folder picker does, with no `session_id`.
+It never sees credentials: keys, certificates, `.env` files, credential folders
+such as `~/.ssh`, keychains, browser profiles, shell history, Git's stored
+credentials, chat and editor app data (Signal, Slack, Discord, VS Code, Cursor)
+and GAIA's own settings folder are left out of listings and searches and
+refused (**403**, code `credentials_withheld`), judged after symlinks, `..` and
+hard links are resolved, and without regard to letter case on macOS and Windows. A path
+outside the home folder is refused with code `outside_home`, without naming it.
+
+Over mobile access, and from a device still waiting for the PC's OK, these reads
+name a chat with `session_id` and see only the folders and files that chat may
+touch, as its session panel lists them. The secret-file policy applies inside
+them, and anything outside the chat or a read that names no chat is refused
+(**403**). The PC reads its home folder as before.
+
 <AccordionGroup>
   <Accordion title="POST /api/files/open">
-    Open a file or folder in the system file explorer. On Windows this launches Explorer, on macOS it uses `open`, and on Linux it uses `xdg-open`. Symbolic links are rejected for security.
+    Open a file or folder in the system file explorer. On Windows this launches Explorer, on macOS it uses `open`, and on Linux it uses `xdg-open`. Symbolic links are rejected for security. PC-only: what it opens shows on the PC, so a request from mobile access, a paired device or another computer is a `403`.
 
     **Request:**
     ```json
@@ -1435,13 +1682,22 @@ Deleting a chat deletes its copies.
     }
     ```
 
-    `exists` is `false` for a missing path or a folder, and `null` for a path outside the home folder, which is not checked. Returns **422** for more than 50 paths and **400** for a path containing a null byte.
+    `exists` is `false` for a missing path or a folder, and `null` for a path outside the home folder, which is not checked. Away from the PC, a path a paired device is kept out of (credentials, shell history, GAIA's own state) is `null` too. Returns **422** for more than 50 paths and **400** for a path containing a null byte.
   </Accordion>
 
   <Accordion title="POST /api/files/upload">
-    Upload an arbitrary file for use as a chat attachment (not added to the
-    RAG library). Use `POST /api/documents/upload` instead if you want the
-    file indexed for Q&A.
+    Upload an arbitrary file for use as a chat attachment. Nothing is added to
+    the library on upload; when a chat message links a document uploaded here,
+    that turn adds it to the library and attaches it to the chat (images and
+    recordings are not added), and the turn's `done` event lists it in
+    `documents_added`. Detaching it from the chat takes the upload away from
+    that chat too. Use `POST /api/documents/upload` to add a file to the
+    library without a chat.
+
+    A refused upload returns HTTP 400 (or 413) with `detail` as an object:
+    `{"status", "message"}`, where `message` is an English sentence. `status` is
+    `no_extension`, `unsupported_type` (plus `extension`), `empty_file` or
+    `too_large` (plus `size_mb` and `max_mb`).
   </Accordion>
 
   <Accordion title="Recording progress events">
@@ -1474,7 +1730,11 @@ Deleting a chat deletes its copies.
 
   <Accordion title="GET /api/files/browse">
     Browse filesystem contents. Returns entries under a directory with size,
-    mtime, and type metadata.
+    mtime, and type metadata. An allowed paired device browses like the PC.
+    Over mobile access or from a waiting device, `path` must be one of the
+    chat's folders or inside one, and with no `path` the listing opens the
+    chat's first folder; `quick_links` lists the chat's folders and
+    `parent_path` never leaves them.
   </Accordion>
 
   <Accordion title="GET /api/files/search">
@@ -1483,11 +1743,14 @@ Deleting a chat deletes its copies.
     `~/Desktop`, `~/OneDrive`, then the rest of the home directory. The walk is bounded: it
     stops at `max_results` matches, after 20,000 directory entries, or after
     about 10 seconds. `truncated: true` in the response means a bound cut the walk
-    short and more matches may exist.
+    short and more matches may exist. `folder` searches that one folder only.
+    Away from the PC it never returns a file holding secrets, and over mobile
+    access or from a waiting device the walk covers the chat's folders alone.
   </Accordion>
 
   <Accordion title="GET /api/files/preview">
-    Return a preview (first N bytes / first N lines) of a text file.
+    Return a preview (first N bytes / first N lines) of a text file. `lines`
+    defaults to 50 and is at most 200, or 50 away from the PC.
   </Accordion>
 
   <Accordion title="GET /api/files/image">
@@ -1579,22 +1842,42 @@ agent at once, so they take effect on its next step.
     stop skill tools, scripts or commands whose network destination GAIA cannot
     inspect. For an agent older than contract 2.23, the Agent UI refuses an
     internet-off turn with an update message instead of sending it. It is
-    false for an agent that keeps its own network rules (the email agent),
-    where the internet endpoint refuses changes with **409**.
+    false for an agent that keeps its own network rules, where the internet
+    endpoint refuses changes with **409**.
   </Accordion>
 
   <Accordion title="POST /api/sessions/{session_id}/environment/folders">
     **Request:** `{"path": "C:\\work\\project"}`. Let the chat read and
     write the folder. **400** for a path that isn't a folder, for a filesystem
     root, the home folder or a protected folder, and for a folder inside one
-    the user removed.
+    the user removed. An allowed paired device gets a **403** for a folder
+    outside the home folder or one holding credentials, with `detail`
+    `{"code", "message"}`: code `device_folder_outside_home` or
+    `device_folder_withheld`, and the same English reason
+    `POST /api/environment/folders/check` gives, with no path in it. Read the
+    code, never the message. A folder a paired device adds is listed in the
+    device's changes (`folderAdded`, by the folder's name).
+  </Accordion>
+
+  <Accordion title="POST /api/environment/folders/check">
+    **Request:** `{"path": "C:\\work\\project"}`. **Response:**
+    `{"refusal": null}`, or why the folder itself can't be given to any chat
+    (not a folder, a filesystem root, the home folder or a protected folder).
+    It knows no chat, so a folder inside one removed from a chat passes here
+    and is refused when added. The desktop app asks this as soon as a folder is
+    picked in the system dialog. For an allowed paired device a folder outside
+    the home folder, or one holding credentials, is refused too, without its
+    path, and the response adds its `code` (`device_folder_outside_home` or
+    `device_folder_withheld`); the PC's own refusals carry no code.
   </Accordion>
 
   <Accordion title="POST /api/sessions/{session_id}/environment/folders/remove">
     **Request:** `{"path": "..."}`. Take a folder or file away from the chat.
     The agent's path validator then refuses everything under it, even inside a
     wider grant and under full access, and never offers it as an approval,
-    until it is added back.
+    until it is added back. The removal is audited, and one a paired device
+    makes is listed in the device's changes (`folderRemoved`, by the folder's
+    name).
   </Accordion>
 
   <Accordion title="PUT /api/sessions/{session_id}/environment/internet">
@@ -1683,7 +1966,7 @@ agent at once, so they take effect on its next step.
     | 404 | No such chat |
     | 409 | The chat's agent isn't running: no message yet, or GAIA restarted or switched the chat's model or agent since its last answer. It starts with the next message. |
     | 502 | A relayed agent failed to answer, or sent a list with a malformed entry or the same tool twice |
-    | 503 | A relayed agent couldn't be started, or can't list its tools (older than contract 2.27, or the email agent) |
+    | 503 | A relayed agent couldn't be started, or can't list its tools (older than contract 2.27) |
 
     The SDK call behind it is `Agent.describe_tools()`, which returns the
     same `{name, description, category}` list for any agent.
@@ -1697,21 +1980,220 @@ Used to reach the UI from a phone.
 
 <AccordionGroup>
   <Accordion title="POST /api/tunnel/start">
-    Start a tunnel. Returns the public URL.
+    Start a tunnel. Returns the public URL. Only the PC running GAIA may start
+    it: a request over mobile access or from another computer is a **403**.
   </Accordion>
 
   <Accordion title="POST /api/tunnel/stop">
-    Stop the active tunnel.
+    Stop the active tunnel. PC-only, like `start`.
   </Accordion>
 
   <Accordion title="GET /api/tunnel/status">
     Current tunnel status — active/inactive, public URL, provider, uptime, and
     `device`: `{"name": "iPhone", "lastSeen": "..."}` for the latest
-    authenticated request through the tunnel, or null. When ngrok is not
+    authenticated request through the tunnel, or null. `token` is the tunnel's
+    token for the PC only; every other caller gets null. When ngrok is not
     installed, `reason` is `"ngrok_not_installed"` and `installCommands` lists
     this OS's install commands (empty where none is known); `error` still
     carries the same instructions as text. Both `start` and `status` return
     this shape.
+  </Accordion>
+</AccordionGroup>
+
+### Paired devices
+
+A phone or tablet can pair with the PC once and then reach GAIA's API on the
+home network, over TLS with GAIA's own certificate, which the device pins. It is
+still in development: every route here answers **403** while `device_pairing`
+is off in `~/.gaia/config.json`, and nothing listens until the PC turns the
+listener on. No response is cached (`Cache-Control: no-store`). The invitation
+appears only in the response that opens a pairing window, and a token only in
+the response that pairs a device; neither the device list nor the status ever
+carries one.
+
+How a device pairs:
+
+1. The PC turns the listener on and opens a pairing window. It shows the
+   window's `DevicePairingOffer` as a QR code, in compact JSON. The window
+   closes after 10 minutes, or at the first pairing.
+2. The device connects to one of `origins` and, during the TLS handshake and
+   before it sends anything, checks that the SHA-256 of the certificate it was
+   served equals `pin`. Nothing else is checked: no CA, hostname or date. A
+   mismatch fails hard, and redirects are refused.
+3. The device redeems `invite` with `POST /api/devices/pair` and keeps the
+   token in the Keychain (a `…ThisDeviceOnly` item) or the Android Keystore,
+   out of backups.
+4. The device is pending: every request is a **403** (`code: device_pending`)
+   until someone allows it on the PC. One not allowed within 10 minutes stops
+   working, and an allowed device unused for 90 days is unpaired.
+
+On the listener a device sends `Authorization: Bearer <token>` with every
+request and `X-Gaia-UI: 1` with every write. Nothing else authenticates there:
+not a cookie, a query parameter or the mobile access token. Only home-network
+IPv4 peers are answered: those on the subnet of the interface carrying the PC's
+default route (or link-local there) that dialed that interface's address, plus
+peers an away route that is on admits. Any other peer is hung up on before the
+TLS handshake. Paths outside `/api/` and `/v1/` are a **404**, a
+request body over 8 MB is a **413** (uploads keep their own limits), an unknown
+or unpaired token is a **401** (`code: device_unknown`), and a device token sent
+over plain http to the main server is a **401** too. What a device may call is
+in [Who may call a route](#who-may-call-a-route).
+
+A file the device opens, such as a cited document
+(`GET /api/documents/{doc_id}/file?session_id=…`, naming the chat it was cited
+in), comes over the listener like any other call, with the token. The device fetches it itself and shows or shares it; a
+browser it handed the link to couldn't send the token, so it would get a
+**401**.
+
+Two events reach the PC's own windows on `GET /api/sessions/events`, and no one
+else's:
+
+- `{"type": "device_paired", "device": PairedDevice, "actions": ["review", "deny"]}`
+  when a device pairs. Review opens the device in the list; Deny unpairs it.
+  Allowing happens only in the list.
+- `{"type": "security_alert", "kind": "pairing_locked_out", "address", "at"}`
+  when an address fails to pair 5 times in a minute and is locked out for 5
+  minutes.
+
+One more reaches the PC and the one device it names, and no other caller:
+
+- `{"type": "device_prompt", "device_id", "kind", "action", "state"}` while an
+  OS prompt a device caused on the PC is up, such as unlocking the key store
+  (`kind` `keyStore`) or an administrator prompt (`admin`). `action` names what
+  the device started; `state` is `waiting`, `approved`, `cancelled`, `denied`,
+  `timeout` (no answer within 5 minutes for the key store, up to 15 minutes for
+  an administrator prompt) or `failed` (the step ran and failed for another
+  reason). A request for an action the PC is already waiting on (the same
+  device's earlier key-store read, or another administrator step of the same
+  kind) answers **409** with the detail
+  `{"code": "prompt_already_waiting", "message": "..."}`. Read the code, never
+  the message; a PC from before the code sent the message alone.
+
+GAIA records each change an allowed device makes on the PC (a provider key set
+or removed, a connector set up, and the like) with its `kind`, a few labels in
+`params` (a provider or connector name, never a key or token) and the time. A
+device's newest 200 are kept while it is paired, and 90 days after it is
+removed.
+
+<AccordionGroup>
+  <Accordion title="GET /api/devices/status">
+    `DeviceAccessStatus`: whether GAIA is listening and on which port, why it
+    isn't when it failed (`error_code` `port_in_use`, `unsafe_folder`,
+    `certificate`, `no_home_network` or `start_failed`, with `error_detail`).
+    `waiting_for_home` is true while a listener left on waits for the PC to
+    join a home network after a restart, with `error_code` `no_home_network`
+    and the reason; it retries every 15 seconds, and `DELETE /api/devices/listener`
+    ends the wait. Then whether a pairing
+    window is open and when it closes, the expiry settings, and the last 20
+    failed redemptions with their `reason`: `expired` (the code timed out),
+    `used` (it was already redeemed, or the window closed after the first
+    pairing), `wrong` (it matches no open window), `closed` (no window is
+    open) or `rate_limited`. The PC or an allowed device; a device sees
+    `error_detail` as a pointer to the PC, never its PC-side text. `routes` lists each away route (a way
+    off the home network) with whether it is on. The one route is `tailnet`
+    (Tailscale): `on` only while the PC has a Tailscale address, else
+    `error_code` `no_tailscale_address`.
+  </Accordion>
+
+  <Accordion title="GET /api/devices">
+    `PairedDeviceList`: every paired device, pending ones with `expires_at`,
+    and each one's `changes_count`; never a token or its hash. The PC or an
+    allowed device.
+  </Accordion>
+
+  <Accordion title="POST /api/devices/listener">
+    Start listening for devices, making the key and certificate the first time.
+    GAIA listens on IPv4 on port 4243 unless `GAIA_DEVICE_PORT` names another,
+    and starts listening again after a restart until the PC turns it off.
+    Returns the status. **409** with `detail` `{"code", "message"}` when it
+    can't: `port_in_use` (on macOS also when another program holds the port on
+    just one of the PC's addresses), `unsafe_folder` (someone else can reach
+    `~/.gaia/devices`; use Reset pairing), `certificate`, `no_home_network`
+    (the PC has no IPv4 default route, or its interface has no home-network
+    address; `message` says which) or `start_failed`. PC-only.
+  </Accordion>
+
+  <Accordion title="DELETE /api/devices/listener">
+    Stop listening, or stop waiting for a home network, and stay off after a
+    restart. Pairing closes. PC-only.
+  </Accordion>
+
+  <Accordion title="POST /api/devices/routes/{kind}">
+    Also let paired devices reach the PC over an away route (`tailnet`), and
+    keep it on after a restart: `DeviceAccessStatus` out. **409** with `code`
+    `listener_off` while the listener is off, or `no_tailscale_address` when
+    Tailscale isn't running on the PC. Pairing still happens on the home
+    network only. PC-only.
+  </Accordion>
+
+  <Accordion title="DELETE /api/devices/routes/{kind}">
+    Turn the away route off, and keep it off after a restart. PC-only.
+  </Accordion>
+
+  <Accordion title="POST /api/devices/pairing">
+    Open the pairing window: a `DevicePairingOffer` with a new invitation,
+    replacing any open one. **409** with `code` `listener_off` while the
+    listener is off, or `no_home_network` when the interface carrying the
+    PC's default route has no home-network address to offer. The offer lists
+    only that interface's addresses. PC-only.
+  </Accordion>
+
+  <Accordion title="DELETE /api/devices/pairing">
+    Close the pairing window; its invitation stops working. Returns the status.
+    The PC or a paired device the PC allowed, whose change is written to the audit log and its list of changes; **403** from mobile access, a pending device or another computer.
+  </Accordion>
+
+  <Accordion title="POST /api/devices/pairing/reset">
+    Reset pairing: a new key and so a new pin, and every device unpaired, which
+    must pair again. The PC keeps its `pc_id`. It works when the listener
+    refuses an unsafe folder, since it is the remedy, and leaves the listener on
+    or off as it was. PC-only.
+  </Accordion>
+
+  <Accordion title="POST /api/devices/pair">
+    Redeem an invitation: `DevicePairRequest` in, `DevicePairResponse` out, with
+    the device pending. Served only on the device listener to a home-network
+    peer (**404** anywhere else, an away route included) and the one route
+    there without a token. Every bad invitation gets
+    the same **403**; only the PC sees why. **429** with `Retry-After` while the
+    address is locked out; **422** for a name with nothing printable left.
+  </Accordion>
+
+  <Accordion title="GET /api/devices/me/routes">
+    `DeviceRoutes`: every origin this device may reach the PC at now, its
+    home-network addresses first, then each away route that is on. Only an
+    allowed device, with its own token; a pending one gets **403**.
+  </Accordion>
+
+  <Accordion title="DELETE /api/devices/me">
+    A device unpairs itself with its own token, pending or allowed: **204**.
+  </Accordion>
+
+  <Accordion title="POST /api/devices/{device_id}/allow">
+    Let a pending device in; returns its `PairedDevice` and records who allowed
+    it in the audit log. **404** for an unknown id, or a pending device whose 10
+    minutes ran out. PC-only.
+  </Accordion>
+
+  <Accordion title="DELETE /api/devices/{device_id}">
+    Unpair a device: `DeviceRemoved`, with how many of its changes stay on the
+    PC. Its next request is a **401** and its open streams end. **404** for an
+    unknown id. An allowed device may unpair itself or any other device. The PC
+    or a paired device the PC allowed, whose change is written to the audit log
+    and its list of changes; **403** from mobile access, a pending device or
+    another computer. Opening pairing and allowing a device stay PC-only.
+    Unpairing the device that connected the Discord bot token disconnects the
+    bridge (its token, approver and "Always allow" answers are forgotten), and
+    unpairing the one that started the pairing resets that pairing; so do
+    `DELETE /api/devices/me`, a pairing reset and a device expiring. **500**
+    when the Discord bridge does not stop, with the device already unpaired.
+  </Accordion>
+
+  <Accordion title="GET /api/devices/{device_id}/changes">
+    `DeviceChangeList`: what the device changed on this PC, newest first;
+    `limit` is 20 by default, 200 at most. The PC may read any device's,
+    removed ones included; an allowed device only its own (**403** for another
+    id). Never over mobile access.
   </Accordion>
 </AccordionGroup>
 
@@ -1771,9 +2253,11 @@ Used to reach the UI from a phone.
 
     **Request:** `{"mode": "full_access"}` or `{"mode": "ask"}` — any other
     value is a **422**. **Response:** `{"default_mode"}`. A config file that
-    can't be written is a **500** naming the cause. A request that didn't
-    come from this PC (a non-loopback peer, or any `X-Forwarded-*` header, as
-    mobile access adds) is a **403** before anything is written.
+    can't be written is a **500** naming the cause (on the PC only). The PC
+    or a paired device the PC allowed; a device's change is written to the
+    audit log and listed in Settings › Phones and tablets. A request from
+    mobile access, a device the PC hasn't allowed or another computer is a
+    **403** before anything is written.
   </Accordion>
 
   <Accordion title="GET /api/chat/permissions/{session_id}">
@@ -1787,7 +2271,7 @@ Used to reach the UI from a phone.
 
   <Accordion title="PUT /api/chat/permissions/{session_id}">
     Switch the chat between `ask` (every gated tool prompts) and `full_access`
-    (gated tools run unasked and shell guardrails are lifted, as the TUI's
+    (gated tools run unasked and the shell runs any command, as the TUI's
     `/full-access`). Takes effect on the next gated tool, including mid-turn.
 
     **Request:** `{"mode": "full_access"}` — any value other than `ask` or
@@ -1809,7 +2293,7 @@ Used to reach the UI from a phone.
     Scripts a user who declines the shell commands in `decline_commands` and
     answers no questions, so `gaia eval agent` can score what the agent does
     after a "no". An empty list turns it off. The runner sets it from a
-    scenario's `setup.decline_commands` and clears it afterwards.
+    scenario's `setup.decline_commands` and clears it afterwards. PC-only.
   </Accordion>
 </AccordionGroup>
 
@@ -1817,13 +2301,20 @@ Used to reach the UI from a phone.
 
 <AccordionGroup>
   <Accordion title="POST /api/documents/upload">
-    Multipart drag-and-drop upload. Stores the file in the library and
-    enqueues it for indexing. Content already in the library returns the
+    Multipart drag-and-drop upload. Stores a copy of the file in the library
+    (under `$GAIA_HOME/chat/documents/`) and enqueues it for indexing. A chat's
+    agent can read the copy only once it is attached to that chat; other chats
+    can't list or open it. Content already in the library returns the
     existing document; if that document's stored file is gone, the new copy
     takes its place. A file that can't be read is a **422** whose
     `detail.status` is one of the `error_kind` values listed under
     `upload-path` and whose
-    `detail.message` says what to do.
+    `detail.message` says what to do. When the model server didn't answer,
+    the copy is kept and the document comes back with `indexing_status`
+    `failed` and `error_kind` `model_server_down` or `model_server_busy`: the
+    file is fine. The Agent UI re-indexes a `model_server_down` document by
+    itself (`POST /api/documents/{doc_id}/reindex`) once the server is back; a
+    `model_server_busy` one waits for the user's Retry.
   </Accordion>
 
   <Accordion title="GET /api/documents/{doc_id}/status">
@@ -1837,6 +2328,13 @@ Used to reach the UI from a phone.
     The document's original file, served inline so the browser can show it.
     A citation link opens a PDF at its page with `#page=N`. Only files in the
     document library are served; a file deleted from disk returns 404.
+
+    Away from the PC (mobile access, or a paired device), the request names a
+    chat with the `session_id` query parameter, and the document must be
+    attached to that chat or its file must be in the chat's folders, as for
+    [file reads](#files). Otherwise it is a **403**, the same whether or not
+    the document exists, and so is a request that names no chat. A file
+    holding credentials is a **403** too, however it got into the library.
   </Accordion>
 
   <Accordion title="POST /api/documents/{doc_id}/cancel">
@@ -1846,7 +2344,13 @@ Used to reach the UI from a phone.
   <Accordion title="POST /api/documents/index-folder">
     Index the supported files in a folder (`recursive`, default `true`, also
     takes subfolders). Returns `indexed`, `failed` with one line per file in
-    `errors`, and `skipped`: files of a type GAIA doesn't index.
+    `errors`, `skipped`: files of a type GAIA doesn't index, and
+    `skipped_images`: images, which GAIA reads only when each is added on its
+    own. A file that fails, or yields no text, gets a `failed` library row with
+    its `last_error`, so it can be retried with `reindex`; it is not in
+    `documents`. Away from the PC, the folder must be in the chat named by
+    `session_id` (else **403**), and files holding credentials, or whose real
+    path leads out of that chat's folders, are skipped and counted in `skipped`.
   </Accordion>
 
   <Accordion title="POST /api/documents/{doc_id}/reindex">
@@ -2167,44 +2671,66 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
     memories from their next message. If
     another open GAIA window keeps the file from being scrubbed, the data is
     still deleted but the call returns 500 with a message saying so; close the
-    other windows and call it again.
+    other windows and call it again. The PC or a paired device the PC
+    allowed, whose wipe is written to the audit log and listed in its changes
+    (`memoryWiped`); **403** from mobile access, a pending device or another
+    computer.
   </Accordion>
 
   <Accordion title="POST /api/memory/reinitialize">
     Wipe all memory, then re-run initialization from scratch — re-collects
     system context if discovery consent is granted. Irreversible.
+    The PC or a paired device the PC allowed, whose change is written to the audit log and its list of changes; **403** from mobile access, a pending device or another computer. A device sees a log id in place of a failure's text.
   </Accordion>
 
   <Accordion title="POST /api/memory/refresh-system-context">
     Re-collect OS, hardware, installed-app, and version facts. Deletes stale
     `category="system"` entries and stores fresh ones — no LLM call, runs in
-    a few seconds.
+    a few seconds, and only with discovery consent on. Allowed like
+    `reinitialize`.
   </Accordion>
 
   <Accordion title="GET /api/memory/stream-discovery">
     SSE stream of the local system-discovery scan (git identity, installed
     apps, recent file types, shell config, …) that seeds first-run memory.
+    The PC or a paired device the PC allowed: the scan reads the PC's files
+    and browser history, so mobile access, a pending device or another
+    computer gets a `403`. A device's findings carry no absolute PC paths
+    (`path`, `paths`), matching what the PC's scan view shows. It runs only
+    with `system_discovery_consent` on, for every caller: otherwise it reads
+    nothing and sends one `error` event (`source: "consent"`) saying how to
+    turn it on, then `done` with a total of 0. Consent is checked again
+    before each source, so turning it off mid-scan ends the stream with the
+    same event. Git remotes are reported without any user or token embedded
+    in the URL. `stream-inference` does the same.
   </Accordion>
 
   <Accordion title="GET /api/memory/stream-inference">
     SSE stream of LLM-assisted profile inference over the discovery findings
     — each `insight` event is a candidate fact awaiting approval. It runs on
-    the machine's default local chat model (`default_model` in
-    `~/.gaia/config.json`), never the chat's cloud model; a cloud
-    `default_model`, or a local one that isn't downloaded yet, ends the stream
-    with an `error` event rather than a download.
+    the local model chat runs now (the last pick, its cheap model for
+    `hybrid`), so no second chat model loads; when that pick is a cloud model
+    or isn't downloaded, it runs on the machine's default local chat model
+    (`default_model` in `~/.gaia/config.json`), never the chat's cloud model.
+    A cloud `default_model`, or a local one that isn't downloaded yet, ends
+    the stream with an `error` event rather than a download. The PC or an
+    allowed paired device, including `include_browser`, and only with
+    consent on, like `stream-discovery`.
   </Accordion>
 
   <Accordion title="POST /api/memory/commit-discovery">
     Store the discovery findings a user approved in the memory dashboard's
     discovery review. Items are validated as knowledge creates, so a disallowed
-    category 422s the whole batch before anything is written.
+    category 422s the whole batch before anything is written. PC-only.
+    category 422s the whole batch before anything is written. The PC or a paired device the PC allowed, whose change is written to the audit log and its list of changes; **403** from mobile access, a pending device or another computer.
   </Accordion>
 
   <Accordion title="POST /api/memory/commit-inference">
     Store approved inference insights, replacing the prior inferred profile
     (old `source="inferred"` rows are deleted first — a failure here leaves
-    the old profile in place rather than partially wiped).
+    the old profile in place rather than partially wiped). PC-only.
+    the old profile in place rather than partially wiped). Allowed like
+    `commit-discovery`.
   </Accordion>
 
   <Accordion title="GET /api/memory/settings">
@@ -2216,19 +2742,44 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
   <Accordion title="PUT /api/memory/settings">
     Update the flags above. Turning `system_discovery_consent` on also
     persists it to `~/.gaia/memory_settings.json` and triggers an immediate
-    system-context refresh.
+    system-context refresh, so turning it on is for the PC or a paired device
+    the PC allowed (a `403` over mobile access or from a pending device).
+    Turning it off, and the other flags, work from any caller. Either change
+    to `system_discovery_consent` writes an audit line naming who made it,
+    and a paired device's change shows in its changes list (`profileScanOn`,
+    `profileScanOff`).
+  </Accordion>
+
+  <Accordion title="GET /api/memory/embedder">
+    Where every chat embeds documents and memory: `device` (`gpu`, or `npu`
+    from a choice saved before it was withdrawn), `chosen` (true when the user
+    picked it), `default_device` (`gpu`), and `options`, one per device with
+    its `model`, `display_name`, `proven` (false for a device GAIA hasn't
+    proven, which can't be chosen), `available` and `reason` (null while the
+    model server is starting) and `downloaded`.
+  </Accordion>
+
+  <Accordion title="PUT /api/memory/embedder">
+    Body `{"device": "gpu" | null}`; `null` is the default, the GPU.
+    Saves `embedding_device` in `~/.gaia/config.json`. Each open chat moves to
+    the new embedder with its next message, keeping its conversation and loaded
+    skills. Stored memory is re-embedded as chats use it, or at once with
+    `POST /api/memory/rebuild-embeddings`. Returns the view above plus
+    `changed`, false when the embedder stayed the same. **409** while a reply
+    runs, for `npu` (not proven), or for a device this PC's hardware can't run; **503** while the model
+    server is starting.
   </Accordion>
 
   <Accordion title="POST /api/memory/admin/clear">
     **Eval-only**, gated by `GAIA_MEMORY_ADMIN=1` (403 otherwise). Wipes
     memory for a scenario reset — `scope` is `all` / `knowledge` /
-    `conversations`.
+    `conversations`. PC-only, as every eval route is.
   </Accordion>
 
   <Accordion title="POST /api/memory/admin/seed">
     **Eval-only**, gated by `GAIA_MEMORY_ADMIN=1`. Bulk-inserts knowledge
     items verbatim, bypassing dedup, to plant a known state for stress
-    scenarios.
+    scenarios. PC-only.
   </Accordion>
 </AccordionGroup>
 
@@ -2241,12 +2792,41 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 <AccordionGroup>
   <Accordion title="GET /api/connectors">
     Catalog specs merged with live state for every connector.
+
+    An OAuth connector's state lives in the PC's OS key store. On the PC the
+    list waits for that read, including any unlock prompt. Anywhere else (a
+    paired device, mobile access), each read waits up to 2 seconds. When the
+    store holds the read back, the connector is listed with `key_store` set and
+    `configured: null`, because its connection is unknown, not absent:
+
+    - `"waiting"`: the PC's unlock prompt is still open. A later list picks up
+      the answer, and a list opens at most one prompt; connectors after the
+      first one that waits report `waiting` without being read.
+    - `"locked"`: the prompt was refused or closed. `POST
+      /api/providers/key-store/retry` asks again.
+
+    Every other connector is listed as usual, and the response carries a
+    top-level `key_store` (`"locked"` when any connector is locked, else
+    `"waiting"`). Both are omitted when every read finished.
+
+    ```json
+    {
+      "key_store": "waiting",
+      "connectors": [
+        {"id": "google", "type": "oauth_pkce", "configured": null,
+         "account_id": null, "scopes": [], "key_store": "waiting", "...": "..."},
+        {"id": "mcp-github", "type": "mcp_server", "configured": true, "...": "..."}
+      ]
+    }
+    ```
   </Accordion>
 
   <Accordion title="GET /api/connectors/events">
     Long-lived SSE stream of connector lifecycle events — configured,
     disconnected, tested, enabled/disabled, OAuth completed/errored, grant
-    changed, activation changed.
+    changed, activation changed, default account changed
+    (`connector.account.changed`). `connector.oauth.completed` carries the
+    signed-in `account_id` and `added` (true when it is a new account).
   </Accordion>
 
   <Accordion title="GET /api/connectors/agent-mcps">
@@ -2256,7 +2836,7 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
   <Accordion title="GET /api/connectors/eval-mailbox">
     **Eval-only**, gated by `GAIA_EVAL_MAILBOX` (403 otherwise). Reports the
     offline fixture mailbox the `gaia_email` scenarios read: its path, whether
-    the file exists, and whether it is attached.
+    the file exists, and whether it is attached. PC-only.
   </Accordion>
 
   <Accordion title="POST /api/connectors/eval-mailbox">
@@ -2264,15 +2844,20 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
     `{"attached": false}` makes the mail tools answer as if no mailbox were
     connected, for sessions that start reading mail afterwards; `true` restores
     the fixture. The eval runner calls it from each scenario's
-    `setup.mailbox_fixture`.
+    `setup.mailbox_fixture`. PC-only.
   </Accordion>
 
   <Accordion title="GET /api/connectors/_debug">
-    Diagnostics dump, gated by `GAIA_DEBUG=1` (404 otherwise).
+    Diagnostics dump, gated by `GAIA_DEBUG=1` (404 otherwise). PC-only.
   </Accordion>
 
   <Accordion title="GET /api/connectors/{connector_id}">
     Summary for one connector (type, configured/enabled state, account info).
+    An OAuth connector lists every connected account in `accounts`
+    (`[{account_id, email, status, is_default}]`, `status` one of `ok`,
+    `reauth_required`, `error`); `account_id` and `scopes` at the top level
+    stay the default account's address and scopes.
+    Off the PC it carries `key_store` as `GET /api/connectors` does.
   </Accordion>
 
   <Accordion title="GET /api/connectors/{connector_id}/grants">
@@ -2287,24 +2872,67 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
   <Accordion title="POST /api/connectors/{connector_id}/configure">
     Store credentials for a connector — for an `mcp_server` connector this
-    also writes `~/.gaia/mcp_servers.json`.
+    also writes `~/.gaia/mcp_servers.json`. The PC may call it, and so may a
+    paired device the PC allowed: a device may save an `mcp_server`
+    connector's keys, or an OAuth client with `save_only: true`, and may send
+    `grant_agents` within the same scope limits as the PC, but it can't start
+    a browser sign-in (**403**). A device's call, with the agents it granted, is
+    written to the audit log, and its response never carries a secret; a server
+    failure tells it only to look on the PC. Mobile access and other computers
+    get a **403**.
   </Accordion>
 
   <Accordion title="POST /api/connectors/{connector_id}/test">
     Run the connector's health check and return `{"ok": bool, "detail": str}`.
     An OAuth connector refreshes its token. An `mcp_server` connector starts
     the server once and reports whether it started; a server that only checks
-    its key on a tool call still passes with a bad key.
+    its key on a tool call still passes with a bad key. The PC may call it, and
+    so may a paired device the PC allowed; the check can raise an OS key-store
+    prompt on the PC. A failed check's `detail` (server output, PC paths) goes
+    only to the PC: a device, and the `connector.tested` event, get a sentence
+    that says to run the check on the PC, except for `reason` `timeout` or
+    `disabled`. When a device's check waits on that prompt, the device hears
+    the `device_prompt` event (kind `keyStore`, action `connectorTest`) on
+    `/api/sessions/events`: `waiting`, then `approved`, `denied`, `failed` or
+    `timeout`; after five minutes unanswered the request answers **504**. A
+    check the key store holds up answers **409** `key_store_waiting`, and one it
+    refuses **423** `key_store_locked` (a device gets a sentence pointing it at
+    the PC as the message). A device may run a check once every 10 seconds (**429** with `Retry-After`),
+    and one at a time (**409** `prompt_already_waiting` while its earlier check
+    still runs). Mobile access and other computers get a **403**.
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/{connector_id}">
     Disconnect a connector — removes stored credentials and, for `mcp_server`,
-    its `mcp_servers.json` entry.
+    its `mcp_servers.json` entry. The PC or a paired device the PC allowed,
+    whose removal is written to the audit log and listed in its changes
+    (`connectorRemoved`); **403** from mobile access, a pending device or
+    another computer. `DELETE /v1/connections/{provider}` is held to the same
+    rule.
+    its `mcp_servers.json` entry. An OAuth connector with several accounts
+    refuses with 409 `{"error": "account_choice_required", "connector_id",
+    "choices": [...], "message"}` (inside `detail`): remove one with the route
+    below, or every one with `?all=true`.
+  </Accordion>
+
+  <Accordion title="DELETE /api/connectors/{connector_id}/accounts/{account_id}">
+    Disconnect one account of an OAuth connector (`account_id` is its stable id
+    or address); the others keep working. Agent grants stay until the last
+    account goes. 204; 404 `{"error": "unknown_account", "choices": [...]}`
+    when it names no connected account.
+  </Accordion>
+
+  <Accordion title="PATCH /api/connectors/{connector_id}/accounts/{account_id}">
+    `{"is_default": true}` makes that account the one agents use when they
+    name none. Returns `{"accounts": [...]}`. `false` is a 400: choose another
+    account as the default instead.
   </Accordion>
 
   <Accordion title="POST /api/connectors/{connector_id}/enable">
     Re-enable a previously-disabled `mcp_server` connector. Its tools
-    materialize live.
+    materialize live. The PC or a paired device the PC allowed, whose change is written to the audit log and its list of changes; **403** from mobile access, a pending device or another computer.
+    Re-enable a previously-disabled `mcp_server` connector. Chats already
+    open get its tools with their next message.
   </Accordion>
 
   <Accordion title="POST /api/connectors/{connector_id}/disable">
@@ -2314,22 +2942,62 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
   <Accordion title="POST /api/connectors/{connector_id}/authorize">
     Start an OAuth PKCE flow. Returns `{flow_id, authorization_url}` — the UI
-    opens the URL and polls for completion.
+    opens the URL and polls for completion. On the PC, the redirect lands on a
+    listener GAIA binds on the PC's loopback; the PC must not send
+    `redirect_port` (**422**).
+
+    A paired device the PC allowed signs in on its own browser instead: it
+    sends `redirect_port` (1024–65535), the port of a one-shot listener it
+    holds on its own `127.0.0.1`. The PC binds nothing, sets
+    `redirect_uri=http://127.0.0.1:<redirect_port>/callback`, keeps the PKCE
+    verifier, and ties the flow to that device for 15 minutes. The device then
+    hands the code to `POST /api/connectors/flows/{flow_id}/complete`. A device
+    without `redirect_port`, or with `grant_agents`, gets a **403**, as do
+    mobile access and a pending device. A device's start is written to the
+    audit log.
+  </Accordion>
+
+  <Accordion title="POST /api/connectors/flows/{flow_id}/complete">
+    Finish a paired device's sign-in with `{code, state}`, the values its
+    loopback listener received. Only the device that started the flow may call
+    it; anyone else, the PC included, gets a **403**. The PC checks `state`,
+    exchanges the code with its own verifier and the same `redirect_uri`, and
+    saves the connection as the PC's own sign-in does. Returns the connector's
+    summary (the shape of `GET /api/connectors/{connector_id}`), never a token.
+    A `state` that doesn't match is a **400** and ends the flow; an unknown,
+    finished or expired flow is a **404**, so a second call gets a **404**.
+    The finish is written to the audit log, naming the connector.
+    opens the URL and polls for completion. `"add_account": true` shows the
+    provider's account picker to connect another account; `"account":
+    "<id or address>"` reconnects that account (the provider is told which
+    one). Signing in as a different account than the one named adds it rather
+    than replacing it.
   </Accordion>
 
   <Accordion title="POST /api/connectors/{connector_id}/authorize-device">
     Start a device-code flow (no browser redirect, no registered OAuth app
-    needed).
+    needed). Returns `user_code`, `verification_uri`, `expires_in`, `interval`
+    and `message`, never the `device_code`; the PC polls the provider and
+    keeps the account. The PC may call it, and so may a paired device the PC
+    allowed, for a connector with `supports_device_code` and without
+    `grant_agents`; a device's call is written to the audit log. Anyone else
+    gets a **403**. The device follows progress by re-reading
+    `GET /api/connectors` every `interval` seconds.
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/_flows/{flow_id}">
-    Cancel a pending OAuth flow without waiting for the callback.
+    Cancel a pending OAuth flow without waiting for the callback. The PC may
+    cancel any flow; a paired device the PC allowed may cancel only a flow it
+    started. Another device, a pending device and mobile access get a
+    **403**. Starting a new sign-in also ends a pending one. When the PC or
+    another device started the one that ended, `connector.oauth.error` goes
+    out with reason `superseded` and its `flow_id`.
   </Accordion>
 
   <Accordion title="PUT /api/connectors/{connector_id}/grants/{agent_id}">
     Write the per-agent grant ledger — the scope ceiling an activation may
     request. Rejects an id the catalog doesn't publish (404) or scopes
-    outside the connector's ceiling (400).
+    outside the connector's ceiling (400). The PC or a paired device the PC allowed, whose change is written to the audit log and its list of changes; **403** from mobile access, a pending device or another computer.
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/{connector_id}/grants/{agent_id}">
@@ -2339,13 +3007,13 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
   <Accordion title="PUT /api/connectors/{connector_id}/activations/{agent_id}">
     Activate `agent_id` for `connector_id` (`mcp_server` only — OAuth
     connectors 400). Auto-grants when no grant exists and the body supplies
-    scopes; 400 if it doesn't.
+    scopes; 400 if it doesn't. Allowed like the grant.
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/{connector_id}/activations/{agent_id}">
     Deactivate `agent_id` for `connector_id`. Idempotent, and non-destructive
     — the grant is preserved so re-activating is one call; delete the grant
-    separately to wipe it.
+    separately to wipe it. Allowed like activating.
   </Accordion>
 </AccordionGroup>
 
@@ -2359,37 +3027,63 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
 Settings → Messaging: connect, pair and run the Discord bridge
 ([Discord guide](/guides/discord)). The routes call the same functions as
-`gaia discord`. **Every route is local-PC only, reads included:** the status
-carries the pairing code, so a request over mobile access or from another
-computer gets a 403. Mutating routes also require the `X-Gaia-UI: 1` header.
+`gaia discord`. Every route answers the PC or a paired device the PC allowed,
+and a device's change is written to the audit log and its list of changes.
+Whoever DMs the pairing code becomes the bot's only approver, so a device sees
+the code only for a pairing it started itself. The device that connected the
+bot token holds that token, so unpairing it disconnects the bridge; unpairing
+the device that started the pairing resets the pairing. An expired or no longer
+allowed device counts as unpaired at the next status read or bridge start. A
+pair press never clears the token's device. A device never sees the bot token
+or a failure's PC-side text.
+Mobile access, a pending device or another computer gets a 403. Mutating routes
+also require the `X-Gaia-UI: 1` header.
 
 <AccordionGroup>
   <Accordion title="GET /api/messaging/discord">
     Connection, pairing and bridge state, plus every link setup opens:
     `connected`, `paired`, `running`, `state`, `detail`, `bot_name`,
-    `owner_name`, `pairing_code`, `portal_url`, `invite_url`,
-    `bot_profile_url` and more.
+    `owner_name`, `autostart`, `always_allowed`, `pairing_code`, `portal_url`,
+    `invite_url`,
+    `bot_profile_url` and more. `pairing_code` is empty for a device, except
+    the one that started the current pairing.
   </Accordion>
 
   <Accordion title="POST /api/messaging/discord/connect">
     Body `{token, model?}`. Checks the bot token with Discord, stores it in the
     OS keyring, and starts the bridge in pairing mode. 400 when Discord refuses
     the token or it belongs to the Discord connector's bot; 502 when Discord
-    can't be reached.
+    can't be reached. From a device a running bridge is stopped first (500 when
+    it does not stop) and started again after any failure, the failure's
+    `detail` saying so when it did not start; the token is never returned or
+    logged.
   </Accordion>
 
   <Accordion title="POST /api/messaging/discord/start">
     Body `{model?, take_over?}`. Starts the bridge; `take_over` answers from this
-    PC even when another PC holds the bot's lease.
+    PC even when another PC holds the bot's lease, and only when sent `true`.
   </Accordion>
 
   <Accordion title="POST /api/messaging/discord/stop">
-    Stops the bridge. 500 when it does not stop.
+    Stops the bridge, and keeps it stopped the next time a GAIA app opens. 500
+    when it does not stop.
+  </Accordion>
+
+  <Accordion title="POST /api/messaging/discord/restart">
+    Stops the bridge and starts it again. 500, leaving it as it was, when it
+    does not stop.
+  </Accordion>
+
+  <Accordion title="POST /api/messaging/discord/forget-always">
+    Forgets every "Always allow" answered in Discord, so GAIA asks again. A
+    running bridge is restarted so its agent forgets them too. 500, forgetting
+    nothing, when the bridge does not stop.
   </Accordion>
 
   <Accordion title="POST /api/messaging/discord/pair">
-    Forgets the paired account and starts over with a new code. 500, keeping
-    the pairing, when the bridge does not stop.
+    Forgets the paired account and starts over with a new code, which the
+    device that asked sees. 500, keeping the pairing, when the bridge does not
+    stop.
   </Accordion>
 
   <Accordion title="POST /api/messaging/discord/disconnect">
@@ -2398,9 +3092,47 @@ computer gets a 403. Mutating routes also require the `X-Gaia-UI: 1` header.
   </Accordion>
 </AccordionGroup>
 
+### Automations
+
+Settings → Automations: list, pause, resume and remove the reminders,
+summaries, alerts and triggers GAIA runs on its own
+([Automations guide](/guides/automations)). The routes read and write the same
+store as `gaia automation`. **The PC and an allowed paired device only, reads
+included:** a trigger's check is a command that runs on this PC, and prompts can
+carry private detail, so mobile access and another computer get a `403`. A
+paired device may do what the desktop offers (list, pause, resume and remove)
+and nothing more. Mutating routes also require the `X-Gaia-UI: 1` header.
+
+<AccordionGroup>
+  <Accordion title="GET /api/automations">
+    `{automations, delivers}`. Each automation has `id`, `name`, `kind`
+    (`reminder`, `summary`, `alert` or `trigger`), `heartbeat`, `paused`,
+    `every_seconds`, `next_at`, `last_run_at`, `runs`, `prompt`, `say`, `check`,
+    `quiet`, `days` and `failures`. `delivers` is whether a paired Discord DM
+    receives what they send, or `null` when that could not be checked. 500 when
+    the store can't be read.
+  </Accordion>
+
+  <Accordion title="POST /api/automations/{ref}/{action}">
+    `action` is `pause` or `resume`; `ref` is an id or exact name. Returns the
+    changed automation. 404 when nothing matches. Any other `action` is a 422
+    from the PC and a 403 from a paired device.
+  </Accordion>
+
+  <Accordion title="DELETE /api/automations/{ref}">
+    Removes the automation and returns it. 404 when nothing matches.
+  </Accordion>
+</AccordionGroup>
+
 ### Goals
 
 Autonomous goal/task tracking (`GoalStore`) behind the Agent UI's Goals panel.
+When the goal store can't be read or written, every route below answers `503`
+with a `detail` that says why and what the user can do.
+
+Mobile access may only read goals: creating, approving, rejecting, cancelling,
+changing or deleting one, adding or updating a task, and starting a new goal
+list are for the PC and an allowed paired device, and mobile access gets a `403`.
 
 <AccordionGroup>
   <Accordion title="GET /api/goals">
@@ -2418,10 +3150,21 @@ Autonomous goal/task tracking (`GoalStore`) behind the Agent UI's Goals panel.
   </Accordion>
 
   <Accordion title="GET /api/goals/health">
-    `{"error": string | null}`. `error` says why the background loop could
-    not read the goal store on its last tick, so approved goals are not
-    running; it is `null` once the store reads again. The UI shows it as a
-    notification and in Memory › Goals.
+    `{"error": string | null, "damaged": bool}`. `error` says why the goal
+    store can't be read (on the background loop's last tick, or when this
+    call opens it), so approved goals are not running; it is `null` once the
+    store reads again.
+    `damaged` is true when `goals.db` is not a readable database at all, which
+    only a new goal list fixes. The UI shows it as a notification and in
+    Memory › Goals.
+  </Accordion>
+
+  <Accordion title="POST /api/goals/store/reset">
+    Start a new, empty goal list when `goals.db` is damaged. The damaged file
+    is renamed to `goals.db.damaged-<timestamp>` beside it, never deleted;
+    the response is `{"kept": "<that name>"}`. Damaged means a page of the
+    file fails SQLite's `quick_check`, not only an unreadable header. Answers
+    `409` when the goal list reads fine or there is none.
   </Accordion>
 
   <Accordion title="GET /api/goals/pending-approval">
@@ -2449,7 +3192,10 @@ Autonomous goal/task tracking (`GoalStore`) behind the Agent UI's Goals panel.
   </Accordion>
 
   <Accordion title="PUT /api/goals/{goal_id}/status">
-    Update goal status and optionally append progress notes.
+    Update goal status and optionally append progress notes. Queuing a goal
+    again from any other status resets its unfinished-run count and any retry
+    pause, so it gets the full number of tries; a status update that leaves a
+    goal queued keeps its count.
   </Accordion>
 
   <Accordion title="POST /api/goals/{goal_id}/tasks">
@@ -2464,6 +3210,10 @@ Autonomous goal/task tracking (`GoalStore`) behind the Agent UI's Goals panel.
 ### Schedules
 
 Recurring prompts run on a cron-like interval — see [`gaia schedule`](/reference/cli#schedule) for the CLI equivalent. The scheduler runs *prompts* only; it cannot yet run a *skill* directly (`gaia schedule add --skill` is rejected).
+
+Mobile access may only read schedules and preview one (`POST /api/schedules/parse`):
+creating, running, pausing, resuming or deleting one is for the PC and an allowed
+paired device, and mobile access gets a `403`.
 
 <AccordionGroup>
   <Accordion title="GET /api/schedules">
@@ -2490,6 +3240,13 @@ Recurring prompts run on a cron-like interval — see [`gaia schedule`](/referen
 
   <Accordion title="PUT /api/schedules/{name}">
     Pause, resume, or cancel a scheduled task via `{"status": ...}`.
+  </Accordion>
+
+  <Accordion title="PATCH /api/schedules/{name}">
+    Change when a scheduled task runs and what it asks, via `{"interval": ..., "prompt": ...}` and
+    the same optional `timezone` as create. The name, chat and run history stay; an active task's
+    next run is worked out again, a paused one stays paused. `400` for a schedule GAIA can't read,
+    an empty prompt, or while a run of it is in flight.
   </Accordion>
 
   <Accordion title="POST /api/schedules/{name}/run">
@@ -2543,6 +3300,12 @@ these same handlers to the TUI under `/daemon/v1/setup/` (`plan`, `chat-model`,
 behind the daemon token instead of the `X-Gaia-UI` header, so both apps read one
 plan and make one set of choices.
 
+The routes that change setup (`npu/recheck`, `chat-model`, `vision-model`,
+`models/skip`, `models/download`, `models/remove`, `run` and `cancel`) answer the
+PC or a paired device the PC allowed, and refuse mobile access and other
+computers (**403**). So does `npu/memlock-fix`, whose administrator prompt
+shows on the PC. The troubleshooting report is PC-only.
+
 <AccordionGroup>
   Error `detail` strings are fixed messages that say what failed and what to
   do; the underlying error is written to the Agent UI server log, never sent
@@ -2581,6 +3344,15 @@ plan and make one set of choices.
     nothing. **403** without `X-Gaia-UI: 1`; **503** when the plan can't be
     worked out.
 
+    While chat runs on a cloud model, the plan leaves the local chat model
+    (and the image model setup pairs with it) out of `models`, `selected` and
+    `download_gb`, so Settings arms no download nobody chose. The query
+    `skip_chat_model=false` asks for what a local setup downloads instead, and
+    `true` for what a cloud setup downloads; the setup screen and the TUI pass
+    `false`. `POST /api/setup/chat-model`, `/vision-model`, `/models/skip` and
+    `/models/remove` take the same query for the plan they return, and
+    `/models/skip` checks the model against that plan.
+
     Each `catalog` entry says `support` (`verified`, `untested`, or null for an
     optional model), `reads_images`, `feature_tier` and `source`. `components`
     lists what setup fetches besides the models, `backends` what Lemonade
@@ -2598,7 +3370,8 @@ plan and make one set of choices.
     `npu` says whether this PC has an NPU (`present`), whether a model can run
     on it now (`ready`), and what stops it (`problems`, each `code`, `title`,
     `fix` and `params`); while it isn't ready, the NPU model's `fit_code` is
-    `npu`. `gaia init --plan --json` prints the same object; its
+    `npu`. `npu` is null when the PC's capacity couldn't be read: unchecked,
+    not "no NPU". `gaia init --plan --json` prints the same object; its
     [CLI reference](/reference/cli#choosing-models) lists every field.
   </Accordion>
 
@@ -2623,9 +3396,17 @@ plan and make one set of choices.
   <Accordion title="POST /api/setup/npu/memlock-fix">
     Linux only. Raises the locked-memory limit FastFlowLM needs, for every
     user on the PC, behind the desktop's own administrator prompt (`pkexec`).
-    It takes effect after a restart. Returns the new plan. **403** over mobile
-    access or from another computer; **409** with `detail` `{"code",
-    "message"}` when the prompt was closed (`cancelled`), not answered
+    It takes effect after a restart; the returned plan's NPU issue says so
+    until then. The PC or an allowed paired device: a device hears the
+    `device_prompt` event (kind `admin`, action `npuMemlockFix`) on
+    `/api/sessions/events`, `waiting` while the prompt is up on the PC, then
+    `approved`, `denied`, `timeout` or `failed`, and the change is audited and
+    listed in the device's changes (`npuMemlockFixed`). Waits up to 15
+    minutes for the prompt's answer. One fix runs at a time, from the PC or a
+    device: another request while one waits gets **409**
+    `prompt_already_waiting`. A device may start it once every 10 seconds (**429** with
+    `Retry-After`). **403** from mobile access, a pending device or another
+    computer; **409** with `detail` `{"code", "message"}` when the prompt was closed (`cancelled`), not answered
     (`timeout`) or couldn't be shown (`not_authorized`); **422** on a PC that
     isn't Linux (`not_linux`) or has no polkit (`no_pkexec`); **500**
     (`failed`) otherwise. The [NPU guide](/guides/npu) has the steps to do it
@@ -2651,14 +3432,20 @@ plan and make one set of choices.
     Write a troubleshooting report for a bug report: setup's record (its last
     run, the plan and every stage's full log) saved as `setup-report.json` in
     GAIA's home, bundled with GAIA's logs and a system snapshot by `gaia
-    diagnostics`, with secret environment variables and secrets in the logs redacted. Returns `{"name", "path", "size_bytes"}`.
-    **500** naming the cause when the bundle can't be written.
+    diagnostics`, with secret environment variables and secrets in the logs redacted. Returns `{"name", "path", "size_bytes"}`;
+    a paired device gets the file name as `path`. **500** naming the cause when
+    the bundle can't be written. The PC or an allowed paired device, as for the
+    logs: **403** from mobile access, a pending device or another computer.
+    One report is written at a time, whoever asks (**409** while one is being
+    written), and each request is recorded in the audit log naming who asked.
   </Accordion>
 
   <Accordion title="GET /api/setup/report/{name}">
     The report `POST /api/setup/report` wrote, as `application/gzip`. Only a
-    `diagnostics-<YYYYMMDD>-<HHMMSS>.tgz` in GAIA's home is served; anything
-    else is **404**.
+    `diagnostics-<YYYYMMDD>-<HHMMSS>-<8 hex>.tgz` in GAIA's home is served
+    (reports from before the suffix too); anything else is **404**, and so is a
+    symlinked report asked for by a device. The same callers as `POST`; a
+    device's download is recorded in the audit log.
   </Accordion>
 
   <Accordion title="POST /api/setup/models/skip">
@@ -2800,8 +3587,19 @@ for a target and `guided_value` as the value to enter, not a preset's
     Linux only. Body: `{"setting_gb": 96, "confirm": true}`. Asks for
     administrator permission through pkexec, writes the limit, and records the
     previous one for undo. Takes effect after a restart; GAIA never restarts
-    the PC. **400** without `confirm`; **403** from another computer or over
-    mobile access, or when permission isn't given; **409** when the method
+    the PC. The response's `needs_restart` and `pending` say so. The PC or an
+    allowed paired device: a device hears the `device_prompt` event (kind
+    `admin`, action `gpuMemoryApply`) on `/api/sessions/events`, `waiting`
+    while the prompt is up on the PC, then `approved`, `denied`, `timeout` or
+    `failed`; the change is audited and listed in the device's changes
+    (`gpuMemoryChanged`), and an error that would name a PC path or command
+    output reaches the device as a fixed sentence. Waits up to 15 minutes for
+    the prompt's answer. One GPU memory change (apply or revert) runs at a
+    time, from the PC or a device: another request while one waits gets
+    **409** `prompt_already_waiting`. A device may start it once every 10
+    seconds (**429** with `Retry-After`). **400** without `confirm`;
+    **403** from mobile access, a pending device or another computer, or when
+    permission isn't given; **409** when the method
     is `guided` or the value is already set; **422** when it would leave the
     CPU less than 16 GB; **500** when the root step fails.
   </Accordion>
@@ -2809,7 +3607,9 @@ for a target and `guided_value` as the value to enter, not a preset's
   <Accordion title="POST /api/gpu-memory/revert">
     Body: `{"confirm": true}`. Puts back the setting GAIA replaced, after a
     restart. **409** when GAIA has no record of a change, or the record holds
-    anything but GPU memory settings. Same **400**/**403** as apply.
+    anything but GPU memory settings. Same callers, **400**/**403**, wait,
+    one-at-a-time **409**, **429** and device events as apply, with action
+    `gpuMemoryRevert`.
   </Accordion>
 
   <Accordion title="POST /api/gpu-memory/pending">
@@ -2856,7 +3656,8 @@ All three routes need the `X-Gaia-UI: 1` header (**403** without it).
 
   <Accordion title="POST /api/lemonade/target">
     Switch servers. Body: `{"mode": "gaia" | "external", "base_url": "...",
-    "api_key": "..."}`; the URL and key are only for `external`. Nothing is
+    "api_key": "...", "confirm": false}`; the URL and key are only for
+    `external`. Nothing is
     saved unless the user's server checks out. A running daemon is told to
     stop (or start) GAIA's own server, and cached agents are dropped. When
     `LEMONADE_BASE_URL` picks the server, `gaia` also saves that value as
@@ -2866,8 +3667,15 @@ All three routes need the `X-Gaia-UI: 1` header (**403** without it).
     the `GET` shape plus `daemon`. **422** when the server can't be used
     (`detail.message`, `detail.status`), including `status: "not_installed"`
     when switching from the user's server to GAIA's own before it is
-    installed; nothing is saved. **409** for an unreadable config, **403** over
-    mobile access, **502** when the daemon did not switch. A failed switch to
+    installed; nothing is saved. **409** for an unreadable config, **403** from
+    mobile access, a pending device or another computer, **502** when the daemon did not switch.
+    A paired device the PC allowed may switch either way; `external` needs
+    `"confirm": true` (**409** without it) and one try per device every 10 s
+    (**429**). Every failed check of a device's server is the same **422**
+    message with `status: null`, whatever went wrong, so a device can't map
+    hosts or ports. Its switch is written to the audit log and its list of
+    changes, and it sees a pointer to the PC in place of any other failure's
+    text. A failed switch to
     GAIA's own puts the previous mode back; a failed switch to the user's
     server stays saved.
   </Accordion>
@@ -2877,7 +3685,12 @@ All three routes need the `X-Gaia-UI: 1` header (**403** without it).
 
 GAIA's logs and the model server's, for the log viewer. Every line is redacted
 before it is sent (API keys, bearer tokens and similar). Both routes need the
-`X-Gaia-UI: 1` header and refuse mobile access (**403**).
+`X-Gaia-UI: 1` header and answer the PC or a paired device it allowed (**403**
+from mobile access, a pending device or another computer). A device picks a log
+by the names `GET /api/logs` lists, never a path, and sees only file names in
+`path` and `log_path`. A symlinked log is not listed for a device, and error
+text a device gets names GAIA's folder and the home folder instead of their
+paths.
 
 <AccordionGroup>
   <Accordion title="GET /api/logs">
@@ -2892,7 +3705,9 @@ before it is sent (API keys, bearer tokens and similar). Both routes need the
   <Accordion title="GET /api/logs/{source}">
     A log's last lines. Query: `file` (a name `GET /api/logs` listed; the
     source's first file when omitted), `after` (the `cursor` a previous read
-    returned, for only the lines written since), `limit` (1-5000, default 1000).
+    returned, for only the lines written since; a cursor that isn't at the start
+    of a line reads the log's last lines instead, with `reset`), `limit`
+    (1-5000, default 1000).
     Returns `lines` (`text`, `severity` of `debug`/`info`/`warning`/`error` or
     `null`, `tag`), `cursor`, `reset` (the log started over: replace, don't
     append), `dropped`, `log_path`, and `available`; when `false`, `reason` is
@@ -2913,13 +3728,59 @@ Gateway**, all served through the local Lemonade — the TUI's `/provider`.
 Keys go to the local Lemonade only and, once they discover models, into the OS
 credential store (the slot the TUI uses). A key is never echoed back or logged.
 
+The OS key store's state is machine-readable. A cloud provider's `key_store`
+is `waiting` while the store's unlock prompt is still open on the PC (the key
+is unknown, not absent), `locked` once the prompt was refused or closed (GAIA
+holds off asking for five minutes, or until Try again), and `null` when the
+store answered. A request a key-store wait holds up answers **409** and one the
+locked store refuses answers **423**, both with the detail
+`{"code": "key_store_waiting" | "key_store_locked", "message": "..."}`. A
+device's request the PC is already waiting on answers **409**
+`prompt_already_waiting` in the same shape (see `device_prompt` under
+[Paired devices](#paired-devices)); any other 409 keeps a plain-text detail.
+Read the code, never the message. The older `key_state` field is still sent beside `key_store` and keeps its `read`
+and `unknown` values; only its two key-store values (`waiting_for_os_permission`
+and `store_locked`) are deprecated in favor of `key_store` and go in the next
+release.
+
 <AccordionGroup>
   <Accordion title="GET /api/providers">
     Every provider with its state — `registered`, `key_source` (`environment`,
-    `lemonade`, `stored`, or `null`), `models_discovered` — and the active
-    model. A stored key is handed back to a Lemonade that lost it.
-    `lemonade_error` is set when Lemonade could not be reached. Requires
-    `X-Gaia-UI: 1` (**403** without it).
+    `lemonade`, `stored`, or `null`), `key_store` (`waiting`, `locked` or
+    `null`) with `key_message` saying what to do, `models_discovered` — and the
+    active model. A stored key is handed back to a Lemonade that lost it.
+    `lemonade_error` is set when Lemonade could not be reached. The `amd`
+    entry's `network` is checked for the PC only; over mobile access it is
+    `{"reachable": null, "detail": null}`. Requires
+    `X-Gaia-UI: 1` (**403** without it). Because it can register a provider
+    and hand Lemonade a key, a paired device is refused (**403**).
+  </Accordion>
+
+  <Accordion title="GET /api/providers/list">
+    Every provider and whether it is set up, for a paired device: `providers`,
+    each with `id`, `name`, `remote`, `privacy_notice`, `configured` (Lemonade
+    has it and it lists models; always `true` for `local`) and `blocked` (Local
+    only is on), and for `amd` a `network` with `reachable` (`true`, `false`, or
+    `null` when the check doesn't apply to this PC; never the reason or the
+    address). Only the PC gets `true` or `false`: for a device or mobile access
+    it is always `null` and nothing is dialed, so a gateway host rebound to a
+    home-network address can't be used to probe the PC's network. Plus
+    `lemonade_error` when Lemonade could not be read. Cloud
+    providers also carry `key_source` (`stored`, `environment`, `lemonade` or
+    `null`), `key_store` (`locked` while the store is held after a closed
+    prompt, else `null`; never `waiting`, since this route doesn't read the
+    store), `key_state` (`read`, `store_locked`, which is deprecated in favor of `key_store`, or `unknown`
+    until GAIA has read the credential store once since it started), `key_hint` (the key's
+    last four characters, as the PC shows them; always `null` over mobile
+    access) and `known_models`, plus `error` (the error line the PC's last
+    provider list showed, with PC paths and key-store text removed for a device;
+    `null` when there is none and always over mobile access), `env_var` (the
+    environment variable's name, never its value, when `key_source` is
+    `environment`) and `key_from_gaia_env` (`true` when that key is GAIA's own
+    environment rather than Lemonade's); all eight are `null` for `local`. Each call
+    from the PC dials the gateway. It only reads: it registers nothing, hands no key over,
+    never reads the OS credential store (so it can't raise a key-store
+    prompt), and never carries a key or a gateway address. Requires `X-Gaia-UI: 1` (**403** without it).
   </Accordion>
 
   <Accordion title="GET /api/providers/active">
@@ -2943,30 +3804,72 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     Register a cloud provider (`fireworks` or `amd`) in Lemonade and give it
     the key. Body: `{"api_key", "base_url", "auth_header_name",
     "auth_header_prefix"}`; the last three apply to `amd` only. A blank
-    `api_key` keeps the current key.
+    `api_key` keeps the current key, and a gateway field left out keeps the
+    one `amd` is registered with. The PC and an allowed paired device may
+    send a key. A device may send a gateway field for `amd` only together with
+    a new key, to a public `https://` address. The saved key is bound to the
+    address it was saved with and is never sent to another one: a replay that
+    finds the gateway at a different address fails with "The saved AMD Gateway
+    key belongs to {old host}; enter a new key for {new host}." Every failed
+    move is one **422** message, with the previous gateway and its key put
+    back; when that restore fails too, a **502** asks for a working address and
+    key. A move is refused (**409**) when GAIA holds no saved key for the
+    current gateway to put back. A device's host is looked up once, every
+    address must be public, and GAIA's check dials the first three of those
+    addresses with TLS for the name given, so a second lookup can't point it
+    elsewhere. One try per device every 10 s (**429**). The PC's own connect
+    checks its gateway with a plain connect to the first three addresses.
+    Either check runs before the gateway key lock is taken, so a slow host
+    doesn't hold up other replays; when the address it checked is no longer
+    the one the connect would use, the connect gets a **409**.
+
+    Any change of the `amd` address, with a key or without, first drops the key
+    Lemonade holds for the old address. Only one replay or move of the gateway
+    key runs at a time across every GAIA process (the Agent UI, the daemon, the
+    CLI, agents, and the terminal app, which changes the gateway through the
+    daemon); a connect that waits over 60 s for another one gets a
+    **409** saying so. The saved key lives in the credential store's
+    `gateway:amd:v2` slot, which older GAIA versions don't read; a key in the
+    old `gateway:amd` slot moves there, bound to the gateway it serves, the
+    next time GAIA hands it to Lemonade or before the gateway moves.
 
     While GAIA uses the user's own Lemonade (`lemonade_mode` `external`) it
     sends that server nothing: it succeeds only when the server already has
     the provider working, and a pasted key is not sent anywhere.
 
-    **Errors:** **401** when the provider rejects the key or discovers no
+    **Errors:** **422** when the provider rejects the key or discovers no
     models (a key that discovers nothing is removed from Lemonade again);
-    **403** when a key is sent through the mobile tunnel; **409** when an
+    **403** when a key comes from mobile access or another computer, or a
+    gateway field comes from anywhere but the PC or an allowed device sending a
+    new key; **409** `key_store_waiting` while the key store's prompt holds the
+    saved key's read (ask again; this includes a gateway move), and **423**
+    `key_store_locked` once that prompt was closed (don't ask again on a timer);
+    a plain **409** when an
     environment key takes precedence, Lemonade is not on this PC, or the
-    user's own server has no working provider.
+    user's own server has no working provider. A paired device gets the same
+    statuses without PC file paths or credential-store details, and its key
+    changes are recorded in the audit log under its device id.
   </Accordion>
 
   <Accordion title="DELETE /api/providers/{provider}/key">
     Clear the key from Lemonade and from the OS credential store. Returns
     `{"removed": bool}`. On the user's own Lemonade only GAIA's stored copy is
-    removed; the server keeps its key.
+    removed; the server keeps its key. The PC or an allowed paired device
+    (**403** from mobile access or another computer).
   </Accordion>
 
   <Accordion title="POST /api/providers/key-store/retry">
     Let the next key read ask the OS to unlock the credential store again. After
     a dismissed or refused unlock prompt GAIA stops reading the store for five
-    minutes, and providers report `key_state: "store_locked"`; the Try again
-    button calls this. Returns `{"retrying": true}`.
+    minutes, and providers report `key_store: "locked"`; the Try again
+    button calls this. Returns `{"retrying": true}`. The PC or an allowed
+    paired device; the unlock prompt it allows shows on the PC. From a device
+    the stored keys are read before it answers, so the device hears the
+    `device_prompt` event (kind `keyStore`, action `keyStoreRetry`) on
+    `/api/sessions/events` while the prompt is up: `waiting`, then `approved`,
+    `denied`, `failed` or, after five minutes, `timeout`. A device may retry
+    once every 10 seconds (**429** with `Retry-After`), and one at a time
+    (**409** `prompt_already_waiting` while its earlier read still runs).
   </Accordion>
 
   <Accordion title="GET /api/providers/{provider}/models">
@@ -3015,7 +3918,10 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
   <Accordion title="DELETE /api/providers/local/custom/{model_id}">
     Remove a model the user added: delete it from Lemonade if it was
     downloaded, forget it, and clear `default_model` / `last_model` if either
-    named it. Returns `{"removed", "display_name", "cleared"}`. **404** for a
+    named it. When it was the custom model in use, chat goes back to the
+    model picked under Model (as clearing `custom_model` does), that model is
+    saved as `last_model`, and a local one starts loading at once. Returns
+    `{"removed", "display_name", "cleared"}`. **404** for a
     model the user didn't add; **502** when Lemonade refuses the delete, and
     the model stays in the list.
   </Accordion>
@@ -3036,8 +3942,9 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     `started: false` with `reason` `already_loaded` (it is loaded at that size
     already), `busy` (a reply is running), `warm_up` (GAIA is preparing a new
     chat), `restarting`, or `not_gaias_server` (GAIA never reloads a model on a
-    server it doesn't run); in the last four cases the size applies on the next
-    load. **422** for a size not offered on this PC, or for a cloud model
+    server it doesn't run). After `busy` or `warm_up`, GAIA reloads the model
+    once the reply or warm-up ends; after the other two the size applies on the
+    next load. **422** for a size not offered on this PC, or for a cloud model
     (nothing is saved then). A saved size that stops
     fitting, or that can't be checked because this PC's memory can't be read,
     is refused at load with how to fix it; `GAIA_CTX_SIZE` still overrides it.
@@ -3068,7 +3975,9 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     Make a model the one new turns run and remember it as `last_model` /
     `last_provider` in `~/.gaia/config.json` (other keys are kept). Body:
     `{"model": "fireworks.glm-5p3-flash"}`. **409** when the model cannot run
-    now; **503** while the local model server is still starting. A successful
+    now, or `key_store_waiting` while the key store's prompt holds its key;
+    **423** `key_store_locked` once that prompt was closed; **503** while the
+    local model server is still starting. A successful
     pick clears this run's restore notice. Picking a local model also starts a
     fresh warm-up (see `POST /api/system/warm-up`), so the model loads before
     the next message; follow it with `GET /api/system/warm-up`.
@@ -3105,14 +4014,17 @@ model with no known price reads as unknown, never $0. Cloud models from
 
   <Accordion title="GET /api/spending/chat/{session_id}">
     Takes `since` and `model` as query parameters.
-    What one chat's cloud answers cost, and every chat's answers since `since`
-    (an ISO instant: the start of the viewer's local day). Sums the cost each
-    answer's turn summary saved, cache discounts included; answers on this PC
-    are left out. `paid` is true when `model` has a known cloud price, the only
+    What one chat's cloud answers cost, and every cloud turn billed since `since`
+    (an ISO instant: the start of the viewer's local day). The chat sums the
+    cost each answer's turn summary saved, cache discounts included; answers on this PC
+    are left out, and so is a turn stopped or failed before any reply, by the
+    rule `GET /api/spending` uses. `paid` is true when `model` has a known cloud price, the only
     time the composer shows it. `chat` carries `usd`, `answers`,
     `unpriced_answers` (stopped or unpriced answers, counted apart, never as
     $0) and `items` (`message_id`, `created_at`, `model`, `kind`, `usd` per
-    answer); `today` carries `usd`, `answers`, `unpriced_answers` and `chats`.
+    answer); `today` carries `usd`, `answers` and `unpriced_answers` for every
+    cloud turn billed since `since` (the record the monthly total reads, so a
+    replaced answer still counts) and `chats`, the chats with an answer today.
     **404** for an unknown chat, **422** when `since` isn't an ISO timestamp,
     **500** when a saved answer's summary is unreadable.
   </Accordion>
@@ -3188,7 +4100,13 @@ model with no known price reads as unknown, never $0. Cloud models from
     reviewed. Skills that ship code are refused unless `allow_code` is true.
     Returns `{"added": [...], "failed": {name: reason}}`. **422** when `pin`
     is missing, **400** when it is malformed or the link cannot be read,
-    **409** when the link changed since the preview.
+    **409** when the link changed since the preview. The PC or a paired
+    device the PC allowed, with the same signing, audit and code checks;
+    each skill a device adds is written to the audit log and listed in
+    Settings › Phones and tablets, marked when it runs code. A device sees
+    paths under the home folder as `~`, and a generic message for an error
+    that names any other folder on the PC. **403** from mobile access, a device
+    the PC hasn't allowed or another computer.
   </Accordion>
 
   <Accordion title="DELETE /api/skills/{name}">
@@ -3209,27 +4127,78 @@ these to install the GAIA agent when it is missing.
 
   <Accordion title="POST /api/agents/install">
     Start an install in the background (body names the agent id). Poll
-    `install-status` for progress.
+    `install-status` for progress. The PC, or a paired device the PC allowed
+    installing the GAIA agent (`gaia`) at its latest version: from a device,
+    another id, `version` or `trust_native` is a **403**, and a started
+    install is written to the audit log and listed in Settings › Phones and
+    tablets. **403** from mobile access, a device the PC hasn't allowed or
+    another computer.
   </Accordion>
 
   <Accordion title="GET /api/agents/{agent_id}/install-status">
-    Progress of an in-flight or completed install.
+    Progress of an in-flight or completed install. A failure's `error` is
+    shown in full on the PC only; everyone else gets a generic message.
   </Accordion>
 
   <Accordion title="DELETE /api/agents/{agent_id}">
-    Uninstall a hub-installed agent. Refuses a builtin (400).
+    Uninstall a hub-installed agent. Refuses a builtin (400). PC-only.
   </Accordion>
 </AccordionGroup>
 
 ## Security
 
 <Note>
-  The backend binds loopback and has no authentication while the tunnel is
-  off, so any web page the user's browser visits could otherwise drive it.
-  Three layers close that off — see
+  Every `/api/*` and `/v1/*` request needs the Agent UI API token, including
+  requests from this PC: binding loopback is not access control. Three more
+  layers stop a web page the user visits from driving the backend through
+  their own browser. See
   [`src/gaia/ui/security.py`](https://github.com/amd/gaia/blob/main/src/gaia/ui/security.py)
+  and [`src/gaia/ui/api_token.py`](https://github.com/amd/gaia/blob/main/src/gaia/ui/api_token.py)
   for the enforcing code.
 </Note>
+
+### API token
+
+The token is per install: the backend creates it on first start as
+`agent-ui-token` in GAIA's home folder (`~/.gaia`, or `GAIA_HOME`), readable
+only by you, and reuses it after that. Present it as
+`Authorization: Bearer <token>` or as the `gaia_ui_token` cookie. A missing or
+wrong token is a **401** with `"code": "ui_token_required"`.
+
+| Client | How it gets the token |
+|--------|-----------------------|
+| Desktop app | The main process adds the header to its own requests to the backend it started; the token never reaches the page or a URL |
+| Browser (`gaia chat --ui`) | Open the link it prints, `http://127.0.0.1:4200/?launch=<code>`. The code works once, for 10 minutes, and sets an HttpOnly, `SameSite=Strict` cookie so the browser stays signed in across restarts |
+| Scripts, MCP server, eval harness | Read the file; in Python, `gaia.ui.api_token.auth_headers()` |
+| Phone over mobile access | The tunnel's own token, from the QR code; it stops working when mobile access is off |
+
+Only `GET /api/health` and CORS preflights need no token; health returns no
+user data. `GAIA_UI_TOKEN_FILE` points the backend and its clients at another
+file, which must exist. To rotate the token, stop the Agent UI, delete the
+file and start it again; browsers then need a new launch link.
+
+<Warning>
+  Anything that holds the token speaks for you, so a few things deserve care:
+
+  - **Browsers send a cookie to every port on the same host.** A browser
+    signed in at `127.0.0.1:4200` also sends `gaia_ui_token` to any other
+    page it opens at `http://127.0.0.1:<port>`. Use the desktop app, which
+    keeps the token out of the browser, on a PC where you open untrusted
+    local web pages.
+  - **Front-ends that add the token answer for it.** The Agent UI MCP server
+    over HTTP and the Vite dev server (`npm run dev`) attach the token to
+    what they forward, so while one runs, whatever can reach its port can
+    use the Agent UI.
+  - **The launch code works for 10 minutes.** `gaia chat --ui` prints it
+    only to a terminal; the desktop app's backend never prints one.
+</Warning>
+
+```bash
+curl -H "Authorization: Bearer $(cat ~/.gaia/agent-ui-token)" \
+  http://localhost:4200/api/sessions
+```
+
+### Browser defenses
 
 1. **CSRF header.** Every mutating (non-GET/HEAD/OPTIONS) request to `/api/*`
    or `/v1/*` must carry `X-Gaia-UI: 1`. A cross-origin page cannot set a
@@ -3254,6 +4223,34 @@ those.
 `GAIA_UI_ALLOWED_ORIGINS` and `GAIA_UI_ALLOWED_HOSTS` (comma-separated) opt a
 reverse-proxied or named-host deployment in; neither is populated by
 default.
+
+### Who may call a route
+
+Each request is from one of three callers, decided by the listener it reached,
+never by its peer address alone (a relay such as `ssh -L` reaches a listener
+from loopback with no forwarded headers):
+
+- **`pc`**: on the main listener, a loopback peer with no `X-Forwarded-*` header.
+- **`device:<id>`**: on the listener paired devices reach, the device its token names.
+- **`tunnel`**: everyone else, mobile access and other computers included.
+
+Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`:
+
+{/* route-classes:begin (generated by python -m gaia.ui.export_route_access; do not edit) */}
+
+| Class | Who | Routes |
+|---|---|---|
+| PC-only | `pc` | `DELETE /api/agents/{agent_id}`, `DELETE /api/devices/listener`, `DELETE /api/devices/routes/{kind}`, `GET /api/connectors/_debug`, `GET /api/connectors/eval-mailbox`, `POST /api/auth/launch-code`, `POST /api/connectors/eval-mailbox`, `POST /api/devices/listener`, `POST /api/devices/pairing`, `POST /api/devices/pairing/reset`, `POST /api/devices/routes/{kind}`, `POST /api/devices/{device_id}/allow`, `POST /api/eval/scripted-user`, `POST /api/files/open`, `POST /api/memory/admin/clear`, `POST /api/memory/admin/seed`, `POST /api/tunnel/start`, `POST /api/tunnel/stop`, `POST /v1/connections/{provider}` |
+| Setup | `pc`, or an allowed device | `DELETE /api/automations/{ref}`, `DELETE /api/connectors/_flows/{flow_id}`, `DELETE /api/connectors/{connector_id}`, `DELETE /api/connectors/{connector_id}/accounts/{account_id}`, `DELETE /api/connectors/{connector_id}/activations/{agent_id:path}`, `DELETE /api/devices/pairing`, `DELETE /api/devices/{device_id}`, `DELETE /api/goals/{goal_id}`, `DELETE /api/memory/all`, `DELETE /api/providers/{provider}/key`, `DELETE /api/schedules/{name:path}`, `DELETE /v1/connections/{provider}`, `GET /api/automations`, `GET /api/devices`, `GET /api/devices/status`, `GET /api/devices/{device_id}/changes`, `GET /api/logs`, `GET /api/logs/{source}`, `GET /api/memory/stream-discovery`, `GET /api/memory/stream-inference`, `GET /api/messaging/discord`, `GET /api/setup/report/{name}`, `PATCH /api/schedules/{name:path}`, `POST /api/agent-programs/{program_id}/download`, `POST /api/agents/install`, `POST /api/automations/{ref}/{action}`, `POST /api/connectors/flows/{flow_id}/complete`, `POST /api/connectors/{connector_id}/authorize`, `POST /api/connectors/{connector_id}/authorize-device`, `POST /api/connectors/{connector_id}/configure`, `POST /api/connectors/{connector_id}/enable`, `POST /api/connectors/{connector_id}/test`, `POST /api/goals`, `POST /api/goals/store/reset`, `POST /api/goals/{goal_id}/tasks`, `POST /api/gpu-memory/apply`, `POST /api/gpu-memory/revert`, `POST /api/lemonade/target`, `POST /api/memory/commit-discovery`, `POST /api/memory/commit-inference`, `POST /api/memory/refresh-system-context`, `POST /api/memory/reinitialize`, `POST /api/messaging/discord/connect`, `POST /api/messaging/discord/disconnect`, `POST /api/messaging/discord/forget-always`, `POST /api/messaging/discord/pair`, `POST /api/messaging/discord/restart`, `POST /api/messaging/discord/start`, `POST /api/messaging/discord/stop`, `POST /api/providers/key-store/retry`, `POST /api/schedules`, `POST /api/schedules/{name:path}/run`, `POST /api/setup/cancel`, `POST /api/setup/chat-model`, `POST /api/setup/models/download`, `POST /api/setup/models/remove`, `POST /api/setup/models/skip`, `POST /api/setup/npu/memlock-fix`, `POST /api/setup/npu/recheck`, `POST /api/setup/report`, `POST /api/setup/run`, `POST /api/setup/vision-model`, `POST /api/skills/link/add`, `POST /api/system/download-model`, `PUT /api/chat/permissions`, `PUT /api/connectors/{connector_id}/activations/{agent_id:path}`, `PUT /api/connectors/{connector_id}/grants/{agent_id:path}`, `PUT /api/goals/{goal_id}/approve`, `PUT /api/goals/{goal_id}/cancel`, `PUT /api/goals/{goal_id}/reject`, `PUT /api/goals/{goal_id}/status`, `PUT /api/goals/{goal_id}/tasks/{task_id}`, `PUT /api/images/settings`, `PUT /api/schedules/{name:path}`, `PUT /api/system/model-server/backend` |
+| Not from a device | `pc`, `tunnel` | `GET /api/providers` |
+| Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
+| Its own routes | an allowed device | `GET /api/devices/me/routes` |
+| Unpairing itself | a device, pending or allowed | `DELETE /api/devices/me` |
+| Everything else | `pc`, `tunnel`, an allowed device | Chats, documents, memory, reading goals and schedules, and the rest |
+
+{/* route-classes:end */}
+
+A refused request is a **403** that says to do it on the PC.
 
 ### Flagship only
 
@@ -3333,7 +4330,7 @@ CREATE TABLE unfinished_turns (
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     owner TEXT NOT NULL,                       -- server process running the turn
     started_at TEXT NOT NULL,
-    partial_content TEXT NOT NULL DEFAULT '',  -- cleaned reply so far, saved every 2 s
+    partial_content TEXT NOT NULL DEFAULT '',  -- cleaned reply so far, saved every 0.5 s
     tools_run TEXT NOT NULL DEFAULT '[]',      -- tools the turn had started
     updated_at TEXT
 );
@@ -3443,7 +4440,7 @@ def test_message_ordering():
 The Agent UI server delegates to the GAIA [Agent](/sdk/core/agent-system) for LLM communication and tool execution:
 
 ```python
-from gaia_agent.chat_agent import ChatAgent, ChatAgentConfig
+from gaiapy.chat_agent import ChatAgent, ChatAgentConfig
 
 # The server creates a ChatAgent instance per request. ChatAgent derives its
 # system prompt from `prompt_profile` ("chat" | "doc" | "file" | "data" |

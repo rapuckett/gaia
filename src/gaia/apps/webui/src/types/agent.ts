@@ -3,6 +3,8 @@
 
 /** Notification types, and the slice of the Electron preload API the UI uses. */
 
+import type { GaiaBrowserPaneAPI } from '../../services/browser-pane/contract';
+
 // ── Notification Types ───────────────────────────────────────────────────
 
 export type NotificationType =
@@ -50,6 +52,8 @@ export interface GaiaNotification {
   ruleIds?: string[];
   policyVersion?: string;
   receiptId?: string;
+  /** For a device pairing notice: the paired device the Review and Deny actions act on. */
+  deviceId?: string;
   actions?: string[];
   timeoutSeconds?: number;
   /** When the prompt times out, in ms since the epoch. */
@@ -228,6 +232,7 @@ declare global {
   interface Window {
     gaiaAPI?: GaiaElectronAPI;
     gaiaWindow?: GaiaWindowFrame;
+    gaiaBrowserPane?: GaiaBrowserPaneAPI;
     gaiaInstall?: GaiaInstallBridge;
   }
 }

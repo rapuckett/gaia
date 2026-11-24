@@ -25,6 +25,8 @@ from gaia.ui.utils import (
     uploads_dir,
 )
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 @pytest.fixture
 def homes(tmp_path, monkeypatch):
@@ -45,7 +47,7 @@ def homes(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client(homes):
-    return TestClient(create_app(db_path=":memory:"))
+    return TestClient(create_app(db_path=":memory:"), client=("127.0.0.1", 50000))
 
 
 @pytest.fixture
@@ -73,7 +75,7 @@ def test_blob_document_lifecycle_uses_gaia_home(homes, client, mock_index_docume
     assert resp.status_code == 200, resp.text
     doc = resp.json()
     stored = Path(doc["filepath"])
-    assert stored.parent == gaia_home / "documents"
+    assert stored.parent == gaia_home / "chat" / "documents"
 
     reindex = client.post(f"/api/documents/{doc['id']}/reindex")
     assert reindex.status_code == 200, reindex.text
@@ -164,7 +166,7 @@ def test_unsafe_gaia_home_is_an_actionable_startup_error_not_a_traceback(
     )
     # If the guard ever stops firing, fail instead of binding a real port.
     monkeypatch.setattr(
-        "uvicorn.run",
+        "gaia.ui.shutdown.serve",
         lambda *a, **k: pytest.fail("create_app() should have refused GAIA_HOME"),
     )
 

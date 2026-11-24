@@ -1,75 +1,17 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { RadioGroup } from '../RadioGroup';
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, ScrollText } from 'lucide-react';
 import * as api from '../../services/api';
-import type { MessageKey } from '../../i18n/registry';
-import { useT, type Translate } from '../../i18n/useT';
+import { useT } from '../../i18n/useT';
 import { useChatStore } from '../../stores/chatStore';
 import { useLogsStore } from '../../stores/logsStore';
 import { displayModelName } from '../../stores/modelStore';
+import { backendLabel, ctxLabel, loadedModelDetail, modelKindLabel, OWNER_LABELS, runsOn } from '../../utils/modelServer.core';
 import { ErrorNotice } from './ErrorNotice';
-import type { LoadedModelInfo, ModelServerInfo } from '../../types/api.gen';
-
-const BACKEND_LABELS: Record<string, string> = {
-    vulkan: 'Vulkan',
-    rocm: 'ROCm',
-    metal: 'Metal',
-    cpu: 'CPU',
-    npu: 'NPU',
-    remote: 'Remote (cloud)',
-};
-
-const OWNER_LABELS: Record<string, MessageKey> = {
-    gaia: 'settings.server.ownerGaia',
-    user: 'settings.server.ownerUser',
-    remote: 'settings.server.ownerRemote',
-};
-
-export function backendLabel(backend: string | null | undefined): string {
-    if (!backend) return 'unknown';
-    return BACKEND_LABELS[backend] ?? backend;
-}
-
-/** "Vulkan", "Vulkan (Lemonade's default)", "Remote (cloud)", or "unknown". */
-export function runsOn(model: LoadedModelInfo | null | undefined): string {
-    if (!model) return 'unknown';
-    const label = backendLabel(model.backend);
-    return model.backend_source === 'lemonade_default' ? `${label} (Lemonade's default)` : label;
-}
-
-function ctxLabel(ctx: number | null | undefined): string {
-    return ctx ? `${Math.round(ctx / 1024)}K tokens` : 'unknown';
-}
-
-const MODEL_KIND_LABELS: Record<string, MessageKey> = {
-    asr: 'settings.server.kind.speechRecognition',
-    embedding: 'settings.server.kind.embedding',
-    image: 'settings.server.kind.image',
-    llm: 'settings.server.kind.language',
-    rerank: 'settings.server.kind.reranker',
-    reranking: 'settings.server.kind.reranker',
-    stt: 'settings.server.kind.speechRecognition',
-    transcription: 'settings.server.kind.speechRecognition',
-    tts: 'settings.server.kind.speech',
-    vision: 'settings.server.kind.vision',
-    '3d': 'settings.server.kind.threeD',
-};
-
-function modelKindLabel(model: LoadedModelInfo, t: Translate): string {
-    if (!model.model_type) return t('settings.server.loadedModel');
-    const type = model.model_type.toLowerCase();
-    const key = MODEL_KIND_LABELS[type];
-    return key ? t(key) : t('settings.server.kindOther', { kind: `${type.charAt(0).toUpperCase()}${type.slice(1)}` });
-}
-
-function loadedModelDetail(model: LoadedModelInfo, t: Translate): string {
-    const name = model.name ? displayModelName(model.name) : t.bare('settings.server.unknownModel');
-    const detail = [name, runsOn(model)];
-    if (model.backend !== 'remote' && model.ctx_size) detail.push(ctxLabel(model.ctx_size));
-    return detail.join(' · ');
-}
+import type { ModelServerInfo } from '../../types/api.gen';
 
 function Row({ label, value, title }: { label: string; value: string; title?: string }) {
     return (
@@ -172,7 +114,7 @@ export function ModelServerPanel() {
     // A saved choice GAIA no longer offers stays visible so it can be switched off.
     if (preferred && !choices.includes(preferred)) choices.push(preferred);
     const selected = preferred ?? info.default_backend ?? null;
-    const installable = available.filter((b) => b.state === 'installable').map((b) => backendLabel(b.name));
+    const installable = available.filter((b) => b.state === 'installable').map((b) => backendLabel(b.name, t));
     const chatIsLocalLlamacpp = !!chat?.name && chat.recipe === 'llamacpp';
 
     return (
@@ -189,19 +131,19 @@ export function ModelServerPanel() {
                     value={chat?.name ? displayModelName(chat.name) : t('settings.advanced.noneLoaded')}
                     title={chat?.name ?? undefined}
                 />
-                {chat && <Row label={t('settings.server.runsOn')} value={runsOn(chat)} />}
-                {chat && chat.backend !== 'remote' && <Row label={t('settings.advanced.context')} value={ctxLabel(chat.ctx_size)} />}
+                {chat && <Row label={t('settings.server.runsOn')} value={runsOn(chat, t)} />}
+                {chat && chat.backend !== 'remote' && <Row label={t('settings.advanced.context')} value={ctxLabel(chat.ctx_size, t)} />}
                 <Row
                     label={t('settings.advanced.embedding')}
                     value={info.embedding_model?.name
-                        ? `${info.embedding_model.name} · ${runsOn(info.embedding_model)}`
+                        ? `${info.embedding_model.name} · ${runsOn(info.embedding_model, t)}`
                         : t('settings.advanced.noneLoaded')}
                 />
                 {(info.loaded_models ?? []).map((model, index) => (
                     <Row
                         key={`${model.name ?? 'unknown'}-${index}`}
                         label={modelKindLabel(model, t)}
-                        value={loadedModelDetail(model, t)}
+                        value={loadedModelDetail(model, t, displayModelName)}
                         title={model.name ?? undefined}
                     />
                 ))}
@@ -217,7 +159,7 @@ export function ModelServerPanel() {
                     </span>
                 ) : (
                     <>
-                        <div className="segmented" role="radiogroup" aria-label={t('settings.server.backendShort')}>
+                        <RadioGroup className="segmented" aria-label={t('settings.server.backendShort')}>
                             {choices.map((name) => (
                                 <button
                                     key={name}
@@ -229,10 +171,10 @@ export function ModelServerPanel() {
                                     onClick={() => { if (name !== selected) void choose(name); }}
                                 >
                                     {saving === name ? <Loader2 size={12} className="spin" /> : null}
-                                    {backendLabel(name)}
+                                    {backendLabel(name, t)}
                                 </button>
                             ))}
-                        </div>
+                        </RadioGroup>
                         <span className="settings-hint">
                             {t('settings.server.backendHint')}
                             {installable.length > 0 && ` ${t('settings.server.installable', { names: installable.join(', ') })}`}

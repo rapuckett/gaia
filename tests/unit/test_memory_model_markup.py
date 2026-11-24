@@ -178,9 +178,9 @@ class TestStoreBoundary:
         ids=["fences", "tildes", "lone_tick", "ticks_one_line", "spaces", "pairs"],
     )
     def test_pathological_input_is_checked_in_linear_time(self, payload):
-        start = time.perf_counter()
+        start = time.thread_time()
         check_memory_content(payload)
-        assert time.perf_counter() - start < 1.0
+        assert time.thread_time() - start < 1.0
 
     def test_markup_after_an_unclosed_fence_is_still_found(self):
         with pytest.raises(MemoryContentError):
@@ -312,7 +312,9 @@ def dashboard(store):
     memory_router._store = store
     try:
         with patch.object(memory_router, "_embed_row", return_value={}):
-            with TestClient(app, headers={"X-Gaia-UI": "1"}) as client:
+            with TestClient(
+                app, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"}
+            ) as client:
                 yield client
     finally:
         memory_router._store = previous

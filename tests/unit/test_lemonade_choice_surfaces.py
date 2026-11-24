@@ -65,7 +65,7 @@ class TestDaemonRoutes:
         app = create_app(
             token="tok", port=1, pid=1, started_at=time.time(), lemonade_owner=owner
         )
-        return TestClient(app)
+        return TestClient(app, client=("127.0.0.1", 50000))
 
     def test_target_hands_the_tui_the_saved_key(self, keyring):
         from gaia.daemon.lemonade import EmbeddedLemonadeOwner
@@ -145,7 +145,7 @@ class TestAgentUiRouter:
         self.dropped = mock.Mock()
         monkeypatch.setattr(choice, "apply_to_daemon", self.applied)
         monkeypatch.setattr(router_mod, "_drop_cached_agents", self.dropped)
-        client = TestClient(app)
+        client = TestClient(app, client=("127.0.0.1", 50000))
         # tests/conftest.py adds the header to every TestClient; opt in per call.
         client.headers.pop("x-gaia-ui", None)
         return client

@@ -9,12 +9,16 @@ import * as api from '../services/api';
 import { requestErrorText } from '../utils/requestErrors';
 import { useChatStore } from '../stores/chatStore';
 import {
-    useModelStore, useInferencePlace, selectChipModel, displayModelName, distinctModelLabels, sameModelId, UNKNOWN_PLACE_TITLE,
+    useModelStore, useInferencePlace, selectChipModel, displayModelName, distinctModelLabels, sameModelId,
 } from '../stores/modelStore';
-import { STATE_LABELS, isDownloading, modelState, placementText } from './modelMeta';
+import { isDownloading, modelState, placementText } from './modelMeta';
 import { InfoBubble } from './InfoBubble';
 import { formatPrice } from './settings/cloudPrice';
-import { useT } from '../i18n/useT';
+import { useT, type Translate } from '../i18n/useT';
+import { isolate, keepTogether } from '../i18n/registry';
+import { keyStoreOf } from '../utils/keyStore';
+import { providerName, providerNotice } from '../utils/providerText';
+import { needsCloudConsent } from '../utils/cloudConsent.core';
 import { MarkedText, markLtr } from './MarkedText';
 import type { ProviderInfo, ProviderModel } from '../types';
 
@@ -25,21 +29,19 @@ interface ProviderModels {
 }
 
 const DOWNLOAD_POLL_MS = 2000;
-const KEY_WAITING = 'waiting_for_os_permission';
-const KEY_LOCKED = 'store_locked';
 // How many polls a picked model may show no download before the pick is given up.
 const PICK_START_POLLS = 5;
 
 /** What the info bubble lists for *m*: where it runs, size, speed, rank, price. */
-function modelDetails(m: ProviderModel, remote: boolean): string[] {
+function modelDetails(m: ProviderModel, remote: boolean, t: Translate): string[] {
     const rank = m.rank ? `#${m.rank} ${m.note ?? ''}`.trim() : null;
     if (remote) return [rank, formatPrice(m.price)].filter((x): x is string => !!x);
     return [
-        placementText(m.placement),
+        placementText(m.placement, t),
         m.size_gb ? `${m.size_gb} GB` : null,
-        m.tokens_per_second ? `${Math.round(m.tokens_per_second)} tok/s on this PC` : null,
+        m.tokens_per_second ? t('modelMenu.speedOnThisPc', { n: Math.round(m.tokens_per_second) }) : null,
         rank,
-        m.custom ? 'added by you' : null,
+        m.custom ? t('modelMenu.addedByYou') : null,
     ].filter((x): x is string => !!x);
 }
 
@@ -65,7 +67,7 @@ function StateMark({ m, onDownload, busy }: { m: ProviderModel; onDownload: () =
     if (isDownloading(m)) {
         const pct = Math.round(m.download_progress?.percent ?? 0);
         return (
-            <span className="model-state is-downloading" title={`Downloading, ${pct}%`}>
+            <span className="model-state is-downloading" title={t('modelMenu.downloadingPct', { pct: String(pct) })}>
                 <Loader2 size={12} className="spin" aria-hidden="true" /> {pct}%
             </span>
         );
@@ -79,7 +81,7 @@ function StateMark({ m, onDownload, busy }: { m: ProviderModel; onDownload: () =
                 onClick={(e) => { e.stopPropagation(); onDownload(); }}
                 disabled={busy}
                 aria-label={t('modelMenu.downloadModel', { name: m.display_name ?? m.id })}
-                title={m.size_gb ? `${STATE_LABELS.not_downloaded} (${m.size_gb} GB)` : STATE_LABELS.not_downloaded}
+                title={m.size_gb ? t.hint(t('settings.model.notDownloaded'), `${m.size_gb} GB`) : t('settings.model.notDownloaded')}
                 // Picking the row downloads it too, so the list keeps one Tab stop.
                 tabIndex={-1}
             >
@@ -88,9 +90,9 @@ function StateMark({ m, onDownload, busy }: { m: ProviderModel; onDownload: () =
         );
     }
     if (state === 'loaded') {
-        return <span className="model-state is-loaded" role="img" aria-label={STATE_LABELS.loaded} title={STATE_LABELS.loaded} />;
+        return <span className="model-state is-loaded" role="img" aria-label={t('settings.model.loaded')} title={t('settings.model.loaded')} />;
     }
-    return <span className="model-state is-ready" title={STATE_LABELS.downloaded}>{t('modelMenu.ready')}</span>;
+    return <span className="model-state is-ready" title={t('modelMenu.downloadedReady')}>{t('modelMenu.ready')}</span>;
 }
 
 /** The model the open chat runs on, where it runs, and a picker to change it. */
@@ -254,7 +256,7 @@ export function ModelChip() {
     };
 
     const anyDownloading = !!groups?.some((g) => g.models.some(isDownloading));
-    const awaitingPermission = !!groups?.some((g) => g.provider.key_state === KEY_WAITING);
+    const awaitingPermission = !!groups?.some((g) => keyStoreOf(g.provider) === 'waiting');
     useEffect(() => {
         if (!(open || pickAfterDownload) || !(anyDownloading || pickAfterDownload || awaitingPermission)) return;
         const t = setInterval(() => { void load(true); }, DOWNLOAD_POLL_MS);
@@ -289,7 +291,7 @@ export function ModelChip() {
 
     /** Switch to *model*; returns why it failed, or null. */
     const choose = useCallback(async (model: string, provider: ProviderInfo): Promise<string | null> => {
-        if (provider.remote && !active?.remote && pendingCloud?.model !== model) {
+        if (needsCloudConsent(provider, active, model, pendingCloud?.model)) {
             setPendingCloud({ model, provider });
             return null;
         }
@@ -332,7 +334,7 @@ export function ModelChip() {
         if (!m) {
             if (!missedPoll()) return;
             setPickAfterDownload(null);
-            setAutoSwitchError(`${displayModelName(model)} is no longer in the model list, so it wasn't switched to.`);
+            setAutoSwitchError(t('modelMenu.modelGone', { model: displayModelName(model) }));
             return;
         }
         if (isDownloading(m)) {
@@ -342,21 +344,21 @@ export function ModelChip() {
         const progress = m.download_progress;
         if (progress?.state === 'error') {
             setPickAfterDownload(null);
-            setAutoSwitchError(`Downloading ${displayModelName(model)} failed: ${progress.message ?? 'no reason given'}`);
+            setAutoSwitchError(t('modelMenu.downloadFailed', { model: displayModelName(model), message: progress.message ?? t.bare('modelMenu.noReason') }));
             return;
         }
         // The model list can lag the finished download by a poll; "complete" already means downloaded.
         if (progress?.state !== 'complete' && modelState(m) === 'not_downloaded') {
             if (!missedPoll()) return;
             setPickAfterDownload(null);
-            setAutoSwitchError(`The download of ${displayModelName(model)} never started. Try the download button again.`);
+            setAutoSwitchError(t('modelMenu.downloadNeverStarted', { name: displayModelName(model) }));
             return;
         }
         setPickAfterDownload(null);
         void choose(model, provider).then((failed) => {
-            if (failed) setAutoSwitchError(`${displayModelName(model)} downloaded, but switching to it failed: ${failed}`);
+            if (failed) setAutoSwitchError(t('modelMenu.switchAfterFailed', { model: displayModelName(model), reason: failed }));
         });
-    }, [groups, pickAfterDownload, requestsPending, choose]);
+    }, [groups, pickAfterDownload, requestsPending, choose, t]);
 
     // The row Tab lands on: the last one focused, else the current model, else the first.
     const fireworksCollapsed = (provider: ProviderInfo, models: ProviderModel[]) =>
@@ -387,7 +389,7 @@ export function ModelChip() {
     });
 
     const Icon = place?.remote ? Cloud : place ? Cpu : HelpCircle;
-    const name = chipModel ? displayModelName(chipModel) : 'Model';
+    const name = chipModel ? displayModelName(chipModel) : t('modelStatus.fallbackName');
     const label = `${name}${place ? ` · ${place.label}` : ''}`;
     const rowLabels = Object.fromEntries((groups ?? []).map((g) => [g.provider.id, distinctModelLabels(g.models)]));
     const shownGroups = groups && orderGroups(groups, active?.provider, currentModel);
@@ -395,18 +397,18 @@ export function ModelChip() {
     const title = autoSwitchError
         ? autoSwitchError
         : queueError
-        ? queueError
+        ? `${t('modelMenu.queueSwitchFailed', { model: keepTogether(displayModelName(queueError.model)) })}\n${isolate(queueError.reason, 'ltr')}`
         : queued
-            ? `${displayModelName(queued)} is used from your next message.`
+            ? t('modelMenu.usedNext', { name: displayModelName(queued) })
             : active?.config_error
                 ? active.config_error
                 : notDownloaded
-                    ? `${name} isn't downloaded yet. Open the list to download it.`
+                    ? t('modelMenu.notDownloadedTitle', { name })
                     : !place
-                        ? UNKNOWN_PLACE_TITLE
+                        ? t('modelStatus.unknownPlace')
                         // The server writes the model name as Markdown code; a tooltip shows backticks literally.
                         : place.description?.replace(/`/g, '')
-                            ?? (place.remote ? `Runs on ${place.label} — chat history leaves this PC` : t('modelStatus.runsHere'));
+                            ?? (place.remote ? t('modelStatus.runsRemote', { name: place.label }) : t('modelStatus.runsHere'));
 
     return (
         <div className="composer-chip-wrap">
@@ -421,9 +423,9 @@ export function ModelChip() {
             >
                 <Icon size={13} aria-hidden="true" />
                 <span className="composer-chip-label" dir="auto">{label}</span>
-                {queued && <span className="composer-chip-next">→ {displayModelName(queued)} next</span>}
-                {notDownloaded && <Download size={12} aria-label="Not downloaded" />}
-                {autoSwitchError && <AlertCircle size={12} aria-label="Model switch failed" />}
+                {queued && <span className="composer-chip-next">{t('modelMenu.nextChip', { name: displayModelName(queued) })}</span>}
+                {notDownloaded && <Download size={12} aria-label={t('settings.model.notDownloaded')} />}
+                {autoSwitchError && <AlertCircle size={12} aria-label={t('modelMenu.switchFailed')} />}
                 <ChevronDown size={12} aria-hidden="true" />
             </button>
             <Popover open={open} onClose={close} anchor={anchor} label={t('modelMenu.label')} align="end" className="model-menu">
@@ -435,7 +437,12 @@ export function ModelChip() {
                     </div>
                 )}
                 {autoSwitchError && <div className="popover-message is-error" role="alert">{autoSwitchError}</div>}
-                {queueError && <div className="popover-message is-error" role="alert">{queueError}</div>}
+                {queueError && (
+                    <div className="popover-message is-error" role="alert">
+                        {t('modelMenu.queueSwitchFailed', { model: keepTogether(displayModelName(queueError.model)) })}
+                        <div dir="ltr">{queueError.reason}</div>
+                    </div>
+                )}
                 {error && <div className="popover-message is-error" role="alert">{error}</div>}
                 {!groups && !error && (
                     <div className="popover-message"><Loader2 size={13} className="spin" /> {t('modelMenu.loading')}</div>
@@ -444,13 +451,13 @@ export function ModelChip() {
                 <div ref={list} role="listbox" aria-label={t('modelMenu.models')} onKeyDown={onListKey}>
                 {shownGroups!.map(({ provider, models, error: groupError }) => (
                     <div key={provider.id} role="group" aria-labelledby={`${listId}-${provider.id}`}>
-                        <div className="popover-heading" id={`${listId}-${provider.id}`}>{provider.name}</div>
+                        <div className="popover-heading" id={`${listId}-${provider.id}`}>{providerName(t, provider)}</div>
                         {groupError && <div className="popover-message is-error">{groupError}</div>}
-                        {provider.key_state === KEY_WAITING ? (
+                        {keyStoreOf(provider) === 'waiting' ? (
                             <div className="popover-message" role="status">
                                 <Loader2 size={13} className="spin" aria-hidden="true" /> {provider.key_message}
                             </div>
-                        ) : provider.key_state === KEY_LOCKED ? (
+                        ) : keyStoreOf(provider) === 'locked' ? (
                             <button
                                 type="button"
                                 className="popover-item"
@@ -489,7 +496,7 @@ export function ModelChip() {
                             const current = sameModelId(queued ?? active?.model, m.id);
                             const needsDownload = !provider.remote && modelState(m) === 'not_downloaded';
                             const modelName = rowLabels[provider.id][m.id];
-                            const details = modelDetails(m, provider.remote);
+                            const details = modelDetails(m, provider.remote, t);
                             const infoId = `${listId}-info-${provider.id}-${m.id}`;
                             return (
                                 <Fragment key={m.id}>
@@ -527,7 +534,7 @@ export function ModelChip() {
                                             </span>
                                         </button>
                                         <InfoBubble
-                                            label={`About ${modelName}`}
+                                            label={t('modelMenu.about', { name: modelName })}
                                             warning={!!m.placement?.warning}
                                             id={infoId}
                                             pinned={infoRow === m.id}
@@ -583,9 +590,9 @@ export function ModelChip() {
                                     {pendingCloud?.model === m.id && pendingCloud.provider.id === provider.id && (
                                         // Next to the clicked row, so a long list can't hide it.
                                         <div ref={consent} className="popover-message" role="alert">
-                                            {pendingCloud.provider.privacy_notice}{' '}
+                                            {providerNotice(t, pendingCloud.provider)}{' '}
                                             <button type="button" className="link-btn" onClick={() => choose(pendingCloud.model, pendingCloud.provider)}>
-                                                Use {displayModelName(pendingCloud.model)}
+                                                {t('modelMenu.useModel', { name: displayModelName(pendingCloud.model) })}
                                             </button>
                                         </div>
                                     )}

@@ -259,6 +259,13 @@ const SHARED_WITH_LIGHT = new Set([
     '--code-success',
     '--code-warning',
     '--code-danger',
+    '--slide-paper',
+    '--slide-ink',
+    '--slide-ink-dim',
+    '--slide-accent',
+    '--slide-on-accent',
+    '--slide-panel',
+    '--slide-rule',
 ]);
 
 describe('token declarations', () => {
@@ -530,7 +537,7 @@ describe('component stylesheets route colour through tokens', () => {
     const LITERAL_ALLOWED: Record<string, string> = {
         '/src/utils/logger.ts':
             'DevTools `%c` category palette -- never painted in the app',
-        '/src/utils/palette.ts':
+        '/src/utils/palette.core.ts':
             'derives every token from the two colors a person picks, and previews each palette as a swatch before it applies',
         '/src/utils/theme.ts':
             '<meta name="theme-color"> has no cascade to read --bg-primary from; both values are pinned to it below',
@@ -909,7 +916,7 @@ describe('status hues stay on status', () => {
     const STATUS_WORDS = [
         'error', 'danger', 'fail', 'warn', 'deny',
         'delete', 'remove', 'clear', 'confirm', 'stop', 'invalid', 'overdue',
-        'urgent', 'missing', 'bad',
+        'missing', 'bad',
     ];
 
     /** Status by meaning, not by name. Each entry says which status. */

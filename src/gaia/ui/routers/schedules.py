@@ -12,11 +12,17 @@ from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from ..devices.changes import name_label, record_device_change
+from ..models import WireModel
 from ..scheduler import DuplicateScheduleName, Scheduler
+from ..security import audit_approval, require_pc_or_allowed_device
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["schedules"])
+
+#: Changing a schedule: the PC and allowed paired devices; mobile access only reads.
+PC_OR_DEVICE = [Depends(require_pc_or_allowed_device)]
 
 
 # ── Request/Response Models ──────────────────────────────────────────────────
@@ -44,6 +50,22 @@ class UpdateScheduleRequest(BaseModel):
 
     status: Optional[str] = Field(
         None, description="New status: 'paused', 'active', or 'cancelled'"
+    )
+
+
+class EditScheduleRequest(BaseModel):
+    """Request to change when a scheduled task runs and what it asks."""
+
+    interval: str = Field(
+        ..., description="New schedule, in the words the create form accepts"
+    )
+    prompt: str = Field(..., description="New prompt to execute on each run")
+    timezone: Optional[str] = Field(
+        None,
+        description=(
+            "IANA time zone the schedule's times are in. Defaults to the "
+            "server machine's zone."
+        ),
     )
 
 
@@ -97,6 +119,12 @@ class ScheduleResultsResponse(BaseModel):
 
     results: list
     total: int
+
+
+class ScheduleDeleteResponse(WireModel):
+    """Confirmation that a schedule was deleted."""
+
+    deleted: bool
 
 
 class ParseScheduleRequest(BaseModel):
@@ -184,9 +212,12 @@ async def parse_schedule(request: ParseScheduleRequest):
     )
 
 
-@router.post("/api/schedules", response_model=ScheduleResponse)
+@router.post(
+    "/api/schedules", response_model=ScheduleResponse, dependencies=PC_OR_DEVICE
+)
 async def create_schedule(
     request: CreateScheduleRequest,
+    http_request: Request,
     scheduler: Scheduler = Depends(get_scheduler),
 ):
     """Create a new scheduled task."""
@@ -196,6 +227,10 @@ async def create_schedule(
             interval=request.interval,
             prompt=request.prompt,
             tz=request.timezone,
+        )
+        audit_approval(http_request, f"schedule {request.name!r} created")
+        record_device_change(
+            http_request, "scheduleCreated", name=name_label(request.name)
         )
         return task
     except DuplicateScheduleName as e:
@@ -247,10 +282,15 @@ async def get_schedule(
     return task
 
 
-@router.put("/api/schedules/{name:path}", response_model=ScheduleResponse)
+@router.put(
+    "/api/schedules/{name:path}",
+    response_model=ScheduleResponse,
+    dependencies=PC_OR_DEVICE,
+)
 async def update_schedule(
     name: str,
     request: UpdateScheduleRequest,
+    http_request: Request,
     scheduler: Scheduler = Depends(get_scheduler),
 ):
     """Update a scheduled task (pause, resume, cancel)."""
@@ -258,7 +298,10 @@ async def update_schedule(
         if request.status == "paused":
             return await scheduler.pause_task(name)
         elif request.status == "active":
-            return await scheduler.resume_task(name)
+            resumed = await scheduler.resume_task(name)
+            audit_approval(http_request, f"schedule {name!r} resumed")
+            record_device_change(http_request, "scheduleResumed", name=name_label(name))
+            return resumed
         elif request.status == "cancelled":
             return await scheduler.cancel_task(name)
         else:
@@ -272,21 +315,55 @@ async def update_schedule(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/api/schedules/{name:path}/run", response_model=ScheduleResponse)
+@router.patch(
+    "/api/schedules/{name:path}",
+    response_model=ScheduleResponse,
+    dependencies=PC_OR_DEVICE,
+)
+async def edit_schedule(
+    name: str,
+    request: EditScheduleRequest,
+    scheduler: Scheduler = Depends(get_scheduler),
+):
+    """Change when a scheduled task runs and what it asks; its chat and history stay."""
+    try:
+        return await scheduler.edit_task(
+            name, interval=request.interval, prompt=request.prompt, tz=request.timezone
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Schedule '{name}' not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/api/schedules/{name:path}/run",
+    response_model=ScheduleResponse,
+    dependencies=PC_OR_DEVICE,
+)
 async def run_schedule_now(
     name: str,
+    http_request: Request,
     scheduler: Scheduler = Depends(get_scheduler),
 ):
     """Run a scheduled task once now; its next scheduled time stays as it was."""
     try:
-        return await scheduler.run_task_now(name)
+        started = await scheduler.run_task_now(name)
+        audit_approval(http_request, f"schedule {name!r} run now")
+        record_device_change(http_request, "scheduleRun", name=name_label(name))
+        return started
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Schedule '{name}' not found")
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.delete("/api/schedules/{name:path}")
+@router.delete(
+    "/api/schedules/{name:path}",
+    response_model=ScheduleDeleteResponse,
+    dependencies=PC_OR_DEVICE,
+    response_model_exclude_unset=True,
+)
 async def delete_schedule(
     name: str,
     scheduler: Scheduler = Depends(get_scheduler),

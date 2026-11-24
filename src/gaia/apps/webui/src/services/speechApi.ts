@@ -24,6 +24,10 @@ export interface SpeechSettings {
     min_speed: number;
     max_speed: number;
     voices: Voice[];
+    /** False where GAIA doesn't offer its voice: Read aloud is hidden. */
+    available?: boolean;
+    /** The server's reason when it isn't available. */
+    unavailable_reason?: string | null;
 }
 
 export async function getSpeechSettings(): Promise<SpeechSettings> {
@@ -46,8 +50,7 @@ export async function getSpeechModel(): Promise<SpeechModel> {
     return apiFetch<SpeechModel>('GET', '/speech/model');
 }
 
-/** Longest text one `/speech` request takes; mirrors MAX_SPEECH_CHARS. */
-export const MAX_SPEECH_CHARS = 1000;
+export { MAX_SPEECH_CHARS } from '../utils/speechText';
 
 /** Speak *text* as WAV audio, in the saved voice unless one is given. */
 export async function speak(

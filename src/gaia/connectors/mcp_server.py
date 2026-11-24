@@ -31,11 +31,16 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from gaia.config import mcp_servers_path
-from gaia.connectors._keyring import keyring  # actionable error if missing (#1621)
+from gaia.connectors import keyring_access
 from gaia.connectors.errors import ConnectorsError, InvalidConfigValueError
 from gaia.connectors.handler import register_handler
 from gaia.connectors.spec import ConnectorSpec
-from gaia.connectors.store import SERVICE_NAME
+from gaia.connectors.store import (
+    SERVICE_NAME,
+    _kr_raw_delete,
+    _kr_raw_get,
+    _kr_raw_set,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +194,7 @@ def rederive_catalog_entries(servers: Dict[str, Any]) -> Dict[str, Any]:
 
 def _saved_secret(spec: ConnectorSpec, env_key: str) -> Optional[str]:
     """Return *env_key*'s secret; a renamed key reads the slot it was saved under."""
-    value = keyring.get_password(SERVICE_NAME, f"{spec.id}:{env_key}")
+    value = _kr_raw_get(f"{spec.id}:{env_key}")
     if value is not None:
         return value
     entry = _read_mcp_servers_json().get(spec.id)
@@ -198,16 +203,13 @@ def _saved_secret(spec: ConnectorSpec, env_key: str) -> Optional[str]:
     _, _, username = _rederived_env(spec, entry)[env_key]["$keyring"].partition(":")
     if username == f"{spec.id}:{env_key}":
         return None
-    return keyring.get_password(SERVICE_NAME, username)
+    return _kr_raw_get(username)
 
 
 def _delete_keyring_slots(usernames: Iterable[str]) -> None:
     """Delete each ``gaia.connections`` keyring slot; absent slots are already gone."""
     for username in sorted(usernames):
-        try:
-            keyring.delete_password(SERVICE_NAME, username)
-        except keyring.errors.PasswordDeleteError:
-            pass
+        _kr_raw_delete(username)
 
 
 def is_mcp_server_configured(connector_id: str) -> bool:
@@ -278,7 +280,7 @@ class McpServerHandler:
         env: Dict[str, str] = {}
         missing: List[str] = []
         for env_key in spec.mcp_env_keys:
-            value = _saved_secret(spec, env_key)
+            value = await asyncio.to_thread(_saved_secret, spec, env_key)
             if value is None:
                 missing.append(_keyring_ref(spec.id, env_key))
             else:
@@ -327,7 +329,7 @@ class McpServerHandler:
         for env_key in spec.mcp_env_keys:
             value = values[env_key]
             username = f"{spec.id}:{env_key}"
-            keyring.set_password(SERVICE_NAME, username, str(value))
+            await asyncio.to_thread(_kr_raw_set, username, str(value))
             env_block[env_key] = {"$keyring": _keyring_ref(spec.id, env_key)}
 
         # Read, update, and atomically write mcp_servers.json.
@@ -342,7 +344,7 @@ class McpServerHandler:
             "disabled": config.get("disabled", False),
         }
         _write_mcp_servers_json(servers)
-        _delete_keyring_slots(stale)
+        await asyncio.to_thread(_delete_keyring_slots, stale)
 
         logger.info(
             "mcp_server: configured connector_id=%s command=%s",
@@ -367,6 +369,8 @@ class McpServerHandler:
         account_id: Optional[str] = None,
     ) -> None:
         """Remove the MCP server entry, keyring slots, and per-agent grants."""
+        # Checked first so an unusable keyring leaves mcp_servers.json untouched.
+        keyring_access.check_delete()
         # Remove from mcp_servers.json.
         servers = _read_mcp_servers_json()
         usernames = {f"{spec.id}:{env_key}" for env_key in spec.mcp_env_keys}
@@ -376,7 +380,7 @@ class McpServerHandler:
             del servers[spec.id]
             _write_mcp_servers_json(servers)
 
-        _delete_keyring_slots(usernames)
+        await asyncio.to_thread(_delete_keyring_slots, usernames)
 
         # Wipe per-agent grants AND activations. If the same connector_id is
         # re-added later the new connector must NOT inherit the previous user's
@@ -441,7 +445,9 @@ class McpServerHandler:
         ``reason`` is ``"timeout"`` when it was too slow to tell (a first
         ``npx`` download), so callers don't blame the token.
         """
-        missing = [k for k in spec.mcp_env_keys if _saved_secret(spec, k) is None]
+        missing = await asyncio.to_thread(
+            lambda: [k for k in spec.mcp_env_keys if _saved_secret(spec, k) is None]
+        )
         if missing:
             return {"ok": False, "detail": f"missing keyring entries: {missing!r}"}
 

@@ -14,6 +14,8 @@ import pytest
 from gaia.agents.base.agent import Agent
 from gaia.cli import build_parser, run_cli
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 class _StubChatAgent:
     """Stands in for the gaia-agent-gaia wheel's GaiaAgent.
@@ -53,15 +55,15 @@ def stub_chat_wheel(monkeypatch):
             super().__init__(config)
             built.append(self)
 
-    agent_mod = types.ModuleType("gaia_agent.agent")
+    agent_mod = types.ModuleType("gaiapy.agent")
     agent_mod.GaiaAgent = _Agent
     agent_mod.GaiaAgentConfig = _Config
-    app_mod = types.ModuleType("gaia_agent.interactive")
+    app_mod = types.ModuleType("gaiapy.interactive")
     app_mod.interactive_mode = lambda agent: None
 
-    monkeypatch.setitem(sys.modules, "gaia_agent", types.ModuleType("gaia_agent"))
-    monkeypatch.setitem(sys.modules, "gaia_agent.agent", agent_mod)
-    monkeypatch.setitem(sys.modules, "gaia_agent.interactive", app_mod)
+    monkeypatch.setitem(sys.modules, "gaiapy", types.ModuleType("gaiapy"))
+    monkeypatch.setitem(sys.modules, "gaiapy.agent", agent_mod)
+    monkeypatch.setitem(sys.modules, "gaiapy.interactive", app_mod)
     return built
 
 

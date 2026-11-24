@@ -38,6 +38,7 @@ from gaia.logger import get_logger
 
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..models import WireModel
 
 logger = get_logger(__name__)
 
@@ -230,14 +231,48 @@ async def onboarding_preflight() -> PreflightReport:
     )
 
 
-@router.get("/api/onboarding/start")
+class StartCardView(WireModel):
+    """A task a new chat offers."""
+
+    skill: str
+    title: str
+    note: str
+    prompt: str
+    needs_input: bool
+
+
+class StartWorkingFolder(WireModel):
+    """The folder a new chat's agent works in."""
+
+    path: str
+    name: str
+    gaia_folder: bool
+    choosable: bool
+
+
+class StartScreenResponse(WireModel):
+    """A new chat's task cards and working folder; ``skills_error`` says why there are no cards."""
+
+    cards: List[StartCardView]
+    working_folder: StartWorkingFolder
+    skills_error: Optional[str]
+
+
+@router.get(
+    "/api/onboarding/start",
+    response_model=StartScreenResponse,
+    response_model_exclude_unset=True,
+)
 def new_chat_start(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
     """A new chat's task cards and working folder, from what is set up here.
 
     When the agent can't list its skills, or be asked whether it takes
     folders, it can't run a task either, so there are no cards, the folder
-    can't be changed, and ``skills_error`` carries why.
+    can't be changed, and ``skills_error`` carries why. ``agent_problem`` is
+    ``{"code", "detail"}`` when the agent the user chose is the reason (see
+    ``agent_programs.chosen_agent_problem``), so the screen can offer its fix.
     """
+    from gaia.ui.routers.agent_programs import chosen_agent_problem
     from gaia.ui.routers.skills import list_skills
     from gaia.ui.security import FLAGSHIP_AGENT_ID
     from gaia.ui.session_environment import EnvironmentChangeError, takes_folders
@@ -253,5 +288,10 @@ def new_chat_start(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
             "cards": [],
             "working_folder": working_folder(choosable=False),
             "skills_error": detail,
+            "agent_problem": chosen_agent_problem(),
         }
-    return {**start_screen(db, skills, choosable), "skills_error": None}
+    return {
+        **start_screen(db, skills, choosable),
+        "skills_error": None,
+        "agent_problem": None,
+    }

@@ -45,7 +45,9 @@
     min-width: 0;
     overflow: hidden;
     color: var(--text-primary);
-    text-overflow: ellipsis;
+    text-overflow: clip;
+    animation: fade-cut-inline both;
+    animation-timeline: scroll(self inline);
     white-space: nowrap;
 }
 
@@ -53,6 +55,14 @@
     flex-shrink: 0;
     color: var(--text-muted);
     font-size: 12px;
+}
+
+.queued-message-detail {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-align: left;
+    word-break: break-all;
 }
 
 .queued-message-steer {

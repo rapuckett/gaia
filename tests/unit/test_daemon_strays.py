@@ -17,6 +17,8 @@ from gaia import cli
 from gaia.daemon import paths, strays
 from gaia.daemon.strays import DaemonProcess
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 OLD = time.time() - 3 * 86400
 
 
@@ -121,6 +123,11 @@ class _FakeProc:
         }
         self._env = env
 
+    def as_dict(self, attrs):
+        if isinstance(self.info, Exception):
+            raise self.info
+        return {name: self.info[name] for name in attrs}
+
     def environ(self):
         if isinstance(self._env, Exception):
             raise self._env
@@ -128,6 +135,15 @@ class _FakeProc:
 
 
 DAEMON = ["python", "-m", "gaia.daemon"]
+
+
+def _exiting_mid_read(pid):
+    """A process psutil on macOS fails to read as it exits."""
+    proc = _FakeProc(pid, 1, DAEMON, OLD, {})
+    proc.info = SystemError(
+        "<built-in function proc_cmdline> returned a result with an exception set"
+    )
+    return proc
 
 
 def test_find_daemons_lists_only_the_outer_process_of_a_launcher_pair(
@@ -142,8 +158,9 @@ def test_find_daemons_lists_only_the_outer_process_of_a_launcher_pair(
         _FakeProc(40, 1, None, OLD, env),  # cmdline unreadable
         _FakeProc(50, 1, DAEMON, OLD + 9, psutil.AccessDenied(50)),
         _FakeProc(60, 1, DAEMON, OLD + 9, psutil.NoSuchProcess(60)),
+        _exiting_mid_read(70),
     ]
-    monkeypatch.setattr(psutil, "process_iter", lambda attrs: iter(procs))
+    monkeypatch.setattr(psutil, "process_iter", lambda: iter(procs))
     found = strays.find_daemons()
     assert [d.pid for d in found] == [20, 10, 50]
     assert found[0].home == tmp_path / "b"

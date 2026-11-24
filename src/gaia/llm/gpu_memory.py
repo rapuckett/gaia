@@ -35,9 +35,10 @@ import shutil
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 from gaia.logger import get_logger
 
@@ -169,12 +170,39 @@ class NotPossible(GpuMemoryError):
     status = 409
 
 
+class Busy(GpuMemoryError):
+    status = 409
+
+
 class OutOfRange(GpuMemoryError):
     status = 422
 
 
 class Unavailable(GpuMemoryError):
     status = 503
+
+
+BUSY_MESSAGE = (
+    "Another GPU memory change is already waiting for approval. "
+    "Finish or cancel it, then try again."
+)
+
+
+@contextmanager
+def _one_change_at_a_time() -> Iterator[None]:
+    """Hold the machine-wide GPU memory lock; :class:`Busy` while another process has it."""
+    from gaia.config import gaia_home
+    from gaia.daemon.lock import try_lock
+
+    path = gaia_home() / "gpu_memory.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        if not try_lock(fd):
+            raise Busy(BUSY_MESSAGE)
+        yield
+    finally:
+        os.close(fd)
 
 
 @dataclass(frozen=True)
@@ -358,7 +386,9 @@ def _run_elevated(argv: List[str]) -> subprocess.CompletedProcess:
     )
 
 
-def _write_conf_as_root(content: Optional[str]) -> None:
+def _write_conf_as_root(
+    content: Optional[str], before_prompt: Optional[Callable[[], None]] = None
+) -> None:
     """Write (or with None remove) the ttm conf as root and rebuild the initramfs.
 
     Refuses anything but ttm options and comments: undo's content comes back
@@ -373,6 +403,8 @@ def _write_conf_as_root(content: Optional[str]) -> None:
     argv += [str(_conf_path()), content or "", _initramfs_tool()]
     if not _is_root():
         argv = [_which("pkexec") or "pkexec"] + argv
+        if before_prompt is not None:
+            before_prompt()
     try:
         done = _run_elevated(argv)
     except (OSError, subprocess.TimeoutExpired) as e:
@@ -804,10 +836,8 @@ def describe(
         method, reason = setup.method, setup.reason
     else:
         method = METHOD_GUIDED
-        reason = (
-            "On Windows this is changed in AMD Software, and it needs a restart. "
-            "GAIA shows you where."
-        )
+        # The panel already says it needs a restart; say where, not that again.
+        reason = "On Windows this is changed in AMD Software. GAIA shows you where."
     models = _models(machine)
     presets = _presets(machine, models)
     recommended = next(
@@ -920,17 +950,29 @@ def _require_applies(current: Dict[str, Any]) -> None:
         raise NotPossible(current["hidden_reason"])
 
 
-def apply(setting_gb: float, confirm: bool) -> Dict[str, Any]:
+def apply(
+    setting_gb: float,
+    confirm: bool,
+    before_prompt: Optional[Callable[[], None]] = None,
+) -> Dict[str, Any]:
     """Set the GPU memory limit (Linux), effective after a restart.
 
-    Asks for administrator permission; keeps the previous setting for
-    :func:`revert`. Never restarts the PC.
+    Asks for administrator permission, calling *before_prompt* first;
+    keeps the previous setting for :func:`revert`. Never restarts the PC.
+    Raises :class:`Busy` while another process is changing GPU memory.
     """
     if confirm is not True:
         raise NotConfirmed(
             "Changing GPU memory needs your confirmation: it asks for "
             "administrator permission and takes effect after a restart."
         )
+    with _one_change_at_a_time():
+        return _apply_locked(setting_gb, before_prompt)
+
+
+def _apply_locked(
+    setting_gb: float, before_prompt: Optional[Callable[[], None]]
+) -> Dict[str, Any]:
     info, url = _read_system_info()
     current = describe(info, url)
     _require_applies(current)
@@ -971,7 +1013,7 @@ def apply(setting_gb: float, confirm: bool) -> Dict[str, Any]:
         state["previous_setting_gb"] if earlier else current["setting"]["current_gb"]
     )
     try:
-        _write_conf_as_root(content)
+        _write_conf_as_root(content, before_prompt)
     except PermissionNotGiven:
         raise
     except GpuMemoryError:
@@ -984,13 +1026,24 @@ def apply(setting_gb: float, confirm: bool) -> Dict[str, Any]:
     return describe(info, url, value)
 
 
-def revert(confirm: bool) -> Dict[str, Any]:
-    """Put back the setting GAIA replaced, effective after a restart."""
+def revert(
+    confirm: bool, before_prompt: Optional[Callable[[], None]] = None
+) -> Dict[str, Any]:
+    """Put back the setting GAIA replaced, effective after a restart.
+
+    Calls *before_prompt* just before the administrator prompt. Raises
+    :class:`Busy` while another process is changing GPU memory.
+    """
     if confirm is not True:
         raise NotConfirmed(
             "Undoing the GPU memory change needs your confirmation: it asks "
             "for administrator permission and takes effect after a restart."
         )
+    with _one_change_at_a_time():
+        return _revert_locked(before_prompt)
+
+
+def _revert_locked(before_prompt: Optional[Callable[[], None]]) -> Dict[str, Any]:
     state = _load_state()
     linux = (state or {}).get("linux")
     if not linux or state.get("source") != "apply":
@@ -1014,7 +1067,7 @@ def revert(confirm: bool) -> Dict[str, Any]:
                 f"Edit {_conf_path()} yourself, or run amd-ttm --clear, then "
                 "restart."
             )
-    _write_conf_as_root(previous or None)
+    _write_conf_as_root(previous or None, before_prompt)
     previous_gb = state.get("previous_setting_gb")
     _record(
         current["os"],

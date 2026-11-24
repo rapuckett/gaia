@@ -2,11 +2,16 @@
 // SPDX-License-Identifier: MIT
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Translate } from '../i18n/useT';
 import { useT } from '../i18n/useT';
 import * as api from '../services/api';
 import { log } from '../utils/logger';
+import { composeWithLinks } from '../utils/attachmentLinks';
+import { usePickedElementsStore } from '../stores/pickedElementsStore';
 import { isMediaFile } from '../utils/mediaFiles';
+import { uploadRefusalText } from '../utils/uploadErrors';
 import type { Attachment } from '../types';
+import type { PageElementWire } from '../../services/browser-pane/contract';
 
 /** Files attached to the message being composed, uploaded as soon as they are added. */
 export interface UseAttachments {
@@ -22,6 +27,14 @@ export interface UseAttachments {
     uploading: boolean;
     /** The message text with markdown links to the uploaded files appended. */
     compose: (text: string) => string;
+    /** The chips picked in the browser pane, for the request being sent; clears them. */
+    takeElements: () => PageElementWire[] | undefined;
+}
+
+/** The upload refusal in the chosen language; a refusal this build doesn't know shows the server's own words. */
+function uploadErrorText(err: unknown, t: Translate): string {
+    if (!(err instanceof api.ApiError)) return err instanceof Error ? err.message : t('composer.uploadFailed');
+    return uploadRefusalText(err.reason, err.body, err.message, t);
 }
 
 function screenshotName(): string {
@@ -32,6 +45,8 @@ export function useAttachments(): UseAttachments {
     const t = useT();
     const [attachments, setAttachments] = useState<Attachment[]>([]);
     const mounted = useRef(true);
+    const current = useRef<Attachment[]>([]);
+    current.current = attachments;
     const uploads = useRef(new Map<string, AbortController>());
     useEffect(() => {
         mounted.current = true;
@@ -56,17 +71,21 @@ export function useAttachments(): UseAttachments {
             if (controller.signal.aborted) return;
             log.chat.error(`Upload failed: ${attachment.name}`, err);
             if (!mounted.current) return;
-            const message = err instanceof Error ? err.message : 'Upload failed';
+            const message = uploadErrorText(err, t);
             setAttachments((prev) => prev.map((a) =>
                 a.id === attachment.id ? { ...a, uploading: false, error: message } : a,
             ));
         } finally {
             uploads.current.delete(attachment.id);
         }
-    }, []);
+    }, [t]);
 
     const addFiles = useCallback((files: File[]) => {
+        const taken = [...current.current];
         for (const file of files) {
+            // The same file picked twice is one chip; a refused one may be retried.
+            if (taken.some((a) => !a.error && a.file.name === file.name && a.file.size === file.size
+                && a.file.lastModified === file.lastModified)) continue;
             const isImage = file.type.startsWith('image/');
             const attachment: Attachment = {
                 id: `attach-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -78,6 +97,7 @@ export function useAttachments(): UseAttachments {
                 isImage,
                 isMedia: isMediaFile(file.name),
             };
+            taken.push(attachment);
             setAttachments((prev) => [...prev, attachment]);
             void upload(attachment);
         }
@@ -112,18 +132,8 @@ export function useAttachments(): UseAttachments {
     }, []);
 
     const compose = useCallback((text: string) => {
-        const links = attachments
-            .filter((a) => a.uploaded && a.serverUrl)
-            .map((a) => {
-                // A bracket in a file name ends the link early, and the agent never sees the file.
-                const label = a.name.replace(/[[\]]/g, ' ').trim();
-                return a.isImage ? `![${label}](${a.serverUrl})` : `[${label}](${a.serverUrl})`;
-            })
-            .join('\n');
-        if (!links) return text;
-        // A recording sent with no words still has an obvious request.
-        const ask = text || (attachments.some((a) => a.uploaded && a.isMedia) ? t('composer.mediaPrompt') : '');
-        return ask ? `${ask}\n\n${links}` : links;
+        const uploaded = attachments.filter((a): a is Attachment & { serverUrl: string } => a.uploaded && !!a.serverUrl);
+        return composeWithLinks(text, uploaded, t('composer.mediaPrompt'));
     }, [attachments, t]);
 
     return {
@@ -136,5 +146,6 @@ export function useAttachments(): UseAttachments {
         hasImage: attachments.some((a) => a.uploaded && a.isImage),
         uploading: attachments.some((a) => a.uploading),
         compose,
+        takeElements: usePickedElementsStore.getState().take,
     };
 }

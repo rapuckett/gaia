@@ -116,6 +116,48 @@ def test_a_background_start_refuses_foreground_only_limits(capsys):
     assert "foreground only" in capsys.readouterr().err
 
 
+def _connected(autostart=True):
+    config = state.BridgeConfig(bot_id="9", owner_id="111", dm_channel_id="5")
+    config.autostart = autostart
+    state.save_config(config)
+
+
+def test_the_users_stop_keeps_the_apps_from_bringing_it_back(monkeypatch):
+    from gaia.messaging.discord import cli
+
+    _connected()
+    started = []
+    monkeypatch.setattr(cli, "start_detached", lambda **_: started.append(1) or 0)
+    assert cli.run_stop(emit=lambda _: None) == 0
+    assert state.load_config().autostart is False
+    assert cli.ensure_started() is None and started == []
+
+
+def test_a_stop_inside_a_restart_does_not_turn_autostart_off():
+    from gaia.messaging.discord import cli
+
+    _connected()
+    assert cli.stop()
+    assert state.load_config().autostart is True
+
+
+def test_a_start_turns_autostart_back_on(monkeypatch):
+    from gaia.messaging.discord import cli
+
+    _connected(autostart=False)
+    monkeypatch.setattr(cli, "_start_detached_locked", lambda **_: 0)
+    assert cli.start_detached(emit=lambda _: None) == 0
+    assert state.load_config().autostart is True
+
+
+def test_recovery_text_names_no_command():
+    from gaia.messaging.discord import adapter
+
+    assert "gaia discord" not in adapter.RESTART_HINT
+    assert "Stop, then Start" in adapter.RESTART_HINT
+    assert "never tell them to run a command" in adapter.DISCORD_REPLY_NOTE
+
+
 def test_setup_with_no_terminal_says_so_instead_of_a_traceback(monkeypatch):
     """`gaia discord setup` with stdin closed (a pipe, CI, a service) ended in
     an EOFError traceback from getpass."""
@@ -147,3 +189,221 @@ def test_setup_with_an_empty_token_is_refused_not_connected(monkeypatch):
     assert code == 1
     assert lines[-1].startswith("\n❌")
     assert started == []
+
+
+def _linked(**links):
+    config = state.BridgeConfig(bot_id="9", owner_id="111", dm_channel_id="5", **links)
+    state.save_config(config)
+
+
+@pytest.fixture
+def cleared(monkeypatch):
+    """The keyring token's deletions, recorded instead of made."""
+    from gaia.messaging.discord import credentials
+
+    calls = []
+    monkeypatch.setattr(credentials, "clear", lambda: calls.append("clear"))
+    monkeypatch.setattr(state, "forget_always", lambda: calls.append("always") or 0)
+    return calls
+
+
+def test_a_connect_from_a_device_links_the_token_to_it(monkeypatch):
+    from gaia.messaging.discord import cli, credentials, transport
+
+    identity = {
+        "bot_id": "9",
+        "bot_name": "GAIA",
+        "application_id": "1",
+        "bot_public": False,
+    }
+    monkeypatch.setattr(transport, "verify_token", lambda token: identity)
+    monkeypatch.setattr(cli, "_connector_bot_id", lambda: None)
+    monkeypatch.setattr(credentials, "save", lambda token: None)
+    cli.connect("tok", started_by="phone")
+    assert state.load_config().token_device_id == "phone"
+    cli.reset_pairing(started_by="tablet")
+    config = state.load_config()
+    assert (config.pairing_device_id, config.token_device_id) == ("tablet", "phone")
+    cli.connect("tok")
+    assert state.load_config().token_device_id == ""
+
+
+def test_unlinking_the_tokens_device_disconnects_the_bridge(cleared):
+    from gaia.messaging.discord import cli
+
+    _linked(token_device_id="phone", pairing_device_id="tablet")
+    assert cli.unlink_devices(["tablet-2"]) is None
+    assert cli.unlink_devices(["phone"]) == "disconnected"
+    config = state.load_config()
+    assert (config.bot_id, config.owner_id, config.token_device_id) == ("", "", "")
+    assert cleared == ["clear", "always"]
+
+
+def test_a_device_that_only_paired_resets_the_pairing_and_keeps_the_token(cleared):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="tablet")
+    assert cli.unlink_devices(["tablet"]) == "reset"
+    config = state.load_config()
+    assert (config.bot_id, config.owner_id) == ("9", "")
+    assert cleared == ["always"]
+
+
+def test_a_stuck_bridge_keeps_the_token_and_says_so(monkeypatch, cleared):
+    from gaia.messaging.discord import cli
+
+    _linked(token_device_id="phone")
+    monkeypatch.setattr(cli, "stop", lambda **_: False)
+    with pytest.raises(cli.PairingKept, match="stayed connected"):
+        cli.unlink_devices(["phone"])
+    assert state.load_config().token_device_id == "phone" and cleared == []
+
+
+def test_a_keyring_that_wont_forget_the_token_keeps_the_link(monkeypatch):
+    import keyring.errors
+
+    from gaia.messaging.discord import cli, credentials
+
+    _linked(token_device_id="phone")
+
+    def locked():
+        raise keyring.errors.KeyringLocked("locked")
+
+    monkeypatch.setattr(credentials, "clear", locked)
+    with pytest.raises(cli.PairingKept, match="couldn't remove its token"):
+        cli.unlink_devices(["phone"])
+    assert state.load_config().token_device_id == "phone"
+
+
+def test_a_start_disconnects_a_token_whose_device_is_gone(monkeypatch, cleared):
+    """No device table means no device is paired, so the link is stale."""
+    from gaia.messaging.discord import cli
+
+    _linked(token_device_id="expired-phone")
+    monkeypatch.setattr(
+        cli, "start_detached", lambda **_: pytest.fail("started the bridge")
+    )
+    config = state.load_config()
+    config.autostart = True
+    state.save_config(config)
+    assert cli.ensure_started() is None
+    assert not state.load_config().connected and cleared == ["clear", "always"]
+
+
+def test_a_status_read_resets_a_pairing_by_a_device_no_longer_allowed(cleared):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="pending-tablet")
+    assert cli.unlink_stale_devices(["phone"]) == "reset"
+    assert state.load_config().owner_id == ""
+    _linked(pairing_device_id="phone")
+    assert cli.unlink_stale_devices(["phone"]) is None
+    assert state.load_config().owner_id == "111"
+
+
+class _FakeTransport:
+    def __init__(self):
+        self.stopped = False
+
+    def stop(self):
+        self.stopped = True
+
+
+def test_the_running_bridge_stops_for_an_expired_linked_device(monkeypatch):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="expired", token_device_id="phone")
+    monkeypatch.setattr("gaia.ui.devices.store.allowed_device_ids", lambda: ["phone"])
+    transport = _FakeTransport()
+    watch = cli._LinkWatch(transport)
+    assert watch.tick() is True
+    assert transport.stopped and watch.stale == {"expired"}
+
+
+def test_the_link_check_leaves_live_devices_alone(monkeypatch):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="phone", token_device_id="phone")
+    monkeypatch.setattr("gaia.ui.devices.store.allowed_device_ids", lambda: ["phone"])
+    transport = _FakeTransport()
+    watch = cli._LinkWatch(transport)
+    assert watch.tick() is False
+    assert not transport.stopped and not watch.stale
+
+
+def _broken_store(monkeypatch):
+    import sqlite3
+
+    def broken():
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr("gaia.ui.devices.store.allowed_device_ids", broken)
+
+
+def test_an_unreadable_device_store_warns_and_keeps_the_bridge_running(
+    monkeypatch, caplog
+):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="phone")
+    _broken_store(monkeypatch)
+    transport = _FakeTransport()
+    watch = cli._LinkWatch(transport)
+    with caplog.at_level("WARNING"):
+        assert watch.tick() is False
+        assert watch.tick() is False
+    assert not transport.stopped
+    assert "database is locked" in caplog.text
+
+
+def test_the_third_unreadable_check_in_a_row_stops_the_bridge(monkeypatch):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="phone")
+    _broken_store(monkeypatch)
+    transport = _FakeTransport()
+    watch = cli._LinkWatch(transport)
+    assert [watch.tick() for _ in range(cli.DEVICE_LINK_MAX_FAILURES)] == [
+        False,
+        False,
+        True,
+    ]
+    assert transport.stopped
+    info = state.read_status()
+    assert info.state == state.STATE_ERROR
+    assert "device store couldn't be read" in info.detail
+
+
+def test_a_good_read_resets_the_failure_count(monkeypatch):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="phone")
+    transport = _FakeTransport()
+    watch = cli._LinkWatch(transport)
+    _broken_store(monkeypatch)
+    assert not watch.tick() and not watch.tick()
+    monkeypatch.setattr("gaia.ui.devices.store.allowed_device_ids", lambda: ["phone"])
+    assert not watch.tick()
+    _broken_store(monkeypatch)
+    assert not watch.tick() and not watch.tick()
+    assert not transport.stopped
+
+
+def test_after_exit_an_expired_token_device_is_disconnected(cleared):
+    from gaia.messaging.discord import cli
+
+    _linked(token_device_id="expired")
+    cli._finish_stale_links({"expired"}, lambda _line: None)
+    assert not state.load_config().connected and "clear" in cleared
+
+
+def test_after_exit_an_expired_pairing_device_is_reset_and_the_bridge_restarts(
+    cleared, monkeypatch
+):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="expired")
+    started = []
+    monkeypatch.setattr(cli, "start_detached", lambda **kw: started.append(1) or 0)
+    cli._finish_stale_links({"expired"}, lambda _line: None)
+    assert state.load_config().owner_id == "" and started

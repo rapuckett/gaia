@@ -19,16 +19,16 @@ import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { refreshTurnChanges } from '../../hooks/useTurnChanges';
 import { announceUndo, useUndoEvents } from '../../utils/undoEvents';
+import { undoneText } from '../../utils/undoneText';
 import { untrackedWarning } from '../../utils/untrackedWork';
 import { DiffCard } from '../render/DiffCard';
 import { PanelSection } from './PanelSection';
+import { useSessionPanelStore } from '../../stores/sessionPanelStore';
+import { isCodeFile } from './sessionFocus';
 import type { ChatFileChange, GitRepo, SessionChanges, SessionGit } from '../../types/sessionPanel';
-import { ref, type MessageKey, type Param } from '../../i18n/registry';
+import { isolate, ref, type MessageKey, type Param } from '../../i18n/registry';
 import { tEn, useT, type Translate } from '../../i18n/useT';
-
-function plural(n: number, one: string, many = `${one}s`): string {
-    return `${n} ${n === 1 ? one : many}`;
-}
+import { visibleName } from '../CalendarApproval';
 
 function baseName(path: string): string {
     const parts = path.split(/[\\/]/).filter(Boolean);
@@ -38,18 +38,14 @@ function baseName(path: string): string {
 /** "4 files" as a message param, so each language words its own count. */
 const filesRef = (n: number) => ref(n === 1 ? 'chg.files.one' : 'chg.files.other', { n });
 
+/** "+120 −8" as one left-to-right value, so the signs stay with their numbers in Arabic. */
+const countsValue = (additions: number, deletions: number) => isolate(`+${additions} \u2212${deletions}`, 'ltr');
+
 /** "4 files changed, +120 −8". */
 export function totalText(changes: SessionChanges, t: Translate = tEn): string {
     const { files, additions, deletions } = changes.totals;
-    return t('chg.total', { files: filesRef(files), add: additions, del: deletions });
+    return t('chg.total', { files: filesRef(files), counts: countsValue(additions, deletions) });
 }
-
-/** The badge the (English-only) review dialog shows. */
-const CHANGE_BADGE: Record<ChatFileChange['change'], string> = {
-    edited: 'Edited',
-    created: 'Created',
-    deleted: 'Deleted',
-};
 
 const CHANGE_LABEL: Record<ChatFileChange['change'], MessageKey> = {
     edited: 'chg.edited',
@@ -74,7 +70,12 @@ export function ChangesSection({ sessionId, busy, onJumpToMessage }: ChangesSect
         Promise.resolve()
             .then(() => api.getSessionChanges(sessionId))
             .then((res) => {
-                setChanges(expectShape(res, (r) => Array.isArray(r.files), "list of this chat's changes"));
+                const loaded = expectShape(res, (r) => Array.isArray(r.files), "list of this chat's changes");
+                setChanges(loaded);
+                useSessionPanelStore.getState().setSignals(sessionId, {
+                    changedFiles: loaded.files.length,
+                    changedCode: loaded.files.filter((f) => isCodeFile(f.path)).length,
+                });
                 setError(null);
             })
             .catch((err) => {
@@ -94,7 +95,7 @@ export function ChangesSection({ sessionId, busy, onJumpToMessage }: ChangesSect
             id="changes"
             title={t('chg.title')}
             summary={changes && !empty
-                ? t('chg.summary', { files: filesRef(changes.totals.files), add: changes.totals.additions, del: changes.totals.deletions })
+                ? t('chg.summary', { files: filesRef(changes.totals.files), counts: countsValue(changes.totals.additions, changes.totals.deletions) })
                 : null}
         >
             {error && <p className="sp-error">{t('chg.error', { error })}</p>}
@@ -134,13 +135,7 @@ function ChangesBody({ sessionId, busy, changes, onChanged, onUndone, onJumpToMe
         setMessage(null);
         try {
             const result = await api.undoAllChanges(sessionId, force);
-            const parts = [];
-            if (result.restored.length) parts.push(`restored ${plural(result.restored.length, 'file')}`);
-            if (result.removed.length) parts.push(`removed ${plural(result.removed.length, 'new file')}`);
-            let text = `Undone: ${parts.join(', ') || 'no files needed changing'}.`;
-            if (result.kept_folders.length) {
-                text += ` Kept ${plural(result.kept_folders.length, 'folder')} the chat created, because they now hold other files.`;
-            }
+            const text = undoneText(result, t);
             setMessage(text);
             setPhase('done');
             onUndone(text);
@@ -168,7 +163,7 @@ function ChangesBody({ sessionId, busy, changes, onChanged, onUndone, onJumpToMe
                     return (
                         <li key={f.path} className="sp-change">
                             <div className="sp-item-text">
-                                <span className="sp-item-name" dir="auto" title={f.path}>{baseName(f.path)}</span>
+                                <span className="sp-item-name" dir="ltr" title={visibleName(f.path)}>{visibleName(baseName(f.path))}</span>
                                 <span className="sp-meta">
                                     {t(CHANGE_LABEL[f.change])}
                                     {f.additions != null && <> · <span className="sp-add">+{f.additions}</span> <span className="sp-del">−{f.deletions}</span></>}
@@ -183,7 +178,7 @@ function ChangesBody({ sessionId, busy, changes, onChanged, onUndone, onJumpToMe
                                     type="button"
                                     className="btn-icon-sm"
                                     onClick={() => onJumpToMessage(latest)}
-                                    aria-label={t('chg.goToLast', { name: baseName(f.path) })}
+                                    aria-label={t('chg.goToLast', { name: visibleName(baseName(f.path)) })}
                                     title={t('sp.goToTurn')}
                                 >
                                     <CornerDownRight size={12} />
@@ -195,7 +190,7 @@ function ChangesBody({ sessionId, busy, changes, onChanged, onUndone, onJumpToMe
             </ul>
             {changes.incomplete && (
                 <p className="sp-warn-text" role="note">
-                    <AlertTriangle size={11} aria-hidden="true" /> {untrackedWarning(changes.untracked, { inChat: true, undo: 'Undo all' })}
+                    <AlertTriangle size={11} aria-hidden="true" /> {untrackedWarning(changes.untracked, { inChat: true }, t)}
                 </p>
             )}
             <div className="sp-actions-row">
@@ -242,24 +237,26 @@ function ChangesBody({ sessionId, busy, changes, onChanged, onUndone, onJumpToMe
     );
 }
 
-function note(file: ChatFileChange): string | undefined {
-    if (file.too_large) return `Too large to show: ${file.before_size} → ${file.after_size} bytes.`;
-    if (file.binary) return `Binary file: ${file.before_size} → ${file.after_size} bytes. No text diff.`;
-    if (file.truncated) return 'Diff shortened: the change is too long to show in full.';
+function note(file: ChatFileChange, t: Translate): string | undefined {
+    const sizes = { before: isolate(String(file.before_size), 'ltr'), after: isolate(String(file.after_size), 'ltr') };
+    if (file.too_large) return t('mobileApp.changes.tooLarge', sizes);
+    if (file.binary) return t('mobileApp.changes.binary', sizes);
+    if (file.truncated) return t('mobileApp.changes.truncated');
     return undefined;
 }
 
 /** Every file the chat changed, from before its first turn to after its last. */
 function ChatChangesReview({ changes, onClose }: { changes: SessionChanges; onClose: () => void }) {
+    const t = useT();
     useEscapeToClose(true, onClose);
     const dialogRef = useRef<HTMLDivElement>(null);
     useFocusTrap(dialogRef, true);
     return (
-        <div ref={dialogRef} className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Review this chat's changes">
+        <div ref={dialogRef} className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={t('mobileApp.changes.chat.reviewTitle')}>
             <div className="modal-panel changes-review" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
-                    <h3>Changes in this chat · {totalText(changes)}</h3>
-                    <button type="button" className="btn-icon" onClick={onClose} aria-label="Close">
+                    <h3>{t('mobileApp.changes.chat.reviewHeading', { total: ref('chg.total', { files: filesRef(changes.totals.files), counts: countsValue(changes.totals.additions, changes.totals.deletions) }) })}</h3>
+                    <button type="button" className="btn-icon" onClick={onClose} aria-label={t('sp.closeShort')}>
                         <X size={18} />
                     </button>
                 </div>
@@ -268,9 +265,9 @@ function ChatChangesReview({ changes, onClose }: { changes: SessionChanges; onCl
                         <section key={file.path} className="changes-review-file">
                             <DiffCard
                                 data={{
-                                    title: file.path,
-                                    badge: CHANGE_BADGE[file.change],
-                                    note: note(file),
+                                    path: file.path,
+                                    badge: t(CHANGE_LABEL[file.change]),
+                                    note: note(file, t),
                                     unified: file.binary || file.too_large ? '' : file.unified,
                                 }}
                             />
@@ -309,9 +306,9 @@ function GitActions({ sessionId, busy, onCommitted }: { sessionId: string; busy:
         <div className="sp-git">
             {git.repos.map((repo) => (
                 <div key={repo.root} className="sp-git-repo">
-                    <span className="sp-meta" title={repo.root}>
-                        <GitBranch size={12} aria-hidden="true" /> {baseName(repo.root)} · {repo.branch}
-                        {repo.uncommitted.length === 0 && repo.files.length > 0 && ' · committed'}
+                    <span className="sp-meta" title={visibleName(repo.root)}>
+                        <GitBranch size={12} aria-hidden="true" /> {visibleName(baseName(repo.root))} · {visibleName(repo.branch)}
+                        {repo.uncommitted.length === 0 && repo.files.length > 0 && ` · ${t('mobileApp.changes.git.committed')}`}
                     </span>
                     <span className="sp-actions-row">
                         <button
@@ -320,7 +317,7 @@ function GitActions({ sessionId, busy, onCommitted }: { sessionId: string; busy:
                             disabled={busy || repo.uncommitted.length === 0}
                             onClick={() => { setDone(null); setDialog({ kind: 'commit', repo }); }}
                         >
-                            <GitCommit size={12} aria-hidden="true" /> Commit…
+                            <GitCommit size={12} aria-hidden="true" /> {t('mobileApp.changes.git.commit')}
                         </button>
                         <button
                             type="button"
@@ -329,7 +326,7 @@ function GitActions({ sessionId, busy, onCommitted }: { sessionId: string; busy:
                             title={repo.pr_blocked ?? undefined}
                             onClick={() => { setDone(null); setDialog({ kind: 'pr', repo }); }}
                         >
-                            <GitPullRequest size={12} aria-hidden="true" /> Create PR…
+                            <GitPullRequest size={12} aria-hidden="true" /> {t('mobileApp.changes.git.pr')}
                         </button>
                     </span>
                     {repo.pr_blocked && <span className="sp-meta">{repo.pr_blocked}</span>}
@@ -357,6 +354,7 @@ function GitDialog({ sessionId, kind, repo, onClose, onDone }: {
     onClose: () => void;
     onDone: (text: string) => void;
 }) {
+    const t = useT();
     const [title, setTitle] = useState(repo.draft.title);
     const [body, setBody] = useState(repo.draft.body);
     const [running, setRunning] = useState(false);
@@ -371,10 +369,10 @@ function GitDialog({ sessionId, kind, repo, onClose, onDone }: {
         try {
             if (kind === 'commit') {
                 const res = await api.commitChanges(sessionId, repo.root, `${title.trim()}\n\n${body.trim()}`.trim());
-                onDone(`Committed ${plural(res.files.length, 'file')} as ${res.commit}.`);
+                onDone(t.plural('mobileApp.changes.git.committedAs', res.files.length, { hash: isolate(res.commit, 'ltr') }));
             } else {
                 const res = await api.createPullRequest(sessionId, repo.root, title, body);
-                onDone(`Opened ${res.url}`);
+                onDone(t('mobileApp.changes.git.opened', { url: isolate(res.url, 'ltr') }));
             }
         } catch (err) {
             setError(requestErrorText(err));
@@ -383,6 +381,7 @@ function GitDialog({ sessionId, kind, repo, onClose, onDone }: {
     };
 
     const files = kind === 'commit' ? repo.uncommitted : repo.files;
+    const dialogTitle = t(kind === 'commit' ? 'mobileApp.changes.git.commitTitle' : 'mobileApp.changes.git.prTitle');
     return (
         <div className="modal-overlay" onClick={running ? undefined : onClose}>
             <div
@@ -390,42 +389,44 @@ function GitDialog({ sessionId, kind, repo, onClose, onDone }: {
                 className="modal-panel sp-git-dialog"
                 role="dialog"
                 aria-modal="true"
-                aria-label={kind === 'commit' ? 'Commit this chat’s changes' : 'Create a pull request'}
+                aria-label={dialogTitle}
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="modal-header">
-                    <h3>{kind === 'commit' ? 'Commit this chat’s changes' : 'Create a pull request'}</h3>
-                    <button type="button" className="btn-icon" onClick={onClose} disabled={running} aria-label="Close">
+                    <h3>{dialogTitle}</h3>
+                    <button type="button" className="btn-icon" onClick={onClose} disabled={running} aria-label={t('sp.closeShort')}>
                         <X size={18} />
                     </button>
                 </div>
                 <div className="modal-body sp-git-body">
                     <p className="sp-meta">
                         {kind === 'commit'
-                            ? `In ${repo.root} on ${repo.branch}. Only the files below are committed; anything else you changed stays as it is.`
-                            : `Pushes ${repo.branch} to ${repo.remote} (never forced), then opens a pull request with GitHub's gh tool.`}
+                            ? t('chg.git.commitNote', { root: isolate(visibleName(repo.root), 'ltr'), branch: isolate(visibleName(repo.branch), 'ltr') })
+                            : t('chg.git.prNote', { branch: isolate(visibleName(repo.branch), 'ltr'), remote: isolate(repo.remote ?? '', 'ltr') })}
                     </p>
                     <label className="sp-field">
-                        <span>{kind === 'commit' ? 'Summary' : 'Title'}</span>
+                        <span>{t(kind === 'commit' ? 'mobileApp.changes.git.summary' : 'mobileApp.changes.git.prTitleField')}</span>
                         <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={running} />
                     </label>
                     <label className="sp-field">
-                        <span>{kind === 'commit' ? 'Details' : 'Description'}</span>
+                        <span>{t(kind === 'commit' ? 'mobileApp.changes.git.details' : 'mobileApp.changes.git.prBodyField')}</span>
                         <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={7} disabled={running} />
                     </label>
-                    <div className="sp-meta">{plural(files.length, 'file')}: {files.join(', ')}</div>
+                    <div className="sp-meta">{t.plural('mobileApp.changes.git.files', files.length)}</div>
+                    <div className="sp-meta" dir="ltr">{files.join(', ')}</div>
                     {kind === 'commit' && repo.ignored.length > 0 && (
-                        <div className="sp-meta">
-                            Left out, because git ignores {repo.ignored.length === 1 ? 'it' : 'them'}: {repo.ignored.join(', ')}
-                        </div>
+                        <>
+                            <div className="sp-meta">{t.plural('mobileApp.changes.git.ignored', repo.ignored.length)}</div>
+                            <div className="sp-meta" dir="ltr">{repo.ignored.join(', ')}</div>
+                        </>
                     )}
                     {error && <p className="sp-error" role="alert">{error}</p>}
                 </div>
                 <div className="sp-picker-actions">
-                    <button type="button" className="btn-secondary" onClick={onClose} disabled={running}>Cancel</button>
+                    <button type="button" className="btn-secondary" onClick={onClose} disabled={running}>{t('sp.cancel')}</button>
                     <button type="button" className="btn-primary" onClick={() => void run()} disabled={running || !title.trim()}>
                         {running && <Loader2 size={13} className="spin" aria-hidden="true" />}
-                        {kind === 'commit' ? `Commit ${plural(files.length, 'file')}` : 'Push and open PR'}
+                        {kind === 'commit' ? t.plural('mobileApp.changes.git.commitGo', files.length) : t('mobileApp.changes.git.prGo')}
                     </button>
                 </div>
             </div>

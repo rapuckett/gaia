@@ -164,7 +164,9 @@ describe('policy alert: toast → View receipt → scroll to the entry', () => {
             return el!;
         });
         expect(within(entry).getByText('rcpt/1 a')).toBeInTheDocument();
-        expect(within(entry).getByText('Reason: run_shell_command is not allowed here.')).toBeInTheDocument();
+        const reason = entry.querySelector('.notification-policy-reason')!;
+        expect(within(reason as HTMLElement).getByText('Reason:')).toBeInTheDocument();
+        expect(reason.querySelector('bdi[dir="ltr"]')!.textContent).toBe('run_shell_command is not allowed here.');
         expect(within(entry).getByText('no-shell')).toBeInTheDocument();
         expect(within(entry).getByText('v7')).toBeInTheDocument();
         // A block is a record, not a prompt: no approve/deny on it.
@@ -317,5 +319,21 @@ describe('a persisted policy block after reload', () => {
             return el!;
         });
         expect(within(card).getByText('Receipt unavailable')).toBeInTheDocument();
+    });
+});
+
+describe('in Arabic', () => {
+    afterEach(() => act(() => useChatStore.getState().setLocale('en')));
+
+    it('words the policy toast and the drag overlay in Arabic', async () => {
+        render(<Harness />);
+        await send();
+        act(() => useChatStore.getState().setLocale('ar'));
+        emit(policyAlert('run_shell_command', 'rcpt-1'));
+        expect(toast()!.textContent).toContain('محظور');
+        expect(within(toast()!).getByRole('button', { name: /عرض الإيصال/ })).toBeInTheDocument();
+
+        fireEvent.dragOver(document.querySelector('.task-view')!, { dataTransfer: { types: ['Files'] } });
+        expect(document.querySelector('.drag-overlay')!.textContent).toContain('أفلت الملفات');
     });
 });

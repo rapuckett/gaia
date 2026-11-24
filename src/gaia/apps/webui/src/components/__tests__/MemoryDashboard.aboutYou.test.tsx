@@ -42,10 +42,12 @@ const STATS = {
 };
 
 let memoryEnabled = true;
+let discoveryConsent = true;
 
 beforeEach(() => {
     vi.resetAllMocks();
     memoryEnabled = true;
+    discoveryConsent = true;
     mockedApi.getMemoryStats.mockResolvedValue(STATS);
     mockedApi.getMemoryActivity.mockResolvedValue([]);
     // A store, not a fixed list: a forget's refresh must not bring the item back.
@@ -59,7 +61,7 @@ beforeEach(() => {
     mockedApi.listGoals.mockResolvedValue({ goals: [], total: 0 });
     mockedApi.getGoalStats.mockResolvedValue({ goals: {}, tasks: {} });
     mockedApi.getMemorySettings.mockImplementation(async () => ({
-        memory_enabled: memoryEnabled, mcp_memory_enabled: false, system_discovery_consent: false,
+        memory_enabled: memoryEnabled, mcp_memory_enabled: false, system_discovery_consent: discoveryConsent,
     }));
     mockedApi.deleteKnowledge.mockImplementation(async (id: string) => {
         items = items.filter((i) => i.id !== id);
@@ -155,6 +157,18 @@ describe('What GAIA knows about you', () => {
         await waitFor(() => expect(mockedApi.editKnowledge).toHaveBeenCalledWith('k2', { content: 'Lives in Edmonton' }));
     });
 
+    it('Enter that picks an IME candidate does not save the edit', async () => {
+        await renderAbout();
+
+        fireEvent.click(within(itemRow('Lives in Calgary')).getByRole('button', { name: /Edit/ }));
+        const box = screen.getByRole('textbox', { name: 'Edit memory' });
+        fireEvent.change(box, { target: { value: 'にほ' } });
+        fireEvent.keyDown(box, { key: 'Enter', isComposing: true });
+
+        expect(mockedApi.editKnowledge).not.toHaveBeenCalled();
+        expect(screen.getByRole('textbox', { name: 'Edit memory' })).toBeInTheDocument();
+    });
+
     it('adds something the user types', async () => {
         await renderAbout();
 
@@ -169,6 +183,13 @@ describe('What GAIA knows about you', () => {
         }));
     });
 
+    it('uses a placeholder short enough to read in the add box', async () => {
+        await renderAbout();
+
+        const placeholder = screen.getByRole('textbox', { name: /Something GAIA should know/ }).getAttribute('placeholder') ?? '';
+        expect(placeholder).toBe('Tell GAIA something about you');
+    });
+
     it('hides a sensitive item until asked, and never prints it when forgotten', async () => {
         await renderAbout();
 
@@ -177,6 +198,20 @@ describe('What GAIA knows about you', () => {
 
         expect(await screen.findByText(/Forgotten: a sensitive memory/)).toBeInTheDocument();
         expect(screen.queryByText(/Bank PIN/)).not.toBeInTheDocument();
+    });
+
+    it('keeps a sensitive item hidden from its edit button until it is shown', async () => {
+        await renderAbout();
+
+        const edit = screen.getByRole('button', { name: 'Edit: sensitive memory' });
+        expect(edit).toBeDisabled();
+        fireEvent.click(edit);
+        expect(screen.queryByRole('textbox', { name: 'Edit memory' })).not.toBeInTheDocument();
+        expect(screen.queryByDisplayValue(/Bank PIN/)).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /Sensitive — show/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Edit: Bank PIN hint is the dog' }));
+        expect(screen.getByRole('textbox', { name: 'Edit memory' })).toHaveValue('Bank PIN hint is the dog');
     });
 
     it('says so when it has nothing yet', async () => {
@@ -368,6 +403,104 @@ describe('Profile saves refresh the other views (#4814)', () => {
         expect(screen.getByRole('checkbox', { name: /Uses VS Code/ })).not.toBeChecked();
         fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
         expect(screen.getByRole('checkbox', { name: /Uses VS Code/ })).toBeChecked();
+    });
+});
+
+describe('Profile scan needs System discovery', () => {
+    it('asks first, and starts the scan only after the person turns discovery on', async () => {
+        discoveryConsent = false;
+        const es: { onmessage?: (e: { data: string }) => void; close: () => void } = { close: vi.fn() };
+        mockedApi.openDiscoveryStream.mockImplementation(() => es as unknown as EventSource);
+        mockedApi.updateMemorySettings.mockResolvedValue({
+            memory_enabled: true, mcp_memory_enabled: false, system_discovery_consent: true,
+        });
+        await renderAbout();
+        fireEvent.click(screen.getByRole('tab', { name: /Profile setup/ }));
+        expect(screen.getByText(/Both scans need System discovery, which is off/)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Start scan' }));
+        await screen.findByRole('dialog', { name: 'Enable System Discovery?' });
+        expect(mockedApi.openDiscoveryStream).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Turn on and start scan' }));
+        await waitFor(() => expect(mockedApi.openDiscoveryStream).toHaveBeenCalledTimes(1));
+        expect(mockedApi.updateMemorySettings).toHaveBeenCalledWith({ system_discovery_consent: true });
+    });
+
+    it('starts nothing when the person cancels', async () => {
+        discoveryConsent = false;
+        await renderAbout();
+        fireEvent.click(screen.getByRole('tab', { name: /Profile setup/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Start scan' }));
+        await screen.findByRole('dialog');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(mockedApi.openDiscoveryStream).not.toHaveBeenCalled();
+        expect(mockedApi.updateMemorySettings).not.toHaveBeenCalled();
+    });
+
+    it("logs a translated line, not the server's English, when the server refuses for consent", async () => {
+        const es: { onmessage?: (e: { data: string }) => void; close: () => void } = { close: vi.fn() };
+        mockedApi.openDiscoveryStream.mockImplementation(() => es as unknown as EventSource);
+        await renderAbout();
+        fireEvent.click(screen.getByRole('tab', { name: /Profile setup/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Start scan' }));
+
+        act(() => {
+            es.onmessage!({ data: JSON.stringify({ type: 'error', source: 'consent', message: 'System discovery is off. Server wording.' }) });
+            es.onmessage!({ data: JSON.stringify({ type: 'done', total: 0 }) });
+        });
+
+        expect(await screen.findByText('System discovery is off, so GAIA read nothing on this PC.')).toBeInTheDocument();
+        expect(screen.queryByText(/Server wording/)).not.toBeInTheDocument();
+    });
+});
+
+describe('Profile scan away from the PC', () => {
+    it('says the scan is PC-only and locks Start scan, not "connection error"', async () => {
+        const es: { onerror?: () => void; close: () => void } = { close: vi.fn() };
+        mockedApi.openDiscoveryStream.mockImplementation(() => es as unknown as EventSource);
+        mockedApi.streamRefusedAsPcOnly.mockResolvedValue(true);
+        await renderAbout();
+        fireEvent.click(screen.getByRole('tab', { name: /Profile setup/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Start scan' }));
+
+        act(() => es.onerror!());
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/only that PC can run them/);
+        expect(screen.queryByText(/Connection error/)).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Start scan' })).toBeDisabled();
+    });
+
+    it('keeps the connection error when the stream failed for another reason', async () => {
+        const es: { onerror?: () => void; close: () => void } = { close: vi.fn() };
+        mockedApi.openDiscoveryStream.mockImplementation(() => es as unknown as EventSource);
+        mockedApi.streamRefusedAsPcOnly.mockResolvedValue(false);
+        await renderAbout();
+        fireEvent.click(screen.getByRole('tab', { name: /Profile setup/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Start scan' }));
+
+        act(() => es.onerror!());
+
+        expect(await screen.findByText(/Connection error/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Start scan' })).toBeEnabled();
+    });
+
+    it("doesn't re-request a stream that had opened, so a dropped scan on the PC never restarts", async () => {
+        const es: { onopen?: () => void; onerror?: () => void; close: () => void } = { close: vi.fn() };
+        mockedApi.openDiscoveryStream.mockImplementation(() => es as unknown as EventSource);
+        mockedApi.streamRefusedAsPcOnly.mockClear();
+        await renderAbout();
+        fireEvent.click(screen.getByRole('tab', { name: /Profile setup/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Start scan' }));
+
+        act(() => es.onopen!());
+        act(() => es.onerror!());
+
+        expect(await screen.findByText(/Connection error/)).toBeInTheDocument();
+        expect(mockedApi.streamRefusedAsPcOnly).not.toHaveBeenCalled();
     });
 });
 

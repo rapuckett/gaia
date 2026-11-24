@@ -83,7 +83,7 @@ beforeEach(() => {
     mockedApi.listGoals.mockResolvedValue({ goals: [GOAL, SUGGESTED], total: 2 } as never);
     mockedApi.getGoalStats.mockResolvedValue({ goals: { in_progress: 1, pending_approval: 1 }, tasks: {} });
     mockedApi.getMemorySettings.mockImplementation(async () => ({
-        memory_enabled: memoryEnabled, mcp_memory_enabled: false, system_discovery_consent: false,
+        memory_enabled: memoryEnabled, mcp_memory_enabled: false, system_discovery_consent: true,
     }));
 });
 
@@ -194,7 +194,7 @@ describe('Memory dashboard in Arabic', () => {
         memoryEnabled = false;
         render(<MemoryDashboard />);
         tab(/متقدم/);
-        fireEvent.click(await screen.findByRole('button', { name: /الذاكرة متوقفة/ }));
+        fireEvent.click(await screen.findByRole('button', { name: /التذكر عبر المحادثات متوقف/ }));
         const dialog = await screen.findByRole('dialog');
         expect(within(dialog).getByText(readsAs('تفعيل ذاكرة الوكيل؟ (Enable Agent Memory?)'))).toBeInTheDocument();
         expect(leftoverEnglish(dialog)).toEqual([]);
@@ -247,6 +247,7 @@ describe('Memory dashboard in Arabic', () => {
         const es = { onmessage: null as ((e: { data: string }) => void) | null, onerror: null as (() => void) | null, close: vi.fn() };
         mockedApi.openDiscoveryStream.mockReturnValue(es as never);
         render(<MemoryDashboard />);
+        await act(async () => {});
         tab(/إعداد الملف الشخصي/);
         expect(screen.getByRole('button', { name: /ابدأ الفحص/ })).toBeInTheDocument();
         expect(leftoverEnglish()).toEqual([]);

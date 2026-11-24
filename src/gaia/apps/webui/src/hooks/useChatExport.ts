@@ -4,9 +4,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import * as api from '../services/api';
 import { log } from '../utils/logger';
+import { isolate } from '../i18n/registry';
+import { useT } from '../i18n/useT';
 
 /** Download the chat as Markdown, with a plain-language error when that fails. */
 export function useChatExport(sessionId: string, title: string | undefined) {
+    const t = useT();
     const [exportError, setExportError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -31,10 +34,10 @@ export function useChatExport(sessionId: string, title: string | undefined) {
         } catch (err) {
             log.chat.error('Export failed', err);
             setExportError(err instanceof api.ApiError
-                ? `Couldn't export this chat: GAIA's backend returned an error (HTTP ${err.httpStatus}). Try Export again; if it keeps failing, check the backend log.`
-                : "Couldn't export this chat because GAIA's backend isn't reachable. Try Export again once GAIA is answering.");
+                ? t('chat.exportHttp', { http: isolate(`HTTP ${err.httpStatus}`, 'ltr') })
+                : t('chat.exportUnreachable'));
         }
-    }, [sessionId, title]);
+    }, [sessionId, title, t]);
 
     return { exportChat, exportError, clearExportError };
 }

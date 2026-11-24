@@ -13,6 +13,8 @@ sys.path.insert(0, os.path.abspath("src"))
 from gaia.messaging import telegram
 from gaia.messaging.telegram_api import TelegramBotAPI
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 def test_background_writes_pid(mock_home, monkeypatch):
     # GAIA_TEST_MODE stops the adapter from starting a real polling loop.
@@ -72,11 +74,6 @@ def test_cli_reports_a_rejected_token_without_traceback(monkeypatch, capsys):
         ["gaia", "telegram", "start", "--token", "1:bad", "--allowed-users", "1"],
     )
     from gaia import cli
-    from gaia.logger import configure
-
-    # An earlier test's cli.main() may have bound the shared console handler
-    # to a capture stream that is now closed.
-    monkeypatch.setattr(configure().console_handler, "stream", sys.stderr)
 
     with pytest.raises(SystemExit) as exc_info:
         cli.main()

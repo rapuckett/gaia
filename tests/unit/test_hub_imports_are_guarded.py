@@ -13,6 +13,8 @@ import ast
 import re
 from pathlib import Path
 
+from tests._repo_scan import files_under, read_text
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 UNIT = REPO_ROOT / "tests" / "unit"
 HUB_PACKAGES = sorted(
@@ -21,6 +23,8 @@ HUB_PACKAGES = sorted(
 
 
 def _imported_hub_packages(source: str) -> set[str]:
+    if not any(package in source for package in HUB_PACKAGES):
+        return set()
     found = set()
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
@@ -47,16 +51,13 @@ def _guarded(package: str, test_file: Path) -> bool:
     candidates = [test_file] + [
         d / "conftest.py" for d in test_file.parents if d.is_relative_to(UNIT)
     ]
-    return any(
-        c.is_file() and pattern.search(c.read_text(encoding="utf-8"))
-        for c in candidates
-    )
+    return any(c.is_file() and pattern.search(read_text(c)) for c in candidates)
 
 
 def test_hub_package_imports_in_unit_tests_are_guarded():
     unguarded = []
-    for path in sorted(UNIT.rglob("*.py")):
-        source = path.read_text(encoding="utf-8")
+    for path in files_under(UNIT, ".py"):
+        source = read_text(path)
         for package in sorted(_imported_hub_packages(source)):
             if not _guarded(package, path):
                 unguarded.append(f"{path.relative_to(REPO_ROOT)}: {package}")
@@ -68,7 +69,7 @@ def test_hub_package_imports_in_unit_tests_are_guarded():
 
 
 def test_the_guard_catches_an_unguarded_import():
-    assert _imported_hub_packages(
-        "def t():\n    from gaia_agent.server import x\n"
-    ) == {"gaia_agent"}
-    assert _imported_hub_packages("from . import gaia_agent\n") == set()
+    assert _imported_hub_packages("def t():\n    from gaiapy.server import x\n") == {
+        "gaiapy"
+    }
+    assert _imported_hub_packages("from . import gaiapy\n") == set()

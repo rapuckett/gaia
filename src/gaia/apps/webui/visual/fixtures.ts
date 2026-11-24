@@ -148,14 +148,67 @@ export const SYSTEM_STATUS = {
     default_model_is_cloud: false, default_model_size_gb: 4.9, lemonade_url: 'http://127.0.0.1:13305',
     expected_model_loaded: true, download_progress: null, init_state: 'ready',
     init_tasks: [
-        { name: 'Checking LLM server', status: 'done' },
-        { name: 'Loading ML libraries', status: 'done' },
-        { name: 'Loading AI model', status: 'done' },
+        { name: 'Checking LLM server', step: 'check_server', status: 'done' },
+        { name: 'Loading ML libraries', step: 'load_libraries', status: 'done' },
+        { name: 'Loading AI model', step: 'load_model', status: 'done' },
     ],
     warm_up: { state: 'done', elapsed_seconds: 2.0, prompt_tokens: 1800, cached_tokens: 1800, error: null },
     detected_devices: ['gpu'], active_profile: 'chat', config_error: null, probe_warnings: [],
     data_dir: 'C:\\Users\\you\\.gaia\\chat',
 };
+
+/** Settings on a PC where both agents are installed and the Python one runs. */
+export const SETTINGS = {
+    custom_model: null, model_status: null, context_size: null, agent_mode: 'goal_driven', dynamic_tools: false, dynamic_tools_locked: false,
+    network_policy: 'cloud_allowed', flagship_agent: 'gaiapy', gaiacpp_available: true,
+};
+
+const IDLE_AGENT_DOWNLOAD = { state: 'idle', bytes_done: 0, bytes_total: null, error: null };
+
+/** Both agent programs on this PC, with their sizes; the Python one runs. */
+export const AGENT_PROGRAMS = {
+    current: 'gaiapy',
+    programs: [
+        { id: 'gaiapy', installed: true, size_bytes: 412_000_000, can_download: false, unavailable_reason: null },
+        { id: 'gaiacpp', installed: true, size_bytes: 6_800_000, can_download: false, unavailable_reason: null },
+    ],
+    download: IDLE_AGENT_DOWNLOAD,
+};
+
+/** gaiacpp downloading, about 40% through. */
+export const AGENT_DOWNLOADING = { state: 'downloading', bytes_done: 2_720_000, bytes_total: 6_800_000, error: null };
+export const AGENT_DOWNLOAD_FAILED = {
+    state: 'failed', bytes_done: 2_720_000, bytes_total: 6_800_000,
+    error: 'Download of gaiacpp-win32-x64 stopped: the connection was reset (ECONNRESET) after 2.7 MB.',
+};
+
+export interface AgentProgramsAnswers {
+    /** Installed; not here but downloadable; or not here and not offered. */
+    gaiacpp?: 'installed' | 'downloadable' | 'unavailable';
+    /** The download as the listing reports it when the page opens. */
+    download?: object;
+    /** What each poll of the download answers. */
+    poll?: object;
+}
+
+/** The agent programs as this PC would report them, and the gaiacpp download's answers. */
+export async function withAgentPrograms(page: Page, { gaiacpp = 'installed', download = IDLE_AGENT_DOWNLOAD, poll }: AgentProgramsAnswers = {}): Promise<void> {
+    const cpp = gaiacpp === 'installed' ? AGENT_PROGRAMS.programs[1]
+        : gaiacpp === 'downloadable' ? { ...AGENT_PROGRAMS.programs[1], installed: false, can_download: true }
+            : { ...AGENT_PROGRAMS.programs[1], installed: false, size_bytes: null, unavailable_reason: 'this GAIA release has no gaiacpp to download. Use the Python agent, or update GAIA.', unavailable_code: 'no_release' };
+    const listing = { ...AGENT_PROGRAMS, programs: [AGENT_PROGRAMS.programs[0], cpp], download };
+    await page.route((url) => url.pathname.startsWith('/api/agent-programs'), async (route) => {
+        const { pathname } = new URL(route.request().url());
+        if (pathname === '/api/agent-programs') await route.fulfill({ json: listing });
+        else if (route.request().method() === 'POST') await route.fulfill({ status: 202, json: poll ?? AGENT_DOWNLOADING });
+        else await route.fulfill({ json: poll ?? download });
+    });
+}
+
+/** A PC where gaiacpp isn't installed and can't be downloaded. */
+export async function withoutGaiacpp(page: Page): Promise<void> {
+    await withAgentPrograms(page, { gaiacpp: 'unavailable' });
+}
 
 const ROUTES: Record<string, unknown> = {
     'GET /sessions': { sessions: SESSIONS, total: SESSIONS.length },
@@ -166,7 +219,8 @@ const ROUTES: Record<string, unknown> = {
     'GET /setup/check': { ready: true, steps: [] },
     'GET /setup/status': { state: 'idle' },
     'GET /setup/needs/chat': { job: 'chat', needed: false, model: null, disk_free_gb: null },
-    'GET /settings': { custom_model: null, model_status: null, context_size: null, agent_mode: 'goal_driven', dynamic_tools: false, dynamic_tools_locked: false },
+    'GET /settings': SETTINGS,
+    'GET /agent-programs': AGENT_PROGRAMS,
     'GET /providers': {
         providers: [
             { id: 'local', name: 'Local', remote: false, privacy_notice: 'Runs on this PC. Nothing leaves your machine.' },
@@ -174,7 +228,7 @@ const ROUTES: Record<string, unknown> = {
         ],
     },
     'GET /providers/active': { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', label: 'Gemma-4-E4B-it-GGUF · local', remote: false, is_default: true, restore: { status: 'none', message: null } },
-    'GET /providers/local/models': { models: [{ id: 'Gemma-4-E4B-it-GGUF', name: 'Gemma-4-E4B-it-GGUF', downloaded: true, loaded: true, size_gb: 4.9 }] },
+    'GET /providers/local/models': { models: [{ id: 'Gemma-4-E4B-it-GGUF', name: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', downloaded: true, loaded: true, size_gb: 4.9 }] },
     'GET /onboarding/start': { cards: [], working_folder: { path: '/home/you/projects/gaia', name: 'gaia', gaia_folder: false } },
     [`GET /sessions/${ANSWER_SESSION}/environment`]: {
         session_id: ANSWER_SESSION,
@@ -217,10 +271,25 @@ const ROUTES: Record<string, unknown> = {
     'GET /agents': { agents: [{ id: 'gaia', name: 'GAIA', description: '', source: 'installed', conversation_starters: [], models: [] }], total: 1 },
     'GET /connectors': { connectors: [] },
     'GET /memory/settings': { memory_enabled: true },
+    'GET /memory/embedder': {
+        device: 'gpu', chosen: false, default_device: 'gpu',
+        options: [
+            { device: 'gpu', model: 'user.embeddinggemma-300m-GGUF', display_name: 'EmbeddingGemma 300M', proven: true, present: true, available: true, reason: null, downloaded: true },
+            { device: 'npu', model: 'embed-gemma-300m-FLM', display_name: 'EmbeddingGemma 300M NPU', proven: false, present: true, available: false, reason: "its search results aren't reliable yet, so GAIA embeds on the GPU", downloaded: true },
+        ],
+    },
     'GET /skills': { skills: [] },
     'GET /skills/featured': { libraries: [{ id: 'pstack', name: 'pstack', url: 'https://github.com/michael-denyer/pstack-claude', description: 'Engineering workflows: design, review, CI fixes, TDD, PR hygiene (MIT)' }] },
     'GET /system/resources': RESOURCES,
     'GET /system/model-server': { reachable: true, error: null, base_url: 'http://127.0.0.1:13305', port: 13305, owner: 'gaia' },
+    'GET /images/settings': {
+        model: 'Z-Image-Turbo', size: '1280x720', steps: null, max_steps: 100,
+        model_available: true, chat_model: 'Gemma-4-E4B-it-GGUF', chat_model_creates_images: false,
+        models: [
+            { id: 'Z-Image-Turbo', recipe: 'sd-cpp', downloaded: true, downloads_on_first_use: false, size_gb: 20.7, default_size: '1024x1024', default_steps: 9, sizes: ['512x512', '768x768', '1024x1024', '1280x720', '720x1280'] },
+            { id: 'SDXL-Turbo', recipe: 'sd-cpp', downloaded: false, downloads_on_first_use: true, size_gb: 6.46, default_size: '512x512', default_steps: 4, sizes: ['512x512', '768x768', '1024x1024'] },
+        ],
+    },
     'GET /speech/model': { downloaded: true, size_gb: 0.3 },
     'GET /spending/prices/fireworks': { provider: 'fireworks', models: [], source: null, note: null },
     'GET /speech/settings': {
@@ -243,6 +312,8 @@ const ROUTES: Record<string, unknown> = {
  */
 /** Server-sent event streams the app subscribes to; each opens quiet. */
 const STREAMS = new Set(['GET /sessions/events', 'GET /connectors/events']);
+/** Device pairing is off unless a scene turns it on (`withDevices`): the backend answers 403, which hides it. */
+const PAIRING_OFF = new Set(['GET /devices/status', 'GET /devices']);
 
 /** A tenth of a second of silence: what POST /speech answers when a reply is read aloud. */
 function silentWav(): Buffer {
@@ -263,6 +334,10 @@ export async function mockApi(page: Page): Promise<string[]> {
         const key = `${route.request().method()} ${path}`;
         if (STREAMS.has(key)) {
             await route.fulfill({ status: 200, contentType: 'text/event-stream', body: ': no events\n\n' });
+            return;
+        }
+        if (PAIRING_OFF.has(key)) {
+            await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ detail: 'Device pairing is off.' }) });
             return;
         }
         if (key === 'POST /speech') {
@@ -291,7 +366,8 @@ const modelRow = (id: string, over: Record<string, unknown>) => ({
     ...over,
 });
 
-/** A Strix Halo with models on disk, more to download, an added one, and two it can't run. */
+/** A Strix Halo with models on disk, more to download, an added one, one that would leave
+ *  other apps little memory, and two it can't run. */
 export const MODEL_LIST = [
     modelRow('Gemma-4-E4B-it-GGUF', {
         display_name: 'Gemma 4 E4B (Multimodal)', state: 'loaded', size_gb: 4.9, tokens_per_second: 41.2,
@@ -309,6 +385,7 @@ export const MODEL_LIST = [
     }),
     ...['gpt-oss 20B', 'Qwen3-VL-4B Instruct', 'SDXL-Turbo', 'Kokoro TTS', 'Whisper Large v3'].map((name, i) =>
         modelRow(`${name.replace(/ /g, '-')}-GGUF`, { display_name: name, downloaded: false, state: 'not_downloaded', size_gb: 3 + i * 4.5 })),
+    modelRow('Muse-Glimmer-30B-GGUF', { display_name: 'Muse Glimmer 30B', downloaded: false, state: 'not_downloaded', size_gb: 21.4, tight: true }),
     modelRow('Qwen3.8-Flash-Next-GGUF', {
         display_name: 'Qwen3.8 Flash Next', downloaded: false, state: 'not_downloaded', size_gb: 82.9, fits: false,
         placement: { device: 'gpu', backend: 'vulkan', label: 'GPU · Vulkan', source: 'expected', warning: 'Lemonade reports this model on the CPU, not the GPU.' },
@@ -382,9 +459,17 @@ export async function withSettingsPanes(page: Page, options: { networkPolicy?: '
             custom_model: null, model_status: null, context_size: null, agent_mode: 'goal_driven',
             dynamic_tools: false, dynamic_tools_locked: false,
             network_policy: options.networkPolicy ?? 'cloud_allowed', policy_warnings: [],
+            flagship_agent: 'gaiapy', gaiacpp_available: true,
             policy_notices: options.policyNotices ?? [],
         },
         'GET /memory/settings': { memory_enabled: true },
+        'GET /memory/embedder': {
+            device: 'gpu', chosen: false, default_device: 'gpu',
+            options: [
+                { device: 'gpu', model: 'user.embeddinggemma-300m-GGUF', display_name: 'EmbeddingGemma 300M', proven: true, present: true, available: true, reason: null, downloaded: true },
+                { device: 'npu', model: 'embed-gemma-300m-FLM', display_name: 'EmbeddingGemma 300M NPU', proven: false, present: true, available: false, reason: "its search results aren't reliable yet, so GAIA embeds on the GPU", downloaded: true },
+            ],
+        },
         'GET /skills': {
             skills: [
                 skill('gh-cli', 'agent-bundled', 'Work with GitHub from the terminal: issues, pull requests and releases.', { always_on: true }),
@@ -412,6 +497,7 @@ export async function withSettingsPanes(page: Page, options: { networkPolicy?: '
             await route.fulfill({ json: {
                 custom_model: null, model_status: null, context_size: null, agent_mode: 'goal_driven',
                 dynamic_tools: false, dynamic_tools_locked: false, network_policy: 'local_ai_only',
+                flagship_agent: 'gaiapy', gaiacpp_available: true,
                 policy_warnings: [], policy_notices: options.policyNotices ?? [],
             } });
         } else if (key in answers) await route.fulfill({ json: answers[key] });
@@ -425,7 +511,7 @@ const connector = (id: string, display_name: string, type: string, over: Record<
     default_scopes: [], available_scopes: [], mcp_env_keys: [], oauth_setup_fields: [], supports_device_code: false, ...over,
 });
 
-const CONNECTORS = [
+export const CONNECTORS = [
     connector('google', 'Google', 'oauth_pkce', {
         configured: true, account_id: 'someone.with.a.long.address@example.com',
         description: 'Connect GAIA to your Google account for Gmail, Calendar, Drive, and more.',
@@ -452,8 +538,8 @@ export async function withConnectors(
     extra: Record<string, unknown> = {},
 ): Promise<void> {
     const answers: Record<string, unknown> = {
-        ...extra,
         'GET /connectors': { connectors },
+        ...extra,
         'GET /connectors/agent-mcps': {
             agent_mcps: [{ agent_id: 'reports', agent_name: 'Reports', server_name: 'warehouse', command: 'uvx', args: ['warehouse-mcp', '--read-only'], disabled: false, config_path: 'C:\\Users\\you\\.gaia\\agents\\reports\\mcp_servers.json' }],
         },
@@ -470,7 +556,7 @@ export async function withConnectors(
 
 const DISCORD_BASE = {
     connected: false, paired: false, running: false, state: 'stopped', detail: '',
-    bot_name: '', owner_name: '', autostart: false, model: null,
+    bot_name: '', owner_name: '', autostart: false, always_allowed: [], model: null,
     portal_url: 'https://discord.com/developers/applications',
     bot_page_url: '', invite_url: '', bot_profile_url: '',
     pairing_code: '', pairing_expires_at: 0, discord_installed: true, should_offer_setup: true,
@@ -486,13 +572,104 @@ const DISCORD_BOT = {
 export const DISCORD_STATES: Record<string, Record<string, unknown>> = {
     none: DISCORD_BASE,
     pairing: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'pairing', pairing_code: 'K7QX4M9P', pairing_expires_at: 1e10, detail: 'DM the code to the bot to pair it with your Discord account.' },
-    connected: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'connected', paired: true, owner_name: 'someone_with_a_long_name', model: 'Qwen3.6-35B-A3B-GGUF' },
+    connected: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'connected', paired: true, owner_name: 'someone_with_a_long_name', model: 'Qwen3.6-35B-A3B-GGUF', always_allowed: ['changes to files in C:/Users/someone_with_a_long_name/Documents/projects/quarterly-report', 'dir'] },
+    crashed: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'stopped', running: false, paired: true, owner_name: 'kalin', detail: 'The Discord bridge stopped unexpectedly.' },
     taken_over: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'taken_over', paired: true, owner_name: 'kalin', detail: 'Another PC is answering this Discord bot.' },
     token_invalid: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'token_invalid', paired: true, owner_name: 'kalin', detail: 'Discord rejected the bot token (HTTP 401). Reset the token in the Developer Portal and paste the new one.' },
 };
 
+const DEVICE_STATUS_BASE = {
+    listening: true, port: 4243, error_code: null, error_detail: null, pairing_open: false, pairing_expires_at: null,
+    idle_expiry_days: 90, pending_expiry_minutes: 10, failed_redemptions: [],
+    routes: [{ kind: 'tailnet', on: false, origin: null, error_code: null }],
+};
+const AT_ISO = (minutesAgo: number) => new Date(NOW.getTime() - minutesAgo * 60_000).toISOString();
+const IPAD = { id: 'dev-ipad', name: "Someone's iPad Pro with a rather long name", platform: 'ipados', status: 'allowed', created_at: AT_ISO(9000), last_seen_at: AT_ISO(1500), expires_at: null, changes_count: 6 };
+const PHONE = { id: 'dev-phone', name: 'هاتف سارة', platform: 'ios', status: 'pending', created_at: AT_ISO(1), last_seen_at: null, expires_at: new Date(NOW.getTime() + 9 * 60_000).toISOString() };
+
+/** Settings > Phones and tablets, one answer per state the pane shows. */
+export const DEVICE_STATES: Record<string, { status: Record<string, unknown>; devices: unknown[] }> = {
+    off: { status: { ...DEVICE_STATUS_BASE, listening: false }, devices: [] },
+    empty: { status: DEVICE_STATUS_BASE, devices: [] },
+    waiting: { status: DEVICE_STATUS_BASE, devices: [PHONE, IPAD] },
+    failed: {
+        status: { ...DEVICE_STATUS_BASE, failed_redemptions: [
+            { at: AT_ISO(3), address: '192.168.1.23', reason: 'expired' },
+            { at: AT_ISO(2), address: '192.168.1.40', reason: 'rate_limited' },
+        ] },
+        devices: [IPAD],
+    },
+    portInUse: { status: { ...DEVICE_STATUS_BASE, listening: false, error_code: 'port_in_use', error_detail: 'Port 4243 is in use.' }, devices: [IPAD] },
+    noHomeNetwork: {
+        status: {
+            ...DEVICE_STATUS_BASE, listening: false, waiting_for_home: true, error_code: 'no_home_network',
+            error_detail: "This PC has no IPv4 default route, so GAIA can't tell which network is your home network. Connect the PC to your home Wi-Fi or Ethernet.",
+        },
+        devices: [IPAD],
+    },
+    tailnetOn: { status: { ...DEVICE_STATUS_BASE, routes: [{ kind: 'tailnet', on: true, origin: 'https://100.101.102.103:4243', error_code: null }] }, devices: [IPAD] },
+    tailnetMissing: { status: { ...DEVICE_STATUS_BASE, routes: [{ kind: 'tailnet', on: false, origin: null, error_code: 'no_tailscale_address' }] }, devices: [IPAD] },
+};
+
+/** What the iPad changed: a provider name, a connector with an agent, and a kind a newer GAIA added. */
+export const IPAD_CHANGES = {
+    total: 6,
+    changes: [
+        { id: 'c1', kind: 'providerKeySet', params: { provider: 'OpenAI' }, at: AT_ISO(12) },
+        { id: 'c2', kind: 'connectorGrant', params: { agent: 'GAIA', connector: 'Google Calendar' }, at: AT_ISO(300) },
+        { id: 'c4', kind: 'connectorGrant', params: { agent: 'GAIA', connector: 'Google Calendar', granted: false }, at: AT_ISO(600) },
+        { id: 'c5', kind: 'memoryCommit', params: { source: 'discovery', count: 3 }, at: AT_ISO(900) },
+        { id: 'c6', kind: 'discordControl', params: { action: 'stop' }, at: AT_ISO(1200) },
+        { id: 'c3', kind: 'teleportCat', params: {}, at: AT_ISO(2000) },
+    ],
+};
+
+/** A system prompt the iPad raised on this PC, waiting for someone to answer it. */
+export async function withDevicePrompt(page: Page, kind: 'keyStore' | 'admin', action: string): Promise<void> {
+    const event = { type: 'device_prompt', device_id: IPAD.id, kind, action, state: 'waiting' };
+    await page.route('**/api/sessions/events', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body: `data: ${JSON.stringify(event)}\n\n` }));
+}
+
+/** A pairing code as the PC shows it; never a real invitation. */
+export const DEVICE_OFFER = {
+    v: 1, name: 'OFFICE-DESKTOP', pc_id: 'pc-fixture', origins: ['https://192.168.1.10:4243'],
+    pin: 'a'.repeat(64), invite: 'fixture-invitation', exp: Math.floor(NOW.getTime() / 1000) + 600,
+};
+
+export async function withDevices(page: Page, state: { status: Record<string, unknown>; devices: unknown[] }): Promise<void> {
+    let status = state.status;
+    await page.route('**/api/devices/status', (route) => route.fulfill({ json: status }));
+    await page.route('**/api/devices/*/changes*', (route) => route.fulfill({ json: IPAD_CHANGES }));
+    await page.route('**/api/devices', (route) => route.fulfill({ json: { devices: state.devices } }));
+    await page.route('**/api/devices/pairing', (route) => {
+        const opening = route.request().method() === 'POST';
+        status = { ...status, pairing_open: opening, pairing_expires_at: opening ? new Date(DEVICE_OFFER.exp * 1000).toISOString() : null };
+        return route.fulfill({ json: opening ? DEVICE_OFFER : status });
+    });
+}
+
 export async function withDiscord(page: Page, status: Record<string, unknown>): Promise<void> {
     await page.route('**/api/messaging/discord', (route) => route.fulfill({ json: status }));
+}
+
+const AT = NOW.getTime() / 1000;
+const AUTOMATION = {
+    heartbeat: false, paused: false, last_run_at: 0, runs: 0,
+    prompt: '', say: '', check: '', quiet: '', days: '', failures: 0,
+};
+
+/** Settings > Automations: one of each kind, a paused one and a failing check. */
+export const AUTOMATIONS = [
+    { ...AUTOMATION, id: 'a1b2c3d4', name: 'Inbox digest', kind: 'summary', every_seconds: 86400, next_at: AT + 61200, prompt: 'Summarize what landed in my inbox overnight and flag anything that needs a reply today.', days: 'mon,tue,wed,thu,fri' },
+    { ...AUTOMATION, id: 'e5f6a7b8', name: 'Heartbeat', kind: 'alert', heartbeat: true, every_seconds: 1800, next_at: AT + 1200, prompt: 'Check my calendar, my inbox and CI on main. Only message me if something needs me.', quiet: '22:00-07:00' },
+    { ...AUTOMATION, id: 'c1c1c1c1', name: 'Call Sam', kind: 'reminder', next_at: AT + 7200, say: 'Call Sam about the venue deposit.' },
+    { ...AUTOMATION, id: 'd2d2d2d2', name: 'Main CI', kind: 'trigger', every_seconds: 900, next_at: AT + 600, prompt: 'Tell me which workflow broke and the first failing step.', check: 'gaia automation ci-status --repo amd/gaia --branch main', failures: 3 },
+    { ...AUTOMATION, id: 'f3f3f3f3', name: 'تذكير بموعد الطبيب', kind: 'reminder', paused: true, next_at: AT + 86400, say: 'موعد الطبيب الساعة الرابعة' },
+    { ...AUTOMATION, id: 'b4b4b4b4', name: 'Mount Rainier weekend weather window for a two-day climb', kind: 'alert', paused: true, every_seconds: 21600, next_at: AT + 3600, prompt: 'Tell me when a two-day window opens with low wind and no storms.' },
+];
+
+export async function withAutomations(page: Page, automations: unknown[], delivers: boolean | null = true): Promise<void> {
+    await page.route('**/api/automations', (route) => route.fulfill({ json: { automations, delivers } }));
 }
 
 /** The desktop app's backend as services/backend-supervisor.cjs reports it; no apiBase, so requests stay mocked. */
@@ -528,7 +705,7 @@ export async function withDesktopBridges(
             }),
             gaiaUpdater: {
                 getStatus: readError ? async () => { throw new Error(readError); } : same, check: same, onStatusChange: () => () => {}, listReleases: async () => [], installVersion: same,
-                resumeUpdates: same, setAutoUpdate: same, setIncludePrereleases: same, downloadUpdate: same, restart: same,
+                resumeUpdates: same, markSetupWorked: same, setAutoUpdate: same, setIncludePrereleases: same, downloadUpdate: same, restart: same,
             },
         });
     }, { state: update, host, running: BACKEND_RUNNING, readError: statusReadError ?? null });
@@ -629,13 +806,15 @@ export interface MemoryState {
     failed?: boolean;
     /** More memories than the first page holds. */
     more?: boolean;
+    /** System discovery is on; off by default. */
+    consent?: boolean;
 }
 
 /** The Memory dashboard's endpoints: a few memories, goals and tools, or empty, off or failing. */
-export async function withMemory(page: Page, { enabled = true, empty = false, failed = false, more = false }: MemoryState = {}): Promise<void> {
+export async function withMemory(page: Page, { enabled = true, empty = false, failed = false, more = false, consent = false }: MemoryState = {}): Promise<void> {
     const items = empty ? [] : MEMORY_ITEMS;
     const answers: Record<string, unknown> = {
-        'GET /memory/settings': { memory_enabled: enabled, mcp_memory_enabled: false, system_discovery_consent: false },
+        'GET /memory/settings': { memory_enabled: enabled, mcp_memory_enabled: false, system_discovery_consent: consent },
         'GET /memory/stats': {
             knowledge: {
                 total: items.length, total_retrievals: empty ? 0 : 9,

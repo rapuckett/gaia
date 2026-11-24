@@ -30,7 +30,7 @@ const SOURCES: [prefix: string, what: string][] = [
 export function personalizeSource(connectorId: string, displayName: string): string {
     const id = connectorId.toLowerCase().replace(/^mcp-/, '');
     const hit = SOURCES.find(([prefix]) => id.startsWith(prefix));
-    return hit ? hit[1] : `my recent activity in ${displayName}`;
+    return hit ? hit[1] : `my recent activity in ${displayName}`; // english: mirrored verbatim by the tui gaiaconnectors test
 }
 
 export type PersonalizeSourceKind = 'google' | 'microsoft' | 'slack' | 'github';
@@ -45,12 +45,13 @@ export function personalizeSourceKind(connectorId: string): PersonalizeSourceKin
 /** The chat prompt that runs the personalization pass for one connector. */
 export function buildPersonalizePrompt({ connectorId, displayName }: PersonalizeRequest): string {
     return [
-        `I just connected ${displayName}. Get to know me from ${personalizeSource(connectorId, displayName)}.`,
-        'Read only — do not send, delete, label or change anything.',
+        `I just connected ${displayName}. Get to know me from ${personalizeSource(connectorId, displayName)}.`, // english: mirrored verbatim by the tui gaiaconnectors test
+        'Read only — do not send, delete, label or change anything.', // english: mirrored verbatim by the tui gaiaconnectors test
+        'If you have no tools that read it, or they fail, tell me you couldn\'t reach it and stop. Never guess or count what it holds.', // english: mirrored verbatim by the tui gaiaconnectors test
         '1. Skim the recent items and work out who I deal with most, what I work on, recurring meetings or threads, and what keeps landing on my plate.',
         '2. Save the durable facts to memory (people, projects, preferences, routines). Skip one-off details and anything sensitive like passwords, codes or financial numbers.',
         '3. Recommend up to five automations you could run for me on a schedule, each with what it does, how often, and why it fits what you saw.',
-        'Don\'t create any schedules yet — tell me what you saved and list the automations so I can pick which to set up.',
+        'Don\'t create any schedules yet — tell me what you saved and list the automations so I can pick which to set up.', // english: mirrored verbatim by the tui gaiaconnectors test
     ].join('\n');
 }
 

@@ -13,24 +13,61 @@ the running agent is asked instead.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+import re
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+
+from gaia.skills.format import SECURITY_TIERS
+from gaia.skills.listing import SKILL_SOURCES
+
+from ..devices.changes import record_device_change
+from ..models import WireModel
+from ..security import audit_approval, is_local_pc, require_pc_or_allowed_device
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["skills"])
 
+SkillTier = Literal[SECURITY_TIERS]  # type: ignore[valid-type]
+SkillSource = Literal[SKILL_SOURCES]  # type: ignore[valid-type]
 
-@router.get("/api/skills")
+
+class SkillListEntry(WireModel):
+    """One installed skill in the Skills settings list."""
+
+    name: str
+    description: str
+    version: Optional[str]
+    tier: SkillTier
+    tools: List[str]
+    path: str
+    #: Absent from an agent binary that predates them.
+    always_on: Optional[bool] = None
+    source: Optional[SkillSource] = None
+
+
+class SkillsListResponse(WireModel):
+    """Installed skills, and any folder that failed to parse (path to message)."""
+
+    skills: List[SkillListEntry]
+    invalid: Dict[str, str]
+
+
+@router.get(
+    "/api/skills",
+    response_model=SkillsListResponse,
+    response_model_exclude_unset=True,
+)
 def list_skills() -> Dict[str, Any]:
     """Installed skills, and any folder that failed to parse."""
     from gaia.skills.errors import SkillError
     from gaia.skills.listing import skills_listing_for_agent
 
     try:
-        from gaia_agent.agent import ENGINEERING_SKILL, GaiaAgent
+        from gaiapy.agent import ENGINEERING_SKILL, GaiaAgent
     except ImportError:
         return _skills_from_agent()
     try:
@@ -42,8 +79,8 @@ def list_skills() -> Dict[str, Any]:
 def _skills_from_agent() -> Dict[str, Any]:
     """Ask the installed GAIA agent, through the daemon, which skills it has."""
     from gaia.daemon.sidecars.errors import SidecarError
-    from gaia.ui.email_sidecar import daemon_client
-    from gaia.ui.email_sidecar.profiles import GAIA_PROFILE, skills_supported
+    from gaia.ui.sidecar import daemon_client
+    from gaia.ui.sidecar.profiles import GAIA_PROFILE, skills_supported
 
     try:
         handle = daemon_client.acquire_handle(GAIA_PROFILE.agent_id)
@@ -83,7 +120,78 @@ class SkillLinkAddRequest(SkillLinkRequest):
     force: bool = False
 
 
-@router.get("/api/skills/featured")
+class SkillFeaturedLibrary(WireModel):
+    """A skills library offered as a one-click add."""
+
+    id: str
+    name: str
+    url: str
+    description: str
+
+
+class SkillFeaturedResponse(WireModel):
+    """Result of ``GET /api/skills/featured``."""
+
+    libraries: List[SkillFeaturedLibrary]
+
+
+class SkillLinkPermission(WireModel):
+    """One permission a linked skill declares, raw grant plus a sentence."""
+
+    grant: str
+    text: str
+
+
+class SkillLinkEntry(WireModel):
+    """One skill found behind a pasted link, and what its audit said."""
+
+    name: str
+    description: str
+    path: str
+    has_code: bool
+    permissions: List[SkillLinkPermission]
+    permissions_unreadable: bool
+    verdict: str
+    findings: List[str]
+    installed: bool
+    update: bool
+    error: Optional[str]
+
+
+class SkillLinkPreviewResponse(WireModel):
+    """Result of ``POST /api/skills/link/preview``; ``pin`` goes back on add."""
+
+    link: str
+    source: str
+    skills: List[SkillLinkEntry]
+    pin: str
+    warning: str
+
+
+class SkillLinkAdded(WireModel):
+    """One skill the add wrote to ``~/.gaia/skills``."""
+
+    name: str
+    updated: bool
+    path: str
+    verdict: str
+    has_code: bool
+    code_trusted: bool
+    findings: List[str]
+
+
+class SkillLinkAddResponse(WireModel):
+    """Result of ``POST /api/skills/link/add``; ``failed`` maps name to reason."""
+
+    added: List[SkillLinkAdded]
+    failed: Dict[str, str]
+
+
+@router.get(
+    "/api/skills/featured",
+    response_model=SkillFeaturedResponse,
+    response_model_exclude_unset=True,
+)
 def featured_skill_libraries() -> Dict[str, Any]:
     """Libraries the Skills panel offers as one-click adds."""
     from gaia.skills.link import FEATURED_LIBRARIES
@@ -91,7 +199,11 @@ def featured_skill_libraries() -> Dict[str, Any]:
     return {"libraries": FEATURED_LIBRARIES}
 
 
-@router.post("/api/skills/link/preview")
+@router.post(
+    "/api/skills/link/preview",
+    response_model=SkillLinkPreviewResponse,
+    response_model_exclude_unset=True,
+)
 def preview_skill_link(body: SkillLinkRequest) -> Dict[str, Any]:
     """List and audit the skills behind a pasted link. Writes nothing."""
     from gaia.skills.errors import SkillError
@@ -100,13 +212,46 @@ def preview_skill_link(body: SkillLinkRequest) -> Dict[str, Any]:
     try:
         return preview_link(body.url).to_dict()
     except SkillLinkError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail=_link_error(e)) from e
     except SkillError as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/api/skills/link/add")
-def add_skill_link(body: SkillLinkAddRequest) -> Dict[str, Any]:
+DEVICE_SKILL_ERROR = (
+    "GAIA couldn't add the skill on the PC. Open Settings \u203a Skills on the PC "
+    "to see why."
+)
+
+
+#: An absolute path left in a message (a temp unpack folder, a drive path); a
+#: URL's path and ``~/`` don't match.
+_ABSOLUTE_PATH = re.compile(r"(?<![\w:/.~\-])/[^\s/]|\b[A-Za-z]:[\\/]")
+
+
+def _off_pc(request: Request, text: str) -> str:
+    """*text* as a caller away from the PC sees it: home folders as ``~``, and
+    the generic message when another absolute path remains."""
+    if is_local_pc(request):
+        return text
+    from gaia.home import gaia_home
+
+    folder = gaia_home()
+    try:
+        folder_shown = "~/" + folder.relative_to(Path.home()).as_posix()
+    except ValueError:
+        folder_shown = "GAIA's folder"
+    shown = text.replace(str(folder), folder_shown).replace(str(Path.home()), "~")
+    return DEVICE_SKILL_ERROR if _ABSOLUTE_PATH.search(shown) else shown
+
+
+# Installs code that runs with the agent: the PC, or a device the PC allowed.
+@router.post(
+    "/api/skills/link/add",
+    dependencies=[Depends(require_pc_or_allowed_device)],
+    response_model=SkillLinkAddResponse,
+    response_model_exclude_unset=True,
+)
+def add_skill_link(request: Request, body: SkillLinkAddRequest) -> Dict[str, Any]:
     """Add the chosen skills behind a pasted link to ``~/.gaia/skills``.
 
     409 when the link no longer serves the version the preview pinned.
@@ -115,7 +260,7 @@ def add_skill_link(body: SkillLinkAddRequest) -> Dict[str, Any]:
     from gaia.skills.link import SkillLinkChangedError, SkillLinkError, add_from_link
 
     try:
-        return add_from_link(
+        result = add_from_link(
             body.url,
             body.names,
             allow_code=body.allow_code,
@@ -123,14 +268,51 @@ def add_skill_link(body: SkillLinkAddRequest) -> Dict[str, Any]:
             pin=body.pin,
         ).to_dict()
     except SkillLinkChangedError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+        raise HTTPException(status_code=409, detail=_off_pc(request, str(e))) from e
     except SkillLinkError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(
+            status_code=400, detail=_off_pc(request, _link_error(e))
+        ) from e
     except SkillError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        if is_local_pc(request):
+            raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error("Adding skills from a link for a device failed: %s", e)
+        raise HTTPException(status_code=500, detail=DEVICE_SKILL_ERROR) from e
+    if is_local_pc(request):
+        return result
+    for added in result["added"]:
+        code = added["has_code"]
+        audit_approval(
+            request,
+            f"Skill {added['name']!r} added from a link"
+            + (" with code (allow_code)" if code else ""),
+        )
+        record_device_change(
+            request, "skillAddedCode" if code else "skillAdded", name=added["name"]
+        )
+        added["path"] = _off_pc(request, added["path"])
+    result["failed"] = {
+        name: _off_pc(request, reason) for name, reason in result["failed"].items()
+    }
+    return result
 
 
-@router.delete("/api/skills/{name}")
+def _link_error(e: Exception) -> str:
+    """*e* as the desktop app shows it: a missing link gets a remedy without a terminal."""
+    from gaia.skills.link import APP_LOCAL_COPY_REMEDY, SkillLinkNotFoundError
+
+    if isinstance(e, SkillLinkNotFoundError):
+        return f"{e} {APP_LOCAL_COPY_REMEDY} Then reopen Settings > Skills."
+    return str(e)
+
+
+class SkillRemoved(WireModel):
+    removed: str
+
+
+@router.delete(
+    "/api/skills/{name}", response_model=SkillRemoved, response_model_exclude_unset=True
+)
 def remove_skill(name: str) -> Dict[str, Any]:
     """Remove a skill from ``~/.gaia/skills``; bundled skills are refused."""
     from gaia.skills.errors import SkillError, SkillNotFoundError
@@ -167,7 +349,7 @@ def _preference_schema(name: str) -> Any:
     from gaia.skills.preferences import load_schema
 
     try:
-        from gaia_agent.agent import GaiaAgent
+        from gaiapy.agent import GaiaAgent
     except ImportError:
         return _preference_schema_beside_the_agent_binary(name)
     try:
@@ -199,7 +381,31 @@ def _preference_schema_beside_the_agent_binary(name: str) -> Any:
         return None
 
 
-@router.get("/api/skills/preferences")
+class SkillPreferences(WireModel):
+    """A skill's saved preferences, keyed as its preferences schema names them."""
+
+    skill: str
+    preferences: Dict[str, Any]
+
+
+class SkillPreferencesList(WireModel):
+    """Every skill with saved preferences."""
+
+    skills: List[SkillPreferences]
+
+
+class SkillPreferencesReset(WireModel):
+    """``reset`` is false when the skill had nothing saved."""
+
+    skill: str
+    reset: bool
+
+
+@router.get(
+    "/api/skills/preferences",
+    response_model=SkillPreferencesList,
+    response_model_exclude_unset=True,
+)
 def list_skill_preferences() -> Dict[str, Any]:
     """Every skill with saved preferences."""
     from gaia.skills.errors import SkillError
@@ -210,7 +416,11 @@ def list_skill_preferences() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/api/skills/{name}/preferences")
+@router.get(
+    "/api/skills/{name}/preferences",
+    response_model=SkillPreferences,
+    response_model_exclude_unset=True,
+)
 def get_skill_preferences(name: str) -> Dict[str, Any]:
     """One skill's saved preferences (``{}`` when none)."""
     from gaia.skills.errors import SkillError
@@ -221,7 +431,11 @@ def get_skill_preferences(name: str) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.put("/api/skills/{name}/preferences")
+@router.put(
+    "/api/skills/{name}/preferences",
+    response_model=SkillPreferences,
+    response_model_exclude_unset=True,
+)
 def update_skill_preferences(name: str, changes: Dict[str, Any]) -> Dict[str, Any]:
     """Merge *changes* into a skill's preferences; a ``null`` value removes a key."""
     from gaia.skills.errors import SkillError
@@ -234,7 +448,11 @@ def update_skill_preferences(name: str, changes: Dict[str, Any]) -> Dict[str, An
     return {"skill": name, "preferences": saved}
 
 
-@router.delete("/api/skills/{name}/preferences")
+@router.delete(
+    "/api/skills/{name}/preferences",
+    response_model=SkillPreferencesReset,
+    response_model_exclude_unset=True,
+)
 def reset_skill_preferences(name: str) -> Dict[str, Any]:
     """Forget every saved preference of a skill."""
     from gaia.skills.errors import SkillError

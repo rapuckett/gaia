@@ -83,6 +83,7 @@ describe('PermissionPrompt countdown', () => {
         raise(600);
         render(<PermissionPrompt sessionId="s" />);
         expect(screen.getByText('10:00')).toBeInTheDocument();
+        expect(document.querySelector('.perm-card-timer')).toHaveTextContent('10:00 left');
 
         act(() => { vi.advanceTimersByTime(599_000); });
         expect(screen.getByText('1s')).toBeInTheDocument();

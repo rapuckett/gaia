@@ -29,6 +29,7 @@ acceptable. lemond invalidates stale binaries itself via the
 """
 
 import errno
+import functools
 import hashlib
 import json
 import math
@@ -183,6 +184,10 @@ class EmbeddedLemonadeError(RuntimeError):
 class EmbeddedLemonadeNotAnswering(EmbeddedLemonadeError):
     """The recorded server process is up but not answering. Nothing was started
     or stopped, so asking again later may find it back."""
+
+
+class EmbeddedLemonadeOwnedElsewhere(EmbeddedLemonadeError):
+    """Another running GAIA daemon owns the server, so it was left running."""
 
 
 class _PortTaken(Exception):
@@ -565,6 +570,16 @@ def gaia_home() -> Path:
     return Path.home() / ".gaia"
 
 
+def is_gaias_to_start(embedded: "EmbeddedLemonade") -> bool:
+    """Whether this machine was set up with GAIA's own server: installed, in
+    need of repair, or on a version this GAIA replaces."""
+    return bool(
+        embedded.is_installed()
+        or embedded.replaces_other_install()
+        or embedded.is_incomplete()
+    )
+
+
 def _normalized_machine() -> str:
     """Return this host's architecture in the naming the asset table uses.
 
@@ -677,6 +692,10 @@ def _outlived(anchor: int, born: float) -> bool:
         return False
 
 
+# What secrets.token_urlsafe(32) produces; anything else in last_key is not ours.
+_API_KEY_RE = re.compile(r"[A-Za-z0-9_-]{43}")
+
+
 def _free_port() -> int:
     """Return a TCP port the OS reports as free on loopback.
 
@@ -721,8 +740,8 @@ def _answers(family: int, host: str, port: int) -> bool:
             return True
     except ConnectionRefusedError:
         return False
-    except TimeoutError:
-        return True  # a listener whose backlog is full
+    except (TimeoutError, ConnectionResetError):
+        return True  # a full backlog: Linux leaves the connect hanging, macOS resets it
     except OSError as e:
         if family == socket.AF_INET6 and e.errno in _NO_FAMILY + (errno.ENETUNREACH,):
             return False
@@ -839,6 +858,8 @@ class EmbeddedLemonade:
         self.progress_callback = progress_callback
         # Where this start's output begins in lemond.log, to quote its error.
         self._spawn_log_offset = 0
+        # Whether the last spawn showed lemond a CA file the host lacks (#7226).
+        self._ca_supplied = False
 
     # -- paths ------------------------------------------------------------
 
@@ -877,6 +898,12 @@ class EmbeddedLemonade:
         """The port the last start used. Survives ``stop`` so the next start
         lands on the same port."""
         return self.root / "last_port.json"
+
+    @property
+    def last_key_path(self) -> Path:
+        """The API key the last start used. Survives ``stop`` and a crash so a
+        restart on the same port keeps the key running agents already hold."""
+        return self.root / "last_key"
 
     @property
     def busy_since_path(self) -> Path:
@@ -1286,18 +1313,23 @@ class EmbeddedLemonade:
         Args:
             state: pid, port, api_key and version of the live daemon.
         """
+        self._write_private(self.state_path, json.dumps(state, indent=2))
+
+    def _write_private(self, path: Path, text: str) -> None:
+        """Write *text* to a file created owner-only (0600 on POSIX)."""
         self.root.mkdir(parents=True, exist_ok=True)
-        self.state_path.unlink(missing_ok=True)
+        path.unlink(missing_ok=True)
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-        descriptor = os.open(self.state_path, flags, stat.S_IRUSR | stat.S_IWUSR)
+        descriptor = os.open(path, flags, stat.S_IRUSR | stat.S_IWUSR)
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump(state, handle, indent=2)
+            handle.write(text)
 
     def _clear_state(self) -> None:
         """Remove the state and credentials files if present.
 
         Both go together: credentials naming a dead port are worse than none,
         because the next process to grab that port inherits the trust.
+        ``last_key`` stays: :meth:`_reusable_key` hands it back only on the same port.
         """
         self.state_path.unlink(missing_ok=True)
         self.env_path.unlink(missing_ok=True)
@@ -1548,6 +1580,8 @@ class EmbeddedLemonade:
         """
         import psutil
 
+        from gaia.utils.process_tree import readable_processes
+
         bin_dir = self.cache_dir / "bin"
         # Names first: reading every process's path or parent takes seconds.
         names = {name.lower() for _, _, files in os.walk(bin_dir) for name in files}
@@ -1555,7 +1589,7 @@ class EmbeddedLemonade:
             return []
         bin_root = os.path.normcase(str(bin_dir.resolve()))
         killed = []
-        for proc in psutil.process_iter(["pid", "name"]):
+        for proc in readable_processes(["pid", "name"]):
             if (proc.info.get("name") or "").lower() not in names:
                 continue
             try:
@@ -1809,6 +1843,10 @@ class EmbeddedLemonade:
             return None
         return port if 1024 <= port <= 65535 else None
 
+    def last_port(self) -> Optional[int]:
+        """The port the last start used: where a stopped server comes back."""
+        return self._read_last_port()
+
     def _choose_port(self) -> int:
         """Reuse the last start's port while it is free, else take a new one."""
         last = self._read_last_port()
@@ -1825,6 +1863,39 @@ class EmbeddedLemonade:
     def _record_port(self, port: int) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         self.last_port_path.write_text(json.dumps({"port": port}), encoding="utf-8")
+
+    def _record_key(self, api_key: str) -> None:
+        self._write_private(self.last_key_path, api_key)
+
+    def _reusable_key(self, port: int) -> Optional[str]:
+        """The last start's key when this start lands on the same port, else None.
+
+        A new port means running agents cannot reach the server anyway, and the
+        old port may now belong to a stranger they sent the key to, so it rotates.
+        """
+        if port != self._read_last_port():
+            return None
+        path = self.last_key_path
+        try:
+            mode = path.stat().st_mode
+            key = path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            return None
+        except (OSError, UnicodeDecodeError) as e:
+            log.warning("Ignoring unreadable %s (%s); starting with a new key", path, e)
+            return None
+        if platform.system() != "Windows" and mode & 0o077:
+            log.warning(
+                "Ignoring %s: other users can read it; starting with a new key",
+                path,
+            )
+            return None
+        if not _API_KEY_RE.fullmatch(key):
+            log.warning(
+                "Ignoring %s: it holds no valid key; starting with a new key", path
+            )
+            return None
+        return key
 
     def _write_env_file(self, port: int, api_key: str) -> Path:
         """Write the sourceable credentials file for the running instance.
@@ -2056,10 +2127,12 @@ class EmbeddedLemonade:
                 "owner_pid": owner_pid,
                 "owner_started": owner_started,
                 "started_at": started_at,
+                "ca_supplied": self._ca_supplied,
             }
         )
         self._write_env_file(port, api_key)
         self._record_port(port)
+        self._record_key(api_key)
         log.info("Embedded Lemonade %s ready on port %s", self.version, port)
         return EmbeddedStatus(
             installed=True,
@@ -2081,7 +2154,8 @@ class EmbeddedLemonade:
         Returns:
             The process, the API key it was started with, and when it started.
         """
-        api_key = secrets.token_urlsafe(32)
+        # Running agents hold the last key; a new one would 401 them.
+        api_key = self._reusable_key(port) or secrets.token_urlsafe(32)
 
         from gaia.llm.fireworks_known_models import start_env
 
@@ -2101,15 +2175,12 @@ class EmbeddedLemonade:
             str(port),
         ]
         log.info("Starting embedded Lemonade: %s", " ".join(argv))
+        self.root.mkdir(parents=True, exist_ok=True)
+        overlay = None
         if sys.platform.startswith("linux"):
-            from gaia.llm.lemonade_tls import ca_store_problem
             from gaia.llm.npu_linux import raise_memlock_soft_limit
 
-            # Local models still run without it, so warn rather than refuse.
-            ca_problem = ca_store_problem()
-            if ca_problem:
-                log.warning(ca_problem)
-
+            overlay = self._ca_overlay()
             # FastFlowLM pins the model in locked memory, and inherits lemond's limit.
             raise_memlock_soft_limit()
 
@@ -2118,10 +2189,10 @@ class EmbeddedLemonade:
         # inherit it instead of each opening a blank window.
         kwargs = background_popen_kwargs()
 
-        self.root.mkdir(parents=True, exist_ok=True)
         with open(self.log_path, "ab") as logfile:
             self._spawn_log_offset = logfile.tell()
-            process = popen_outliving_job(
+            popen = functools.partial(
+                popen_outliving_job,
                 argv,
                 env=env,
                 stdout=logfile,
@@ -2130,6 +2201,34 @@ class EmbeddedLemonade:
                 cwd=str(self.dist_dir),
                 **kwargs,
             )
+            self._ca_supplied = False
+            if overlay is None:
+                process = popen()
+            else:
+                from gaia.llm.lemonade_tls import (
+                    CaOverlayError,
+                    ca_store_problem,
+                    enter_ca_overlay,
+                )
+
+                try:
+                    process = popen(preexec_fn=enter_ca_overlay(overlay))
+                    self._ca_supplied = True
+                    log.info(
+                        "lemond sees %s at the CA path it reads, in its own "
+                        "mount namespace",
+                        overlay.bundle,
+                    )
+                except (CaOverlayError, subprocess.SubprocessError) as e:
+                    # Local models still run without it, so warn rather than refuse.
+                    log.warning(
+                        "GAIA could not start the model server in its own mount "
+                        "namespace (%s; %s has the reason). %s",
+                        e,
+                        self.log_path,
+                        ca_store_problem(),
+                    )
+                    process = popen()
         _SPAWNED[process.pid] = process
         started_at = time.time()
 
@@ -2144,9 +2243,45 @@ class EmbeddedLemonade:
                 "owner_pid": owner_pid,
                 "owner_started": owner_started,
                 "started_at": started_at,
+                "ca_supplied": self._ca_supplied,
             }
         )
         return process, api_key, started_at
+
+    def _ca_overlay(self):
+        """The CA mirror lemond needs on this host, or None when it needs none.
+
+        Logs the remedy when no mirror can be built: local models still run
+        without one, so that is a warning, not a refusal.
+        """
+        from gaia.llm.lemonade_tls import (
+            CaOverlayError,
+            ca_store_problem,
+            plan_ca_overlay,
+        )
+
+        try:
+            overlay = plan_ca_overlay(self.root)
+        except CaOverlayError as e:
+            log.warning("%s %s", e, ca_store_problem())
+            return None
+        if overlay is None:
+            problem = ca_store_problem()
+            if problem:
+                log.warning(problem)
+        return overlay
+
+    def ca_problem(self) -> Optional[str]:
+        """Why the running lemond cannot verify HTTPS, or None when it can.
+
+        None when the last start showed lemond a CA file the host lacks.
+        """
+        from gaia.llm.lemonade_tls import ca_store_problem
+
+        state = self._read_state() or {}
+        if state.get("ca_supplied"):
+            return None
+        return ca_store_problem()
 
     def _wait_healthy(
         self,
@@ -2206,28 +2341,35 @@ class EmbeddedLemonade:
         if recorded is None or recorded.get("pid") == process.pid:
             self._clear_state()
 
-    def stop(self, timeout: float = _STOP_TIMEOUT) -> bool:
+    def stop(
+        self, timeout: float = _STOP_TIMEOUT, allow_live_owner: bool = False
+    ) -> bool:
         """Stop the recorded instance and its inference backends.
 
         Reaches a daemon that has stopped answering as well as a healthy one,
         so a stalled server can still be cleaned up. The pid is only signalled
         after :meth:`_identify` confirms it is GAIA's lemond, so a recycled
-        pid -- or a user's own Lemonade -- is never killed by mistake.
+        pid -- or a user's own Lemonade -- is never killed by mistake. Nor is
+        one another running GAIA daemon owns, or one in a GAIA home whose
+        daemon lock another process holds.
 
         Args:
             timeout: Seconds to wait for the daemon to exit.
+            allow_live_owner: Stop it even while its owner daemon runs; only
+                for a restart that hands it straight back to that owner.
 
         Returns:
             True if an instance was stopped, False if none was running.
 
         Raises:
+            EmbeddedLemonadeOwnedElsewhere: Another running daemon owns it.
             EmbeddedLemonadeError: The process would not terminate, or the
                 recorded pid could not be confirmed as GAIA's server.
         """
         with self._instance_lock():
-            return self._stop_locked(timeout)
+            return self._stop_locked(timeout, allow_live_owner)
 
-    def _stop_locked(self, timeout: float) -> bool:
+    def _stop_locked(self, timeout: float, allow_live_owner: bool = False) -> bool:
         current = self.status()
         state = self._read_state()
         if state is None or not (current.running or current.unresponsive_pid):
@@ -2235,6 +2377,15 @@ class EmbeddedLemonade:
             return False
 
         pid = int(state["pid"])
+        if not allow_live_owner:
+            from gaia.daemon.singleton import stop_refusal
+
+            refusal = stop_refusal(
+                self.root.parent, pid, current.owner_pid, current.owner_started
+            )
+            if refusal is not None:
+                log.warning("Not stopping embedded Lemonade: %s", refusal)
+                raise EmbeddedLemonadeOwnedElsewhere(refusal)
         port = int(state["port"])
         api_key = state["api_key"]
         identity = self._identify(pid, port, api_key)

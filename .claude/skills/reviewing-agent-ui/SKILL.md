@@ -30,13 +30,16 @@ dashboard, Scheduled tasks and the model-status popover shipped entirely in Engl
 downloading Chromium.
 
 `npm test` also runs `src/gaia/apps/webui/src/i18n/__tests__/hardcodedText.test.ts`,
-which fails when a component gains English written straight into JSX (text, `title`,
-`placeholder`, `aria-label`, `alt`), including both arms of a ternary, the text after
-`&&` or `||`, and template strings. Put the text through `useT`. When you translate
-strings, lower the baseline (`UPDATE_I18N_BASELINE=1 npx vitest run hardcodedText`);
-raise it only for text that stays English in every language, and say why in the PR. It
-can't see strings built in variables or helpers, or sent by the backend, so those still
-need the screenshot.
+which fails when any `.ts` or `.tsx` file gains English written outside the catalogs:
+JSX text, text attributes (`title`, `aria-label`, `placeholder`, `label`...), message
+setters and toasts, copy properties such as `label:` and `message:`, switch-case
+returns, and capitalized sentences, including both arms of a ternary and template
+strings. It reports `file:line`; add a key in `en.ts` and `ar.ts` and use `useT`. When
+you translate strings, lower the baseline (`UPDATE_I18N_BASELINE=1 npx vitest run
+hardcodedText`); never raise it. Text that stays English by design takes a
+`// english: <reason>` comment on its line (or alone on the line above); an empty reason
+fails the test, and `keepTogether()` / `isolate()` values are skipped.
+Product names are skipped. It can't see text built in variables or sent by the backend, so those still need the screenshot.
 
 **Every option on a screen must be one GAIA has proven.** A backend, device, model or
 setting the user can pick is a promise; list only what passed evals on that hardware
@@ -84,7 +87,7 @@ controls either, so capture the desktop or ask the person to confirm them.
 To test a build without touching the user's install:
 
 1. Download the `windows-installer` and `gaia-wheel` artifacts from the release branch's
-   `build-installers.yml` run, and `gaia-agent-win32-x64` from `build_flagship_sidecar.yml`.
+   `build-installers.yml` run, and `gaia-agent-win32-x64` from `build_gaiapy.yml`.
 2. Unpack the installer into a scratch folder, and point `USERPROFILE`, `HOME`, `APPDATA`
    and `LOCALAPPDATA` at an empty profile.
 3. Set `GAIA_LOCAL_WHEEL` to the wheel and launch `gaia-desktop.exe --remote-debugging-port=9333`.

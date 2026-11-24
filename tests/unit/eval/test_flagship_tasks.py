@@ -23,6 +23,8 @@ from gaia.eval import flagship_tasks as ft
 from gaia.eval import task_setups as setups
 from gaia.eval.bench import gaia_child, harness
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 ALL_TASKS = ft.load_suite("full")
 TASKS = {t.id: t for t in ALL_TASKS}
 MECHANICAL = [t for t in ALL_TASKS if t.check == "mechanical"]
@@ -276,7 +278,14 @@ ADVERSARIAL = {
 
 def test_every_suite_loads_and_core_is_a_subset_of_full():
     suites = {name: {t.id for t in ft.load_suite(name)} for name in ft.suite_names()}
-    assert set(suites) == {"core", "full", "adversarial", "everyday", "therock"}
+    assert set(suites) == {
+        "core",
+        "full",
+        "adversarial",
+        "everyday",
+        "therock",
+        "research",
+    }
     assert suites["core"] <= suites["full"] and suites["adversarial"] <= suites["full"]
     assert suites["adversarial"] == ADVERSARIAL
     # CI runs core: only the short adversarial tasks, never the one that hangs.
@@ -863,7 +872,7 @@ def fake_agent(monkeypatch, tmp_path):
     _FakeAgent.error_history = []
     _FakeAgent.conversation = [{"role": "tool", "content": "x"}] * 2
     module = SimpleNamespace(GaiaAgent=_FakeAgent, GaiaAgentConfig=lambda **kw: kw)
-    monkeypatch.setitem(sys.modules, "gaia_agent.agent", module)
+    monkeypatch.setitem(sys.modules, "gaiapy.agent", module)
     tasks = tmp_path / "tasks.json"
     source = json.loads(ft.TASKS_FILE.read_text(encoding="utf-8"))
     source["suites"]["one"] = ["02-bugfix"]

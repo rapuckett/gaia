@@ -5,9 +5,9 @@
 
 A logged-in session is cookies plus ``localStorage`` — tens of KB. That does
 not fit in the OS credential store: Windows Credential Manager caps an entry
-around 1280 characters, and ``connectors/mcp_server.py`` writes secrets with a
-bare ``keyring.set_password`` (the chunking helpers in ``connectors/store.py``
-are private to that module). Putting a cookie jar down that path fails on
+around 1280 characters, and ``connectors/mcp_server.py`` writes secrets as a
+single keyring entry (the chunking helpers in ``connectors/store.py`` are
+private to that module). Putting a cookie jar down that path fails on
 Windows.
 
 So the split is **key in the keyring, ciphertext on disk**:
@@ -33,6 +33,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from gaia.browser.errors import SessionStoreError
+from gaia.home import gaia_home
 from gaia.logger import get_logger
 
 logger = get_logger(__name__)
@@ -52,8 +53,8 @@ _HOSTNAME_RE = re.compile(
 
 
 def sessions_dir() -> Path:
-    """``~/.gaia/browser/sessions``, created 0700 on first use."""
-    d = Path.home() / ".gaia" / "browser" / "sessions"
+    """``<GAIA_HOME>/browser/sessions``, created 0700 on first use."""
+    d = gaia_home() / "browser" / "sessions"
     d.mkdir(parents=True, exist_ok=True)
     if os.name != "nt":
         try:
@@ -91,16 +92,20 @@ def _slug(origin: str) -> str:
 
 def _load_key() -> bytes:
     """Fetch the session key, minting one on first use."""
+    from gaia.connectors.errors import ConnectorsError
+
     try:
-        import keyring
-    except ImportError as e:
+        from gaia.connectors import keyring_access
+    except ConnectorsError as e:
         raise SessionStoreError(
             "Saving a browser session needs the 'keyring' package, which "
             "should ship with GAIA. Reinstall with: pip install amd-gaia"
         ) from e
 
     try:
-        existing = keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME)
+        existing = keyring_access.read(KEYRING_SERVICE, KEYRING_USERNAME)
+    except ConnectorsError as e:
+        raise SessionStoreError(str(e)) from e
     except Exception as e:  # noqa: BLE001 — backend failure, re-raised actionably
         raise SessionStoreError(
             f"Could not read the OS credential store: {e}. "
@@ -126,7 +131,9 @@ def _load_key() -> bytes:
 
     key = os.urandom(_KEY_BYTES)
     try:
-        keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, key.hex())
+        keyring_access.write(KEYRING_SERVICE, KEYRING_USERNAME, key.hex())
+    except ConnectorsError as e:
+        raise SessionStoreError(str(e)) from e
     except Exception as e:  # noqa: BLE001 — re-raised actionably
         raise SessionStoreError(
             f"Could not write to the OS credential store: {e}"

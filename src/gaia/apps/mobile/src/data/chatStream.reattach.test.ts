@@ -1,0 +1,70 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+import { waitFor } from '@testing-library/react-native';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
+
+import { createFakeClient } from '@/api/fake';
+import { GaiaAuthError, GaiaStreamDroppedError } from '@/api/errors';
+import { readTurn, useChatStreamStore } from '@/state/chatStreams';
+
+import { detachTurn, sendTurn } from './chatStream';
+import { queryKeys } from './queries';
+
+describe('a stream that drops mid-turn', () => {
+    it('reattaches and the turn continues', async () => {
+        const client = createFakeClient({
+            replies: async function* () {
+                yield { type: 'chunk', content: 'Half ' };
+                throw new GaiaStreamDroppedError(new Error('reset'));
+            },
+            running: { s1: [{ type: 'chunk', content: 'Half an answer.' }, { type: 'done', message_id: 2, content: 'Half an answer.' }] },
+            messages: {
+                s1: [
+                    { id: 1, session_id: 's1', role: 'user', content: 'Hi', created_at: '2026-11-12T00:00:00Z', rag_sources: null },
+                    { id: 2, session_id: 's1', role: 'assistant', content: 'Half an answer.', created_at: '2026-11-12T00:00:01Z', rag_sources: null },
+                ],
+            },
+        });
+        const queryClient = new QueryClient();
+        // An open chat screen reads the saved reply when the turn ends; without one the phone keeps re-reading past the test.
+        const transcript = new QueryObserver(queryClient, { queryKey: queryKeys.messages('s1'), queryFn: () => client.getMessages('s1') });
+        const unsubscribe = transcript.subscribe(() => {});
+        try {
+            const seen: string[] = [];
+            const stop = useChatStreamStore.subscribe((state) => seen.push(state.turns.s1?.liveText ?? ''));
+            expect(sendTurn({ client, queryClient }, 's1', 'Hi')).toBe(true);
+            await waitFor(() => expect(readTurn('s1').status).toBe('idle'));
+            expect(readTurn('s1').error).toBeNull();
+            stop();
+            expect(seen).toContain('Half an answer.');
+            expect(readTurn('s1').status).toBe('idle');
+        } finally {
+            unsubscribe();
+            detachTurn('s1');
+            queryClient.clear();
+        }
+    });
+
+    it('does not retry a refused reattach', async () => {
+        const base = createFakeClient({
+            replies: async function* () {
+                yield { type: 'chunk', content: 'Half ' };
+                throw new GaiaStreamDroppedError(new Error('reset'));
+            },
+        });
+        const attach = jest.fn(async function* (): AsyncGenerator<never> {
+            throw new GaiaAuthError('bad token');
+        });
+        const client = { ...base, attachToRun: attach } as typeof base;
+        const queryClient = new QueryClient();
+        try {
+            sendTurn({ client, queryClient }, 's2', 'Hi');
+            await waitFor(() => expect(readTurn('s2').error).toBeInstanceOf(GaiaAuthError));
+            expect(attach).toHaveBeenCalledTimes(1);
+        } finally {
+            detachTurn('s2');
+            queryClient.clear();
+        }
+    });
+});

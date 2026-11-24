@@ -13,6 +13,7 @@ import { useChatStore } from '../../stores/chatStore';
 import { useNotificationStore } from '../../stores/notificationStore';
 import type { AgentInfo, Session } from '../../types';
 import * as api from '../../services/api';
+import { tEn } from '../../i18n/translator';
 
 vi.mock('../../services/api', async (importOriginal) => {
     const real = await importOriginal<typeof import('../../services/api')>();
@@ -182,7 +183,7 @@ describe('ChatView stream reliability', () => {
         await driveSend();
         const body = JSON.stringify({ detail: 'The server is busy processing other chat requests. Please try again in a few moments.' });
         act(() => capturedCallbacks!.onError(new api.ApiError(`HTTP 429: ${body}`, 429, body, null)));
-        await waitFor(() => expect(document.body.textContent).toContain('GAIA is busy with another chat'));
+        await waitFor(() => expect(document.body.textContent).toContain(tEn('chatError.busy')));
         expect(document.body.textContent).not.toContain('HTTP 429');
         expect(document.body.textContent).not.toContain('{"detail"');
     });
@@ -190,7 +191,7 @@ describe('ChatView stream reliability', () => {
     it('explains a send the backend never started', async () => {
         await driveSend();
         act(() => capturedCallbacks!.onError(new api.StreamTimeoutError('send', api.SEND_HEADER_TIMEOUT_MS)));
-        await waitFor(() => expect(document.body.textContent).toContain('did not start this answer within 90 seconds'));
+        await waitFor(() => expect(document.body.textContent).toContain(tEn('chatError.sendTimeout', { seconds: 90 })));
         expect(document.body.textContent).not.toContain('Try a shorter question');
     });
 
@@ -211,7 +212,7 @@ describe('ChatView stream reliability', () => {
             total: 1,
         } as never);
         act(() => attachCallbacks[0].onDone({ type: 'done', content: '' }));
-        await waitFor(() => expect(document.body.textContent).toContain('The answer to your last message was lost'));
+        await waitFor(() => expect(document.body.textContent).toContain(tEn('chatError.runLost')));
     });
 
     it('shows the wait for the backend live, without saving it as a step of the answer', async () => {

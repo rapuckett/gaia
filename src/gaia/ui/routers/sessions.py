@@ -11,18 +11,22 @@ import asyncio
 import json
 import logging
 import sqlite3
+from datetime import datetime
+from typing import Annotated, Any, Dict, List, Literal, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import Field
 
 from gaia.agents.base import file_snapshots
 from gaia.config import GaiaConfigError
+from gaia.llm.hybrid import is_hybrid_model
+from gaia.llm.lemonade_client import cloud_model_provider
 from gaia.llm.surface_hints import AGENT_UI_SETUP_HINT
 
 from .. import answer_retry, followups
 from .. import permissions as session_permissions
 from .. import session_environment
 from .._chat_helpers import (
-    _SIDECAR_AGENT_TYPES,
     _agent_type_unknown,
     evict_session_agent,
     forget_relayed_context,
@@ -38,7 +42,8 @@ from ..database import (
     resolved_default_model,
 )
 from ..dependencies import get_db
-from ..email_sidecar.profiles import profile_for
+from ..devices import DEVICE_PROMPT_EVENT, DEVICE_PROMPT_STATES
+from ..devices.changes import record_folder_added
 from ..models import (
     AttachDocumentRequest,
     CreateSessionRequest,
@@ -48,15 +53,82 @@ from ..models import (
     SessionResponse,
     SessionSearchResponse,
     UpdateSessionRequest,
+    WireModel,
 )
 from ..run_manager import run_manager
-from ..security import flagship_only
-from ..utils import message_to_response, session_to_response
+from ..security import (
+    allowed_device,
+    audit_approval,
+    detail_for,
+    flagship_only,
+    is_local_pc,
+)
+from ..shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_opened
+from ..utils import UPLOAD_LINK_RE, message_to_response, session_to_response
+from .files import device_pick_refusal
 from .memory import _get_store as get_memory_store
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["sessions"])
+
+
+class SessionDeleteResponse(WireModel):
+    """Confirmation that a session was deleted."""
+
+    deleted: bool
+
+
+class SessionAttachResponse(WireModel):
+    """Confirmation that a document was attached to a session."""
+
+    attached: bool
+
+
+class SessionDetachResponse(WireModel):
+    """Confirmation that a document was detached from a session."""
+
+    detached: bool
+
+
+class SessionActivateResponse(WireModel):
+    """The Agent UI was told to switch to this session."""
+
+    activated: Literal[True]
+    session_id: str
+
+
+class MessageDeleteResponse(WireModel):
+    """Confirmation that a message was deleted."""
+
+    deleted: Literal[True]
+
+
+class MessagesDeleteResponse(WireModel):
+    """Confirmation that a message and every later one were deleted."""
+
+    deleted: Literal[True]
+    count: int
+
+
+class MarkdownExportResponse(WireModel):
+    """The session as one markdown document."""
+
+    content: str
+    format: Literal["markdown"]
+
+
+class JsonExportResponse(WireModel):
+    """The session's row and messages as the database stores them."""
+
+    session: Dict[str, Any]
+    messages: List[Dict[str, Any]]
+    format: Literal["json"]
+
+
+SessionExportResponse = Annotated[
+    Union[MarkdownExportResponse, JsonExportResponse], Field(discriminator="format")
+]
 
 
 def _reject_if_turn_running(http_request: Request, session_id: str) -> None:
@@ -168,6 +240,48 @@ class _SystemSseEmitter:
 
 _system_emitter = _SystemSseEmitter()
 
+#: Marks an event only the PC's own windows may receive.
+_PC_ONLY = "pc_only"
+
+
+async def emit_pc_event(event: dict) -> None:
+    """Tell the PC's windows something no remote caller may see, such as a
+    device pairing; the stream drops it for everyone else."""
+    await _system_emitter.emit({**event, _PC_ONLY: True})
+
+
+#: Marks an event only the PC and the one device it names may receive.
+_FOR_DEVICE = "for_device"
+
+
+async def emit_device_prompt(
+    device_id: str, kind: str, action: str, state: str
+) -> None:
+    """Tell *device_id* and the PC where an OS prompt it caused on the PC stands.
+
+    *kind* is ``keyStore`` or ``admin``; *action* names what the device started.
+
+    Raises:
+        ValueError: *device_id* is empty, or *state* isn't one of
+            ``DEVICE_PROMPT_STATES``.
+    """
+    if not isinstance(device_id, str) or not device_id:
+        raise ValueError("device_prompt needs the id of the device that asked")
+    if state not in DEVICE_PROMPT_STATES:
+        raise ValueError(
+            f"device_prompt state {state!r} is not one of {DEVICE_PROMPT_STATES}"
+        )
+    await _system_emitter.emit(
+        {
+            "type": DEVICE_PROMPT_EVENT,
+            "device_id": device_id,
+            "kind": kind,
+            "action": action,
+            "state": state,
+            _FOR_DEVICE: device_id,
+        }
+    )
+
 
 # ── Session CRUD ─────────────────────────────────────────────────────────────
 
@@ -184,14 +298,9 @@ def _reject_unknown_agent_type(agent_type: str | None) -> None:
     registry = get_agent_registry()
     if not _agent_type_unknown(agent_type, registry):
         return
-    # Every id _agent_type_unknown accepts, legacy aliases aside. Only the
-    # ALWAYS-relay sidecars are added unconditionally: since #4161 the others
-    # must resolve in the registry like any agent, so listing every sidecar id
-    # here told the user 'gaia' was both unknown and registered.
-    valid_ids = sorted(
-        {reg.id for reg in registry.list()}
-        | {aid for aid in _SIDECAR_AGENT_TYPES if profile_for(aid).always_relay}
-    )
+    # Every id _agent_type_unknown accepts, legacy aliases aside. Sidecars
+    # must resolve in the registry like any agent.
+    valid_ids = sorted(reg.id for reg in registry.list())
     load_error = registry.get_load_error(agent_type)
     reason = f" It failed to load: {load_error}." if load_error else ""
     # The app lists only registered agents, so an unknown non-gaia id comes
@@ -213,9 +322,15 @@ def _reject_unknown_agent_type(agent_type: str | None) -> None:
     )
 
 
+# An offset past SQLite's integer range can't reach the query: it would 500.
+SQLITE_INT_MAX = 2**63 - 1
+
+
 @router.get("/api/sessions", response_model=SessionListResponse)
 async def list_sessions(
-    limit: int = 50, offset: int = 0, db: ChatDatabase = Depends(get_db)
+    limit: int = 50,
+    offset: int = Query(0, le=SQLITE_INT_MAX),
+    db: ChatDatabase = Depends(get_db),
 ):
     """List all chat sessions."""
     limit = max(1, min(limit, 200))
@@ -237,6 +352,11 @@ async def create_session(
     """Create a new chat session."""
     request.agent_type = flagship_only(http_request, request.agent_type)
     _reject_unknown_agent_type(request.agent_type)
+    if allowed_device(http_request) is not None:
+        for folder in request.folders:
+            refusal = await asyncio.to_thread(device_pick_refusal, folder)
+            if refusal:
+                raise refusal.http_error()
     try:
         # Off the loop: a relayed agent is asked over the daemon.
         await asyncio.to_thread(
@@ -245,7 +365,9 @@ async def create_session(
             request.folders,
         )
     except session_environment.EnvironmentChangeError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(
+            status_code=400, detail=detail_for(http_request, str(e))
+        ) from e
     session = None
     try:
         # Read before the chat exists, so a bad config leaves no chat behind.
@@ -263,6 +385,12 @@ async def create_session(
         session_permissions.seed_new_session(session["id"], start_mode)
         for folder in request.folders:
             session_environment.grant_folder(db, session["id"], folder)
+        # Only once every folder is granted: a refused one rolls the chat back.
+        for folder in request.folders:
+            audit_approval(
+                http_request, f"folder {folder} given to chat {session['id']}"
+            )
+            record_folder_added(http_request, folder)
         return await _session_response(db, session)
     except Exception as e:
         if session is not None:
@@ -279,7 +407,9 @@ async def create_session(
             finally:
                 session_permissions.forget_session(session["id"])
         if isinstance(e, session_environment.EnvironmentChangeError):
-            raise HTTPException(status_code=400, detail=str(e)) from e
+            raise HTTPException(
+                status_code=400, detail=detail_for(http_request, str(e))
+            ) from e
         logger.error("Failed to create session: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500,
@@ -292,25 +422,42 @@ async def create_session(
 
 
 @router.get("/api/sessions/events")
-async def session_events():
+async def session_events(request: Request):
     """SSE stream for system-level session events (activation etc.).
 
     Frontend subscribes on mount; events are emitted by activate_session().
-    Event shape: {"type": "set_active_session", "session_id": "<id>"}
+    Event shape: {"type": "set_active_session", "session_id": "<id>"}. The
+    PC also gets the events :func:`emit_pc_event` sends, and the PC and the
+    device it names the ones :func:`emit_device_prompt` sends.
     """
     from fastapi.responses import StreamingResponse
 
+    at_the_pc = is_local_pc(request)
+    device = allowed_device(request)
+    device_id = device.device_id if device else None
+
     async def generate():
         q = await _system_emitter.subscribe()
+        stream_opened()
         try:
             yield ": keepalive\n\n"
             while True:
                 try:
-                    event = await asyncio.wait_for(q.get(), timeout=30.0)
+                    event = await get_or_shutdown(q, timeout=30.0)
+                    if event is SHUTDOWN:
+                        return
+                    if event.get(_PC_ONLY) and not at_the_pc:
+                        continue
+                    if _FOR_DEVICE in event:
+                        target = event[_FOR_DEVICE]
+                        if not at_the_pc and (not target or target != device_id):
+                            continue
+                        event = {k: v for k, v in event.items() if k != _FOR_DEVICE}
                     yield f"data: {json.dumps(event)}\n\n"
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"  # prevent proxy timeout
         finally:
+            stream_closed()
             await _system_emitter.unsubscribe(q)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -337,7 +484,12 @@ async def search_sessions(
     return SessionSearchResponse(query=q, results=results, truncated=truncated)
 
 
-@router.post("/api/sessions/{session_id}/activate", status_code=200)
+@router.post(
+    "/api/sessions/{session_id}/activate",
+    status_code=200,
+    response_model=SessionActivateResponse,
+    response_model_exclude_unset=True,
+)
 async def activate_session(session_id: str, db: ChatDatabase = Depends(get_db)):
     """Signal the frontend to switch to this session (MCP automation support).
 
@@ -392,8 +544,9 @@ async def update_session(
         existing = db.get_session(session_id)
         agent_type = request.agent_type or (existing or {}).get("agent_type") or "chat"
         resolved, _ = resolve_device_model(agent_type, request.device)
-        if resolved:
-            current_model = (existing or {}).get("model")
+        current_model = (existing or {}).get("model")
+        # A device only picks among local models; hybrid routes to its own.
+        if resolved and not is_hybrid_model(current_model):
             try:
                 configured_default = resolved_default_model()
             except Exception as e:
@@ -434,7 +587,61 @@ async def update_session(
     return await _session_response(db, session)
 
 
-@router.delete("/api/sessions/{session_id}")
+def _end_sidecar_session(session_id: str, agent_type: str) -> None:
+    """End the chat's session in its running sidecar, stopping its MCP servers.
+
+    Never starts, stops or restarts a sidecar to do it. The chat is already
+    gone, so a failure is logged, not raised: the sidecar still closes the
+    session once it idles out.
+    """
+    from gaia.daemon.sidecars.errors import SidecarError, SidecarHTTPError
+
+    from ..sidecar import daemon_client
+    from ..sidecar.profiles import end_session_supported, profile_for
+    from ..sidecar.proxy import SidecarTimeoutError
+
+    profile = profile_for(agent_type)
+    if profile is None or profile.min_end_session_api_version is None:
+        return
+    agent = profile.display_name
+    try:
+        handle = daemon_client.running_handle(profile.agent_id)
+        if handle is None or not end_session_supported(profile, handle.api_version):
+            return
+        handle.proxy().end_session(session_id)
+    except SidecarHTTPError as e:
+        if e.status_code == 404:  # the sidecar never had this chat
+            return
+        if e.status_code == 409:  # deleted mid-answer: the turn still holds it
+            _log_unended(logger.warning, session_id, agent, "it is still answering", e)
+        elif e.status_code == 503:  # stopped or wedged after it was listed
+            _log_unended(
+                logger.warning, session_id, agent, "it is not running or answering", e
+            )
+        else:
+            _log_unended(logger.error, session_id, agent, "the agent refused", e)
+    except SidecarTimeoutError as e:
+        _log_unended(logger.warning, session_id, agent, "it did not answer", e)
+    except SidecarError as e:
+        _log_unended(logger.error, session_id, agent, "the call failed", e)
+
+
+def _log_unended(log, session_id: str, agent: str, reason: str, error) -> None:
+    log(
+        "Could not end deleted chat %s in the %s agent (%s); its MCP servers run "
+        "until the session idles out: %s",
+        session_id,
+        agent,
+        reason,
+        error,
+    )
+
+
+@router.delete(
+    "/api/sessions/{session_id}",
+    response_model=SessionDeleteResponse,
+    response_model_exclude_unset=True,
+)
 async def delete_session(
     session_id: str,
     http_request: Request,
@@ -446,7 +653,8 @@ async def delete_session(
     for it to finish: the turn is still using the session's agent and will
     persist its answer to the session row.
     """
-    if db.get_session(session_id) is None:
+    session = db.get_session(session_id)
+    if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
     run_manager.cancel(session_id)
     session_locks = http_request.app.state.session_locks
@@ -473,6 +681,11 @@ async def delete_session(
         session_permissions.forget_session(session_id)
         followups.forget(session_id)
         answer_retry.forget(session_id)
+        session_environment.forget_session(session_id)
+        if session_environment.relayed(session):
+            await asyncio.to_thread(
+                _end_sidecar_session, session_id, session.get("agent_type")
+            )
     try:
         await asyncio.to_thread(file_snapshots.delete_session, session_id)
     except OSError as e:
@@ -522,7 +735,7 @@ async def mark_session_read(session_id: str, db: ChatDatabase = Depends(get_db))
 async def get_messages(
     session_id: str,
     limit: int = 100,
-    offset: int = 0,
+    offset: int = Query(0, le=SQLITE_INT_MAX),
     db: ChatDatabase = Depends(get_db),
 ):
     """Get messages for a session."""
@@ -541,7 +754,11 @@ async def get_messages(
     )
 
 
-@router.delete("/api/sessions/{session_id}/messages/{message_id}")
+@router.delete(
+    "/api/sessions/{session_id}/messages/{message_id}",
+    response_model=MessageDeleteResponse,
+    response_model_exclude_unset=True,
+)
 async def delete_message(
     session_id: str, message_id: int, db: ChatDatabase = Depends(get_db)
 ):
@@ -555,7 +772,11 @@ async def delete_message(
     return {"deleted": True}
 
 
-@router.delete("/api/sessions/{session_id}/messages/{message_id}/and-below")
+@router.delete(
+    "/api/sessions/{session_id}/messages/{message_id}/and-below",
+    response_model=MessagesDeleteResponse,
+    response_model_exclude_unset=True,
+)
 async def delete_messages_from(
     session_id: str, message_id: int, db: ChatDatabase = Depends(get_db)
 ):
@@ -583,7 +804,29 @@ def _answer_model(msg: dict) -> str | None:
     return stats.get("model") if isinstance(stats, dict) else None
 
 
-@router.get("/api/sessions/{session_id}/export")
+def _model_label(model: str) -> str:
+    """The model as the app shows it: no cloud provider prefix, no catalogue path."""
+    if cloud_model_provider(model):
+        model = model.partition(".")[2]
+    return model.rsplit("/", 1)[-1]
+
+
+def _local_time(stamp: str) -> str:
+    """A stored UTC timestamp as local time, e.g. "November 12, 2026, 2:21 PM"."""
+    t = datetime.fromisoformat(stamp).astimezone()
+    return f"{t:%B} {t.day}, {t.year}, {t.hour % 12 or 12}:{t:%M} {t:%p}"
+
+
+def _plain_attachments(content: str) -> str:
+    """Name each attachment instead of linking a file that exists only inside the app."""
+    return UPLOAD_LINK_RE.sub(lambda m: f"Attached: {m['label']}", content)
+
+
+@router.get(
+    "/api/sessions/{session_id}/export",
+    response_model=SessionExportResponse,
+    response_model_exclude_unset=True,
+)
 async def export_session(
     session_id: str,
     format: str = "markdown",  # noqa: A002
@@ -610,23 +853,25 @@ async def export_session(
             _answer_model(msg) for msg in messages if msg["role"] == "assistant"
         ]
         if answer_models and all(answer_models):
-            used = list(dict.fromkeys(answer_models))
+            used = list(dict.fromkeys(_model_label(m) for m in answer_models))
             label = "Models" if len(used) > 1 else "Model"
             model_line = f"*{label}: {', '.join(used)}*"
         else:
             # An answer saved before its model was recorded can't say what wrote it.
-            model_line = f"*Model (current setting): {effective_model}*"
+            model_line = f"*Model (current setting): {_model_label(effective_model)}*"
 
         lines = [f"# {session['title']}\n"]
-        lines.append(f"*Created: {session['created_at']}*\n")
+        lines.append(f"*Created: {_local_time(session['created_at'])}*\n")
         lines.append(f"{model_line}\n\n---\n")
 
         for msg in messages:
             role_label = "User" if msg["role"] == "user" else "Assistant"
             answer_model = _answer_model(msg)
             if answer_model:
-                role_label = f"{role_label} ({answer_model})"
-            lines.append(f"**{role_label}:**\n\n{msg['content']}\n\n---\n")
+                role_label = f"{role_label} ({_model_label(answer_model)})"
+            lines.append(
+                f"**{role_label}:**\n\n{_plain_attachments(msg['content'])}\n\n---\n"
+            )
 
         content = "\n".join(lines)
         return {"content": content, "format": "markdown"}
@@ -640,7 +885,11 @@ async def export_session(
 # ── Session-Document Attachments ─────────────────────────────────────────────
 
 
-@router.post("/api/sessions/{session_id}/documents")
+@router.post(
+    "/api/sessions/{session_id}/documents",
+    response_model=SessionAttachResponse,
+    response_model_exclude_unset=True,
+)
 async def attach_document(
     session_id: str,
     request: AttachDocumentRequest,
@@ -655,11 +904,22 @@ async def attach_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    db.attach_document(session_id, request.document_id)
+    if not db.attach_document(session_id, request.document_id):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "The chat or the document was removed while attaching, so nothing "
+                "was attached. Refresh the document library and try again."
+            ),
+        )
     return {"attached": True}
 
 
-@router.delete("/api/sessions/{session_id}/documents/{doc_id}")
+@router.delete(
+    "/api/sessions/{session_id}/documents/{doc_id}",
+    response_model=SessionDetachResponse,
+    response_model_exclude_unset=True,
+)
 async def detach_document(
     session_id: str,
     doc_id: str,

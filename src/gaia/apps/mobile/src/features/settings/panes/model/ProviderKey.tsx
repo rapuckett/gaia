@@ -1,0 +1,385 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
+
+import { isolate, isolateUnit } from '@webui/i18n/registry';
+import { isKeyStoreLocked, keyStoreOf } from '@webui/utils/keyStore';
+import { providerName } from '@webui/utils/providerText';
+
+import type { GatewayFields, ProviderConnected } from '@/api/client.types';
+import { ENDPOINTS } from '@/api/constants';
+import { GaiaApiError } from '@/api/errors';
+import { useDeviceRefused } from '@/api/routeAccess';
+import { useForgetProviderKey, useReconnectProvider, useRetryKeyStore, useSendProviderKey, type ProviderRow } from '@/data';
+import { describeHttpFailure, ltr, useT, type Translate } from '@/i18n/useT';
+import { ApproveOnPcNotice } from '@/features/devices/ApproveOnPcNotice';
+import { useDevicePrompt } from '@/features/devices/devicePrompts';
+import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
+import { Badge, Button, Notice, Row, Stack, Surface, Text, TextField } from '@/ui';
+import { KeyRound, Trash2 } from '@/ui/icons';
+
+import { useConfirmSheet } from '../../../setup/sheets/ConfirmSheet';
+import { isPcRefusal, PcOnlyNotice } from '../../PcOnlyNotice';
+
+/** `locked`: the PC's OS key store is locked (423), with Try again where this phone may ask. */
+type Outcome = { tone: 'success' | 'info' | 'warning' | 'danger'; text: string; detail?: string } | { tone: 'locked'; detail?: string };
+
+function connectedOutcome(r: ProviderConnected, name: string, t: Translate): Outcome {
+    if (r.remember_error) return { tone: 'warning', text: t('mobileApp.settings.key.sessionOnly'), detail: r.remember_error };
+    if (r.known_models) return { tone: 'success', text: t('settings.key.knownModels', { name }) };
+    return { tone: 'success', text: r.remembered ? t('settings.key.kept') : t('settings.key.connectedDone') };
+}
+
+// The desktop's masked saved key: 20 bullets, then the PC's last-four hint.
+const SAVED_MASK = '•'.repeat(20);
+
+/** Dev scenes: the key field opened by Replace, fixture text typed into it (and the AMD gateway's fields), and Connect pressed on arrival. */
+export const SeedProviderKey = createContext<{ replacing?: boolean; typed?: string; submit?: boolean; gateway?: GatewayFields } | null>(null);
+
+const NO_GATEWAY = { base_url: '', auth_header_name: '' };
+
+/** The gateway fields the person typed; an empty one keeps the PC's own, so it isn't sent. */
+function typedGateway(fields: typeof NO_GATEWAY): GatewayFields | undefined {
+    const out = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v !== ''));
+    return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * A cloud provider's API key: Connect with a key typed here, or Reconnect with the one the PC holds, and
+ * Replace or Remove once connected. The key lives only in this field until it is sent, and the field clears
+ * on every send. When the PC refuses a typed key from this phone (403), the field gives way to "Change this
+ * on the PC"; Remove and the key store's Try again show only where the phone's routes allow them.
+ * Where the key comes from, its hint and the key store's state are the PC's list (`key_*`); the list never reads
+ * the PC's key store, so `unknown` means GAIA there hasn't read it since it started.
+ * The AMD gateway adds its address and auth header under the key field, sent only with a typed key; the list never
+ * says the PC's current ones, so an empty field keeps them.
+ */
+export function ProviderKey({ provider, connected }: { provider: ProviderRow; connected: boolean }) {
+    const t = useT();
+    const name = providerName(t, provider);
+    const isGateway = provider.id === 'amd';
+    const seed = useContext(SeedProviderKey);
+    const reconnect = useReconnectProvider();
+    const sendKey = useSendProviderKey();
+    const forget = useForgetProviderKey();
+    const retry = useRetryKeyStore();
+    const storePrompt = useDevicePrompt({ kind: 'keyStore', action: 'keyStoreRetry' });
+    const removeRefused = useDeviceRefused('DELETE', ENDPOINTS.providerKey);
+    const retryRefused = useDeviceRefused('POST', ENDPOINTS.providersKeyStoreRetry);
+    const { ask, sheet } = useConfirmSheet();
+    const [key, setKey] = useState(seed?.typed ?? '');
+    const [replacing, setReplacing] = useState(!!seed?.replacing);
+    const [gateway, setGateway] = useState({ ...NO_GATEWAY, ...seed?.gateway });
+    const [refused, setRefused] = useState(false);
+    // The PC's own words when it refused a gateway move from this phone.
+    const [refusedDetail, setRefusedDetail] = useState<string | undefined>(undefined);
+    const [outcome, setOutcome] = useState<Outcome | null>(null);
+
+    // Model mounts one per provider, so leaving the screen or picking another provider both unmount.
+    const mounted = useRef(true);
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
+    const movedOn = () => !mounted.current;
+
+    // The PC's own words go on the detail line, under our sentence; a typed key never reaches them.
+    // A gateway move fails with one message for every cause, and a 409 is the PC busy or refusing the move.
+    const report = (err: unknown, moved: boolean) => {
+        if (movedOn()) return;
+        if (isPcRefusal(err)) {
+            setRefused(true);
+            if (moved && err instanceof GaiaApiError) setRefusedDetail(err.detail || undefined);
+            return;
+        }
+        if (err instanceof GaiaApiError && isKeyStoreLocked(err.status, err.body)) {
+            setOutcome({ tone: 'locked', detail: err.detail || undefined });
+            return;
+        }
+        if (err instanceof GaiaApiError && err.status === 422 && err.body?.code === 'gateway_insecure_http') {
+            setOutcome({ tone: 'danger', text: t('settings.key.gatewayInsecureHttp', { scheme: ltr('https://') }), detail: err.detail || undefined });
+            return;
+        }
+        if (moved && err instanceof GaiaApiError && (err.status === 409 || err.status === 422)) {
+            setOutcome({ tone: err.status === 409 ? 'warning' : 'danger', text: t('mobileApp.settings.modelActionFailed'), detail: err.detail || undefined });
+            return;
+        }
+        if (err instanceof GaiaApiError && err.status === 422) {
+            setOutcome({ tone: 'danger', text: t('mobileApp.settings.key.rejected', { name: ltr(name) }), detail: err.detail || undefined });
+            return;
+        }
+        const f = describeHttpFailure(err, t);
+        setOutcome({ tone: 'danger', text: f.text, detail: f.detail });
+    };
+    const failed = (err: unknown) => report(err, false);
+
+    const waiting = (detail: string) => !movedOn() && setOutcome({ tone: 'info', text: t('settings.key.waitingOs'), detail: detail || undefined });
+
+    const onReconnect = () => {
+        setOutcome(null);
+        reconnect.mutate(
+            { provider: provider.id, onWaiting: waiting, stopped: movedOn },
+            { onSuccess: (r) => !movedOn() && setOutcome(connectedOutcome(r, name, t)), onError: failed },
+        );
+    };
+
+    // The request stays open while the PC's unlock prompt waits; the notice follows the PC's events meanwhile.
+    const onRetryStore = () => {
+        storePrompt.begin();
+        retry.mutate(undefined, {
+            onSuccess: () => {
+                storePrompt.settle();
+                if (!movedOn()) setOutcome(null);
+            },
+            onError: (err) => {
+                if (!storePrompt.report(err)) failed(err);
+            },
+        });
+    };
+
+    const onRemove = async () => {
+        const sure = await ask({
+            title: t('settings.key.removeAsk'),
+            body: [t('settings.key.removeBody', { name: ltr(name) })],
+            confirmLabel: t('settings.key.remove'),
+            cancelLabel: t('settings.models.keep'),
+            danger: true,
+        });
+        if (!sure || movedOn()) return;
+        setOutcome(null);
+        forget.mutate(provider.id, { onSuccess: () => !movedOn() && setOutcome({ tone: 'success', text: t('settings.key.cleared') }), onError: failed });
+    };
+
+    const onSubmit = () => {
+        const typed = key.trim();
+        setKey('');
+        if (!typed) return;
+        setOutcome(null);
+        const moving = isGateway ? typedGateway(gateway) : undefined;
+        sendKey
+            .send(provider.id, typed, { onWaiting: waiting, stopped: movedOn, ...(moving ? { gateway: moving } : null) })
+            .then(
+                (r) => {
+                    if (movedOn()) return;
+                    setReplacing(false);
+                    setGateway(NO_GATEWAY);
+                    setOutcome(connectedOutcome(r, name, t));
+                },
+                (err: unknown) => report(err, !!moving),
+            );
+    };
+
+    const seededSubmit = useRef(!!seed?.submit);
+    useEffect(() => {
+        if (!seededSubmit.current) return;
+        seededSubmit.current = false;
+        onSubmit();
+        // Once, on arrival, for a dev scene.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const busy = reconnect.isPending || sendKey.isPending || forget.isPending || retry.isPending;
+    const source = provider.key_source ?? null;
+    // null: a PC that doesn't send the key fields, which keeps the field and Reconnect as before.
+    const state = provider.key_state ?? null;
+    const hasKey = source !== null;
+    const fromEnv = source === 'environment';
+    // Like the desktop: a GAIA-set environment key can be replaced, any other can't be changed from here.
+    const canChange = !fromEnv || provider.key_from_gaia_env === true;
+    const providerError = provider.error || null;
+    const showField = !refused && (replacing || (!connected && !hasKey));
+    const locked = outcome?.tone === 'locked' || (!hasKey && keyStoreOf(provider) === 'locked');
+    const lockedDetail = outcome?.tone === 'locked' ? outcome.detail : undefined;
+
+    return (
+        <Stack gap="sm" testID="provider-key">
+            <Row gap="sm" justify="between">
+                <Text role="label" weight="medium" tone="secondary" accessibilityRole="header">{t('settings.key.title')}</Text>
+                {connected || hasKey || state === null ? (
+                    <Badge
+                        tone={connected ? 'success' : 'danger'}
+                        label={t.bare(connected ? 'settings.key.connected' : 'settings.key.notConnected')}
+                        accessibilityLabel={t(connected ? 'settings.key.connected' : 'settings.key.notConnected')}
+                    />
+                ) : null}
+            </Row>
+            {locked ? (
+                <Notice
+                    tone="warning"
+                    message={t('settings.key.storeLocked')}
+                    detail={lockedDetail}
+                    action={retryRefused || busy || storePrompt.hideAction ? undefined : { label: t('settings.key.unlockAgain'), onPress: onRetryStore }}
+                    testID="provider-key-locked"
+                />
+            ) : null}
+            {!hasKey && state === 'unknown' ? (
+                <Text role="caption" tone="muted" testID="provider-key-waiting">{t('settings.key.waitingOs')}</Text>
+            ) : !hasKey && state === 'read' ? (
+                <Text role="caption" tone="muted" testID="provider-key-none">{t('settings.key.none')}</Text>
+            ) : null}
+
+            {hasKey && !replacing ? (
+                fromEnv ? (
+                    <Surface tone="recessed" radius="md" padding="sm" border testID="provider-key-env">
+                        <Text role="label" tone="secondary">
+                            {provider.env_var
+                                ? t('mobileApp.yourPc.settings.key.setIn', { name: isolate(provider.env_var, 'ltr') })
+                                : t('mobileApp.settings.key.fromEnvironment')}
+                        </Text>
+                    </Surface>
+                ) : (
+                    <Surface tone="recessed" radius="md" padding="sm" border>
+                        <Text
+                            role="label"
+                            tone="secondary"
+                            mono
+                            dir="ltr"
+                            numberOfLines={1}
+                            accessibilityLabel={t('settings.key.savedAria', { name: isolateUnit(name) })}
+                            testID="provider-key-saved"
+                        >
+                            {isolate(provider.key_hint ? `${SAVED_MASK} ${provider.key_hint}` : SAVED_MASK, 'ltr')}
+                        </Text>
+                    </Surface>
+                )
+            ) : null}
+
+            {showField ? (
+                <>
+                    <TextField
+                        value={key}
+                        onChangeText={setKey}
+                        placeholder={t.bare(replacing ? 'settings.key.pasteNew' : 'settings.key.paste')}
+                        accessibilityLabel={t('settings.key.fieldAria', { name })}
+                        accessibilityHint={t(replacing ? 'settings.key.pasteNew' : 'settings.key.paste')}
+                        secret
+                        autoFocus={replacing && !seed}
+                        disabled={busy}
+                        returnKeyType="done"
+                        onSubmitEditing={() => (key.trim() && !busy ? onSubmit() : undefined)}
+                        testID="provider-key-field"
+                    />
+                    {isGateway ? (
+                        <>
+                            <TextField
+                                value={gateway.base_url}
+                                onChangeText={(base_url) => setGateway((g) => ({ ...g, base_url }))}
+                                label={t('settings.key.gatewayUrl')}
+                                placeholder={t.bare('mobileApp.settings.key.blankDefault')}
+                                literal
+                                disabled={busy}
+                                testID="provider-key-gateway-url"
+                            />
+                            <TextField
+                                value={gateway.auth_header_name}
+                                onChangeText={(auth_header_name) => setGateway((g) => ({ ...g, auth_header_name }))}
+                                label={t('settings.key.headerName')}
+                                placeholder={t.bare('mobileApp.settings.key.blankDefault')}
+                                literal
+                                disabled={busy}
+                                testID="provider-key-gateway-header"
+                            />
+                        </>
+                    ) : null}
+                    <Button
+                        variant="primary"
+                        full
+                        label={t(replacing ? 'settings.key.save' : 'settings.key.connect')}
+                        busy={sendKey.isPending}
+                        disabled={busy || !key.trim()}
+                        onPress={onSubmit}
+                        testID="provider-key-connect"
+                    />
+                    {replacing ? (
+                        <Button
+                            variant="secondary"
+                            full
+                            label={t('settings.key.cancel')}
+                            disabled={busy}
+                            onPress={() => {
+                                setKey('');
+                                setGateway(NO_GATEWAY);
+                                setReplacing(false);
+                            }}
+                            testID="provider-key-cancel"
+                        />
+                    ) : null}
+                </>
+            ) : null}
+
+            {!connected && !replacing && hasKey ? (
+                <Button
+                    variant="secondary"
+                    full
+                    label={t('settings.key.reconnect')}
+                    busy={reconnect.isPending}
+                    disabled={busy}
+                    onPress={onReconnect}
+                    testID="provider-key-reconnect"
+                />
+            ) : null}
+
+            {(connected || hasKey) && !replacing && canChange ? (
+                <>
+                    {refused ? (
+                        <PcOnlyAction label={t('settings.key.replace')} icon={KeyRound} detail={t('mobileApp.settings.pcOnly')} testID="provider-key-replace" />
+                    ) : (
+                        <Button
+                            variant="secondary"
+                            full
+                            icon={KeyRound}
+                            label={t('settings.key.replace')}
+                            disabled={busy}
+                            onPress={() => {
+                                setOutcome(null);
+                                setReplacing(true);
+                            }}
+                            testID="provider-key-replace"
+                        />
+                    )}
+                    {fromEnv ? null : removeRefused ? (
+                        <PcOnlyAction label={t('settings.key.remove')} icon={Trash2} detail={t('mobileApp.settings.pcOnly')} testID="provider-key-remove" />
+                    ) : (
+                        <Button
+                            variant="danger"
+                            full
+                            icon={Trash2}
+                            label={t('settings.key.remove')}
+                            busy={forget.isPending}
+                            disabled={busy}
+                            onPress={() => void onRemove()}
+                            testID="provider-key-remove"
+                        />
+                    )}
+                </>
+            ) : null}
+            {hasKey && !connected && !replacing && !providerError ? (
+                <Text role="caption" tone="muted" testID="provider-key-not-connected">{t('settings.key.notConnectedHint', { name: isolateUnit(name) })}</Text>
+            ) : null}
+            {providerError ? (
+                <Notice
+                    tone="danger"
+                    message={t('mobileApp.settings.key.providerError', { name: isolateUnit(name) })}
+                    detail={providerError}
+                    testID="provider-key-error"
+                />
+            ) : null}
+            {refused && refusedDetail ? (
+                <Notice tone="info" message={t('mobileApp.settings.pcOnly')} detail={refusedDetail} testID="provider-key-pc-only" />
+            ) : refused ? (
+                <PcOnlyNotice testID="provider-key-pc-only" />
+            ) : null}
+            {!retryRefused ? <ApproveOnPcNotice kind="keyStore" action="keyStoreRetry" onRetry={onRetryStore} /> : null}
+            {outcome && outcome.tone !== 'locked' ? (
+                <Notice tone={outcome.tone} message={outcome.text} detail={outcome.detail} testID="provider-key-outcome" />
+            ) : null}
+            {provider.known_models ? (
+                <Notice tone="info" role="note" message={t('settings.key.knownList', { name: isolateUnit(name) })} testID="provider-key-known-list" />
+            ) : null}
+            {sheet}
+        </Stack>
+    );
+}

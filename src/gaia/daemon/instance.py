@@ -241,7 +241,7 @@ def probe_state(
     """Probe the recorded port with the recorded token, and say what answered.
 
     Returns ``("live", body)`` when our daemon answered, ``("busy", None)`` when
-    something accepted the connection but did not answer within *timeout*, and
+    something was slow to accept or to answer within *timeout*, and
     ``("gone", None)`` otherwise (nothing listening, a foreign server, or a
     different daemon). A busy daemon is alive: only a caller that has waited it
     out may treat it as hung. Never raises.
@@ -257,7 +257,8 @@ def probe_state(
             headers={"Authorization": f"{AUTH_SCHEME} {inst.token}"},
             timeout=timeout,
         )
-    except requests.exceptions.ReadTimeout:
+    except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout):
+        # Nothing listening on loopback refuses at once; a slow accept is load.
         return "busy", None
     except requests.exceptions.RequestException:
         return "gone", None

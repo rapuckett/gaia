@@ -56,7 +56,10 @@ class _DummyAgent(Agent):
     def _create_console(self):
         from gaia.agents.base.console import AgentConsole
 
-        return AgentConsole()
+        console = AgentConsole()
+        # No terminal to clear here; every step would wait 0.15 s for it.
+        console.progress_clear_s = 0.0
+        return console
 
 
 @pytest.fixture
@@ -301,6 +304,22 @@ def test_the_legacy_path_prints_its_closing_answer_too():
 
     agent.console.print_final_answer.assert_called_once()
     assert agent.console.print_final_answer.call_args[0][0] == result["result"]
+
+
+def test_a_turn_stopped_by_a_call_that_kept_failing_is_incomplete(agent):
+    """`gaia -p` scripts read the status; "I couldn't recover" is not a success."""
+    agent.tool_result = {"status": "error", "error": "boom"}
+    _stub_chat(agent, *_repeat_then("I could not run the checks."))
+
+    first = agent.process_query("fix the loader and run the tests")
+    assert first["status"] == "incomplete"
+    assert "boom" in first["result"]
+
+    agent.tool_result = _DONE
+    _stub_chat(agent, "All set.")
+    assert (
+        agent.process_query("thanks")["status"] == "success"
+    ), "the next turn starts clean"
 
 
 def test_a_failed_repeat_summary_is_printed_as_well(agent):

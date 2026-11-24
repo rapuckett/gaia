@@ -3,11 +3,33 @@
 
 """Pydantic models for GAIA Agent UI API."""
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from gaia.browser.picked import MAX_ELEMENTS as _MAX_PAGE_ELEMENTS
+from gaia.browser.picked import PageElement
 from gaia.version import __version__ as _gaia_version
+
+from .devices import (
+    AwayRouteKind,
+    DevicePlatform,
+    DeviceStatus,
+    ListenerErrorCode,
+    PairFailureReason,
+    RouteKind,
+)
+
+
+class WireModel(BaseModel):
+    """Base for a model that types a route's existing dict response.
+
+    An undeclared key is passed through, not dropped or refused, so a newer
+    sidecar or producer never turns a reply into a 500.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
 
 # ── System ──────────────────────────────────────────────────────────────────
 
@@ -78,7 +100,8 @@ class SystemStatus(BaseModel):
     # banner long after it stopped existing. ``start_command`` is None on hosts
     # requiring GUI/manual configuration, including service context changes,
     # and on Windows when Command Prompt and PowerShell need different lines.
-    # In those cases start_instruction carries the necessary steps.
+    # In those cases start_instruction carries the necessary steps. Both are
+    # None for GAIA's own server, which GAIA starts by itself.
     start_instruction: Optional[str] = None
     start_command: Optional[str] = None
     # Extended Lemonade info (settings modal)
@@ -286,6 +309,8 @@ class InitTaskInfo(BaseModel):
     """Summary of a boot-time initialization task (embedded in SystemStatus)."""
 
     name: str
+    # The UI shows banner.boot.<step> in the user's language, never ``name``.
+    step: Optional[str] = None
     status: str  # pending | running | done | failed
 
 
@@ -309,6 +334,9 @@ class PolicyNotice(BaseModel):
     severity: Literal["info", "warning"]
     url: Optional[str] = None
     reason: Optional[str] = None
+    # "model_server_down" when nothing answered; the UI words that itself.
+    cause: Optional[str] = None
+    models: Optional[List[str]] = None
 
 
 class SettingsResponse(BaseModel):
@@ -328,6 +356,11 @@ class SettingsResponse(BaseModel):
     # True when GAIA_DYNAMIC_TOOLS is set ⇒ the env wins ⇒ the UI toggle
     # reflects the effective value and disables (no silent no-op).
     dynamic_tools_locked: bool = False
+    # The program that is the GAIA agent; ~/.gaia/config.json, shared with the terminal UI.
+    # A plain string: a harness a newer GAIA saved still shows, so Settings can change it.
+    flagship_agent: str = "gaiapy"
+    # False when gaiacpp is not installed on this PC, so it cannot be chosen.
+    gaiacpp_available: bool = False
     # The shared policy file, not the Agent UI database. Local only clears
     # saved cloud selections and removes runtime cloud keys when it is enabled.
     network_policy: Literal["cloud_allowed", "local_ai_only"] = "cloud_allowed"
@@ -342,12 +375,24 @@ class SettingsUpdateRequest(BaseModel):
 
     custom_model: Optional[str] = Field(
         None,
+        max_length=256,
         description=(
             "HuggingFace model ID to use instead of the default model. "
             "Example: huihui-ai/Huihui-Qwen3.5-35B-A3B-abliterated. "
             "Set to empty string or null to clear the override."
         ),
     )
+
+    @field_validator("custom_model")
+    @classmethod
+    def _one_line_model_id(cls, value: Optional[str]) -> Optional[str]:
+        # It is sent to the model server and logged on every turn.
+        if value and any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+            raise ValueError(
+                "A model ID is a single line: remove the line break or control character."
+            )
+        return value
+
     context_size: Optional[int] = Field(
         None,
         description=(
@@ -364,6 +409,15 @@ class SettingsUpdateRequest(BaseModel):
             "'goal_driven' (execute approved goals). Default: 'goal_driven'. "
             "'autonomous' (observe, infer, and execute own goals) is not "
             "implemented yet and is rejected (#2005)."
+        ),
+    )
+    flagship_agent: Optional[Literal["gaiapy", "gaiacpp"]] = Field(
+        None,
+        description=(
+            "Which program is the GAIA agent: gaiapy (the Python agent) or "
+            "gaiacpp (the native C++ agent, beta). Applies from the next "
+            "message. Choosing gaiacpp where it is not installed is refused. "
+            "Omit the field to leave the choice unchanged."
         ),
     )
     dynamic_tools: Optional[bool] = Field(
@@ -457,8 +511,8 @@ class CreateSessionRequest(BaseModel):
     private: bool = False
     agent_type: Optional[str] = Field(None, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
     device: Optional[str] = None
-    # Mailbox provider for email-backed agents. Gmail by default; "microsoft"
-    # routes the email agent to the Outlook backend (see EmailAgentConfig).
+    # Mailbox the mail tools read; None reads every connected one, "microsoft"
+    # only Outlook.
     mail_provider: Optional[str] = Field(None, pattern=r"^(google|microsoft)$")
     # Folders the chat may read and write from its first message.
     folders: List[str] = Field(default_factory=list)
@@ -567,6 +621,10 @@ class ChatRequest(BaseModel):
     document_ids: Optional[List[str]] = None
     stream: bool = True
     agent_type: Optional[str] = Field(None, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
+    #: Elements the user picked in the browser pane (the composer's chips).
+    page_elements: Optional[List[PageElement]] = Field(
+        None, max_length=_MAX_PAGE_ELEMENTS
+    )
 
 
 class SourceInfo(BaseModel):
@@ -641,6 +699,10 @@ class AgentStepResponse(BaseModel):
     declined: Optional[bool] = None
     # Nobody answered its prompt in time; it never ran either.
     timedOut: Optional[bool] = None
+    # GAIA's own rule stopped it; nobody was asked, so nobody declined.
+    refused: Optional[bool] = None
+    # GAIA turned this call down itself; no prompt was shown, so not the user's no.
+    autoDeclined: Optional[bool] = None
     active: bool = False
     planSteps: Optional[List[str]] = None
     planNarrations: Optional[List[str]] = None
@@ -655,7 +717,7 @@ class AgentStepResponse(BaseModel):
     mcpOutput: Optional[McpOutputResponse] = None
     latencyMs: Optional[float] = None
     # Render-map card persistence (#2109): populated ONLY when the source
-    # tool_result event carried a ``render`` kind (e.g. "email_pre_scan") —
+    # tool_result event carried a ``render`` kind (e.g. "table") —
     # render-less tool results keep today's summary-only persistence, a
     # deliberate retention cap since a full tool payload can carry raw email
     # bodies. Without these fields pydantic's default extra='ignore' would
@@ -663,6 +725,21 @@ class AgentStepResponse(BaseModel):
     # card from history.
     render: Optional[str] = None
     data: Optional[Any] = None
+    # A finished status the user waited on (a download); a reopened chat still shows it.
+    kept: Optional[bool] = None
+    # A model the call needed and didn't find; a reopened chat still offers it.
+    needsModel: Optional[str] = None
+
+
+class TurnRouteResponse(BaseModel):
+    """The model a ``hybrid`` turn was routed to, and why."""
+
+    model: str
+    reason: str = ""
+    # True once the classifier has failed several turns in a row.
+    degraded: bool = False
+    # A one-line warning for the user when ``degraded``; empty otherwise.
+    notice: str = ""
 
 
 class InferenceStatsResponse(BaseModel):
@@ -682,6 +759,8 @@ class InferenceStatsResponse(BaseModel):
     retried: Optional[bool] = None
     # Where the turn was answered, as the footer says it: "on your GPU", "via Fireworks AI".
     place: Optional[str] = None
+    # Set on a ``hybrid`` session's turns.
+    route: Optional[TurnRouteResponse] = None
 
 
 class TurnSummaryPage(BaseModel):
@@ -743,7 +822,8 @@ class TurnSummaryLiveData(BaseModel):
 class TurnSummaryCost(BaseModel):
     """What the turn cost."""
 
-    kind: str  # local | estimate | unknown | unreported (priced, no usage sent)
+    # local | estimate | unknown | unreported (priced, no usage sent) | no_reply
+    kind: str
     usd: Optional[float] = None
 
 
@@ -775,10 +855,13 @@ class MessageResponse(BaseModel):
     agent_steps: Optional[List[AgentStepResponse]] = None
     stats: Optional[InferenceStatsResponse] = None
     turn_summary: Optional[TurnSummaryResponse] = None
+    page_elements: Optional[List[PageElement]] = None
     # Notices from indexing files into the document library during this turn.
     library_notices: Optional[List[str]] = None
     # The user's Stop ended this reply before it finished.
     stopped: bool = False
+    # A model failure ended this reply's turn; its content says why.
+    failed: bool = False
 
 
 class MessageListResponse(BaseModel):
@@ -809,6 +892,7 @@ class DocumentResponse(BaseModel):
     # Set with last_error when retrying can't help until the file is fixed:
     # "corrupted", "encrypted", "empty" (no extractable text), "empty_file"
     # (nothing to index) or "unsupported_workbook" (.xls or password-protected).
+    # "model_server_down" / "model_server_busy": the file is fine; retry later.
     error_kind: Optional[str] = None
 
 
@@ -862,6 +946,8 @@ class BrowseResponse(BaseModel):
     parent_path: Optional[str] = None
     entries: List[FileEntry]
     quick_links: List[QuickLink] = Field(default_factory=list)
+    # Why a chat can't be given this folder (home, a drive root, ...); None if it can.
+    folder_refusal: Optional[str] = None
 
 
 # ── Folder Indexing ────────────────────────────────────────────────────────
@@ -881,6 +967,8 @@ class IndexFolderResponse(BaseModel):
     failed: int = 0
     # Files in the folder that aren't a type GAIA indexes.
     skipped: int = 0
+    # Images in the folder: GAIA reads them only when picked one by one.
+    skipped_images: int = 0
     documents: List[DocumentResponse] = Field(default_factory=list)
     errors: List[str] = Field(default_factory=list)
 
@@ -969,3 +1057,134 @@ class FileUploadResponse(BaseModel):
     size: int
     content_type: str
     is_image: bool
+
+
+# ── Paired devices ──────────────────────────────────────────────────────────
+
+
+class DevicePairingOffer(BaseModel):
+    """What the PC's pairing QR code carries, as compact JSON.
+
+    Everything a device needs to pair: where the PC listens, the certificate
+    to pin, and a single-use invitation that dies at ``exp``.
+    """
+
+    v: int = Field(description="Format version")
+    name: str = Field(description="The PC's name, to show on the device")
+    pc_id: str = Field(description="Stays the same for this PC, across resets")
+    origins: List[str] = Field(
+        description="``https://<home-network IPv4>:<port>`` for each address"
+    )
+    pin: str = Field(description="SHA-256 of the listener's certificate, in hex")
+    invite: str = Field(description="The single-use invitation")
+    exp: int = Field(description="When the invitation dies, in Unix seconds")
+
+
+class DevicePairRequest(BaseModel):
+    """A device redeeming the invitation it scanned."""
+
+    invitation: str = Field(min_length=1, max_length=64)
+    device_name: str = Field(min_length=1, max_length=256)
+    platform: DevicePlatform
+
+
+class DevicePairResponse(BaseModel):
+    """The device's token, returned once. The device waits for Allow on the PC."""
+
+    device_id: str
+    token: str
+    pc_name: str
+    pc_id: str
+    status: DeviceStatus
+    # When a device still pending stops working.
+    expires_at: str
+
+
+class PairedDevice(BaseModel):
+    """A paired device, as the PC lists it. Never carries a token or its hash."""
+
+    id: str
+    name: str
+    platform: DevicePlatform
+    status: DeviceStatus
+    created_at: str
+    last_seen_at: Optional[str] = None
+    # Set while pending: when it stops working unless allowed.
+    expires_at: Optional[str] = None
+    # How many changes it made on this PC that are still on record.
+    changes_count: int = 0
+
+
+class PairedDeviceList(BaseModel):
+    """Every paired device."""
+
+    devices: List[PairedDevice]
+
+
+class DeviceRemoved(BaseModel):
+    """A device the PC unpaired: how many of its changes stay on the PC."""
+
+    changes_count: int
+
+
+class DeviceChange(BaseModel):
+    """One change a paired device made on the PC; ``params`` never hold a secret."""
+
+    id: str
+    kind: str
+    params: Dict[str, Union[str, int, float, bool, None]]
+    at: str
+
+
+class DeviceChangeList(BaseModel):
+    """A device's changes, newest first, and how many it has on record."""
+
+    changes: List[DeviceChange]
+    total: int
+
+
+class FailedRedemption(BaseModel):
+    """A pairing attempt that failed, and why; the device saw one refusal."""
+
+    at: str
+    address: str
+    reason: PairFailureReason
+
+
+class AwayRouteStatus(BaseModel):
+    """An away route as the PC sees it: on or off, and why it failed."""
+
+    kind: AwayRouteKind
+    on: bool
+    origin: Optional[str] = None
+    error_code: Optional[str] = None
+
+
+class DeviceAccessStatus(BaseModel):
+    """What the PC shows about access from the home network. Carries no secret."""
+
+    listening: bool
+    #: Left on, but waiting for a home network to start; ``error_detail`` says why.
+    waiting_for_home: bool = False
+    port: int
+    error_code: Optional[ListenerErrorCode] = None
+    error_detail: Optional[str] = None
+    pairing_open: bool
+    pairing_expires_at: Optional[str] = None
+    idle_expiry_days: int
+    pending_expiry_minutes: int
+    failed_redemptions: List[FailedRedemption] = Field(default_factory=list)
+    routes: List[AwayRouteStatus] = Field(default_factory=list)
+
+
+class DeviceOrigin(BaseModel):
+    """One origin a paired device may reach this PC at."""
+
+    kind: RouteKind
+    origin: str
+
+
+class DeviceRoutes(BaseModel):
+    """Every origin a paired device may reach this PC at now."""
+
+    origins: List[DeviceOrigin]

@@ -8,7 +8,7 @@ import sys
 import types
 
 import pytest
-from gaia_agent import entry
+from gaiapy import entry
 
 
 def _stop_after_path_repair(monkeypatch):
@@ -24,13 +24,16 @@ def test_the_path_is_repaired_before_a_transport_is_chosen(monkeypatch):
         "gaia.login_path.apply_login_path", lambda: order.append("path")
     )
     monkeypatch.setattr(
+        "gaia.env.expose_shipped_gaia", lambda env: order.append("gaia")
+    )
+    monkeypatch.setattr(
         entry,
         "selects_http",
         lambda argv: order.append("dispatch") or (_ for _ in ()).throw(SystemExit(0)),
     )
     with pytest.raises(SystemExit):
         entry.main([])
-    assert order == ["path", "dispatch"]
+    assert order == ["path", "gaia", "dispatch"]
 
 
 def test_an_older_core_without_the_repair_warns_on_stderr_and_still_runs(

@@ -16,36 +16,47 @@ import os
 import sqlite3
 import sys
 import threading
-from typing import List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
 from gaia.agents.base.tool_grants import grant_scope
+from gaia.browser.picked import page_elements_json, with_page_elements
 
 from .. import answer_retry, followups
 from .. import permissions as session_permissions
+from .. import session_environment
 from .._chat_helpers import (
     _set_provisional_title,
     _spawn_background,
     model_context_messages,
+    refuse_unstreamed_sidecar_chat,
     stuck_producer,
     turn_takes_the_line,
 )
 from ..database import ChatDatabase
 from ..dependencies import get_db
-from ..models import ChatRequest, ChatResponse
+from ..devices.changes import record_device_change
+from ..models import ChatRequest, ChatResponse, WireModel
 from ..restart_recovery import CANCELLED_TURN_NOTICE
 from ..run_manager import run_manager
-from ..security import flagship_only, require_local_pc
+from ..security import (
+    audit_approval,
+    flagship_only,
+    is_local_pc,
+    require_local_pc,
+    require_pc_or_allowed_device,
+)
 from ..sse_handler import (
     _RAG_RESULT_JSON_SUB_RE,
     _THOUGHT_JSON_SUB_RE,
     _TOOL_CALL_JSON_SUB_RE,
     _clean_answer_json,
     _fix_double_escaped,
+    short_id,
 )
 from ..turn_queue import TurnCancelled, turn_queue
 from ..utils import resolve_upload_links
@@ -85,7 +96,17 @@ def _server_mod():
     return sys.modules["gaia.ui.server"]
 
 
-@router.post("/api/chat/send")
+def _sse_response(description: str) -> dict:
+    return {200: {"content": {"text/event-stream": {}}, "description": description}}
+
+
+@router.post(
+    "/api/chat/send",
+    response_model=ChatResponse,
+    responses=_sse_response(
+        "The reply: JSON, or server-sent events when `stream` is true."
+    ),
+)
 async def send_message(
     request: ChatRequest,
     http_request: Request,
@@ -103,6 +124,9 @@ async def send_message(
        from having overlapping requests that would corrupt conversation
        state.
     """
+    # A blank message would still run a whole turn and store an empty exchange.
+    if not request.message.strip():
+        raise HTTPException(status_code=422, detail="The message is empty.")
     # Verify session exists
     session = db.get_session(request.session_id)
     if not session:
@@ -110,6 +134,8 @@ async def send_message(
     request.agent_type = flagship_only(
         http_request, request.agent_type, session.get("agent_type") or "chat"
     )
+    if not request.stream:
+        refuse_unstreamed_sidecar_chat(request.agent_type)
 
     # ── Per-session lock ─────────────────────────────────────────────
     # setdefault is atomic: safe under concurrent requests for the same session
@@ -151,9 +177,10 @@ async def send_message(
     # so a long wait never loses it.
     holds_turn = False
     question_id = None
+    picked = page_elements_json(request.page_elements or [])
     if not request.stream:
         try:
-            question_id = db.begin_turn(sid, request.message)
+            question_id = db.begin_turn(sid, request.message, picked)
             _set_provisional_title(db, sid, request.message)
             if takes_line:
                 await turn_queue.acquire(sid)
@@ -181,9 +208,15 @@ async def send_message(
     # that patch("gaia.ui.server._stream_chat_response") work correctly.
     srv = _server_mod()
 
-    # The transcript keeps the browser link; the agent gets the file's path.
+    # The transcript keeps the browser link; the agent gets the file's path,
+    # and any elements picked in the browser pane as one block of page data.
     agent_request = request.model_copy(
-        update={"message": resolve_upload_links(request.message)}
+        update={
+            "message": resolve_upload_links(
+                with_page_elements(request.message, request.page_elements)
+            ),
+            "page_elements": None,
+        }
     )
 
     try:
@@ -213,12 +246,12 @@ async def send_message(
 
             async def _stream():
                 try:
-                    db.begin_turn(request.session_id, request.message)
+                    db.begin_turn(request.session_id, request.message, picked)
                     _set_provisional_title(db, request.session_id, request.message)
                     # The detached lifecycle owns producer + persistence;
                     # this subscriber only relays buffered and live events.
                     async for chunk in srv._stream_chat_response(
-                        db, session, agent_request
+                        db, session, agent_request, away=not is_local_pc(http_request)
                     ):
                         yield chunk
                 finally:
@@ -263,6 +296,7 @@ async def send_message(
                         response_text,
                         model_messages=model_messages or None,
                         ends_turn=True,
+                        failed=bool(turn_box.get("failed")),
                     )
                     if "recording" in turn_box:
                         turn_box["recording"].link_message(msg_id)
@@ -294,7 +328,7 @@ async def send_message(
                         model_id=turn_box.get("model"),
                     )
                 )
-                run_status = "done"
+                run_status = "failed" if turn_box.get("failed") else "done"
                 return ChatResponse(
                     message_id=msg_id,
                     content=response_text,
@@ -348,15 +382,46 @@ class ToolConfirmRequest(BaseModel):
     approved: bool
     always: bool = False
     confirm_id: Optional[str] = None
+    source: Optional[Literal["notification"]] = None
 
 
-@router.post("/api/chat/confirm-tool")
-async def confirm_tool(request: ToolConfirmRequest):
+class ConfirmToolResponse(WireModel):
+    """The answer reached the waiting prompt; ``granted`` is what "always" allowed."""
+
+    status: Literal["ok"]
+    approved: bool
+    granted: Optional[str]
+
+
+@router.post(
+    "/api/chat/confirm-tool",
+    response_model=ConfirmToolResponse,
+    response_model_exclude_unset=True,
+)
+async def confirm_tool(request: ToolConfirmRequest, http_request: Request):
     """Answer the tool confirmation the agent is blocked on.
 
     The agent waits in ``SSEOutputHandler.confirm_tool_execution()`` until this
     endpoint resolves it with allow once, always allow in this chat, or deny.
     """
+    answer = await _answer_tool_prompt(request)
+    verdict = "allowed" if request.approved else "denied"
+    if request.approved and request.always:
+        verdict = "always allowed"
+    via = " via notification" if request.source == "notification" else ""
+    audit_approval(
+        http_request, f"tool call {verdict}{via} in chat {request.session_id}"
+    )
+    logger.info(
+        "Tool decision %s%s for prompt %s",
+        verdict,
+        via,
+        short_id(request.confirm_id),
+    )
+    return answer
+
+
+async def _answer_tool_prompt(request: ToolConfirmRequest):
     from .._chat_helpers import _active_sse_handlers
 
     handler = _active_sse_handlers.get(request.session_id)
@@ -411,7 +476,7 @@ async def _confirm_relayed_tool(
     from starlette.concurrency import run_in_threadpool
 
     from gaia.daemon.sidecars.errors import SidecarError
-    from gaia.ui.email_sidecar import grants as relayed_grants
+    from gaia.ui.sidecar import grants as relayed_grants
 
     always = request.always and request.approved
     scope = handler.relay_always_scope(request.confirm_id)
@@ -426,6 +491,7 @@ async def _confirm_relayed_tool(
             ),
         )
     proxy = handler.active_relay_proxy
+    path_access = handler.relay_path_access(request.confirm_id)
     try:
         # Off the event loop: this is an HTTP round trip to the sidecar.
         delivered = await run_in_threadpool(
@@ -440,6 +506,8 @@ async def _confirm_relayed_tool(
         ) from exc
     if not delivered:
         raise stale
+    if request.approved and path_access:
+        session_environment.note_approved_path(request.session_id, path_access)
     if always:
         try:
             await run_in_threadpool(relayed_grants.refresh, proxy, request.session_id)
@@ -465,6 +533,37 @@ class PermissionModeRequest(BaseModel):
     mode: str
 
 
+PermissionMode = Literal[session_permissions.MODES]  # type: ignore[valid-type]
+
+
+class PermissionGrantResponse(WireModel):
+    """One "always allow" grant: its key and the label shown for it."""
+
+    key: str
+    label: str
+
+
+class SessionPermissionsResponse(WireModel):
+    """A chat's permission mode and its "always allow" grants."""
+
+    session_id: str
+    mode: PermissionMode
+    grants: List[PermissionGrantResponse]
+
+
+class PermissionsListResponse(WireModel):
+    """The default mode for new chats and every chat with non-default permissions."""
+
+    default_mode: PermissionMode
+    sessions: List[SessionPermissionsResponse]
+
+
+class DefaultPermissionModeResponse(WireModel):
+    """The mode new chats start in."""
+
+    default_mode: PermissionMode
+
+
 def _permissions_view(session_id: str) -> dict:
     perms = session_permissions.get(session_id)
     if perms is None:
@@ -481,7 +580,11 @@ def _require_session(db: ChatDatabase, session_id: str) -> None:
         raise HTTPException(status_code=404, detail=f"No chat {session_id!r}.")
 
 
-@router.get("/api/chat/permissions")
+@router.get(
+    "/api/chat/permissions",
+    response_model=PermissionsListResponse,
+    response_model_exclude_unset=True,
+)
 async def list_permissions():
     """Every chat with full access on or "always allow" grants, for Settings.
 
@@ -497,13 +600,18 @@ async def list_permissions():
     }
 
 
-@router.put("/api/chat/permissions", dependencies=[Depends(require_local_pc)])
-async def set_default_permission_mode(body: PermissionModeRequest):
+@router.put(
+    "/api/chat/permissions",
+    dependencies=[Depends(require_pc_or_allowed_device)],
+    response_model=DefaultPermissionModeResponse,
+    response_model_exclude_unset=True,
+)
+async def set_default_permission_mode(request: Request, body: PermissionModeRequest):
     """Set the mode new chats start in: ``full_access`` in ``~/.gaia/config.json``.
 
-    The same key the TUI's ``/full-access always`` writes. Chats already open
-    keep the mode they have. A paired phone can't change it: it would apply
-    to every future chat on the PC, the TUI's included.
+    The same key the TUI's ``/full-access always`` writes, so it applies to
+    every future chat on the PC, the TUI's included. Chats already open keep
+    the mode they have. A device's change is audited and listed on the PC.
     """
     if body.mode not in session_permissions.MODES:
         raise HTTPException(
@@ -518,23 +626,41 @@ async def set_default_permission_mode(body: PermissionModeRequest):
             body.mode == session_permissions.MODE_FULL_ACCESS,
         )
     except (GaiaConfigError, OSError) as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Couldn't save the default permission mode: {exc}",
-        ) from exc
+        detail = f"Couldn't save the default permission mode: {exc}"
+        if not is_local_pc(request):
+            logger.error("Default permission mode for a device not saved: %s", exc)
+            detail = (
+                "Couldn't save the default permission mode on the PC. Open GAIA "
+                "on the PC to see why."
+            )
+        raise HTTPException(status_code=500, detail=detail) from exc
+    if not is_local_pc(request):
+        audit_approval(request, f"Default permission mode for new chats: {body.mode}")
+        record_device_change(request, "permissionsDefault", mode=body.mode)
     return {"default_mode": session_permissions.default_mode()}
 
 
-@router.get("/api/chat/permissions/{session_id}")
+@router.get(
+    "/api/chat/permissions/{session_id}",
+    response_model=SessionPermissionsResponse,
+    response_model_exclude_unset=True,
+)
 async def get_permissions(session_id: str, db: ChatDatabase = Depends(get_db)):
     """This chat's permission mode and its "always allow" grants."""
     _require_session(db, session_id)
     return _permissions_view(session_id)
 
 
-@router.put("/api/chat/permissions/{session_id}")
+@router.put(
+    "/api/chat/permissions/{session_id}",
+    response_model=SessionPermissionsResponse,
+    response_model_exclude_unset=True,
+)
 async def set_permission_mode(
-    session_id: str, body: PermissionModeRequest, db: ChatDatabase = Depends(get_db)
+    session_id: str,
+    body: PermissionModeRequest,
+    http_request: Request,
+    db: ChatDatabase = Depends(get_db),
 ):
     """Switch between ask and full access; applies to the next gated tool."""
     _require_session(db, session_id)
@@ -544,6 +670,15 @@ async def set_permission_mode(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     await _sync_relayed_mode(
         session_id, body.mode == session_permissions.MODE_FULL_ACCESS
+    )
+    audit_approval(http_request, f"chat {session_id} set to {body.mode}")
+    record_device_change(
+        http_request,
+        (
+            "chatPermissionsFull"
+            if body.mode == session_permissions.MODE_FULL_ACCESS
+            else "chatPermissionsAsk"
+        ),
     )
     return _permissions_view(session_id)
 
@@ -589,7 +724,11 @@ async def _sync_relayed_mode(session_id: str, enabled: bool) -> None:
         ) from exc
 
 
-@router.delete("/api/chat/permissions/{session_id}/grants")
+@router.delete(
+    "/api/chat/permissions/{session_id}/grants",
+    response_model=SessionPermissionsResponse,
+    response_model_exclude_unset=True,
+)
 async def revoke_grants(
     session_id: str, key: Optional[str] = None, db: ChatDatabase = Depends(get_db)
 ):
@@ -617,8 +756,8 @@ async def _revoke_relayed(session_id: str, agent_id: str, key: Optional[str]) ->
     from starlette.concurrency import run_in_threadpool
 
     from gaia.daemon.sidecars.errors import SidecarError
-    from gaia.ui.email_sidecar import daemon_client
-    from gaia.ui.email_sidecar import grants as relayed_grants
+    from gaia.ui.sidecar import daemon_client
+    from gaia.ui.sidecar import grants as relayed_grants
 
     from .._chat_helpers import _active_sse_handlers
 
@@ -650,7 +789,18 @@ class UserInputRequest(BaseModel):
     value: str
 
 
-@router.post("/api/chat/user-input")
+class UserInputResponse(WireModel):
+    """The answer reached the waiting question."""
+
+    status: Literal["ok"]
+    request_id: str
+
+
+@router.post(
+    "/api/chat/user-input",
+    response_model=UserInputResponse,
+    response_model_exclude_unset=True,
+)
 async def user_input(request: UserInputRequest):
     """Answer a mid-run ``needs_input`` question from the agent (#2595).
 
@@ -692,7 +842,7 @@ class ScriptedUserRequest(BaseModel):
     decline_commands: List[str] = []
 
 
-@router.post("/api/eval/scripted-user")
+@router.post("/api/eval/scripted-user", dependencies=[Depends(require_local_pc)])
 async def set_scripted_user(request: ScriptedUserRequest):
     """Script a user who declines these commands and answers nothing (#4447).
 
@@ -721,7 +871,18 @@ class CancelStreamRequest(BaseModel):
     session_id: str
 
 
-@router.post("/api/chat/cancel")
+class CancelStreamResponse(WireModel):
+    """The running or queued turn was told to stop."""
+
+    status: Literal["ok"]
+    cancelled: Literal[True]
+
+
+@router.post(
+    "/api/chat/cancel",
+    response_model=CancelStreamResponse,
+    response_model_exclude_unset=True,
+)
 async def cancel_stream(request: CancelStreamRequest):
     """Cancel an active streaming chat session by setting its SSE handler cancelled flag.
 
@@ -747,7 +908,19 @@ async def cancel_stream(request: CancelStreamRequest):
     )
 
 
-@router.get("/api/chat/active")
+class ActiveRunsResponse(WireModel):
+    """Chats with a turn in flight, those waiting in line, and those paused on the user."""
+
+    session_ids: List[str]
+    queued: List[str]
+    awaiting_user: Dict[str, Literal["permission", "question"]]
+
+
+@router.get(
+    "/api/chat/active",
+    response_model=ActiveRunsResponse,
+    response_model_exclude_unset=True,
+)
 async def list_active_runs():
     """Return the chats with a turn in flight, and what each is waiting on.
 
@@ -775,8 +948,11 @@ async def list_active_runs():
     }
 
 
-@router.get("/api/chat/attach")
-async def attach_stream(session_id: str):
+@router.get(
+    "/api/chat/attach",
+    responses=_sse_response("The running turn's events so far, then the rest live."),
+)
+async def attach_stream(session_id: str, http_request: Request):
     """Re-attach to an in-flight background run and stream its events (SSE).
 
     Used when the user revisits a session whose turn is still running. The
@@ -792,7 +968,7 @@ async def attach_stream(session_id: str):
 
     srv = _server_mod()
     return StreamingResponse(
-        srv._attach_chat_stream(session_id),
+        srv._attach_chat_stream(session_id, away=not is_local_pc(http_request)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -807,7 +983,24 @@ class FollowUpRequest(BaseModel):
     text: str
 
 
-@router.post("/api/chat/followup")
+class FollowUpDelivered(WireModel):
+    """The running turn took the message."""
+
+    delivered: Literal[True]
+
+
+class FollowUpOutcome(WireModel):
+    """What the last finished turn did with the messages added to it."""
+
+    taken: List[str]
+    returned: List[str]
+
+
+@router.post(
+    "/api/chat/followup",
+    response_model=FollowUpDelivered,
+    response_model_exclude_unset=True,
+)
 async def send_followup(request: FollowUpRequest):
     """Hand a message to the session's running turn, picked up at its next step.
 
@@ -845,7 +1038,11 @@ async def send_followup(request: FollowUpRequest):
     return {"delivered": True}
 
 
-@router.get("/api/chat/followup/{session_id}")
+@router.get(
+    "/api/chat/followup/{session_id}",
+    response_model=FollowUpOutcome,
+    response_model_exclude_unset=True,
+)
 async def followup_outcome(session_id: str, db: ChatDatabase = Depends(get_db)):
     """What the chat's last finished turn did with the messages added to it.
 
@@ -865,7 +1062,94 @@ async def followup_outcome(session_id: str, db: ChatDatabase = Depends(get_db)):
     return followups.last_outcome(session_id)
 
 
-@router.get("/api/chat/context/{session_id}")
+class ExactTokenizer(WireModel):
+    exact: Literal[True]
+    model: str
+
+
+class EstimatedTokenizer(WireModel):
+    exact: Literal[False]
+    reason: str
+
+
+class ContextCategory(WireModel):
+    key: str
+    label: str
+    tokens: int
+
+
+class ToolLoading(WireModel):
+    """Tools sent with every request, and those loaded only when needed."""
+
+    loaded: List[str]
+    on_demand: List[str]
+
+
+class PutAwayContext(WireModel):
+    results: int
+    tokens: int
+
+
+class SummarizedContext(WireModel):
+    turns: int
+    tokens: int
+    summary_tokens: int
+
+
+class ContextState(WireModel):
+    """What the agent moved out of the window to keep going."""
+
+    put_away: Optional[PutAwayContext]
+    summarized: Optional[SummarizedContext]
+
+
+class ContextMeasured(WireModel):
+    """How full the model's context is for the chat's next message, by kind."""
+
+    available: Literal[True]
+    window: int
+    reply_reserve: int
+    system: int
+    skills: Optional[int] = None
+    memory: Optional[int] = None
+    tools: int
+    tool_definitions: Optional[int] = None
+    documents: int
+    history: int
+    query: int
+    used: int
+    history_budget: int
+    history_used: int
+    turns_in_view: int
+    turns_hidden: int
+    at_risk: List[str]
+    at_risk_tokens: int
+    tokenizer: Optional[
+        Annotated[
+            Union[ExactTokenizer, EstimatedTokenizer], Field(discriminator="exact")
+        ]
+    ] = None
+    categories: Optional[List[ContextCategory]] = None
+    tool_loading: Optional[ToolLoading] = None
+    model: Optional[str] = None
+    model_window: Optional[int] = None
+    context_state: Optional[ContextState] = None
+
+
+class ContextUnavailable(WireModel):
+    """Why the chat's context can't be measured now."""
+
+    available: Literal[False]
+    reason: str
+
+
+@router.get(
+    "/api/chat/context/{session_id}",
+    response_model=Annotated[
+        Union[ContextMeasured, ContextUnavailable], Field(discriminator="available")
+    ],
+    response_model_exclude_unset=True,
+)
 async def get_context_usage(session_id: str, db: ChatDatabase = Depends(get_db)):
     """How full the model's context is for this chat's next message, by kind."""
     if not db.get_session(session_id):
@@ -891,12 +1175,16 @@ async def get_context_usage(session_id: str, db: ChatDatabase = Depends(get_db))
                 else "Measured once GAIA has answered in this chat."
             ),
         }
+    from gaia.agents.base.skill_budget import skill_budget_report
+
     from ..turn_insights import panel_context
 
     def _measure():
-        return panel_context(
+        usage = panel_context(
             agent, model_turns(agent, db, session_id), getattr(agent, "model_id", None)
         )
+        usage["skill_budget"] = skill_budget_report(agent)
+        return usage
 
     return {"available": True, **(await asyncio.to_thread(_measure))}
 
@@ -944,25 +1232,66 @@ class RetryWithRequest(BaseModel):
     model: str
 
 
-@router.post("/api/chat/retry-with")
+class RetryStats(WireModel):
+    """The retried answer's numbers; zero tokens means the server did not report them."""
+
+    model: str
+    retried: Literal[True]
+    seconds: float
+    load_seconds: float
+    input_tokens: int
+    output_tokens: int
+    tokens_per_second: float
+    time_to_first_token: float
+
+
+class RetryWithResponse(WireModel):
+    """The retried answer, held until ``/api/chat/retry-with/choose`` keeps one."""
+
+    message_id: int
+    model: str
+    content: str
+    stats: RetryStats
+
+
+@router.post(
+    "/api/chat/retry-with",
+    response_model=RetryWithResponse,
+    response_model_exclude_unset=True,
+)
 async def retry_with(
     request: RetryWithRequest,
     http_request: Request,
     db: ChatDatabase = Depends(get_db),
 ):
-    """Answer the latest question again on another local model, to compare.
+    """Answer the latest question again on another model, to compare.
 
+    The other model runs on this PC, or at the cloud service that gave the
+    answer: the chat has already gone there, so nothing new leaves the PC.
     The answer is held until ``/api/chat/retry-with/choose`` keeps one.
     """
     from gaia.llm.lemonade_client import LemonadeClientError, resolve_ctx_size
+    from gaia.llm.local_only import cloud_blocked
 
-    from .._chat_helpers import _runs_on_this_pc
+    from .._chat_helpers import _runs_on_this_pc, _ui_cloud_provider
 
     sid = request.session_id
     if not db.get_session(sid):
         raise HTTPException(status_code=404, detail="Session not found")
+    record = db.get_message_record(sid, request.message_id)
+    cloud = _ui_cloud_provider(request.model)
+    answered_by = ((record or {}).get("inference_stats") or {}).get("model")
+    same_cloud = bool(cloud and answered_by) and cloud == _ui_cloud_provider(
+        answered_by
+    )
+    if same_cloud and cloud_blocked():
+        raise HTTPException(
+            status_code=400,
+            detail="Local only is on, so Retry with… can't use a cloud model. "
+            "Turn it off in Settings › Privacy, or pick a model on this PC.",
+        )
     try:
-        local = await asyncio.to_thread(_runs_on_this_pc, request.model)
+        local = same_cloud or await asyncio.to_thread(_runs_on_this_pc, request.model)
     except LemonadeClientError as exc:
         logger.error(
             "Retry with: couldn't check %s runs locally: %s", request.model, exc
@@ -976,14 +1305,14 @@ async def retry_with(
     if not local:
         raise HTTPException(
             status_code=400,
-            detail="Retry with… compares models on this PC; pick a local model.",
+            detail="Retry with… compares models on this PC or at the cloud "
+            "service that answered; pick one of those.",
         )
     if db.latest_message_id(sid) != request.message_id:
         raise HTTPException(
             status_code=409,
             detail="Only the latest answer can be retried with another model.",
         )
-    record = db.get_message_record(sid, request.message_id)
     if record is None or record["role"] != "assistant":
         raise HTTPException(
             status_code=409, detail="Only an answer from GAIA can be retried."
@@ -1012,7 +1341,7 @@ async def retry_with(
                 earlier, question, resolve_ctx_size(request.model)
             )
             result = await asyncio.to_thread(
-                answer_retry.answer_with, request.model, messages
+                answer_retry.answer_with, request.model, messages, cloud=same_cloud
             )
         except answer_retry.RetryError as exc:
             raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
@@ -1038,7 +1367,26 @@ class RetryChoiceRequest(BaseModel):
     keep: Literal["original", "retry"]
 
 
-@router.post("/api/chat/retry-with/choose")
+class KeptOriginal(WireModel):
+    kept: Literal["original"]
+
+
+class KeptRetry(WireModel):
+    """The retried answer replaced the original."""
+
+    kept: Literal["retry"]
+    content: str
+    #: The turn's saved inference stats with the retry's numbers over them.
+    stats: Dict[str, Any]
+
+
+@router.post(
+    "/api/chat/retry-with/choose",
+    response_model=Annotated[
+        Union[KeptOriginal, KeptRetry], Field(discriminator="kept")
+    ],
+    response_model_exclude_unset=True,
+)
 async def choose_retry(request: RetryChoiceRequest, db: ChatDatabase = Depends(get_db)):
     """Keep the original or the retried answer; the chat continues from it."""
     sid = request.session_id

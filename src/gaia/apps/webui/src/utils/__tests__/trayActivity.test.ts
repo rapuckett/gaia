@@ -35,6 +35,7 @@ function input(overrides: Partial<TrayActivityInput> = {}): TrayActivityInput {
         liveStatus: null,
         livePhase: null,
         notifications: [],
+        untitledChat: 'Untitled chat',
         ...overrides,
     };
 }

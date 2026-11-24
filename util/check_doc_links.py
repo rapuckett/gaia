@@ -20,6 +20,7 @@ import http.client
 import json
 import os
 import re
+import ssl
 import sys
 import time
 import urllib.error
@@ -39,7 +40,7 @@ class LinkResult(NamedTuple):
 
 # Regex patterns for extracting links
 # Matches [text](url) but not ![image](url) image tags with broken links
-MD_LINK_RE = re.compile(r'(?<!!)\[([^\]]*)\]\(([^)]+)\)')
+MD_LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
 # Matches bare URLs in text
 BARE_URL_RE = re.compile(r'(?<=["\s(])https?://[^\s)"\'<>]+')
 # Matches href="url" in HTML/JSX
@@ -95,6 +96,7 @@ SKIP_PATTERNS = [
     r"github\.com/amd/gaia/(blob|tree)/main/",  # Same-repo links (may 404 during PRs before merge)
     r"https?://(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)",  # RFC1918 private IPs (example URLs in docs)
     r"^https?://t\.me/",  # Telegram deep-links (e.g. BotFather) — valid but unresolvable from CI runners
+    r"^https?://slack\.com/signin",  # Sign-in page 403s automated requests
 ]
 
 
@@ -145,7 +147,7 @@ def extract_links(filepath: Path) -> List[Tuple[int, str]]:
                 links.append((i, url))
 
         # Bare URLs (only if not already captured)
-        existing_urls = {u for _, u in links if _== i}  # noqa: E741
+        existing_urls = {u for _, u in links if _ == i}  # noqa: E741
         for match in BARE_URL_RE.finditer(line):
             url = match.group(0).strip().rstrip(".,;:)")
             if url not in existing_urls:
@@ -196,12 +198,14 @@ def check_internal_link(
     # Try with and without extensions
     candidates = [target]
     if not target.suffix:
-        candidates.extend([
-            target.with_suffix(".mdx"),
-            target.with_suffix(".md"),
-            target / "index.mdx",
-            target / "index.md",
-        ])
+        candidates.extend(
+            [
+                target.with_suffix(".mdx"),
+                target.with_suffix(".md"),
+                target / "index.mdx",
+                target / "index.md",
+            ]
+        )
     elif target.suffix == ".mdx":
         candidates.append(target.with_suffix(".md"))
 
@@ -223,6 +227,100 @@ def github_api_equivalent(url: str) -> Optional[str]:
         return None
     owner, repo, number = m.groups()
     return f"https://api.github.com/repos/{owner}/{repo}/issues/{number}"
+
+
+GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
+# Issue/PR numbers looked up per GraphQL query (one aliased field each).
+GITHUB_BATCH_SIZE = 100
+
+
+def _graphql_batch(
+    owner: str, repo: str, numbers: List[int], token: str, timeout: int = 30
+) -> Set[int]:
+    """The numbers in ``numbers`` that are an issue or PR of owner/repo.
+
+    One query for the whole batch; raises on an HTTP or GraphQL-level failure.
+    """
+    fields = " ".join(
+        f"n{n}: issueOrPullRequest(number: {n}) {{ __typename }}" for n in numbers
+    )
+    query = (
+        "query($owner: String!, $name: String!) "
+        f"{{ repository(owner: $owner, name: $name) {{ {fields} }} }}"
+    )
+    body = json.dumps(
+        {"query": query, "variables": {"owner": owner, "name": repo}}
+    ).encode()
+    req = urllib.request.Request(
+        GITHUB_GRAPHQL_URL,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": "GAIA-DocLinkChecker/1.0 (+https://github.com/amd/gaia)",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        payload = json.load(resp)
+    data = payload.get("data")
+    errors = payload.get("errors") or []
+    # A missing number comes back as a NOT_FOUND error next to the data; any
+    # other error means the answer can't be trusted.
+    other = [e for e in errors if e.get("type") != "NOT_FOUND"]
+    if other or data is None:
+        reason = "; ".join(str(e.get("message", e)) for e in other) or "no data"
+        raise RuntimeError(f"GitHub GraphQL query failed: {reason}")
+    found = data.get("repository") or {}
+    return {n for n in numbers if found.get(f"n{n}") is not None}
+
+
+def prefetch_github_refs(
+    urls: List[str], token: Optional[str]
+) -> Dict[str, Tuple[str, str]]:
+    """Answer github.com issue/PR links ~100 per GraphQL query.
+
+    One REST call per link spent the workflow token's shared hourly quota.
+    Only links that exist are answered; one GraphQL can't find (transferred,
+    inaccessible repo, typo) is left to the per-link REST check, which follows
+    redirects. A failed batch marks its links "warning" rather than falling
+    back to one REST call each.
+    """
+    if not token:
+        return {}
+    by_repo: Dict[Tuple[str, str], Dict[int, List[str]]] = {}
+    for url in urls:
+        m = GITHUB_ISSUE_PR_RE.match(url)
+        if not m:
+            continue
+        owner, repo, number = m.groups()
+        # GraphQL's Int is 32-bit; a larger number would fail its whole batch.
+        if int(number) > 2**31 - 1:
+            continue
+        by_repo.setdefault((owner, repo), {}).setdefault(int(number), []).append(url)
+
+    answers: Dict[str, Tuple[str, str]] = {}
+    for (owner, repo), refs in by_repo.items():
+        numbers = sorted(refs)
+        for start in range(0, len(numbers), GITHUB_BATCH_SIZE):
+            batch = numbers[start : start + GITHUB_BATCH_SIZE]
+            try:
+                found = _graphql_batch(owner, repo, batch, token)
+            except urllib.error.HTTPError as e:
+                detail = f"GitHub GraphQL HTTP {e.code} (may be rate limited)"
+                for n in batch:
+                    for url in refs[n]:
+                        answers[url] = ("warning", detail)
+                continue
+            except (OSError, http.client.HTTPException, RuntimeError, ValueError) as e:
+                for n in batch:
+                    for url in refs[n]:
+                        answers[url] = ("warning", f"GitHub GraphQL: {e}")
+                continue
+            for n in found:
+                for url in refs[n]:
+                    answers[url] = ("ok", "exists (GitHub GraphQL)")
+    return answers
 
 
 def _request_headers(effective_url: str) -> Dict[str, str]:
@@ -274,7 +372,10 @@ def check_external_link(url: str, timeout: int = 15) -> Tuple[str, str]:
                     return "broken", f"HTTP {code}"
             except urllib.error.HTTPError as e2:
                 if e2.code in (403, 408, 429) or e2.code >= 500:
-                    return "warning", f"HTTP {e2.code} (may require auth or be rate limited)"
+                    return (
+                        "warning",
+                        f"HTTP {e2.code} (may require auth or be rate limited)",
+                    )
                 return "broken", f"HTTP {e2.code}"
             except (OSError, http.client.HTTPException) as e2:
                 return "warning", f"connection error on GET fallback: {e2}"
@@ -301,6 +402,12 @@ def check_external_link(url: str, timeout: int = 15) -> Tuple[str, str]:
         reason_str = str(reason).lower()
         if "timed out" in reason_str or "handshake" in reason_str:
             return "warning", f"URL error: {reason} (SSL/network timeout)"
+        # The site let its certificate lapse; the link still points at the right place.
+        if isinstance(reason, ssl.SSLCertVerificationError) and "expired" in reason_str:
+            return (
+                "warning",
+                f"URL error: {reason} (the site's certificate has expired)",
+            )
         return "broken", f"URL error: {reason}"
     except TimeoutError:
         return "warning", "timeout"
@@ -416,15 +523,18 @@ def check_links(
 
     # Check external links (parallel with rate limiting)
     if external_urls:
-        checked: Dict[str, Tuple[str, str]] = {}
+        checked = prefetch_github_refs(
+            list(external_urls), os.environ.get("GITHUB_TOKEN")
+        )
 
         def _check(url: str) -> Tuple[str, str, str]:
             time.sleep(0.1)  # Basic rate limiting
             status, detail = check_external_link_with_retries(url)
             return url, status, detail
 
+        pending = [url for url in external_urls if url not in checked]
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(_check, url): url for url in external_urls}
+            futures = {executor.submit(_check, url): url for url in pending}
             for future in as_completed(futures):
                 url, status, detail = future.result()
                 checked[url] = (status, detail)

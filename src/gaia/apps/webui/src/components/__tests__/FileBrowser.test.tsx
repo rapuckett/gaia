@@ -8,6 +8,7 @@ import { useChatStore } from '../../stores/chatStore';
 import * as api from '../../services/api';
 import type { BrowseResponse } from '../../types';
 import { stripIsolates } from '../../i18n/registry';
+import { tEn } from '../../i18n/useT';
 import { ARABIC_MONTH, ENGLISH_MONTH, resetUiLocale, setUiLocale } from '../../test/dates';
 
 vi.mock('../../services/api');
@@ -123,9 +124,9 @@ describe('FileBrowser row selection', () => {
         const previewBtn = within(row).getByRole('button', { name: /Preview/i });
         fireEvent.click(previewBtn);
 
-        // previewFile should have been called
+        // Names the chat: away from the PC, previews read only that chat's folders.
         await waitFor(() => {
-            expect(mockedApi.previewFile).toHaveBeenCalledWith('/home/user/docs/report.pdf');
+            expect(mockedApi.previewFile).toHaveBeenCalledWith('/home/user/docs/report.pdf', undefined, 'session-1');
         });
 
         // Checkbox should stay unchecked
@@ -250,6 +251,18 @@ describe('FileBrowser Index Selected', () => {
         expect(await screen.findByText('Added 1 file')).toBeInTheDocument();
         expect(screen.queryByText(/indexed/i)).not.toBeInTheDocument();
     });
+
+    it('blames the model server, not the file, without the connection error', async () => {
+        mockedApi.uploadDocumentByPath.mockResolvedValue({
+            ...DOC, indexing_status: 'failed', error_kind: 'model_server_down',
+            last_error: "Lemonade Server is not reachable: HTTPConnectionPool(host='127.0.0.1') [WinError 10061]",
+        } as never);
+        await indexNotes();
+        await waitFor(() => expect(document.querySelector('.upload-error-toast')).not.toBeNull());
+        const toast = document.querySelector('.upload-error-toast')!;
+        expect(toast).toHaveTextContent("GAIA's model server isn't answering");
+        expect(toast.textContent).not.toMatch(/HTTPConnectionPool|WinError/);
+    });
 });
 
 describe('FileBrowser Ask Agent', () => {
@@ -279,7 +292,7 @@ describe('FileBrowser Ask Agent', () => {
     it('starts a new chat about the file from the new-chat screen (#5924)', async () => {
         useChatStore.setState({ currentSessionId: null });
         const onStartChat = await askAboutNotes();
-        expect(onStartChat).toHaveBeenCalledWith('Please analyze this document for me: notes.txt');
+        expect(onStartChat).toHaveBeenCalledWith(tEn('mobileApp.files.askOne', { name: 'notes.txt' }));
         // Nothing is left waiting to fire into whichever chat opens next.
         expect(useChatStore.getState().pendingPrompt).toBeNull();
         expect(useChatStore.getState().draftDocumentIds).toEqual(['doc-1']);
@@ -289,7 +302,7 @@ describe('FileBrowser Ask Agent', () => {
         const onStartChat = await askAboutNotes();
         expect(onStartChat).not.toHaveBeenCalled();
         expect(useChatStore.getState().pendingPrompt).toEqual({
-            sessionId: 'session-1', text: 'Please analyze this document for me: notes.txt',
+            sessionId: 'session-1', text: tEn('mobileApp.files.askOne', { name: 'notes.txt' }),
         });
     });
 });
@@ -434,6 +447,79 @@ describe('FileBrowser dates follow the interface language', () => {
     });
 });
 
+it('marks a right-to-left override in entry names, paths, buttons, quick links, the path bar and the preview', async () => {
+    const rlo = String.fromCodePoint(0x202e);
+    const name = `report${rlo}txt.md`;
+    mockedApi.browseFiles.mockResolvedValue({
+        current_path: `/home/u${rlo}x`,
+        parent_path: '/home',
+        entries: [{ name, path: `/home/u/${name}`, type: 'file', size: 10, extension: '.md', modified: '' }],
+        quick_links: [{ name: `Docs${rlo}x`, path: `/home/docs${rlo}x`, icon: 'folder' }],
+    });
+    mockedApi.previewFile.mockResolvedValue({ ...FILE_PREVIEW, name, path: `/home/u/${name}`, preview_lines: [`a ${rlo}b`] });
+    render(<FileBrowser onStartChat={vi.fn()} />);
+    const shown = await screen.findByText('report[U+202E]txt.md');
+    expect(shown).toHaveAttribute('title', '/home/u/report[U+202E]txt.md');
+    expect(screen.getByRole('checkbox', { name: 'Select report[U+202E]txt.md' })).toBeInTheDocument();
+    expect(screen.getByText('Docs[U+202E]x').closest('button')).toHaveAttribute('title', '/home/docs[U+202E]x');
+    expect(screen.getByRole('button', { name: 'u[U+202E]x' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview report[U+202E]txt.md' }));
+    expect(await screen.findByText('a [U+202E]b')).toBeInTheDocument();
+    expect(document.querySelector('.fb-preview-name')!.textContent).toBe('report[U+202E]txt.md');
+    expect(document.body.innerHTML).not.toContain(rlo);
+});
+
+describe('unreadable folder', () => {
+    const osDenied = () => Object.assign(new Error('Permission denied for this directory'), { httpStatus: 403, reason: 'os_denied' });
+
+    it('clears the previous folder and names the folder that could not be opened', async () => {
+        render(<FileBrowser onStartChat={vi.fn()} />);
+        await screen.findByText('report.pdf');
+
+        mockedApi.browseFiles.mockRejectedValueOnce(osDenied());
+        fireEvent.click(screen.getByRole('button', { name: 'docs' }));
+
+        expect(await screen.findByText(/cannot open the folder "docs"/)).toBeTruthy();
+        expect(screen.queryByText('report.pdf')).toBeNull();
+        expect(screen.queryByText('This folder is empty')).toBeNull();
+        expect(screen.getByRole('button', { name: 'docs' })).toBeTruthy();
+    });
+
+    it('keeps the backend text for the outside-home 403', async () => {
+        render(<FileBrowser onStartChat={vi.fn()} />);
+        await screen.findByText('report.pdf');
+
+        mockedApi.browseFiles.mockRejectedValueOnce(
+            Object.assign(new Error('Access restricted to files under: /home/user'), { httpStatus: 403, reason: null }),
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'user' }));
+
+        expect(await screen.findByText('Access restricted to files under: /home/user')).toBeTruthy();
+        expect(screen.queryByText(/cannot open the folder/)).toBeNull();
+        expect(screen.getByText('report.pdf')).toBeTruthy();
+    });
+});
+
+describe('FileBrowser relative dates', () => {
+    async function dateFor(msAgo: number): Promise<string> {
+        mockedApi.browseFiles.mockResolvedValue({
+            ...BROWSE_RESPONSE,
+            entries: [{ ...BROWSE_RESPONSE.entries[0], modified: new Date(Date.now() - msAgo).toISOString() }],
+        });
+        const { unmount } = render(<FileBrowser onStartChat={vi.fn()} />);
+        const name = await screen.findByText('report.pdf');
+        const text = stripIsolates(name.closest('.fb-entry')!.querySelector('.fb-entry-date')!.textContent ?? '');
+        unmount();
+        return text;
+    }
+
+    it('counts minutes under an hour instead of saying just now', async () => {
+        expect(await dateFor(20_000)).toBe('just now');
+        expect(await dateFor(40 * 60_000)).toBe('40m ago');
+        expect(await dateFor(3 * 3_600_000)).toBe('3h ago');
+    });
+});
+
 describe('FileBrowser in Arabic', () => {
     afterEach(resetUiLocale);
 
@@ -459,5 +545,59 @@ describe('FileBrowser in Arabic', () => {
         }
         expect(within(dialog).getByPlaceholderText(/ابحث عن ملفات على جهازك/)).toBeInTheDocument();
         expect(within(dialog).getByRole('combobox', { name: /تصفية حسب نوع الملف/ })).toHaveDisplayValue(/كل الملفات/);
+    });
+});
+
+describe('FileBrowser folder add', () => {
+    const DOC = {
+        id: 'doc-1', filename: 'report.md', filepath: '/home/user/docs/scan/report.md', file_size: 512,
+        chunk_count: 1, indexed_at: '', last_accessed_at: null, sessions_using: 1, indexing_status: 'complete',
+    };
+
+    beforeEach(() => {
+        useChatStore.setState({
+            sessions: [{ id: 'session-1', title: 'Chat', document_ids: [] } as never],
+            documents: [],
+        });
+        mockedApi.browseFiles.mockResolvedValue({
+            ...BROWSE_RESPONSE,
+            entries: [{ name: 'scan', path: '/home/user/docs/scan', type: 'folder', size: 0, extension: '', modified: '' }],
+        });
+        mockedApi.attachDocument.mockResolvedValue(undefined as never);
+        mockedApi.listDocuments.mockResolvedValue({
+            documents: [DOC] as never, total: 1, total_size_bytes: 512, total_chunks: 1,
+        });
+    });
+
+    async function addScanFolder() {
+        render(<FileBrowser onStartChat={vi.fn()} />);
+        const row = (await screen.findByText('scan')).closest('.fb-entry') as HTMLElement;
+        fireEvent.click(within(row).getByRole('checkbox'));
+        fireEvent.click(screen.getByRole('button', { name: /Add to library/i }));
+        await waitFor(() => expect(mockedApi.indexFolder).toHaveBeenCalled());
+    }
+
+    it('counts the files a folder failed on and refreshes the library to show them', async () => {
+        mockedApi.indexFolder.mockResolvedValue({
+            indexed: 1, failed: 1, skipped: 0, skipped_images: 0,
+            errors: ['contract_summary.txt: the embedder was restarting'], documents: [DOC],
+        } as never);
+
+        await addScanFolder();
+
+        expect(await screen.findByText('Done: 1 added, 1 failed')).toBeInTheDocument();
+        expect(mockedApi.listDocuments).toHaveBeenCalled();
+    });
+
+    it("says how many of a folder's images were left out", async () => {
+        mockedApi.indexFolder.mockResolvedValue({
+            indexed: 1, failed: 0, skipped: 0, skipped_images: 2, errors: [], documents: [DOC],
+        } as never);
+
+        await addScanFolder();
+
+        expect(await screen.findByText(
+            'Added 1 file Left out 2 images: add them one at a time and GAIA will read them.',
+        )).toBeInTheDocument();
     });
 });

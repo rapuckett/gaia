@@ -22,6 +22,8 @@ from gaia.login_path import (
     read_login_path,
 )
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 BEGIN, END = lp._PATH_BEGIN, lp._PATH_END
 posix_only = pytest.mark.skipif(os.name == "nt", reason="needs a POSIX shell")
 SEP = os.pathsep
@@ -392,6 +394,8 @@ def test_cli_main_repairs_the_path_after_parsing_arguments(monkeypatch):
     monkeypatch.setattr(cli, "apply_login_path", lambda: order.append("path"))
 
     class Parser:
+        _actions = []  # main() reads the flags to spot a retired command
+
         def parse_args(self):
             order.append("parse")
             raise SystemExit(0)
@@ -416,6 +420,8 @@ def test_cli_main_reaches_the_repair_for_a_real_command(monkeypatch):
     monkeypatch.setattr(cli, "get_logger", lambda name: None)
 
     class Parser:
+        _actions = []  # main() reads the flags to spot a retired command
+
         def parse_args(self):
             return types.SimpleNamespace(action="chat")
 

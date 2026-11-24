@@ -19,15 +19,24 @@ import {
   useNotificationStore,
   selectUnreadCount,
   selectVisibleNotifications,
+  selectPresentTypes,
   permissionPromptText,
 } from '../stores/notificationStore';
 import type { GaiaNotification, NotificationType } from '../types/agent';
 import { dateLocale, useT, type Translate } from '../i18n/useT';
 import { MarkedText, markLtr } from './MarkedText';
+import { ApiError } from '../services/api';
+import { removeDevice } from '../services/devicesApi';
+import { useDeviceStore } from '../stores/deviceStore';
+import { useChatStore } from '../stores/chatStore';
+import { log } from '../utils/logger';
 import './NotificationCenter.css';
+import { noticeText, visibleStrict } from './CalendarApproval';
 
 interface NotificationCenterProps {
   onClose: () => void;
+  /** Opens the chat a notification came from, e.g. a scheduled run's chat. */
+  onOpenChat?: (sessionId: string) => void;
 }
 
 // ── Notification type → icon + color mapping ─────────────────────────────
@@ -83,7 +92,7 @@ function formatNotifTime(timestamp: number, t: Translate): string {
 
 // ── Component ────────────────────────────────────────────────────────────
 
-export function NotificationCenter({ onClose }: NotificationCenterProps) {
+export function NotificationCenter({ onClose, onOpenChat }: NotificationCenterProps) {
   const t = useT();
   // useShallow is required — the selector filters into a fresh array, and an
   // uncached snapshot makes useSyncExternalStore re-render without end.
@@ -95,14 +104,16 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
   const dismiss = useNotificationStore((s) => s.dismiss);
   const respondToPermission = useNotificationStore((s) => s.respondToPermission);
   const typeFilter = useNotificationStore((s) => s.typeFilter);
+  const presentTypes = useNotificationStore(useShallow(selectPresentTypes));
   const setTypeFilter = useNotificationStore((s) => s.setTypeFilter);
 
-  // Handle clicking a notification item (mark as read)
+  // Clicking a notification marks it read and, when it names a chat, opens it.
   const handleClick = useCallback(
-    (id: string) => {
-      markRead(id);
+    (notif: GaiaNotification) => {
+      markRead(notif.id);
+      if (notif.sessionId && notif.type !== 'permission_request') onOpenChat?.(notif.sessionId);
     },
-    [markRead]
+    [markRead, onOpenChat]
   );
 
   // Handle approve for permission_request
@@ -121,10 +132,32 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
     [respondToPermission]
   );
 
+  // A device pairing notice: Review opens the device list; Deny unpairs it. Allowing happens only in Settings.
+  const handleDeviceReview = useCallback(() => {
+    onClose();
+    useChatStore.getState().openSettings('devices');
+  }, [onClose]);
+
+  const handleDeviceDeny = useCallback((notif: GaiaNotification) => {
+    if (!notif.deviceId) return;
+    const answered = () =>
+      useNotificationStore.setState((s) => ({
+        notifications: s.notifications.map((n) => (n.id === notif.id ? { ...n, response: 'deny', respondedAt: Date.now() } : n)),
+      }));
+    removeDevice(notif.deviceId)
+      .then(answered)
+      .catch((err) => {
+        // 404: already unpaired or expired, which is what Deny asks for.
+        if (err instanceof ApiError && err.httpStatus === 404) answered();
+        else log.ui.error('Denying the paired device failed', err);
+      })
+      .finally(() => void useDeviceStore.getState().refresh());
+  }, []);
+
   useEscapeToClose(true, onClose);
 
-  // Filter type tabs
-  const filterTypes: Array<{ key: NotificationType | null; label: string }> = [
+  // Only the kinds that are in the list, so the tabs fit and none of them is empty.
+  const allFilters: Array<{ key: NotificationType | null; label: string }> = [
     { key: null, label: t('notifications.filter.all') },
     { key: 'permission_request', label: t('notifications.filter.permissions') },
     { key: 'policy_alert', label: t('notifications.filter.policy') },
@@ -133,6 +166,8 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
     { key: 'status_change', label: t('notifications.filter.status') },
     { key: 'info', label: t('notifications.filter.info') },
   ];
+  const filterTypes = allFilters.filter((ft) => ft.key === null || ft.key === typeFilter || presentTypes.includes(ft.key));
+  const showFilters = filterTypes.length > 2 || typeFilter !== null;
 
   return (
     <div className="notification-center" role="dialog" aria-label={t('notifications.dialogAria')}>
@@ -154,19 +189,21 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
       </div>
 
       {/* Filter tabs */}
-      <div className="notification-filter-bar" role="tablist" aria-label={t('notifications.filterAria')}>
-        {filterTypes.map((ft) => (
-          <button
-            key={ft.key ?? 'all'}
-            role="tab"
-            aria-selected={typeFilter === ft.key}
-            className={`notification-filter-tab ${typeFilter === ft.key ? 'active' : ''}`}
-            onClick={() => setTypeFilter(ft.key)}
-          >
-            {ft.label}
-          </button>
-        ))}
-      </div>
+      {showFilters && (
+        <div className="notification-filter-bar" role="tablist" aria-label={t('notifications.filterAria')}>
+          {filterTypes.map((ft) => (
+            <button
+              key={ft.key ?? 'all'}
+              role="tab"
+              aria-selected={typeFilter === ft.key}
+              className={`notification-filter-tab ${typeFilter === ft.key ? 'active' : ''}`}
+              onClick={() => setTypeFilter(ft.key)}
+            >
+              {ft.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Notification list */}
       <div className="notification-list">
@@ -179,17 +216,17 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
           notifications.map((n) => {
             const meta = NOTIFICATION_META[n.type];
             // A prompt reads as its card does, not as its stored English text.
-            const prompt = n.type === 'permission_request' && n.tool ? permissionPromptText(n, t, markLtr) : null;
+            const prompt = n.type === 'permission_request' && n.tool ? permissionPromptText(n, t, (s) => markLtr(visibleStrict(s))) : null;
             return (
               <div
                 className={`notification-item ${!n.read ? 'unread' : ''} ${meta.colorClass}`}
                 id={n.type === 'policy_alert' && n.receiptId ? `policy-receipt-${encodeURIComponent(n.receiptId)}` : undefined}
                 key={n.id}
-                onClick={() => handleClick(n.id)}
+                onClick={() => handleClick(n)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') handleClick(n.id);
+                  if (e.key === 'Enter' || e.key === ' ') handleClick(n);
                 }}
               >
                 {/* Unread dot */}
@@ -209,14 +246,14 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
                   {prompt ? (
                     <>
                       <span className="notification-title"><MarkedText text={prompt.heading} /></span>
-                      <span className="notification-message"><MarkedText text={prompt.question} /></span>
+                      <span className="notification-message" dir="auto"><MarkedText text={prompt.question} /></span>
                     </>
                   ) : (
                     <>
                       {n.title && (
-                        <span className="notification-title">{n.title}</span>
+                        <span className="notification-title">{noticeText(n.title)}</span>
                       )}
-                      <span className="notification-message">{n.message}</span>
+                      <span className="notification-message" dir="auto">{noticeText(n.message)}</span>
                     </>
                   )}
 
@@ -229,7 +266,8 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
                       )}
                       {n.reason && (
                         <span className="notification-policy-reason">
-                          {t('notifications.reason')}: {n.reason}
+                          <span className="notification-policy-reason-label">{t('notifications.reason')}:</span>
+                          <bdi dir="ltr">{n.reason}</bdi>
                         </span>
                       )}
                       {n.ruleIds && n.ruleIds.length > 0 && (
@@ -277,6 +315,33 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
                         {t('notifications.deny')}
                       </button>
                     </div>
+                  )}
+
+                  {n.deviceId && !n.response && (
+                    <div className="notification-actions">
+                      <button
+                        className="notification-action-btn notification-action-allow"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeviceReview();
+                        }}
+                      >
+                        {t('notifications.devices.review')}
+                      </button>
+                      <button
+                        className="notification-action-btn notification-action-deny"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeviceDeny(n);
+                        }}
+                      >
+                        <X size={14} />
+                        {t('notifications.deny')}
+                      </button>
+                    </div>
+                  )}
+                  {n.deviceId && n.response === 'deny' && (
+                    <span className="notification-response-badge response-deny">{t('notifications.denied')}</span>
                   )}
 
                   {/* Permission response badge */}

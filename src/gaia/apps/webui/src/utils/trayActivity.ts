@@ -31,10 +31,12 @@ export interface TrayActivityInput {
     liveStatus: string | null;
     livePhase: string | null;
     notifications: GaiaNotification[];
+    /** What a chat with no title is called, in the chosen language. */
+    untitledChat: string;
 }
 
-function ref(id: string, byId: Map<string, Session>): TrayChatRef {
-    return { id, title: byId.get(id)?.title ?? 'Untitled chat' };
+function ref(id: string, byId: Map<string, Session>, untitled: string): TrayChatRef {
+    return { id, title: byId.get(id)?.title ?? untitled };
 }
 
 export function buildTrayActivity(input: TrayActivityInput): TrayActivity {
@@ -51,14 +53,14 @@ export function buildTrayActivity(input: TrayActivityInput): TrayActivity {
             .filter((n) => n.type === 'permission_request' && !n.response && !n.dismissed && n.sessionId && running.has(n.sessionId))
             .map((n) => n.sessionId!),
     );
-    const needsYou: TrayActivity['needsYou'] = [...approvals].map((id) => ({ ...ref(id, byId), reason: 'approval' }));
+    const needsYou: TrayActivity['needsYou'] = [...approvals].map((id) => ({ ...ref(id, byId, input.untitledChat), reason: 'approval' }));
     if (streamingHere && input.awaitingUser && !approvals.has(input.currentSessionId!)) {
-        needsYou.push({ ...ref(input.currentSessionId!, byId), reason: 'answer' });
+        needsYou.push({ ...ref(input.currentSessionId!, byId, input.untitledChat), reason: 'answer' });
     }
     // A prompt raised in another window never reaches this window's notifications.
     for (const [id, kind] of Object.entries(input.awaitingBySession)) {
         if (needsYou.some((n) => n.id === id)) continue;
-        needsYou.push({ ...ref(id, byId), reason: kind === 'question' ? 'answer' : 'approval' });
+        needsYou.push({ ...ref(id, byId, input.untitledChat), reason: kind === 'question' ? 'answer' : 'approval' });
     }
 
     const waitingOnModel = streamingHere && !input.awaitingUser && input.livePhase && MODEL_WAIT_PHASES.has(input.livePhase)
@@ -78,7 +80,7 @@ export function buildTrayActivity(input: TrayActivityInput): TrayActivity {
     const recent = [...input.sessions]
         .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
         .slice(0, RECENT_CHATS)
-        .map((s) => ref(s.id, byId));
+        .map((s) => ref(s.id, byId, input.untitledChat));
 
     return {
         backendConnected: input.backendConnected,
@@ -86,7 +88,7 @@ export function buildTrayActivity(input: TrayActivityInput): TrayActivity {
         modelServerRunning: status && !status.default_model_is_cloud ? status.lemonade_running : null,
         model,
         waitingOnModel: waitingOnModel || null,
-        running: runningIds.map((id) => ref(id, byId)),
+        running: runningIds.map((id) => ref(id, byId, input.untitledChat)),
         needsYou,
         recent,
     };

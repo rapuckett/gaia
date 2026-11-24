@@ -3,12 +3,13 @@
 
 import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelSettings } from '../ModelSettings';
 import { useModelStore } from '../../../stores/modelStore';
 import { useChatStore } from '../../../stores/chatStore';
 import * as api from '../../../services/api';
-import { mockSetupApis } from '../../../test/setupApiMocks';
+import { ApiError } from '../../../services/apiErrors';
+import { mockSetupApis, SETTINGS } from '../../../test/setupApiMocks';
 import type { ActiveModel, ProviderInfo, ProviderModel } from '../../../types';
 
 vi.mock('../../../services/api');
@@ -52,6 +53,19 @@ beforeEach(() => {
     mockedApi.getContextChoice.mockResolvedValue({
         model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', chosen: null, automatic: 65536,
         min: 65536, max_fit: 65536, options: [65536], loaded_ctx: null, memory_source: 'AMD iGPU', note: null,
+    });
+});
+
+describe('ModelSettings agent', () => {
+    it('picks the agent at the top of the page; the comparison says when a switch applies', async () => {
+        mockedApi.updateSettings.mockResolvedValue({ ...SETTINGS, flagship_agent: 'gaiacpp' });
+        render(<ModelSettings />);
+        const card = await screen.findByRole('region', { name: 'Agent' });
+        fireEvent.click(await within(card).findByRole('button', { name: 'Compare the two' }));
+        expect(within(card).getByText('A switch applies from the next message in every chat.')).toBeVisible();
+        fireEvent.click(await within(card).findByRole('radio', { name: /gaiacpp/ }));
+        expect(mockedApi.updateSettings).toHaveBeenCalledWith({ flagship_agent: 'gaiacpp' });
+        await waitFor(() => expect(within(card).getByRole('radio', { name: /gaiacpp/ })).toHaveAttribute('aria-checked', 'true'));
     });
 });
 
@@ -100,6 +114,16 @@ describe('ModelSettings provider keys', () => {
         await waitFor(() => expect(mockedApi.connectProviderWaitingForOs).toHaveBeenCalledWith('fireworks', { api_key: undefined }, expect.any(Function), expect.any(Function)));
     });
 
+    it('a gateway on plain http says to use https on the PC', async () => {
+        withProviders(fireworks({ models_discovered: false, key_source: 'stored', key_hint: 'a1b2' }));
+        mockedApi.connectProviderWaitingForOs.mockRejectedValue(
+            new ApiError('x', 422, 'The AMD Gateway address must start with https://.', null, [], { message: 'm', code: 'gateway_insecure_http' }),
+        );
+        const card = await openFireworks();
+        fireEvent.click(within(card).getByRole('button', { name: 'Reconnect' }));
+        expect(await within(card).findByText(/must start with .*https:\/\/.*Change it on the PC/)).toBeInTheDocument();
+    });
+
     it('replaces a saved key only after asking for a new one', async () => {
         withProviders(fireworks({ models_discovered: true, key_source: 'stored', key_hint: 'a1b2' }));
         mockedApi.connectProviderWaitingForOs.mockResolvedValue({ ...fireworks(), remembered: true, remember_error: null });
@@ -128,7 +152,7 @@ describe('ModelSettings provider keys', () => {
     it('an environment key can be neither replaced nor removed here', async () => {
         withProviders(fireworks({ models_discovered: true, key_source: 'environment' }));
         const card = await openFireworks();
-        expect(within(card).getByLabelText('Saved Fireworks AI API key')).toHaveValue('From your environment (FIREWORKS_API_KEY)');
+        expect(within(card).getByLabelText('Saved Fireworks AI API key')).toHaveValue('From your environment: \u2066FIREWORKS_API_KEY\u2069');
         expect(within(card).queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument();
         expect(within(card).queryByRole('button', { name: 'Remove key' })).not.toBeInTheDocument();
     });
@@ -145,7 +169,7 @@ describe('ModelSettings provider keys', () => {
         withProviders(fireworks({ key_source: 'environment', models_discovered: false }));
         mockedApi.connectProviderWaitingForOs.mockResolvedValue({ ...fireworks({ key_source: 'environment', models_discovered: true }), remembered: false, remember_error: null });
         const card = await openFireworks();
-        expect(within(card).getByLabelText('Saved Fireworks AI API key')).toHaveValue('From your environment (FIREWORKS_API_KEY)');
+        expect(within(card).getByLabelText('Saved Fireworks AI API key')).toHaveValue('From your environment: \u2066FIREWORKS_API_KEY\u2069');
         expect(within(card).getByText('Not connected')).toBeInTheDocument();
         expect(within(card).getByText('Fireworks AI has your key but is not connected yet, so no models are listed.')).toBeInTheDocument();
         fireEvent.click(within(card).getByRole('button', { name: 'Reconnect' }));
@@ -235,6 +259,17 @@ describe('ModelSettings provider keys', () => {
         await waitFor(() => expect(mockedApi.listProviders.mock.calls.length).toBe(reads + 1));
     });
 
+    it('reads the key store from key_store, ahead of the deprecated key_state', async () => {
+        withProviders(fireworks({
+            key_state: 'read',
+            key_store: 'locked',
+            key_message: 'The OS credential store is locked: its unlock prompt was closed.',
+        }));
+        const card = await openFireworks();
+        expect(within(card).getByText(/key store is locked/)).toBeInTheDocument();
+        expect(within(card).queryByText('No key yet.')).not.toBeInTheDocument();
+    });
+
     it('connects with the typed key and clears the field', async () => {
         mockedApi.connectProviderWaitingForOs.mockResolvedValue({ ...fireworks(), remembered: true, remember_error: null });
         const card = await openFireworks();
@@ -281,7 +316,9 @@ describe('ModelSettings provider keys', () => {
         const card = await openFireworks();
         fireEvent.click(within(card).getByRole('button', { name: 'Remove key' }));
         expect(mockedApi.forgetProviderKey).not.toHaveBeenCalled();
-        fireEvent.click(within(card).getByRole('button', { name: 'Remove' }));
+        const ask = screen.getByRole('alertdialog', { name: 'Remove this key?' });
+        expect(within(ask).getByRole('button', { name: 'Keep' })).toHaveFocus();
+        fireEvent.click(within(ask).getByRole('button', { name: 'Remove key' }));
         await waitFor(() => expect(mockedApi.forgetProviderKey).toHaveBeenCalledWith('fireworks'));
         expect(await within(card).findByRole('status')).toHaveTextContent('Key cleared');
     });
@@ -474,7 +511,7 @@ describe('ModelSettings: an unreachable AMD gateway (#5604)', () => {
         render(<ModelSettings />);
         const tab = await screen.findByRole('radio', { name: /AMD LLM Gateway/ });
         expect(tab).toBeDisabled();
-        expect(tab).toHaveAttribute('title', NO_NET);
+        expect(tab).toHaveAttribute('title', "Unavailable: needs AMD's network or VPN.");
         expect(screen.getByRole('radio', { name: /Fireworks AI/ })).toBeEnabled();
     });
 
@@ -492,5 +529,28 @@ describe('ModelSettings: an unreachable AMD gateway (#5604)', () => {
         });
         fireEvent.click(within(card).getByRole('button', { name: 'Check again' }));
         expect(await within(card).findByLabelText('AMD LLM Gateway API key')).toBeInTheDocument();
+    });
+});
+
+describe('ModelSettings in Arabic', () => {
+    afterEach(() => useChatStore.setState({ locale: 'en' }));
+
+    it('names Local in Arabic and says in Arabic that chat history leaves the PC', async () => {
+        useChatStore.setState({ locale: 'ar' });
+        mockedApi.listProviders.mockResolvedValue({
+            providers: [
+                { ...LOCAL, privacy_notice: 'Runs on this PC. Nothing leaves your machine.' },
+                fireworks({ privacy_notice: 'Chat history is sent to Fireworks AI. Usage may incur charges.' }),
+            ],
+            active: LOCAL_ACTIVE,
+            lemonade_error: null,
+        });
+        render(<ModelSettings />);
+        expect(await screen.findByRole('radio', { name: 'محلي' })).toBeInTheDocument();
+        expect(screen.queryByRole('radio', { name: 'Local' })).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('radio', { name: /Fireworks AI/ }));
+        const card = await screen.findByRole('region', { name: 'Fireworks AI' });
+        expect(card).toHaveTextContent('يُرسَل سجل المحادثة إلى Fireworks AI. قد يترتب على الاستخدام رسوم.');
     });
 });

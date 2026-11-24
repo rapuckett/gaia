@@ -604,3 +604,43 @@ class TestCheckNgrokAuthtokenConfigured:
             lambda: [tmp_path / "missing.yml"],
         )
         assert tunnel_mod._check_ngrok_authtoken_configured() is False
+
+
+def test_tunnel_started_log_carries_no_part_of_the_token(monkeypatch, caplog):
+    """The token is the whole credential: not even a prefix goes in the log."""
+    import logging
+
+    from gaia.ui import tunnel as tunnel_mod
+
+    manager = TunnelManager(port=4200)
+    manager._find_ngrok = lambda: "/fake/ngrok"
+    monkeypatch.setattr(tunnel_mod, "_check_ngrok_authtoken_configured", lambda: True)
+
+    async def _noop(self):
+        return None
+
+    async def _url(self):
+        return "https://abc.ngrok-free.app"
+
+    monkeypatch.setattr(TunnelManager, "_fetch_public_ip", _noop)
+    monkeypatch.setattr(TunnelManager, "_kill_stale_ngrok", _noop)
+    monkeypatch.setattr(TunnelManager, "_poll_ngrok_api", _url)
+    monkeypatch.setattr(TunnelManager, "_start_output_readers", lambda self: None)
+
+    class _Running:
+        def __init__(self, *_a, **_kw):
+            self.pid = None
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(tunnel_mod.subprocess, "Popen", _Running)
+
+    with caplog.at_level(logging.DEBUG, logger="gaia.ui.tunnel"):
+        status = asyncio.run(manager.start())
+
+    token = status["token"]
+    assert status["active"] and token
+    assert "Tunnel started: https://abc.ngrok-free.app" in caplog.text
+    for size in (6, 8):
+        assert token[:size] not in caplog.text

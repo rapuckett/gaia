@@ -12,6 +12,7 @@ See: https://docs.pytest.org/en/stable/reference/fixtures.html#conftest-py-shari
 
 Current fixtures:
 - _block_real_browser_launch: Session-autouse guard so no test can open a real browser
+- _block_real_screen_capture: Session-autouse guard so no test can grab the real screen
 - api_server: Function-scoped fixture that starts GAIA API server for integration tests
 - api_client: HTTP client (requests.Session) configured for API testing
 - lemonade_available: Session-scoped fixture checking if Lemonade server is running
@@ -31,6 +32,7 @@ be automatically available to all test files.
 
 import importlib
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -48,6 +50,12 @@ import requests
 # rather than rewriting every TestClient's ``base_url``. The guard's own tests
 # exercise the rejection path directly and do not rely on this.
 os.environ.setdefault("GAIA_UI_ALLOWED_HOSTS", "testserver")
+
+# Every Agent UI request needs the API token. Point the suite at its own token
+# file so no test reads or creates the developer's real one.
+_UI_TOKEN_FILE = Path(tempfile.mkdtemp(prefix="gaia-ui-token-")) / "agent-ui-token"
+_UI_TOKEN_FILE.write_text("test-agent-ui-token", encoding="utf-8")
+os.environ.setdefault("GAIA_UI_TOKEN_FILE", str(_UI_TOKEN_FILE))
 
 _BROWSER_LAUNCHERS = ("open", "open_new", "open_new_tab")
 
@@ -79,58 +87,27 @@ def _block_real_browser_launch():
         setattr(webbrowser, name, original)
 
 
-_EMAIL_CORPUS_DIR = Path(__file__).parent / "fixtures" / "email"
-_BUILD_EMAIL_CORPUS = """
-try:
-    from tests.fixtures.email.generate_mbox import ensure_corpus
-except ImportError:
-    raise SystemExit(0)
-ensure_corpus()
-"""
-
-
-def pytest_sessionstart(session):
-    """Rebuild the email-triage corpus from its committed seed before any test.
-
-    ``synthetic_inbox.mbox`` + ``ground_truth.json`` are generated artifacts (not
-    committed — fully derived from ``vendor_corpus_seed.jsonl``), so a fresh
-    checkout has the seed but not the corpus. This materialises them once so
-    email unit/integration tests find their inputs. It no-ops when the email
-    agent extra isn't installed (those tests don't run here); a missing
-    committed seed still raises loudly inside ``ensure_corpus``.
-
-    Under pytest-xdist only the controller builds it, before any worker starts:
-    several workers rewriting the same mbox would corrupt it. It runs in a
-    child interpreter because importing the generator puts the email agent on
-    ``sys.path``, which would change which test files collect.
-    """
-    if hasattr(session.config, "workerinput"):
-        return
-    if all(
-        (_EMAIL_CORPUS_DIR / name).exists()
-        for name in ("synthetic_inbox.mbox", "ground_truth.json")
-    ):
-        return
-    subprocess.run(
-        [sys.executable, "-c", _BUILD_EMAIL_CORPUS],
-        cwd=_EMAIL_CORPUS_DIR.parents[2],
-        check=True,
-    )
-
-
 @pytest.fixture(scope="session", autouse=True)
-def _ensure_email_corpus():
-    """Check the corpus is in place, and import its generator after collection.
+def _block_real_screen_capture():
+    """No test may grab the real screen: it prompts for screen recording on macOS."""
+    saved = []
 
-    The controller already built the corpus (see ``pytest_sessionstart``), so
-    ``ensure_corpus`` is a no-op here; the import still puts the email agent on
-    ``sys.path`` for the rest of the session, as it always has.
-    """
-    try:
-        from tests.fixtures.email.generate_mbox import ensure_corpus
-    except ImportError:
-        return
-    ensure_corpus()
+    def _blocked(*_args, **_kwargs):
+        raise RuntimeError(
+            "tests must not capture the real screen; stub it like "
+            "tests/unit/test_screenshot_tools.py"
+        )
+
+    for module_name, attr in (("PIL.ImageGrab", "grab"), ("mss", "mss")):
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        saved.append((module, attr, getattr(module, attr)))
+        setattr(module, attr, _blocked)
+    yield
+    for module, attr, original in saved:
+        setattr(module, attr, original)
 
 
 def pytest_configure(config):
@@ -165,6 +142,114 @@ def _fixed_machine_memory(request, monkeypatch):
     monkeypatch.setattr(
         lemonade_client, "_free_memory_snapshot", lambda url: (None, {})
     )
+
+
+# Log handlers installed while a test module is imported, by module. The
+# per-test guard below cannot see these: they exist before any test starts.
+_collection_handler_baseline = None
+_collection_leaks = []
+
+
+def _gaia_log_handlers():
+    import logging
+
+    return [
+        h
+        for name in (None, "gaia")
+        for h in logging.getLogger(name).handlers
+        if not type(h).__module__.startswith("_pytest")
+    ]
+
+
+def pytest_collectstart(collector):
+    global _collection_handler_baseline
+    if _collection_handler_baseline is None:
+        _collection_handler_baseline = _gaia_log_handlers()
+
+
+def pytest_collectreport(report):
+    if _collection_handler_baseline is None or not report.nodeid.endswith(".py"):
+        return
+    for handler in _gaia_log_handlers():
+        if not any(handler is h for h in _collection_handler_baseline):
+            _collection_handler_baseline.append(handler)
+            _collection_leaks.append((report.nodeid, handler))
+
+
+def pytest_collection_finish(session):
+    if not _collection_leaks:
+        return
+    found = "; ".join(
+        f"{nodeid}: {type(h).__name__}(stream={getattr(h, 'stream', None)!r})"
+        for nodeid, h in _collection_leaks
+    )
+    pytest.exit(
+        "log handler installed at import or collection time by: "
+        f"{found}. It outlives the module and prints into later tests' "
+        "capsys/capfd; install logging in a fixture and remove it afterward "
+        "(see tests/unit/test_gaia_home_isolation.py).",
+        returncode=pytest.ExitCode.INTERNAL_ERROR,
+    )
+
+
+@pytest.fixture
+def restore_gaia_logging():
+    """Undo ``gaia.logger.configure()`` after a test that runs a CLI entry point.
+
+    Entry points install GAIA's stderr and file handlers on the root logger;
+    left in place they print into later tests' capsys/capfd captures.
+    """
+    import logging
+
+    from gaia import logger as gaia_logger
+
+    root = logging.getLogger()
+    handlers = list(root.handlers)
+    manager = gaia_logger.log_manager
+    yield
+    for handler in list(root.handlers):
+        if not any(handler is h for h in handlers):
+            root.removeHandler(handler)
+            handler.close()
+    gaia_logger.log_manager = manager
+
+
+@pytest.fixture(autouse=True)
+def _no_leaked_log_handlers(request):
+    """Fail a test that leaves a log handler on the root or ``gaia`` logger.
+
+    GAIA's console handler writes to whatever ``sys.stderr`` is at each record,
+    so one that outlives its test prints into the next test's capsys/capfd
+    capture. Handlers are compared by identity against the pre-test snapshot;
+    a leftover is removed so the next test starts clean.
+    """
+    import logging
+
+    from gaia import logger as gaia_logger
+
+    loggers = (logging.getLogger(), logging.getLogger("gaia"))
+    before = [list(lg.handlers) for lg in loggers]
+    manager = gaia_logger.log_manager
+    yield
+    leaked = []
+    for lg, kept in zip(loggers, before):
+        for handler in list(lg.handlers):
+            if not any(handler is h for h in kept):
+                lg.removeHandler(handler)
+                leaked.append((lg.name, handler))
+    if leaked:
+        # configure() is a no-op while a manager is set; without this a later
+        # test would find a manager whose handlers were just removed.
+        gaia_logger.log_manager = manager
+        found = ", ".join(
+            f"{name}: {type(h).__name__}(stream={getattr(h, 'stream', None)!r})"
+            for name, h in leaked
+        )
+        pytest.fail(
+            f"{request.node.nodeid} leaked log handler(s): {found}. Remove them "
+            "in the test or its fixture so later tests' capsys/capfd stay clean.",
+            pytrace=False,
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -611,9 +696,155 @@ def in_memory_keyring():
         keyring.set_keyring(previous)
 
 
+_REAL_KEYCHAIN_ENV = "GAIA_TEST_REAL_KEYCHAIN"
+_real_keychain_allowed = False
+_current_test = ["<no test running>"]
+
+
+def _keychain_refusal(what: str) -> AssertionError:
+    return AssertionError(
+        f"{_current_test[0]} reached the real OS keychain ({what}). Use the "
+        "in-memory keyring (tests/conftest.py) or fake GAIA's credential store. "
+        "A test that truly needs the real store takes @pytest.mark.real_keychain "
+        f"and runs with {_REAL_KEYCHAIN_ENV}=1."
+    )
+
+
+_KEYCHAIN_SUBCOMMAND = re.compile(r"\b(generic|internet)-password\b")
+_SECURITY_THEN_PASSWORD = re.compile(r"\bsecurity\b.*-password\b", re.DOTALL)
+
+
+def _is_security_keychain_call(args, shell) -> bool:
+    """True when Popen args run the macOS `security` password subcommands."""
+    import shlex
+
+    if isinstance(args, (bytes, bytearray)):
+        args = args.decode(errors="replace")
+    if isinstance(args, str):
+        raw = [args]
+    elif isinstance(args, (list, tuple)):
+        raw = [
+            os.fsdecode(x) if isinstance(x, (bytes, os.PathLike)) else str(x)
+            for x in args
+        ]
+    else:
+        raw = [os.fsdecode(args)] if isinstance(args, os.PathLike) else []
+    if not raw:
+        return False
+    try:
+        if isinstance(args, str) or shell:
+            tokens = shlex.split(raw[0]) + raw[1:]
+        else:
+            tokens = raw
+    except ValueError:
+        return bool(_SECURITY_THEN_PASSWORD.search(" ".join(raw)))
+    i = 0
+    while i < len(tokens) and (
+        os.path.basename(tokens[i]) == "env"
+        or tokens[i].startswith("-")
+        or re.match(r"[A-Za-z_][A-Za-z0-9_]*=", tokens[i])
+    ):
+        i += 1
+    if i >= len(tokens) or os.path.basename(tokens[i]) != "security":
+        return False
+    return any(_KEYCHAIN_SUBCOMMAND.search(t) for t in tokens[i + 1 :])
+
+
+def _install_keychain_guards():
+    """Make every real OS keyring backend and the macOS `security` CLI raise."""
+    import subprocess
+
+    patched = []
+    for mod_name, cls_name in (
+        ("keyring.backends.macOS", "Keyring"),
+        ("keyring.backends.SecretService", "Keyring"),
+        ("keyring.backends.Windows", "WinVaultKeyring"),
+        ("keyring.backends.kwallet", "DBusKeyring"),
+        ("keyring.backends.kwallet", "DBusKeyringKWallet4"),
+    ):
+        try:
+            cls = getattr(importlib.import_module(mod_name), cls_name, None)
+        except (
+            Exception
+        ):  # pylint: disable=broad-except  # backend needs an OS lib this host lacks
+            continue
+        if cls is None:
+            continue
+        for meth in ("get_password", "set_password", "delete_password"):
+            original = cls.__dict__.get(meth)
+            if original is None:
+                continue
+
+            def _make(orig, label):
+                def _guarded(self, *args, **kwargs):
+                    if _real_keychain_allowed:
+                        return orig(self, *args, **kwargs)
+                    raise _keychain_refusal(label)
+
+                return _guarded
+
+            setattr(cls, meth, _make(original, f"{mod_name}.{cls_name}.{meth}"))
+            patched.append((cls, meth, original))
+
+    real_popen_init = subprocess.Popen.__init__
+
+    def _guarded_popen_init(self, args, *a, **kw):
+        if not _real_keychain_allowed and _is_security_keychain_call(
+            args, kw.get("shell", False)
+        ):
+            raise _keychain_refusal("the macOS `security` CLI")
+        return real_popen_init(self, args, *a, **kw)
+
+    subprocess.Popen.__init__ = _guarded_popen_init
+
+    def _undo():
+        subprocess.Popen.__init__ = real_popen_init
+        for cls, meth, original in patched:
+            setattr(cls, meth, original)
+
+    return _undo
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _keychain_guard_session(in_memory_keyring):
+    """Install the in-memory keyring for the whole run and refuse any real OS store."""
+    import keyring
+
+    keyring.set_keyring(in_memory_keyring)
+    undo = _install_keychain_guards()
+    try:
+        yield
+    finally:
+        undo()
+
+
+@pytest.fixture(autouse=True)
+def _keychain_guard_per_test(request, in_memory_keyring, _keychain_guard_session):
+    """Start each test with the in-memory keyring installed and empty."""
+    import keyring
+
+    global _real_keychain_allowed  # pylint: disable=global-statement
+    marked = request.node.get_closest_marker("real_keychain") is not None
+    if marked and os.environ.get(_REAL_KEYCHAIN_ENV) != "1":
+        pytest.skip(f"real_keychain test: set {_REAL_KEYCHAIN_ENV}=1 to run")
+    _current_test[0] = request.node.nodeid
+    _real_keychain_allowed = marked
+    if not marked:
+        keyring.set_keyring(in_memory_keyring)
+    in_memory_keyring._store.clear()
+    try:
+        yield
+    finally:
+        _real_keychain_allowed = False
+        in_memory_keyring._store.clear()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _testclient_sends_ui_header():
     """Make every ``TestClient`` carry ``X-Gaia-UI``, as real clients do.
+
+    A client of the Agent UI app also carries its API token, as the desktop
+    app and scripts do; a test of the refusal pops ``authorization``.
 
     ``gaia.ui.security.UIRequestGuardMiddleware`` refuses mutating
     ``/api``/``/v1`` requests without it. Over a hundred call sites across
@@ -636,6 +867,10 @@ def _testclient_sends_ui_header():
     def _init_with_ui_header(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
         self.headers.setdefault("x-gaia-ui", "1")
+        app = args[0] if args else kwargs.get("app")
+        token = getattr(getattr(app, "state", None), "ui_api_token", None)
+        if isinstance(token, str):
+            self.headers.setdefault("authorization", f"Bearer {token}")
 
     TestClient.__init__ = _init_with_ui_header
     try:
@@ -659,6 +894,8 @@ def ui_api_client():
     Deliberately carries no ``X-Gaia-UI`` default: the connectors and
     agents suites use this client to assert that an unheadered mutating
     request is refused, so a per-call header is how a test here opts *in*.
+    It connects from loopback, as the desktop app does, so the PC-only
+    routes answer it.
     """
     try:
         from starlette.testclient import TestClient
@@ -668,6 +905,6 @@ def ui_api_client():
         pytest.skip(f"gaia.ui not importable (install with `[ui]` extras): {e}")
 
     app = create_app()
-    with TestClient(app) as client:
+    with TestClient(app, client=("127.0.0.1", 50000)) as client:
         client.headers.pop("x-gaia-ui", None)
         yield client

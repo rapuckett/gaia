@@ -19,7 +19,21 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from gaia.llm.gateway import GatewayError
+from gaia.llm.gateway import read_stored_key as _real_read_stored_key
 from gaia.llm.gateway import read_stored_token as _real_read_stored_token
+
+
+def _bound(token):
+    """*token* stored bound to the gateway GAIA has registered."""
+    from gaia.llm import gateway
+
+    return (
+        gateway.GatewayKey(token, gateway.GatewayState.load().base_url)
+        if token
+        else None
+    )
+
+
 from gaia.llm.surface_hints import TUI_GATEWAY_KEY_HINT
 
 GATEWAY_TOKEN = "gw-unit-test-token"
@@ -86,6 +100,7 @@ def gateway_env(monkeypatch, tmp_path):
     monkeypatch.setenv(gateway.GATEWAY_ENV_VAR, GATEWAY_TOKEN)
     monkeypatch.setattr(gateway, "GATEWAY_STATE_FILE", tmp_path / "gateway.json")
     monkeypatch.setattr(gateway, "read_stored_token", lambda: None)
+    monkeypatch.setattr(gateway, "read_stored_key", lambda: _bound(None))
     monkeypatch.setattr("gaia.llm.local_only.cloud_blocked", lambda: False)
     _lemonade_reports(monkeypatch, runtime_key_set=True)
     return gateway
@@ -253,6 +268,7 @@ def test_token_sources_in_order(fake_sdk, monkeypatch, gateway_env):
     )
     monkeypatch.delenv("GAIA_GATEWAY_TOKEN")
     monkeypatch.setattr(gateway_env, "read_stored_token", lambda: "from-keyring")
+    monkeypatch.setattr(gateway_env, "read_stored_key", lambda: _bound("from-keyring"))
     _gateway_client()
     assert (
         fake_sdk.Anthropic.last_init["default_headers"]["Ocp-Apim-Subscription-Key"]
@@ -413,7 +429,7 @@ def test_agent_reply_cap_stays_at_the_cloud_size(fake_sdk):
         max_output_tokens=None,
         chat=SimpleNamespace(llm_client=client, effective_model="amd.Claude-Opus-5-5"),
     )
-    assert Agent._max_output_tokens(stub) == CLOUD_MAX_OUTPUT_TOKENS
+    assert Agent._output_token_cap(stub) == CLOUD_MAX_OUTPUT_TOKENS
 
 
 # ── failures are loud, never a quiet switch back to Lemonade ────────────
@@ -430,6 +446,7 @@ def test_missing_token_raises_and_never_falls_back(fake_sdk, monkeypatch, gatewa
 def test_unreadable_credential_store_says_so(fake_sdk, monkeypatch, gateway_env):
     monkeypatch.delenv(gateway_env.GATEWAY_ENV_VAR)
     monkeypatch.setattr(gateway_env, "read_stored_token", _real_read_stored_token)
+    monkeypatch.setattr(gateway_env, "read_stored_key", _real_read_stored_key)
 
     def locked(_name):
         raise RuntimeError("keyring is locked")
@@ -529,6 +546,7 @@ def _second_copy(monkeypatch, gateway_env, source, value):
     monkeypatch.delenv(gateway_env.GATEWAY_ENV_VAR)
     if source == "store":
         monkeypatch.setattr(gateway_env, "read_stored_token", lambda: value)
+        monkeypatch.setattr(gateway_env, "read_stored_key", lambda: _bound(value))
     else:
         monkeypatch.setenv("GAIA_GATEWAY_TOKEN", value)
     return _lemonade_reports(monkeypatch, env_var_set=True)
@@ -599,6 +617,7 @@ def test_gaia_s_token_is_the_one_sent_when_lemonade_has_no_env_key(
     """Lemonade's session token came from GAIA (``ensure_authenticated``)."""
     monkeypatch.delenv(gateway_env.GATEWAY_ENV_VAR)
     monkeypatch.setattr(gateway_env, "read_stored_token", lambda: "remembered")
+    monkeypatch.setattr(gateway_env, "read_stored_key", lambda: _bound("remembered"))
     _lemonade_reports(monkeypatch, **held)
     _gateway_client()
     assert _sent_token(fake_sdk) == "remembered"
@@ -628,6 +647,9 @@ def test_401_with_a_stale_gaia_copy_asks_for_a_current_key(
 ):
     monkeypatch.delenv(gateway_env.GATEWAY_ENV_VAR)
     monkeypatch.setattr(gateway_env, "read_stored_token", lambda: "stored-copy-tok")
+    monkeypatch.setattr(
+        gateway_env, "read_stored_key", lambda: _bound("stored-copy-tok")
+    )
     lemonade = _lemonade_reports(monkeypatch, runtime_key_set=True)
     message = _rejected(fake_sdk, _gateway_client())
     assert "stored in the OS credential store" in message
@@ -651,6 +673,7 @@ def test_401_after_lemonade_gained_an_env_key_names_the_conflict(
     """Lemonade restarted with an env key after this client was built."""
     monkeypatch.delenv(gateway_env.GATEWAY_ENV_VAR)
     monkeypatch.setattr(gateway_env, "read_stored_token", lambda: "remembered")
+    monkeypatch.setattr(gateway_env, "read_stored_key", lambda: _bound("remembered"))
     client = _gateway_client()
     _lemonade_reports(monkeypatch, env_var_set=True)
     message = _rejected(fake_sdk, client)

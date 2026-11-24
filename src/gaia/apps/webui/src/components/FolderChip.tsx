@@ -83,6 +83,7 @@ export function FolderChip({ folder, disabled }: { folder: WorkingFolder; disabl
 /** The folder a chat started in, beside the model in its composer; opens the panel where it can be changed. */
 export function SessionFolderChip({ sessionId, onOpen }: { sessionId: string; onOpen: () => void }) {
     const { env } = useSessionEnvironment(sessionId);
+    const t = useT();
     const folder = env?.folders.find((f) => f.source === 'working_folder');
     if (!folder) return null;
     const name = baseName(folder.path);
@@ -90,8 +91,8 @@ export function SessionFolderChip({ sessionId, onOpen }: { sessionId: string; on
         <button
             type="button"
             className="composer-chip folder-chip"
-            title={`GAIA works in ${folder.path}`}
-            aria-label={`Working folder ${name}, show the chat's folders`}
+            title={t('folderChip.worksIn', { path: folder.path })}
+            aria-label={t('folderChip.workingFolder', { name })}
             onClick={onOpen}
         >
             <Folder size={13} aria-hidden="true" />
