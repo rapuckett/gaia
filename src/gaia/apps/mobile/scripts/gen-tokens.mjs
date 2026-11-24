@@ -57,7 +57,7 @@ const COLOR_ROLE = /^--(bg|text|border|accent|danger|tint|code|switch)-?[a-z0-9-
 const COLOR_VALUE = /^(#[0-9a-fA-F]{3,8}|rgba?\([0-9., %]+\))$/;
 const SHADOW = /^--shadow-(sm|md|lg|press)$/;
 
-// Desktop window chrome, the web's hamburger offset, and the cursor-blink easing.
+// Desktop window chrome, the web's hamburger offset, the cursor-blink easing and the slide-deck palette.
 const IGNORED = new Map([
     ['--titlebar-h', 'desktop window chrome'],
     ['--titlebar-controls-w', 'desktop window chrome'],
@@ -66,6 +66,13 @@ const IGNORED = new Map([
     ['--browser-pane-inset', "the desktop's browser pane, which phones don't have"],
     ['--chat-min-w', "the desktop's chat and browser-pane split"],
     ['--pane-min-w', "the desktop's chat and browser-pane split"],
+    ['--slide-paper', 'slide-deck palette, fixed colors for generated decks'],
+    ['--slide-ink', 'slide-deck palette, fixed colors for generated decks'],
+    ['--slide-ink-dim', 'slide-deck palette, fixed colors for generated decks'],
+    ['--slide-accent', 'slide-deck palette, fixed colors for generated decks'],
+    ['--slide-on-accent', 'slide-deck palette, fixed colors for generated decks'],
+    ['--slide-panel', 'slide-deck palette, fixed colors for generated decks'],
+    ['--slide-rule', 'slide-deck palette, fixed colors for generated decks'],
 ]);
 
 const index = stripComments(readFileSync(resolve(stylesDir, 'index.css'), 'utf8'));
