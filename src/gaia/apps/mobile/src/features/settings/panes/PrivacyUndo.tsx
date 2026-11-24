@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { GaiaApiError } from '@/api/errors';
 import { useUndoSettings, useUpdateUndoSettings } from '@/data';
-import { describeHttpFailure, describeFailureWith, useT } from '@/i18n/useT';
+import { describeHttpFailure, plainFailure, useT } from '@/i18n/useT';
 import { Button, Disclosure, Ltr, Notice, Stack, Text, TextField } from '@/ui';
 
 import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
@@ -33,6 +33,7 @@ export function PrivacyUndo({ initialOpen = false }: { initialOpen?: boolean }) 
     const [saved, setSaved] = useState(false);
     const [rejected, setRejected] = useState(false);
     const settings = undo.data;
+    const readFailure = undo.error ? plainFailure(t, 'settings.undo.readFailed', {}, undo.error, 'reason') : null;
 
     const daysText = days ?? (settings ? String(settings.retention_days) : '');
     const mbText = mb ?? (settings ? String(settings.max_mb) : '');
@@ -65,8 +66,8 @@ export function PrivacyUndo({ initialOpen = false }: { initialOpen?: boolean }) 
                     </Text>
                     {isPcRefusal(undo.error) || isPcRefusal(save.error) ? (
                         <PcOnlyNotice testID="undo-pc-only" />
-                    ) : undo.error ? (
-                        <Notice tone="danger" message={t.compose((say) => say('settings.undo.readFailed', { reason: describeFailureWith(undo.error, say) }))} testID="undo-read-error" />
+                    ) : readFailure ? (
+                        <Notice tone="danger" message={readFailure.text} detail={readFailure.detail} testID="undo-read-error" />
                     ) : null}
                     {settings ? (
                         <>

@@ -8,7 +8,7 @@ import { ref, type MessageKey } from '@webui/i18n/registry';
 import type { Goal } from '@/api/client.types';
 import { useGoalAction, useGoals, useGoalStats, useGoalStoreHealth, useResetGoalStore, type GoalAction } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
-import { describeFailureWith, useT } from '@/i18n/useT';
+import { plainFailureText, useT } from '@/i18n/useT';
 import { View } from 'react-native';
 
 import { Button, LoadingState, Notice, Row, Stack, Text, useTheme } from '@/ui';
@@ -80,13 +80,13 @@ export function GoalsPane({ notify }: MemoryPaneProps) {
     const run = (goal: Goal, action: GoalAction) =>
         act.mutate(
             { id: goal.id, action },
-            { onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.goals.failed', { what: ref(FAILURES[action]), error: describeFailureWith(error, say) })) }) },
+            { onError: (error) => notify({ tone: 'danger', text: plainFailureText(t, 'mem.goals.failed', { what: ref(FAILURES[action]) }, error) }) },
         );
 
     const startNewList = () =>
         resetStore.mutate(undefined, {
             onSuccess: ({ kept }) => notify({ tone: 'success', text: t('mem.goals.newListStarted', { file: kept }) }),
-            onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.goals.failed', { what: ref('mem.goals.startNewListFailed'), error: describeFailureWith(error, say) })) }),
+            onError: (error) => notify({ tone: 'danger', text: plainFailureText(t, 'mem.goals.failed', { what: ref('mem.goals.startNewListFailed') }, error) }),
         });
 
     const goals = list.data;
