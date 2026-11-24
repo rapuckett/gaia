@@ -4567,6 +4567,7 @@ export const enMessages = {
     'mobileApp.composer.cameraOff': 'Camera access is off for GAIA. Turn it on in Settings to take a photo.',
     'mobileApp.pairing.uploadUnsupported': "This phone can't send files to your PC yet. Add them on the PC.",
     'mobileApp.pairing.transportMissing': "This build of GAIA can't open a secure connection to your PC. Install the latest GAIA app on this phone, then pair again.",
+    'mobileApp.docs.add': 'Add documents',
     'mobileApp.docs.previewShare': "Preview or share {name}",
     'mobileApp.files.askMany': "Please analyze these documents for me:\n{list}",
     'mobileApp.files.askNoChat': "Couldn't reach the chat to send your question. Open the chat and try again.",
