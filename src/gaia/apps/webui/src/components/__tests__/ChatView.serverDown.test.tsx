@@ -46,6 +46,7 @@ beforeEach(() => {
     mockedApi.updateSession.mockResolvedValue(undefined as never);
     mockedApi.getLocalModelStatus.mockResolvedValue(STOPPED);
     mockedApi.getLemonadeTarget.mockResolvedValue({ mode: 'gaia', source: 'gaia' } as never);
+    mockedApi.getStartScreen.mockResolvedValue({ agent_problem: null } as never);
     mockedApi.sendMessageStream.mockImplementation((_sid, _msg, cbs) => {
         callbacks = cbs as api.StreamCallbacks;
         return new AbortController();
