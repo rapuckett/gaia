@@ -58,7 +58,7 @@ test.afterEach(async ({ page }) => {
     await expectNoFixtureGap(page);
 });
 
-async function open(page: Page, hash = '', locale = 'ar', before?: (page: Page) => Promise<void>, theme: 'light' | 'dark' = 'light'): Promise<void> {
+async function open(page: Page, hash = '', locale = 'ar', before?: (page: Page) => Promise<unknown>, theme: 'light' | 'dark' = 'light'): Promise<void> {
     await page.clock.setFixedTime(NOW);
     unhandled = await mockApi(page);
     await before?.(page);
