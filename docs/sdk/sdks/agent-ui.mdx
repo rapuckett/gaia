@@ -2171,19 +2171,29 @@ removed.
     A device unpairs itself with its own token, pending or allowed: **204**.
   </Accordion>
 
-  <Accordion title="PUT, GET, DELETE /api/devices/me/push">
-    A device's own push notifications. Only an allowed device, with its own
-    token; the PC, mobile access and a pending device get **403**. `PUT` takes
+  <Accordion title="PUT /api/devices/me/push">
+    Turn on a device's own push notifications. Only an allowed device, with its
+    own token; the PC, mobile access and a pending device get **403**. Takes
     `{relay_url, handle, send_token, key, platform}` (`handle` 16 bytes,
     `send_token` and `key` 32, unpadded base64url; `platform` `apns` or `fcm`);
     `relay_url` must be https and resolve only to public addresses, or **422**.
-    `GET` and every answer are `DevicePushStatus` (`{enabled, relay_host}`),
-    never the send token or key. Unpairing, removing or resetting deletes the
-    record. The PC sends each notification to the relay encrypted with the
+    Returns `DevicePushStatus` (`{enabled, relay_host}`), never the send token
+    or key. The PC sends each notification to the relay encrypted with the
     device's key and padded to a fixed size, so the relay sees no kind, chat,
     id or badge, and each carries a rising `seq` the phone uses to refuse
     replays. The PC can only send on the handle; rotating or deleting it is
     the phone's.
+  </Accordion>
+
+  <Accordion title="GET /api/devices/me/push">
+    The device's own push status, `DevicePushStatus` (`{enabled, relay_host}`),
+    never the send token or key. Same access as `PUT`.
+  </Accordion>
+
+  <Accordion title="DELETE /api/devices/me/push">
+    Turn off the device's own push notifications and delete its record; returns
+    `DevicePushStatus`. Same access as `PUT`. Unpairing, removing or resetting
+    the device deletes the record too.
   </Accordion>
 
   <Accordion title="POST /api/devices/{device_id}/allow">
