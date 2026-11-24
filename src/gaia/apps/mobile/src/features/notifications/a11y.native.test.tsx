@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import { APPROVAL_ARM_MS } from '@webui/utils/permissionPrompts.core';
 
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
@@ -23,7 +25,7 @@ jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 const t = translator('en');
 
-const mount = async (scene = 'permission-pending') => {
+const mount = async (scene = 'permission-pending', client = createFakeClient({})) => {
     const spec = NOTIFICATION_SCENES[scene]!;
     useNotificationStore.setState({ items: resolveSceneItems(spec, t), filter: spec.filter ?? null });
     useChatStreamStore.setState({
@@ -32,7 +34,7 @@ const mount = async (scene = 'permission-pending') => {
     await render(
         <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
             <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-                <GaiaClientProvider client={createFakeClient({})}>
+                <GaiaClientProvider client={client}>
                     <ThemeProvider>
                         <NotificationCenterScreen onBack={jest.fn()} onOpenChat={jest.fn()} />
                     </ThemeProvider>
@@ -45,6 +47,37 @@ const mount = async (scene = 'permission-pending') => {
 afterEach(() => {
     useNotificationStore.setState({ items: [], filter: null });
     useChatStreamStore.setState({ turns: {} } as never);
+});
+
+const settle = () =>
+    act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, APPROVAL_ARM_MS + 50));
+    });
+
+describeNative('the notification center approval', () => {
+    it('ignores a tap on Approve or Deny until the row has been still for the arm wait', async () => {
+        const client = createFakeClient({});
+        await mount('permission-pending', client);
+        await fireEvent.press(screen.getByTestId('ntf-approve'));
+        await fireEvent.press(screen.getByTestId('ntf-deny'));
+        await settle();
+        expect(client.confirmations).toEqual([]);
+        await fireEvent(screen.getByTestId('ntf-confirm-1'), 'layout', { nativeEvent: { layout: { x: 0, y: 120, width: 390, height: 200 } } });
+        await fireEvent.press(screen.getByTestId('ntf-approve'));
+        await settle();
+        expect(client.confirmations).toEqual([]);
+        await fireEvent.press(screen.getByTestId('ntf-approve'));
+        await waitFor(() => expect(client.confirmations).toEqual([expect.objectContaining({ approved: true, always: false })]));
+    });
+
+    it('takes a screen reader approval at once', async () => {
+        const client = createFakeClient({});
+        await mount('permission-pending', client);
+        const row = touchables().find((x) => x.name.includes('GAIA needs your OK'));
+        const onAction = row!.node.props.onAccessibilityAction as (e: { nativeEvent: { actionName: string } }) => void;
+        await act(async () => onAction({ nativeEvent: { actionName: 'approve' } }));
+        await waitFor(() => expect(client.confirmations).toEqual([expect.objectContaining({ approved: true })]));
+    });
 });
 
 describeNative('the notification center accessibility', () => {

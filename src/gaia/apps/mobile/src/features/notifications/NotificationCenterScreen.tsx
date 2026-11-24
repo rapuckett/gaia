@@ -8,6 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { GaiaNotification, NotificationType } from '@webui/types/agent';
 
 import { useConfirmTool } from '@/data';
+import { useApprovalArm } from '@/features/chat/permission/useApprovalArm';
 import { describeHttpFailure, useLocaleCode, useT } from '@/i18n/useT';
 import { useChatStreamStore } from '@/state/chatStreams';
 import {
@@ -144,6 +145,7 @@ interface ItemProps {
 function NotificationItem({ n, now, locale, waiting, answered, onOpenChat, onLaidOut }: ItemProps) {
     const t = useT();
     const confirm = useConfirmTool();
+    const arm = useApprovalArm();
     const { icon, tone } = ICONS[n.type];
     const { title, message } = useMemo(() => notificationText(n, t), [n, t]);
     const approval = n.type === 'permission_request';
@@ -177,8 +179,15 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat, onLai
         else if (name === 'deny') answer(false);
     };
 
+    // A row arriving above, or this row's buttons appearing, moves Approve and Deny: their taps wait again.
     return (
-        <View testID={`ntf-${n.id}`} onLayout={onLaidOut ? (e) => onLaidOut(e.nativeEvent.layout.y, e.nativeEvent.layout.height) : undefined}>
+        <View
+            testID={`ntf-${n.id}`}
+            onLayout={(e) => {
+                arm.rearm();
+                onLaidOut?.(e.nativeEvent.layout.y, e.nativeEvent.layout.height);
+            }}
+        >
             <Divider />
             <Pressable
                 onPress={open}
@@ -209,10 +218,10 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat, onLai
                     {canAnswer ? (
                         <Row gap="sm" stack>
                             <Stack flex={1}>
-                                <Button label={t('notifications.approve')} icon={Check} full disabled={confirm.isPending} onPress={() => answer(true)} testID="ntf-approve" />
+                                <Button label={t('notifications.approve')} icon={Check} full disabled={confirm.isPending} onPress={() => arm.armed() && answer(true)} testID="ntf-approve" />
                             </Stack>
                             <Stack flex={1}>
-                                <Button label={t('notifications.deny')} icon={X} variant="danger" full disabled={confirm.isPending} onPress={() => answer(false)} testID="ntf-deny" />
+                                <Button label={t('notifications.deny')} icon={X} variant="danger" full disabled={confirm.isPending} onPress={() => arm.armed() && answer(false)} testID="ntf-deny" />
                             </Stack>
                         </Row>
                     ) : null}

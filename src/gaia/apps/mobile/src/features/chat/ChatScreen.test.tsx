@@ -8,6 +8,7 @@ import { AppState, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { item, type QueuedMessage } from '@webui/utils/messageQueue';
+import { APPROVAL_ARM_MS } from '@webui/utils/permissionPrompts.core';
 
 import type { ConnectorListEntry } from '@webui/types';
 
@@ -274,11 +275,17 @@ describe('ChatScreen', () => {
                 },
             });
 
-        it('shows the waiting prompt, posts the answer, and clears it as answered', async () => {
+        it('sends nothing for a tap as the prompt appears, then posts the answer and clears it as answered', async () => {
             const client = permissionClient(REQUEST);
             await mount(client);
             await sendText('Save it');
-            await fireEvent.press(await screen.findByTestId('perm-allow'));
+            await fireEvent.press(await screen.findByTestId('perm-always'));
+            await fireEvent.press(screen.getByTestId('perm-allow'));
+            await act(async () => {
+                await new Promise((resolve) => setTimeout(resolve, APPROVAL_ARM_MS + 50));
+            });
+            expect(client.confirmations).toEqual([]);
+            await fireEvent.press(screen.getByTestId('perm-allow'));
             await waitFor(() => expect(client.confirmations).toEqual([{ session_id: CHAT, approved: true, always: false, confirm_id: 'c1' }]));
             await waitFor(() => expect(screen.queryByTestId('perm-card')).toBeNull());
             expect(useChatStreamStore.getState().resolved[CHAT]?.c1).toEqual({ state: 'answered' });

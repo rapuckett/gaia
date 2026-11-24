@@ -2,33 +2,49 @@
 // SPDX-License-Identifier: MIT
 
 import { act } from 'react';
+import type { AccessibilityActionEvent } from 'react-native';
+import { KeyboardEvents } from 'react-native-keyboard-controller';
 import { createRoot } from 'test-renderer';
 
 import type { GaiaNotification } from '@webui/types/agent';
+import { APPROVAL_ARM_MS } from '@webui/utils/permissionPrompts.core';
 
 import { PermissionPrompt } from './PermissionPrompt';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const buttons: Record<string, { onPress: () => void }> = {};
+interface ButtonSeen {
+    onPress: () => void;
+    onAccessibilityAction?: (e: AccessibilityActionEvent) => void;
+    accessibilityActions?: readonly { name: string }[];
+    variant?: string;
+}
+const buttons: Record<string, ButtonSeen> = {};
+const mockMotion = { reduced: true, entering: [] as unknown[], onLayout: undefined as (() => void) | undefined };
 
 jest.mock('react-native-reanimated', () => {
     const { View } = jest.requireActual('react-native');
     return {
         __esModule: true,
-        default: { View },
-        FadeIn: undefined,
-        FadeInDown: undefined,
-        FadeOut: undefined,
-        FadeOutDown: undefined,
-        useReducedMotion: () => true,
+        default: {
+            View: (p: { entering?: unknown; onLayout?: () => void }) => {
+                mockMotion.entering.push(p.entering);
+                mockMotion.onLayout = p.onLayout;
+                return <View {...p} />;
+            },
+        },
+        FadeIn: 'FadeIn',
+        FadeInDown: 'FadeInDown',
+        FadeOut: 'FadeOut',
+        FadeOutDown: 'FadeOutDown',
+        useReducedMotion: () => mockMotion.reduced,
     };
 });
 jest.mock('@/ui', () => {
     const { Text: RNText, View: RNView } = jest.requireActual('react-native');
     const Pass = ({ children }: { children?: unknown }) => children ?? null;
     return {
-        Button: (p: { label: string; onPress: () => void }) => {
+        Button: (p: { label: string } & ButtonSeen) => {
             buttons[p.label] = p;
             return null;
         },
@@ -87,15 +103,127 @@ async function mount(p: GaiaNotification, onAnswer = jest.fn(), onExpired = jest
         const root = r.container.toJSON();
         return JSON.stringify(find(Array.isArray(root) ? { children: root } : root));
     };
-    return { onAnswer, onExpired, shown: () => JSON.stringify(r.container.toJSON()), scrolled };
+    const layout = () => act(() => mockMotion.onLayout?.());
+    return { onAnswer, onExpired, shown: () => JSON.stringify(r.container.toJSON()), scrolled, layout };
 }
 
 beforeEach(() => jest.useFakeTimers());
-afterEach(() => jest.useRealTimers());
+afterEach(() => {
+    jest.useRealTimers();
+    mockMotion.reduced = true;
+});
+
+const settle = () =>
+    act(() => {
+        jest.advanceTimersByTime(APPROVAL_ARM_MS);
+    });
+const alwaysLabel = () => Object.keys(buttons).find((label) => label.startsWith('Always allow'))!;
+const activate = (label: string) =>
+    act(() => buttons[label].onAccessibilityAction?.({ nativeEvent: { actionName: 'activate' } } as AccessibilityActionEvent));
+
+describe('PermissionPrompt entrance', () => {
+    it('ignores every tap until the card has been still for the arm wait, then answers', async () => {
+        const { onAnswer } = await mount(prompt({}));
+        for (const label of [alwaysLabel(), 'Allow once', 'Deny']) act(() => buttons[label].onPress());
+        act(() => {
+            jest.advanceTimersByTime(APPROVAL_ARM_MS - 1);
+        });
+        for (const label of [alwaysLabel(), 'Allow once', 'Deny']) act(() => buttons[label].onPress());
+        expect(onAnswer).not.toHaveBeenCalled();
+        act(() => {
+            jest.advanceTimersByTime(1);
+        });
+        act(() => buttons['Allow once'].onPress());
+        expect(onAnswer.mock.calls).toEqual([['once']]);
+    });
+
+    it('takes a screen reader activation at once, on every answer', async () => {
+        const { onAnswer } = await mount(prompt({}));
+        for (const label of ['Allow once', alwaysLabel(), 'Deny']) {
+            expect(buttons[label].accessibilityActions).toEqual([{ name: 'activate' }]);
+            activate(label);
+        }
+        expect(onAnswer.mock.calls).toEqual([['once'], ['always'], ['deny']]);
+    });
+
+    it('answers nothing while busy, by tap or screen reader', async () => {
+        const onAnswer = jest.fn();
+        for (const k of Object.keys(buttons)) delete buttons[k];
+        const r = createRoot({ textComponentTypes: ['Text', 'RCTText'] });
+        await act(async () => {
+            r.render(<PermissionPrompt prompt={prompt({})} busy onAnswer={onAnswer} />);
+        });
+        settle();
+        act(() => buttons['Allow once'].onPress());
+        activate(alwaysLabel());
+        expect(onAnswer).not.toHaveBeenCalled();
+    });
+
+    it('starts the wait again when the keyboard moves the footer or the card changes size', async () => {
+        const listeners = jest.mocked(KeyboardEvents.addListener);
+        listeners.mockClear();
+        const { onAnswer, layout } = await mount(prompt({}));
+        expect(listeners.mock.calls.map(([name]) => name).sort()).toEqual(['keyboardDidHide', 'keyboardDidShow', 'keyboardWillHide', 'keyboardWillShow']);
+        settle();
+        const willHide = listeners.mock.calls.find(([name]) => name === 'keyboardWillHide')![1];
+        act(() => willHide({} as never));
+        act(() => buttons['Allow once'].onPress());
+        settle();
+        layout();
+        act(() => buttons[alwaysLabel()].onPress());
+        expect(onAnswer).not.toHaveBeenCalled();
+        settle();
+        act(() => buttons[alwaysLabel()].onPress());
+        expect(onAnswer.mock.calls).toEqual([['always']]);
+    });
+
+    it('arms a prompt that replaces an armed one afresh, and still expires one never answered', async () => {
+        const onAnswer = jest.fn();
+        const onExpired = jest.fn();
+        const r = createRoot({ textComponentTypes: ['Text', 'RCTText'] });
+        const show = (p: GaiaNotification) => <PermissionPrompt key={p.id} prompt={p} onAnswer={onAnswer} onExpired={onExpired} />;
+        await act(async () => {
+            r.render(show(prompt({ id: 'p1' })));
+        });
+        settle();
+        await act(async () => {
+            r.render(show(prompt({ id: 'p2', timeoutSeconds: 2 })));
+        });
+        act(() => buttons['Allow once'].onPress());
+        expect(onAnswer).not.toHaveBeenCalled();
+        await act(async () => {
+            jest.advanceTimersByTime(3000);
+        });
+        expect(onExpired).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps Always allow outlined and Allow once filled, even when Always is suggested', async () => {
+        for (const k of Object.keys(buttons)) delete buttons[k];
+        const r = createRoot({ textComponentTypes: ['Text', 'RCTText'] });
+        await act(async () => {
+            r.render(<PermissionPrompt prompt={prompt({})} repeats={2} onAnswer={jest.fn()} />);
+        });
+        expect(JSON.stringify(r.container.toJSON())).toContain('allowed this 2 times');
+        expect([buttons['Allow once'].variant, buttons[alwaysLabel()].variant, buttons.Deny.variant]).toEqual(['primary', 'secondary', 'secondary']);
+    });
+
+    it('fades in without sliding, and appears at once under reduced motion', async () => {
+        mockMotion.reduced = false;
+        mockMotion.entering.length = 0;
+        await mount(prompt({}));
+        expect(mockMotion.entering).toContain('FadeIn');
+        expect(mockMotion.entering).not.toContain('FadeInDown');
+        mockMotion.reduced = true;
+        mockMotion.entering.length = 0;
+        await mount(prompt({}));
+        expect(mockMotion.entering.every((e) => e === undefined)).toBe(true);
+    });
+});
 
 describe('PermissionPrompt', () => {
     it('answers once or deny, and offers Always only when the call may be remembered', async () => {
         const { onAnswer } = await mount(prompt({}));
+        settle();
         act(() => buttons['Allow once'].onPress());
         act(() => buttons.Deny.onPress());
         expect(onAnswer.mock.calls).toEqual([['once'], ['deny']]);
@@ -202,6 +330,7 @@ describe('PermissionPrompt shows what will really run', () => {
     it('codes a joiner in a command and in its Always allow label, keeping the raw scope for the answer', async () => {
         const p = prompt({ tool: 'run_shell_command', toolLabel: undefined, alwaysScope: 'gi\u200dt status', toolArgs: { command: 'gi\u200dt status' } });
         const { shown, onAnswer } = await mount(p);
+        settle();
         expect(shown()).toContain('gi[U+200D]t status');
         expect(shown()).not.toContain('\u200d');
         const always = Object.keys(buttons).find((label) => label.replace(ISOLATES, '').startsWith('Always allow'))!;
