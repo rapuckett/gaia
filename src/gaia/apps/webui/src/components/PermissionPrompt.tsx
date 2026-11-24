@@ -193,10 +193,11 @@ function PromptCard({ notification }: { notification: GaiaNotification }) {
             }, APPROVAL_ARM_MS);
         };
         rearm();
-        // The composer pins the card from below, so the card changing size (an error under the buttons) moves them.
+        // The composer pins the card from below, so the card or anything in its column (the composer, a notice, a
+        // queued message) changing size moves the buttons.
         const card = cardRef.current;
         const resized = card && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(rearm) : null;
-        if (card) resized?.observe(card);
+        for (const el of [card, card?.parentElement]) if (el) resized?.observe(el);
         return () => {
             clearTimeout(timer);
             resized?.disconnect();

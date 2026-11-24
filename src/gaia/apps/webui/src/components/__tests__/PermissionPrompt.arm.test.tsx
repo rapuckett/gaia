@@ -75,15 +75,22 @@ describe('PermissionPrompt arm wait', () => {
         expect(respond.mock.calls).toEqual([['perm-2', 'deny']]);
     });
 
-    it('starts the wait again when the card changes size', () => {
+    it('starts the wait again when the card or the column below it changes size', () => {
         let resized: () => void = () => {};
+        const watched: Element[] = [];
         vi.stubGlobal('ResizeObserver', class {
             constructor(cb: () => void) { resized = cb; }
-            observe() {}
+            observe(el: Element) { watched.push(el); }
             disconnect() {}
         });
         raise();
-        render(<PermissionPrompt sessionId="s" />);
+        render(
+            <div data-testid="column">
+                <PermissionPrompt sessionId="s" />
+                <textarea aria-label="composer" />
+            </div>,
+        );
+        expect(watched).toEqual([screen.getByRole('alertdialog'), screen.getByTestId('column')]);
         wait(APPROVAL_ARM_MS);
         act(() => resized());
         tap(screen.getByRole('button', { name: /^Always allow/ }));
