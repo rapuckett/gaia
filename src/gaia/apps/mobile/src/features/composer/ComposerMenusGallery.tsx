@@ -24,7 +24,7 @@ import { ModelChip } from './ModelChip';
 import { SpendMeter } from './SpendMeter';
 
 /** Developer gallery (`/dev/composer?state=`): the context meter, spend meter, model menu and picked-model load banner in each state. */
-export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'spendOpen', 'permissionMenu', 'permissionAsk', 'permissionFull', 'permissionFullWaiting', 'private-off', 'private-on', 'private-memoryOff', 'private-menu', 'folder-own', 'folder-add', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted'] as const;
+export const COMPOSER_MENU_STATES = ['context', 'meterLow', 'meterHigh', 'warning', 'spend', 'spendOpen', 'permissionMenu', 'permissionAsk', 'permissionFull', 'permissionFullWaiting', 'private-off', 'private-on', 'private-memoryOff', 'private-menu', 'folder-own', 'folder-add', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted'] as const;
 export type ComposerMenuState = (typeof COMPOSER_MENU_STATES)[number];
 
 const USAGE: ContextUsage = {
@@ -130,7 +130,7 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
         else if (state === 'pickFailed') usePickLoadStore.setState({ pickLoad: { model: 'Qwen3.6-35B-A3B-GGUF', seconds: 0, error: { reason: 'Not enough free memory to load the model.' } } });
         return () => usePickLoadStore.getState().clear();
     }, [state]);
-    const usage = state === 'warning' ? { ...USAGE, used: 61000, at_risk: ['What did the vendor contract say about renewal?', 'Summarize the board notes'] } : USAGE;
+    const usage = state === 'meterLow' ? { ...USAGE, used: 19660 } : state === 'meterHigh' ? { ...USAGE, used: 47180 } : state === 'warning' ? { ...USAGE, used: 61000, at_risk: ['What did the vendor contract say about renewal?', 'Summarize the board notes'] } : USAGE;
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>

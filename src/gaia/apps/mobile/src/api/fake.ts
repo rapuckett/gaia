@@ -475,6 +475,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly connects: string[];
     /** Each browser sign-in started from the phone, with the loopback port it named. */
     readonly browserSignIns: { connectorId: string; redirectPort: number; scopes: string[]; target?: ConnectorSignInTarget }[];
+    /** Each code sign-in started for another account or an existing one. */
+    readonly deviceSignInTargets: { connectorId: string; target: ConnectorSignInTarget }[];
     /** Each account call made: a default choice, one account's removal, or a whole-connector disconnect. */
     readonly accountCalls: ({ kind: 'default' | 'disconnect'; connectorId: string; accountId: string } | { kind: 'disconnectAll'; connectorId: string })[];
     /** Each browser sign-in handed back to the PC to finish. */
@@ -625,6 +627,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const connects: string[] = [];
     const browserSignIns: FakeGaiaClient['browserSignIns'] = [];
     const accountCalls: FakeGaiaClient['accountCalls'] = [];
+    const deviceSignInTargets: FakeGaiaClient['deviceSignInTargets'] = [];
     const flowTargets = new Map<string, ConnectorSignInTarget>();
     const browserCompletions: FakeGaiaClient['browserCompletions'] = [];
     const flowCancels: string[] = [];
@@ -769,6 +772,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         connects,
         browserSignIns,
         accountCalls,
+        deviceSignInTargets,
         browserCompletions,
         flowCancels,
         keyedConnects,
@@ -1168,7 +1172,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const connectors = [...(data.connectors ?? [])];
             return data.connectorsKeyStore ? { connectors, key_store: data.connectorsKeyStore } : { connectors };
         },
-        async startConnectorDeviceSignIn(connectorId) {
+        async startConnectorDeviceSignIn(connectorId, _scopes, options) {
+            if (options?.target) deviceSignInTargets.push({ connectorId, target: options.target });
             const row = (data.connectors ?? []).find((c) => c.id === connectorId);
             if (!row || 'error' in row || !row.supports_device_code || !data.deviceSignIn) {
                 throw new GaiaApiError(403, 'Connect this account on the PC running GAIA.');

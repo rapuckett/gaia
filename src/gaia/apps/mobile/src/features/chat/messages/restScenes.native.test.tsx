@@ -148,8 +148,10 @@ describeNative('card, connector and undo scenes', () => {
         await mount(route('messages'));
         fireEvent.press(await screen.findByTestId('turn-changes-undo', opts));
         fireEvent.press(await screen.findByTestId('turn-changes-confirm', opts));
+        expect(await screen.findByTestId('turn-changes-force', opts)).toBeTruthy();
+        expect(screen.queryByText('q3-summary.md changed after this turn', opts)).toBeNull();
+        fireEvent.press(screen.getByTestId('turn-changes-details-toggle', opts));
         expect(await screen.findByText('q3-summary.md changed after this turn', opts)).toBeTruthy();
-        expect(screen.getByTestId('turn-changes-force', opts)).toBeTruthy();
     });
 
     it.each([

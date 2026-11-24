@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { connectCardProviders, hasConnectCard } from '@webui/utils/connectAccountCard.core';
+import { connectCardAccounts } from '@webui/utils/connectCards';
 import { isAuthRequiredMessage } from '@webui/utils/connectorRetry.core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
@@ -81,6 +82,7 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
         !!tail && !tail.live && tail.replyId !== null && lastReply?.id === tail.replyId &&
         ownsTryAgain(lastReply, { fixShownBelow: serverDownReplyId(tail) === lastReply.id, latest: true, busy: hold, readOnly: !!retiredAgent });
     const connectProviders = connectCardProviders(lastReply);
+    const connectAccounts = connectCardAccounts(lastReply);
     // A Connect card names its connectors outright; a reply with only its wording is read for them.
     const connectorError =
         !busy &&
@@ -199,7 +201,7 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                             />
                         </Stack>
                     ) : null}
-                    {connectorError ? <ConnectorRetry content={connectorError.content} providers={connectProviders} onRetry={() => tryAgain(connectorError.id)} /> : null}
+                    {connectorError ? <ConnectorRetry content={connectorError.content} providers={connectProviders} accounts={connectAccounts} onRetry={() => tryAgain(connectorError.id)} /> : null}
                     {permission ? (
                         <Stack paddingX="gutter">
                             <PermissionPrompt
@@ -241,7 +243,7 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                         rightControls={
                             <>
                                 <SpendMeter sessionId={sessionId} busy={busy} />
-                                <ContextMeter usage={context.usage} unavailable={context.unavailable} onDetails={() => setPanelOpen(true)} />
+                                <ContextMeter usage={context.usage} onDetails={() => setPanelOpen(true)} />
                                 <SessionFolderChip sessionId={sessionId} live={busy} onOpen={showEnvironment} />
                                 <ModelChip turnRunning={busy} initialQueued={initialQueuedModel} />
                             </>
