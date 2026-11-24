@@ -479,8 +479,8 @@ export function PermissionPrompt({
                         <ScrollBox maxHeight={bodyMax} hint testID="perm-details-scroll">
                             <View testID="perm-details-body">
                                 <Stack gap="md">
-                                    <CallDetails facts={facts} question={question} />
                                     {fullAccessPending ? <Notice tone="info" message={t('perm.fullPendingNote')} testID="perm-full-pending" /> : null}
+                                    <CallDetails facts={facts} question={question} />
                                     {suggestAlways && !expired ? (
                                         <Text role="caption" tone="secondary">
                                             {t.compose(

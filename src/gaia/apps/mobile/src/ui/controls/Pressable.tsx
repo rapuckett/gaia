@@ -47,7 +47,7 @@ export interface PressableProps {
     minSize?: number;
     /** Sizes to its content (a short label in a row of text); hit slop keeps the target `minSize` wide and tall without changing the layout. */
     inline?: boolean;
-    /** With `inline`: keeps the content's own height, so a link inside a paragraph's rhythm doesn't grow; the target is `minSize` tall through hit slop. */
+    /** With `inline` or `shape`: keeps the content's own height, so a link inside a paragraph's rhythm doesn't grow; the target is `minSize` tall through hit slop. */
     hugHeight?: boolean;
     /** Android: an icon-only control's borderless ripple, a circle of half the target. */
     round?: boolean;
@@ -88,12 +88,12 @@ export function Pressable({
     const [height, setHeight] = useState(0);
     const [box, setBox] = useState<{ width: number; height: number } | null>(null);
     const clip = RIPPLE && shape != null;
-    const slop = inline ? Math.max(0, Math.ceil((minSize - width) / 2)) : 0;
+    const slop = inline && !clip ? Math.max(0, Math.ceil((minSize - width) / 2)) : 0;
     // A clipped shape keeps the full target through hit slop, since its own bounds are smaller.
     const ringX = clip && box ? Math.max(0, Math.ceil((minSize - box.width) / 2)) : 0;
     const ringY = clip && box ? Math.max(0, Math.ceil((minSize - box.height) / 2)) : 0;
     // Where an inline link keeps its content's height, the target grows by slop, not layout.
-    const slopY = inline ? Math.max(0, Math.ceil((minSize - height) / 2)) : 0;
+    const slopY = inline && !clip ? Math.max(0, Math.ceil((minSize - height) / 2)) : 0;
     const hitSlop = slop || ringX || ringY || slopY ? { left: slop + ringX, right: slop + ringX, top: ringY + slopY, bottom: ringY + slopY } : undefined;
     const pressable = (
         <RNPressable
@@ -125,6 +125,7 @@ export function Pressable({
             style={({ pressed }) => ({
                 minWidth: inline || clip ? undefined : minSize,
                 minHeight: clip || (inline && hugHeight) ? undefined : minSize,
+                maxWidth: hugHeight ? '100%' : undefined,
                 justifyContent: 'center',
                 opacity: dimmed ? 0.45 : pressed && !RIPPLE ? 0.72 : 1,
             })}
@@ -136,12 +137,12 @@ export function Pressable({
     // A view's own overflow doesn't clip its foreground, where the ripple draws, so the shape is clipped from outside;
     // the clipping view takes the same hit slop, because touches outside its bounds never reach its children.
     return (
-        <View testID={testID ? `${testID}-target` : undefined} style={{ minHeight: minSize, justifyContent: 'center', alignItems: shape.hug ? 'flex-start' : 'stretch' }}>
+        <View testID={testID ? `${testID}-target` : undefined} style={{ minHeight: hugHeight ? undefined : minSize, maxWidth: hugHeight ? '100%' : undefined, justifyContent: 'center', alignItems: shape.hug ? 'flex-start' : 'stretch' }}>
             <View
                 testID={testID ? `${testID}-clip` : undefined}
                 hitSlop={hitSlop}
                 onLayout={(e) => setBox({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
-                style={{ overflow: 'hidden', borderRadius: shape.radius }}
+                style={{ overflow: 'hidden', borderRadius: shape.radius, maxWidth: hugHeight ? '100%' : undefined }}
             >
                 {pressable}
             </View>

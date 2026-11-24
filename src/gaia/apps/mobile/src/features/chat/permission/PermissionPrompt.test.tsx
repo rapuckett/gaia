@@ -155,7 +155,7 @@ describe('PermissionPrompt', () => {
         expect(tree).not.toContain('"height"');
     });
 
-    it('keeps the full-access note inside the padded body', async () => {
+    it('puts the full-access note first in the scrolling body, above the call details', async () => {
         const r = createRoot({ textComponentTypes: ['Text', 'RCTText'] });
         await act(async () => {
             r.render(<PermissionPrompt prompt={prompt({})} fullAccessPending onAnswer={jest.fn()} />);

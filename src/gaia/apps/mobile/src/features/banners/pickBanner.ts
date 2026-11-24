@@ -7,7 +7,7 @@ import { isStarting } from '@/data';
 import { namesSetupCommand, needsLocalSetup } from '@/features/settings/panes/advanced/statusText';
 import { technicalDetail, type Translate } from '@/i18n/useT';
 import type { NoticeTone } from '@/ui';
-import { isolate } from '@webui/i18n/registry';
+import { isMessageKey, isolate } from '@webui/i18n/registry';
 import { GB_UNIT, MIN_CONTEXT_SIZE } from '@webui/utils/constants';
 import { shortModelName, type PickLoad } from '@webui/utils/modelList.core';
 
@@ -127,7 +127,9 @@ export function pickBanner(
 
     if (isStarting(status)) {
         const running = status.init_tasks?.find((task) => task.status === 'running');
-        return { id: 'starting', tone: 'info', title: running?.name || t('banner.preparing'), progress: {} };
+        const key = `banner.boot.${running?.step}`;
+        const label = running?.step && isMessageKey(key) ? t(key) : t('banner.boot.generic');
+        return { id: 'starting', tone: 'info', title: label, progress: {} };
     }
 
     if (status.config_error) {
