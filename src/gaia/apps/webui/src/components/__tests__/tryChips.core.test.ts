@@ -16,6 +16,12 @@ describe('tryChips.core', () => {
         expect(five.examples).toHaveLength(1);
     });
 
+    it('leaves out a task offered elsewhere and fills from the next one', () => {
+        const picked = pickStarters(['doc', 'b', 'c'].map(card), ['doc']);
+        expect(picked.tasks.map((c) => c.skill)).toEqual(['b', 'c']);
+        expect(pickStarters([card('doc')], ['doc']).examples).toHaveLength(3);
+    });
+
     it('puts a pick after typed text and replaces the last pick', () => {
         expect(withStarter('', '', 'one')).toBe('one');
         expect(withStarter('Mine', '', 'one')).toBe('Mine\n\none');

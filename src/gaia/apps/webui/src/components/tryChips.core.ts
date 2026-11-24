@@ -21,9 +21,9 @@ export const TRY_EXAMPLE_KEYS: readonly TryExampleKeys[] = [
     { label: 'cards.try.bill', prompt: 'cards.try.billPrompt' },
 ];
 
-/** The row: up to two of this PC's tasks, then examples to make three. */
-export function pickStarters(cards: readonly StartCard[] = []): { tasks: StartCard[]; examples: TryExampleKeys[] } {
-    const tasks = cards.slice(0, CARDS_SHOWN);
+/** The row: up to two of this PC's tasks, then examples to make three. `leave` names tasks already offered elsewhere on the screen. */
+export function pickStarters(cards: readonly StartCard[] = [], leave: readonly string[] = []): { tasks: StartCard[]; examples: TryExampleKeys[] } {
+    const tasks = cards.filter((c) => !leave.includes(c.skill)).slice(0, CARDS_SHOWN);
     return { tasks, examples: TRY_EXAMPLE_KEYS.slice(0, STARTERS_SHOWN - tasks.length) as TryExampleKeys[] };
 }
 

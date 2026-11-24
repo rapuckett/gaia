@@ -62,6 +62,13 @@ describeNative('/dev/composer new-chat scenes', () => {
         created.mockRestore();
     });
 
+    it('new-chat-doc-brief offers the documents task once, as the brief card, not also as a starter', async () => {
+        await mount('new-chat-doc-brief');
+        expect(await screen.findByTestId('document-brief-card')).toBeTruthy();
+        expect(screen.queryByTestId('try-task-document-brief')).toBeNull();
+        expect(screen.getByText('Recipe')).toBeTruthy();
+    });
+
     it('new-chat-starters-none shows three examples', async () => {
         await mount('new-chat-starters-none');
         expect(await screen.findByText('Recipe')).toBeTruthy();

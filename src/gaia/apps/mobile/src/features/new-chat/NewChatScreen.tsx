@@ -190,6 +190,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
         holdDocuments(indexed.map((d) => d.id));
         if (briefCard.needs_input || send(briefCard.prompt) === false) setText(briefCard.prompt);
     };
+    const briefShown = !!briefCard && indexed.length > 0 && !state.sending;
     const failedSetup = setupError(status);
     const warming = warmUpProgress(status?.warm_up);
     const [greeting, gloss] = bracketParts(t(greetingKey(new Date())));
@@ -319,7 +320,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                         onChoose={onChooseDocuments}
                     />
                 )}
-                {briefCard && indexed.length > 0 && !state.sending && (
+                {briefShown && briefCard && (
                     <DocumentBriefCard count={indexed.length} onPress={askAboutDocuments} />
                 )}
                 {warming !== null && showWarmUp(status) && (
@@ -342,7 +343,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                     </Stack>
                 )}
                 {state.error !== null && <Notice tone="danger" message={state.error} detail={state.errorDetail} />}
-                {!state.sending && startingReason(status, t) === null && <TryChips cards={startScreen?.cards} pending={startQuery.isPending && !startSlow} onPick={fillExample} />}
+                {!state.sending && startingReason(status, t) === null && <TryChips cards={startScreen?.cards} leave={briefShown ? ['document-brief'] : undefined} pending={startQuery.isPending && !startSlow} onPick={fillExample} />}
                 {agentProblem !== null && (
                     <View onLayout={showCard} testID="agent-recovery-slot">
                         <AgentRecovery problem={agentProblem} answeredAt={assistant.answeredAt} onRetry={assistant.retry} kept={keptForAgent} />

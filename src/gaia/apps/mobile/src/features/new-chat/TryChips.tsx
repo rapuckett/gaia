@@ -35,11 +35,13 @@ interface TryChipsProps {
     onPick: (prompt: string) => void;
     /** The tasks haven't arrived: the row holds its space, unseen, so the screen doesn't jump. */
     pending?: boolean;
+    /** Skills already offered elsewhere on the screen (the documents brief), left out of the row. */
+    leave?: string[];
 }
 
-export function TryChips({ cards, onPick, pending = false }: TryChipsProps) {
+export function TryChips({ cards, onPick, pending = false, leave }: TryChipsProps) {
     const t = useT();
-    const { tasks, examples } = pickStarters(cards);
+    const { tasks, examples } = pickStarters(cards, leave);
     return (
         <View
             accessibilityRole="toolbar"
