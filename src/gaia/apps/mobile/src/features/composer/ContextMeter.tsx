@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { pluralKey } from '@webui/i18n/registry';
+import { contextPct, meterVisible } from '@webui/utils/contextMeter.core';
 import { formatTokens } from '@webui/utils/format';
 
 import type { ContextUsage } from '@/api/client.types';
@@ -40,8 +41,9 @@ export function ContextMeter({ usage, unavailable, onDetails, initialOpen = fals
     const wordless = useChipCollapsed('meterWord');
     if (!usage && !unavailable) return null;
 
-    const pct = usage ? Math.min(100, Math.round((usage.used / usage.window) * 100)) : 0;
+    const pct = usage ? contextPct(usage) : 0;
     const warn = !!usage && usage.at_risk.length > 0;
+    if (usage && !meterVisible(pct, warn, open)) return null;
     const partColor = {
         system: colors.accentBlue,
         tools: colors.accentPurple,
