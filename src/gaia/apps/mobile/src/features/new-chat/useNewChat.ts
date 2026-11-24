@@ -8,7 +8,7 @@ import type { AgentProblem, StartScreen } from '@webui/types';
 
 import { useStartScreen } from '@/data';
 import { folderRefusalNotice } from '@/features/files/folderRefusal';
-import { describeError, describeHttpFailure, useT } from '@/i18n/useT';
+import { describeDetail, describeHttpFailure, useT } from '@/i18n/useT';
 import { useChatStreamStore } from '@/state/chatStreams';
 import type { Translate } from '@/i18n/useT';
 
@@ -45,7 +45,7 @@ export function useFirstSend(deps: NewChatDeps, initialText: string) {
 // The chosen agent failing to start has its own card, which a failed re-read leaves up, so it is not said here too.
 export function assistantProblem(error: unknown, data: StartScreen | undefined, t: Translate): string | null {
     if (data?.agent_problem) return null;
-    if (error) return describeError(error, t);
+    if (error) return describeDetail(error, t);
     return data?.skills_error ?? null;
 }
 

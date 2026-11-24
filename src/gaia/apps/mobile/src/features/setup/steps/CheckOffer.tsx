@@ -8,7 +8,7 @@ import { useDeviceRefused } from '@/api/routeAccess';
 import { useSetLemonadeTarget, useSwitchToYourServer } from '@/data';
 import { ActionError, SwitchError } from '@/features/settings/panes/advanced/errors';
 import { OwnServerConfirm } from '@/features/settings/panes/advanced/OwnServerConfirm';
-import { describeError, useT } from '@/i18n/useT';
+import { describeDetail, useT } from '@/i18n/useT';
 import { Badge, Button, Disclosure, Ltr, Pressable, Row, Spinner, Stack, Surface, Text, TextField } from '@/ui';
 
 import { SetupFooter } from '../SetupFooter';
@@ -142,7 +142,7 @@ export function CheckOffer({ state }: { state: OfferState }) {
                 <Stack gap="sm">
                     <Text tone="secondary">{t('setup.offer.checkFailed')}</Text>
                     <Disclosure title={t('setup.progress.details')} open={details} onToggle={() => setDetails((d) => !d)}>
-                        <Ltr>{describeError(state.error, t)}</Ltr>
+                        <Ltr>{describeDetail(state.error, t)}</Ltr>
                     </Disclosure>
                 </Stack>
             );

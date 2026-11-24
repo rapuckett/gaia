@@ -6,6 +6,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { GaiaApiError } from '@/api/errors';
 import { DEVELOPMENT_SCHEME } from '@/features/dev/devGallery';
 import { translator } from '@/i18n/useT';
 import { ThemeProvider, useScreenBanner } from '@/ui';
@@ -70,6 +71,22 @@ describe('failed upgrade notice', () => {
         await render(<SetupGate><Pane /></SetupGate>, { wrapper });
         expect(screen.getByText('The download was interrupted.')).toBeTruthy();
         expect(screen.queryByText(/Details:/)).toBeNull();
+        mockGate = { state: 'ready' };
+    });
+});
+
+describe('a PC answering the setup check with an error', () => {
+    it('says our reason-free title, with the PC text on its own line and no status', async () => {
+        mockGate = { state: 'unknown', upgradeFailed: false, error: new GaiaApiError(500, 'setup state is unreadable') };
+        const wrapper = ({ children }: { children: ReactNode }) => (
+            <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                <ThemeProvider>{children}</ThemeProvider>
+            </SafeAreaProvider>
+        );
+        await render(<SetupGate><Pane /></SetupGate>, { wrapper });
+        expect(screen.getByText('Something went wrong on your PC.')).toBeTruthy();
+        expect(screen.getByText('setup state is unreadable')).toBeTruthy();
+        expect(screen.queryByText(/500/)).toBeNull();
         mockGate = { state: 'ready' };
     });
 });

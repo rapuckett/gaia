@@ -105,6 +105,17 @@ describe('DocumentsScreen', () => {
             expect(screen.getByText(/up to 20 MB/)).toBeTruthy();
         });
 
+        it("puts the PC's sentence for a failed add on its own detail line, under our title", async () => {
+            (pickDocuments as jest.Mock).mockResolvedValue([file('handbook.pdf')]);
+            const documentUploadError = new GaiaApiError(500, 'The index could not be written: disk is read-only.');
+            await mount(createFakeClient({ documentUploadError }));
+            fireEvent.press(await screen.findByText('Add a file'));
+            expect(await screen.findByText('Failed to index "handbook.pdf"')).toBeTruthy();
+            expect(screen.getByText('An unexpected error occurred during indexing.')).toBeTruthy();
+            expect(screen.getByText('The index could not be written: disk is read-only.')).toBeTruthy();
+            expect(screen.queryByText(/500/)).toBeNull();
+        });
+
         it('shows a warning, and no spinner, when the paired connection cannot send files yet', async () => {
             (pickDocuments as jest.Mock).mockResolvedValue([file('notes.txt')]);
             const refused = Object.assign(new GaiaError('mobileApp.pairing.uploadUnsupported'), { code: 'unsupported_body' });
@@ -227,12 +238,13 @@ describe('DocumentsScreen', () => {
             expect(client.documentActions).toEqual([{ action: 'delete', docId: 'a' }]);
         });
 
-        it('a failed DELETE brings the row back with the reason', async () => {
+        it('a failed DELETE brings the row back, saying our words and not the PC\'s reason', async () => {
             const client = createFakeClient({ documents: library(), documentFailures: { delete: 'disk is read-only' } });
             await mount(client);
             await fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
             await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS));
-            expect(await screen.findByText(/Couldn't remove notes\.txt: .*disk is read-only/)).toBeTruthy();
+            expect(await screen.findByText(/Couldn't remove notes\.txt: .*Something went wrong on your PC\./)).toBeTruthy();
+            expect(screen.queryByText(/disk is read-only/)).toBeNull();
             expect(screen.getByLabelText('Remove notes.txt')).toBeTruthy();
         });
     });
