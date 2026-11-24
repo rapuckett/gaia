@@ -91,6 +91,7 @@ export function ConnectorAccountList({ connector }: { connector: ConnectorRow })
                                             target={{ account: ref }}
                                             testID={`connector-reconnect-${ref}`}
                                             secondary
+                                            compact
                                         />
                                     ) : null}
                                     {!account.is_default && account.status === 'ok' ? (
