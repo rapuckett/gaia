@@ -14,6 +14,7 @@ import { log } from '../../utils/logger';
 import { useTurnEnd } from '../../hooks/useTurnEnd';
 import { useUndoEvents } from '../../utils/undoEvents';
 import { PanelSection } from './PanelSection';
+import { outputsCount } from '../../utils/sessionPanelSummary.core';
 import { useLatestRead } from '../../hooks/useLatestRead';
 import type { OutputItem, OutputKind } from '../../types/sessionPanel';
 import { ref, type MessageKey, type Param, type Params } from '../../i18n/registry';
@@ -94,7 +95,7 @@ export function OutputsSection({ sessionId, busy, onJumpToMessage }: OutputsSect
 
     if (!error && (!items || items.length === 0)) return null;
     return (
-        <PanelSection id="outputs" title={t('out.title')} summary={items && items.length > 0 ? String(items.length) : null}>
+        <PanelSection id="outputs" title={t('out.title')} summary={outputsCount(items)}>
             {error
                 ? <p className="sp-error">{t('out.listError', { error })}</p>
                 : <OutputsList items={items ?? []} onJumpToMessage={onJumpToMessage} />}
