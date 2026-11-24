@@ -150,3 +150,10 @@ export class DownloadMeter {
 /** Seconds without new bytes before the row says so, and before it offers a retry. */
 export const STALL_NOTICE_S = 15;
 export const STALL_STUCK_S = 60;
+
+/** "C:" from "C:\Users\me\.cache\huggingface\hub"; null elsewhere. */
+export function driveName(path: string | null): string | null {
+    if (!path) return null;
+    // Elsewhere the path names the user's home folder: show none, not the path.
+    return /^([A-Za-z]:)[\\/]/.exec(path)?.[1] ?? null;
+}

@@ -3,9 +3,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { tEn } from '../../../i18n/useT';
-import { DownloadMeter, formatEta, formatSize, formatSpeed } from '../format';
+import { DownloadMeter, driveName, formatEta, formatSize, formatSpeed } from '../format';
 import { copyableCommand } from '../GpuMemoryPanel';
-import { driveName } from '../ModelChecklist';
 
 describe('sizes, speeds and times', () => {
     it('shows decimal GB to one place, and MB under 1 GB', () => {

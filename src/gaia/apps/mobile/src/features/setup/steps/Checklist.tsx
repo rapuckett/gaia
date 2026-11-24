@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 
-import { formatBytes, formatSize, ltrIn } from '@webui/components/setup/format';
+import { driveName, formatBytes, formatSize, ltrIn } from '@webui/components/setup/format';
 import {
     catalogOf, chatCandidates, installedOnlyRows, isNpu, isVision, mainRows, moreRows, shortfall, totals, type Selection,
 } from '@webui/components/setup/selection';
@@ -16,13 +16,6 @@ import { MarkedRow, Warn } from './ModelRows';
 import { fitLine, purposeChips, purposeLine, skipCaveat, statusText, tooBigText } from './modelsView';
 
 const SEARCH_ABOVE = 6;
-
-/** "C:" from "C:\Users\me\.cache\huggingface\hub"; the folder itself elsewhere. */
-function driveName(path: string | null): string | null {
-    if (!path) return null;
-    const win = /^([A-Za-z]:)[\\/]/.exec(path);
-    return win ? win[1]! : path;
-}
 
 function Row1({ entry: e, ticked, onToggle, disabled, progress, imagesCovered }: {
     entry: SetupCatalogEntry;
@@ -199,6 +192,7 @@ export function ModelChecklist({ plan, selection, onToggle, onDefaultChat, disab
 
             <Select
                 label={t('setup.models.defaultChat')}
+                testID="default-chat-model"
                 value={selection.defaultChat ?? ''}
                 disabled={disabled || candidates.length === 0}
                 placeholder={t.bare('setup.models.noChat')}

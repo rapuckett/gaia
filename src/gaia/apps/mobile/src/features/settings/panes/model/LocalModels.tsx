@@ -229,6 +229,7 @@ export function LocalModels() {
                             ) : null}
                             <Select
                                 label={t('setup.models.defaultChat')}
+                                testID="default-chat-model"
                                 value={selection.defaultChat ?? ''}
                                 disabled={busy || candidates.length === 0}
                                 placeholder={t.bare('setup.models.noChat')}
