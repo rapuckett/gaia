@@ -4929,6 +4929,13 @@ const messages: Messages = {
     'mobileApp.yourPc.setup.models.cantRun.chat': "لا يمكن تشغيل {name} على الكمبيوتر لديك. {why} اختر نموذج دردشة آخر.",
     'mobileApp.yourPc.setup.models.cantRun.other': "لا يمكن تشغيل {name} على الكمبيوتر لديك. {why} ألغِ تحديده للمتابعة.",
     'mobileApp.yourPc.setup.npu.fixError.noPkexec': "لا يستطيع GAIA طلب كلمة مرور المسؤول على الكمبيوتر لديك لأن polkit غير مثبت. يشرح دليل NPU في GAIA خطوات رفع الحد يدويًا.",
+    'mobileApp.yourPc.chatError.savedReport': "حفظ GAIA تقريرًا عن هذه المشكلة على الكمبيوتر لديك باسم {id}، ولم يُرسَل أي شيء.",
+    'mobileApp.yourPc.tool.get_system_info.done': "تحقّق من الكمبيوتر لديك",
+    'mobileApp.yourPc.tool.get_system_info.active': "التحقق من الكمبيوتر لديك",
+    'mobileApp.yourPc.setup.component.serverNote': "يشغّل نماذج الذكاء الاصطناعي على الكمبيوتر لديك (Lemonade).",
+    'mobileApp.yourPc.setup.fail.testMemory': "نُزّل {name}، لكن لم تكن في الكمبيوتر لديك ذاكرة متاحة كافية لاختباره. أغلق بعض التطبيقات، ثم اضغط «إعادة المحاولة» لاختباره من جديد. لن يُنزَّل شيء مرة أخرى.",
+    'mobileApp.yourPc.mem.source.discovery': "وُجد على الكمبيوتر لديك أثناء إعداد الملف الشخصي",
+    'mobileApp.yourPc.resources.unavailableWhy': "تعذّرت قراءة استخدام {label} على الكمبيوتر لديك: {reason}",
     // Browser pane (desktop app)
     'browserPane.label': 'لوحة المتصفح',
     'browserPane.resize': 'تغيير حجم لوحة المتصفح',
