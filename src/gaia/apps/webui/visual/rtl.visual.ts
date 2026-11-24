@@ -4160,6 +4160,20 @@ for (const locale of ['ar', 'en']) {
         });
     }
 
+    test(`settings devices: the list can't be read (${locale})`, async ({ page }) => {
+        await open(page, '', locale, async (p) => {
+            await p.route('**/api/devices/status', (route) => route.fulfill({ status: 500, json: { detail: 'The device store is locked.' } }));
+            await p.route('**/api/devices', (route) => route.fulfill({ json: { devices: [] } }));
+        });
+        await page.getByRole('button', { name: /Settings/ }).first().click();
+        await page.getByRole('dialog').locator('[data-section="devices"]').click();
+        const pane = page.locator('.settings-scroll');
+        await expect(pane.locator('.settings-error')).toContainText('The device store is locked.');
+        await expect(pane.locator('.settings-card .btn-secondary')).toBeVisible();
+        await shot(page, `devices-${locale}-loadFailed`);
+        expect(await audit(page)).toEqual([]);
+    });
+
     test(`settings devices: pairing code shown (${locale})`, async ({ page }) => {
         await open(page, '', locale, (p) => withDevices(p, DEVICE_STATES.empty));
         await openDevices(page);
