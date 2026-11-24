@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 
 import type { StartScreen, SystemStatus } from '@webui/types';
-import type { AgentPrograms } from '@/api/client.types';
+import type { AgentPrograms, Settings } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
@@ -35,7 +35,7 @@ import { NewChatScreen } from './NewChatScreen';
  * `new-chat-agent-cant-download` (this release has none to download: the reason, no Download), `new-chat-agent-downloading`
  * (a download the PC started, followed), `new-chat-agent-pc-only` (the PC keeps both ways out to itself: Check again).
  */
-export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'new-chat-doc-brief', 'create-failed', 'skill-prompt', 'new-chat-folder-own-fixed', 'new-chat-folder-own-add', 'new-chat-folder-project-fixed', 'new-chat-folder-project-add', 'new-chat-folder-picker', 'new-chat-folder-picked', 'new-chat-folder-refused', 'new-chat-folder-outside-home', 'new-chat-agent-missing', 'new-chat-agent-invalid', 'new-chat-agent-cant-download', 'new-chat-agent-downloading', 'new-chat-agent-pc-only'] as const;
+export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'new-chat-doc-brief', 'create-failed', 'skill-prompt', 'new-chat-folder-own-fixed', 'new-chat-folder-own-add', 'new-chat-folder-project-fixed', 'new-chat-folder-project-add', 'new-chat-folder-picker', 'new-chat-folder-picked', 'new-chat-folder-refused', 'new-chat-folder-outside-home', 'new-chat-agent-missing', 'new-chat-agent-invalid', 'new-chat-agent-cant-download', 'new-chat-agent-downloading', 'new-chat-agent-pc-only', 'new-chat-agent-fast'] as const;
 export type NewChatScene = (typeof NEW_CHAT_SCENES)[number];
 
 const READY = {
@@ -123,6 +123,13 @@ function clientFor(state: NewChatScene) {
     }
     if (state === 'new-chat-warmup') {
         return createFakeClient({ ...base, status: { ...READY, warm_up: { state: 'warming', elapsed_seconds: 12, model: 'Gemma-4-E4B-it-GGUF', device: 'gpu' } } as unknown as SystemStatus });
+    }
+    if (state === 'new-chat-agent-fast') {
+        const settings = {
+            custom_model: null, model_status: null, context_size: null, dynamic_tools: false, dynamic_tools_locked: false,
+            agent_mode: 'manual', network_policy: 'cloud_allowed', flagship_agent: 'gaiacpp', gaiacpp_available: true,
+        } as Settings;
+        return createFakeClient({ ...base, settings });
     }
     const folder = FOLDERS[state];
     if (folder) {
