@@ -7,7 +7,7 @@ import { View } from 'react-native';
 
 import { isolate, isolateUnit } from '@webui/i18n/registry';
 
-import { Icon, Pressable, Row, Text } from '@/ui';
+import { Icon, Pressable, Row, Text, useTheme } from '@/ui';
 import { ChevronDown } from '@/ui/icons';
 import { a11yVisibility } from '@/ui/theme/a11y';
 
@@ -26,6 +26,8 @@ export interface ControlChipProps {
     /** The label is a value, not UI copy: a model id stays `ltr`, a folder name follows its own script (`auto`). */
     value?: 'ltr' | 'auto';
     disabled?: boolean;
+    /** A toggle chip: true draws the accent look and reads as a switch that is on, false as off; leave out for a plain chip. */
+    active?: boolean;
     /** Where the model runs ("Local" or the provider), after its name when the row has room: "Gemma 4 E4B · Local". */
     place?: string | null;
     accessibilityLabel?: string;
@@ -36,7 +38,8 @@ export interface ControlChipProps {
 const MODEL_CHIP_MIN = 44;
 
 /** A flat control in the message box's bottom row, as the desktop's composer chips: an icon, a short label and a chevron. */
-export function ControlChip({ label, icon, onPress, menu, warning, chip, disabled, place, accessibilityLabel, accessibilityHint, testID, value }: ControlChipProps) {
+export function ControlChip({ label, icon, onPress, menu, warning, chip, disabled, active, place, accessibilityLabel, accessibilityHint, testID, value }: ControlChipProps) {
+    const { colors } = useTheme();
     const collapsed = useChipCollapsed(chip);
     const placeHidden = useChipCollapsed('place');
     const [modelWidth, setModelWidth] = useState<number | null>(null);
@@ -45,24 +48,27 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
     const iconOnly = collapsed || belowFloor;
     // One line, so an ellipsis cuts the place before the name; each stays one island in Arabic.
     const text = (placed: boolean) => (placed && place ? [value === 'ltr' ? isolate(label, 'ltr') : label, isolateUnit(place)].join(' · ') : label);
+    const tone = warning ? 'warning' : active ? 'accent' : 'secondary';
     const content = (compact: boolean, placed = false) => (
-        <Row gap="xs">
-            <View style={{ flexShrink: 0 }}>
-                <Icon icon={icon} size="sm" tone={warning ? 'warning' : 'secondary'} />
-            </View>
-            {compact ? null : (
-                <View style={{ flexShrink: chip === 'model' ? 1 : 0 }}>
-                    <Text role="label" tone={warning ? 'warning' : 'secondary'} numberOfLines={1} compact dir={placed && place ? undefined : value}>
-                        {text(placed)}
-                    </Text>
-                </View>
-            )}
-            {menu && !(compact && !belowFloor) ? (
+        <View style={active ? { backgroundColor: colors.accentDim, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 } : undefined}>
+            <Row gap="xs">
                 <View style={{ flexShrink: 0 }}>
-                    <Icon icon={ChevronDown} size="sm" tone="muted" />
+                    <Icon icon={icon} size="sm" tone={tone} />
                 </View>
-            ) : null}
-        </Row>
+                {compact ? null : (
+                    <View style={{ flexShrink: chip === 'model' ? 1 : 0 }}>
+                        <Text role="label" tone={tone} numberOfLines={1} compact dir={placed && place ? undefined : value}>
+                            {text(placed)}
+                        </Text>
+                    </View>
+                )}
+                {menu && !(compact && !belowFloor) ? (
+                    <View style={{ flexShrink: 0 }}>
+                        <Icon icon={ChevronDown} size="sm" tone="muted" />
+                    </View>
+                ) : null}
+            </Row>
+        </View>
     );
     return (
         <View
@@ -86,6 +92,8 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
                 disabled={disabled}
                 accessibilityLabel={accessibilityLabel ?? label}
                 accessibilityHint={accessibilityHint}
+                accessibilityRole={active === undefined ? undefined : 'switch'}
+                aria-checked={active}
                 aria-expanded={menu ? false : undefined}
                 aria-haspopup={menu ? 'menu' : undefined}
                 minSize={44}
