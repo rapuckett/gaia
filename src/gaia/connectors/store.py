@@ -323,6 +323,14 @@ _refusal: Optional[str] = None
 _refused_at = 0.0
 # One read probes the store once a hold expires; the rest stay held until it ends.
 _probing = False
+_refusal_listeners: list = []
+
+
+def on_keyring_refused(callback) -> None:
+    """Call *callback* (no arguments, must not block) each time the store locks."""
+    with _refusal_lock:
+        if callback not in _refusal_listeners:
+            _refusal_listeners.append(callback)
 
 
 def _held_locked() -> bool:
@@ -360,6 +368,10 @@ def _refuse(error: Exception) -> KeyringRefused:
         "Keyring read refused; holding reads for %ds or until the user retries",
         HOLD_SECONDS,
     )
+    with _refusal_lock:
+        listeners = list(_refusal_listeners)
+    for callback in listeners:
+        callback()
     return KeyringRefused(message)
 
 
