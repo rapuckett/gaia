@@ -8,6 +8,9 @@ import { cardText } from './startCardText';
 import { useT } from '../i18n/useT';
 import type { MessageKey } from '../i18n/registry';
 import type { StartCard } from '../types';
+import { TRY_EXAMPLE_KEYS, pickStarters } from './tryChips.core';
+
+export { CARDS_SHOWN, STARTERS_SHOWN } from './tryChips.core';
 
 interface TryExample {
     icon: LucideIcon;
@@ -15,17 +18,9 @@ interface TryExample {
     prompt: MessageKey;
 }
 
-/** Examples that each end in a different kind of card, none needing the web; the first is shown most. */
-export const TRY_EXAMPLES: readonly TryExample[] = [
-    { icon: ChefHat, label: 'cards.try.recipe', prompt: 'cards.try.recipePrompt' },
-    { icon: ListChecks, label: 'cards.try.checklist', prompt: 'cards.try.checklistPrompt' },
-    { icon: Receipt, label: 'cards.try.bill', prompt: 'cards.try.billPrompt' },
-];
+const EXAMPLE_ICONS: readonly LucideIcon[] = [ChefHat, ListChecks, Receipt];
 
-/** Starters in one row: the backend's tasks first, then examples to fill it. */
-export const STARTERS_SHOWN = 3;
-/** Backend tasks shown, so at least one starter still ends in a card. */
-export const CARDS_SHOWN = 2;
+export const TRY_EXAMPLES: readonly TryExample[] = TRY_EXAMPLE_KEYS.map((keys, i) => ({ icon: EXAMPLE_ICONS[i], ...keys }));
 
 const CARD_ICONS: Record<string, LucideIcon> = {
     'document-brief': FileText,
@@ -49,8 +44,8 @@ interface TryChipsProps {
 /** Up to three starters for an empty chat. */
 export function TryChips({ cards = [], onPick, disabled, pending = false }: TryChipsProps) {
     const t = useT();
-    const tasks = cards.slice(0, CARDS_SHOWN);
-    const examples = TRY_EXAMPLES.slice(0, STARTERS_SHOWN - tasks.length);
+    const { tasks, examples: shown } = pickStarters(cards);
+    const examples = shown.map((keys) => TRY_EXAMPLES.find((e) => e.label === keys.label)!);
     return (
         <div
             className={`try-chips${pending ? ' is-pending' : ''}`}

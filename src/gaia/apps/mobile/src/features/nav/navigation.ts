@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { ActiveRuns } from '@/api/client.types';
 import type { LiveRuns } from '@/features/chats/chatList';
 import type { ChatTurn } from '@/state/chatStreams';
 
@@ -73,14 +74,18 @@ export function activeChatId(pathname: string): string | null {
     return match ? decodeURIComponent(match[1]) : null;
 }
 
-/** A chat with a turn that isn't idle is running; one blocked on a prompt is also awaiting. */
-export function liveRunsFromTurns(turns: Readonly<Record<string, ChatTurn>>): LiveRuns {
+/**
+ * What the drawer shows live: this phone's own turns, plus the PC's runs (another device's turn,
+ * a chat waiting for the GPU) from GET /api/chat/active.
+ */
+export function liveRunsFromTurns(turns: Readonly<Record<string, ChatTurn>>, active?: ActiveRuns): LiveRuns {
     const running: string[] = [];
-    const awaiting: Record<string, true> = {};
+    const awaiting: Record<string, unknown> = { ...active?.awaiting_user };
     for (const [id, turn] of Object.entries(turns)) {
         if (turn.status === 'idle') continue;
         running.push(id);
         if (turn.pendingPermission || turn.pendingQuestion) awaiting[id] = true;
     }
-    return { running, queued: [], awaiting, prompting: [] };
+    for (const id of active?.session_ids ?? []) if (!running.includes(id)) running.push(id);
+    return { running, queued: active?.queued ?? [], awaiting, prompting: [] };
 }

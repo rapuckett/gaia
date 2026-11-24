@@ -8,6 +8,7 @@ import { ContextPanel } from './ContextPanel';
 import { pluralKey } from '../i18n/registry';
 import { useT } from '../i18n/useT';
 import { formatTokens } from '../utils/format';
+import { contextPct, meterVisible } from '../utils/contextMeter.core';
 import { formatWindow } from './modelMeta';
 import type { ContextUsage } from '../types';
 import './ContextMeter.css';
@@ -19,9 +20,6 @@ const PARTS = [
     { key: 'history', label: 'ctx.meter.part.history' },
     { key: 'query', label: 'ctx.meter.part.query' },
 ] as const;
-
-/** The composer shows the meter only past this fill; the session panel always has the figure. */
-const METER_SHOWN_ABOVE_PCT = 50;
 
 interface ContextMeterProps {
     usage: ContextUsage | null;
@@ -43,9 +41,9 @@ export function ContextMeter({ usage, sessionId, busy = false, onUsage, onDetail
         ? <ContextPanel sessionId={sessionId} busy={busy} onUsage={onUsage} onClose={() => setDetails(false)} />
         : null;
     if (!usage) return null;
-    const pct = Math.min(100, Math.round((usage.used / usage.window) * 100));
+    const pct = contextPct(usage);
     const warn = usage.at_risk.length > 0;
-    if (pct <= METER_SHOWN_ABOVE_PCT && !warn && !open && !panel) return null;
+    if (!meterVisible(pct, warn, open || !!panel)) return null;
     const free = Math.max(0, usage.window - usage.used - usage.reply_reserve);
     // The meter fills against GAIA's admitted window, which can be far below a cloud model's own.
     const modelWindow = usage.model_window != null && usage.model_window > usage.window ? usage.model_window : null;
