@@ -23,6 +23,8 @@ export interface ControlChipProps {
     warning?: boolean;
     /** A setting that is on: the accent-dim fill and accent glyph of the desktop's `is-on` chip. */
     active?: boolean;
+    /** `active` is a switch's on state, not a menu's: read as a switch that is on or off. */
+    toggle?: boolean;
     /** Which chip this is, so the row can drop its label when space runs out; the model's never goes. */
     chip: ChipId;
     /** The label is a value, not UI copy: a model id stays `ltr`, a folder name follows its own script (`auto`). */
@@ -38,7 +40,7 @@ export interface ControlChipProps {
 const MODEL_CHIP_MIN = 44;
 
 /** A flat control in the message box's bottom row, as the desktop's composer chips: an icon, a short label and a chevron. */
-export function ControlChip({ label, icon, onPress, menu, warning, active, chip, disabled, place, accessibilityLabel, accessibilityHint, testID, value }: ControlChipProps) {
+export function ControlChip({ label, icon, onPress, menu, warning, active, toggle, chip, disabled, place, accessibilityLabel, accessibilityHint, testID, value }: ControlChipProps) {
     const { colors, radius } = useTheme();
     const tone = warning ? 'warning' : active ? 'accent' : 'secondary';
     const collapsed = useChipCollapsed(chip);
@@ -92,6 +94,8 @@ export function ControlChip({ label, icon, onPress, menu, warning, active, chip,
                 </View>
             ) : null}
             <Pressable
+                accessibilityRole={toggle ? 'switch' : undefined}
+                aria-checked={toggle ? !!active : undefined}
                 onPress={onPress}
                 disabled={disabled}
                 accessibilityLabel={accessibilityLabel ?? label}
