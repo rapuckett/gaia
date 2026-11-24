@@ -97,7 +97,7 @@ export function usePermissionMode(sessionId: string | null) {
         mutationFn: (mode) => requireClient(client).setPermissionMode(sessionId!, mode),
         onSuccess: (saved) => queryClient.setQueryData(modelMenuKeys.permissions(sessionId!), saved),
     });
-    return { mode: query.data?.mode, set };
+    return { mode: query.data?.mode, readFailed: query.isError, set };
 }
 
 export interface RetryModel {

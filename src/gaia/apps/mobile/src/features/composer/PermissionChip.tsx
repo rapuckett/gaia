@@ -3,6 +3,8 @@
 
 import { useState } from 'react';
 
+import { permissionChipView } from '@webui/utils/permissionChip.core';
+
 import type { PermissionMode } from '@/api/client.types';
 import { describeErrorWith, describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, ListRow, Notice, Sheet, Stack } from '@/ui';
@@ -11,7 +13,10 @@ import { ShieldAlert, ShieldCheck } from '@/ui/icons';
 import { ControlChip } from './ControlChip';
 
 export interface PermissionChipProps {
-    mode: PermissionMode;
+    /** Null while the chat's saved mode is unread. */
+    mode: PermissionMode | null;
+    /** The read of the saved mode failed. */
+    readFailed?: boolean;
     /** Saves the mode; a rejection shows in the menu as an alert. */
     onChange: (mode: PermissionMode) => void | Promise<unknown>;
     /** Reads the saved mode again after a failed save, which may still have been stored. */
@@ -24,12 +29,13 @@ export interface PermissionChipProps {
 }
 
 /** The chat's permission mode, the TUI's ask or full access. Full access asks once more before it turns on. */
-export function PermissionChip({ mode, onChange, onReread, promptWaiting, disabled, initialOpen = false }: PermissionChipProps) {
+export function PermissionChip({ mode, readFailed = false, onChange, onReread, promptWaiting, disabled, initialOpen = false }: PermissionChipProps) {
     const t = useT();
     const [open, setOpen] = useState(initialOpen);
     const [confirming, setConfirming] = useState(false);
     const [error, setError] = useState<{ text: string; detail?: string } | null>(null);
-    const full = mode === 'full_access';
+    const view = permissionChipView(mode, readFailed);
+    const full = view.state === 'full_access';
     const modes = [
         { mode: 'ask' as const, label: t('perm.ask'), note: t('perm.askNote') },
         { mode: 'full_access' as const, label: t('perm.full'), note: t('perm.fullNote') },
@@ -61,18 +67,18 @@ export function PermissionChip({ mode, onChange, onReread, promptWaiting, disabl
     return (
         <>
             <ControlChip
-                label={t.bare(full ? 'perm.full' : 'env.ask')}
-                icon={full ? ShieldAlert : ShieldCheck}
+                label={t.bare(view.labelKey)}
+                icon={view.warning ? ShieldAlert : ShieldCheck}
                 chip="permission"
                 menu
-                warning={full}
+                warning={view.warning}
                 disabled={disabled}
                 onPress={() => {
                     setConfirming(false);
                     setError(null);
                     setOpen(true);
                 }}
-                accessibilityLabel={t('perm.chipAria', { mode: t.bare(full ? 'perm.fullLower' : 'perm.askLower') })}
+                accessibilityLabel={view.unread ? t('perm.chipAriaUnread', { state: t.bare(view.labelKey) }) : t('perm.chipAria', { mode: t.bare(view.modeKey) })}
                 testID="permission-chip"
             />
             <Sheet open={open} onClose={() => setOpen(false)} title={t('env.permission')}>
