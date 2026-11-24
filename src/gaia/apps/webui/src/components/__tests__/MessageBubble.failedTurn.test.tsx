@@ -112,3 +112,24 @@ describe('describeFailedTurn', () => {
         expect(describeFailedTurn(answer).raw).toBe(false);
     });
 });
+
+describe('a turn that failed because the model server is not answering', () => {
+    const DOWN = "The model call failed at step 1, so this request is unfinished. The local model server at 127.0.0.1:13305 "
+        + "isn't answering, so the message never reached Fireworks AI.\n\nNothing had run yet.\n\n"
+        + 'Start the model server, then send the message again.';
+
+    it('is headed with the cause, with the desktop body and the PC text under Details', () => {
+        const { container } = renderFailed(DOWN);
+        expect(screen.getByText("The model server isn't answering")).toBeInTheDocument();
+        expect(screen.queryByText('Something went wrong')).toBeNull();
+        expect(container.querySelector('.msg-failed-lead')?.textContent)
+            .toBe("GAIA's model server on this PC isn't answering, so nothing reached the model. Start it, then try again.");
+        expect(container.querySelector('details.msg-failed-details')?.textContent).toContain('127.0.0.1:13305');
+    });
+
+    it('does not catch the Local only notice that merely mentions the server', () => {
+        const text = "couldn't check whether it is a cloud model because the model server isn't answering, so it is still saved. Turn Local only on again once the model server is back to check it";
+        expect(describeFailedTurn(text).kind).toBe('unknown');
+        expect(describeFailedTurn(DOWN)).toMatchObject({ kind: 'modelServer', raw: true });
+    });
+});

@@ -39,12 +39,23 @@ describe('failed reply names its cause', () => {
     it.each([
         ['modelUnavailable', "Failed to start the query run: Failed to preload model: Lemonade has no model called 'x'."],
         ['modelLoad', 'Failed to start the query run: Failed to load model Gemma: llama-server exited with code 1.'],
+        ['modelServer', "The model call failed at step 1, so this request is unfinished. The local model server at 127.0.0.1:13305 isn't answering, so the message never reached Fireworks AI.\n\nNothing had run yet.\n\nStart the model server, then send the message again."],
         ['context', 'Failed to start the query run: Error: request exceeds the available context size.'],
     ] as const)('%s: title and body', async (kind, content) => {
         await mount(content);
         expect(screen.getByText(t(`failedTurn.${kind}.title`))).toBeTruthy();
         expect(screen.getByText(t(`failedTurn.${kind}.body`))).toBeTruthy();
         expect(screen.queryByText(t('msg.error'))).toBeNull();
+    });
+
+    it('modelServer: the PC text and its report line sit under Details, the model server log stays', async () => {
+        mockLocal = true;
+        await mount("The local model server at 127.0.0.1:13305 isn't answering. Start the model server, then send the message again.\n\nA problem report for this was saved on this PC as GF-20261124-144003-f8bf; nothing was sent anywhere.");
+        expect(screen.getByText(t('failedTurn.modelServer.body'))).toBeTruthy();
+        expect(screen.queryByText(/GF-20261124/)).toBeNull();
+        await fireEvent.press(screen.getByTestId('failed-details-toggle'));
+        expect(screen.getByText(/GF-20261124-144003-f8bf/)).toBeTruthy();
+        expect(screen.getByText(t('logs.serverLog'))).toBeTruthy();
     });
 
     it('unknown keeps "Something went wrong", with the plain body and the raw text under Details', async () => {

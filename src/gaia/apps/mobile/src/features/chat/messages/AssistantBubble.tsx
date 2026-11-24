@@ -26,7 +26,7 @@ import { LibraryNotices, libraryNoticesOf } from '../LibraryNotices';
 import { GrantNote, isAgentNotGranted } from '../GrantNote';
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
-import { offersAgentLog, SavedReplyErrors, showsFailedLead } from '../ReplyErrors';
+import { SavedReplyErrors, showsFailedLead, showsTextBelowNotice } from '../ReplyErrors';
 import { AnswerComparison } from '../compare/AnswerComparison';
 import { useAnswerComparison } from '../compare/useAnswerComparison';
 import { useMessageActions, type MessageContext } from './useMessageActions';
@@ -80,8 +80,8 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             {text && !(!streaming && showsFailedLead(message, fixShownBelow)) ? <Markdown text={text} streaming={streaming} /> : null}
         </Pressable>
     );
-    // The agent's own message sits under the notice and above the buttons, as on the desktop.
-    const textBelowNotice = !streaming && !cancelled && offersAgentLog(message);
+    // Every failed turn reads the same: steps, the cause, the turn's text, Details, then the buttons.
+    const textBelowNotice = !streaming && !cancelled && showsTextBelowNotice(message, fixShownBelow);
     return (
         <Stack paddingX="lg" paddingY="xs">
             {!streaming && !cancelled ? <LibraryNotices notices={libraryNoticesOf(message)} /> : null}
