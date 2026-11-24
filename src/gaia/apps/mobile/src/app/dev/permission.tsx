@@ -182,6 +182,11 @@ function useFixtures(): Fixture[] {
             { id: 'expired', label: 'Expired', props: { prompt: { ...WRITE, id: 'exp', expiresAt: now - 1000 } } },
             { id: 'full', label: 'Full access pending', props: { prompt: SHELL, fullAccessPending: true } },
             {
+                id: 'full-long',
+                label: 'Full access pending, long arguments',
+                props: { prompt: prompt('full-long', { tool: 'run_python', toolArgs: { ...LONG_ARGS }, alwaysScope: 'run_python' }), fullAccessPending: true },
+            },
+            {
                 id: 'long',
                 label: 'Long arguments',
                 props: {
