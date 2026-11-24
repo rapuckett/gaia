@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import { memo } from 'react';
-import { MessageBubble, isErrorContent, turnEnding } from './MessageBubble';
+import { MessageBubble, turnEnding } from './MessageBubble';
+import { canRegenerate } from '../utils/turnEnding.core';
 import { HistoryNotice, LibraryNotices } from './ChatNotices';
 import { RetryWithMenu } from './RetryWithMenu';
 import { AnswerComparison } from './AnswerComparison';
@@ -54,9 +55,8 @@ export const TranscriptRow = memo(function TranscriptRow({
     const cutOff = msg.role === 'assistant' && turnEnding(msg.content, msg.stopState) === 'interrupted';
     const stopped = msg.role === 'assistant' && msg.stopState === 'stopped' && !msg.stopError;
     const canTryAgain = (msg.failed === true || cutOff || stopped) && !busy && !readOnly && isLast;
-    const canRetry = !canTryAgain && !busy && !comparing && !readOnly
-        && msg.role === 'assistant' && isLast
-        && !msg.stopState && !msg.failed && !isErrorContent(msg.content);
+    const canRetry = !canTryAgain && canRegenerate(msg, { latest: isLast, busy, comparing, retiredAgent: readOnly });
+    const serverDown = msg.failure === 'model_server_down' && isLast && !busy;
     const canChange = !busy && !unsent && msg.role === 'user' && !readOnly;
     const model = msg.stats?.model ?? answeredBy;
     return (
@@ -85,8 +85,9 @@ export const TranscriptRow = memo(function TranscriptRow({
                 onContinue={canTryAgain && stopped ? onContinue : undefined}
                 latest={msg.role === 'assistant' && isLast}
                 latencyMs={latencyMs}
+                fixShownBelow={serverDown}
             />
-            {msg.failure === 'model_server_down' && isLast && !busy && <ModelServerDownNotice />}
+            {serverDown && <ModelServerDownNotice />}
             {msg.failed === true && msg.failure !== 'model_server_down' && canTryAgain && (
                 <ChatAgentRecovery key={msg.id} onTryAgain={() => onTryAgain(msg)} />
             )}

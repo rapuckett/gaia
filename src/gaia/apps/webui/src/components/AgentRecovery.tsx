@@ -10,7 +10,7 @@ import { requestErrorParam } from '../utils/requestErrors';
 import { log } from '../utils/logger';
 import { useActiveAgentStore } from '../stores/activeAgentStore';
 import { AgentDownloadRow, useAgentDownload } from './setup/AgentDownload';
-import { WHY } from './setup/AgentChoice';
+import { AGENT_WHY as WHY } from './setup/agentPrograms';
 import type { AgentProblem, AgentProgram } from '../types';
 
 const NAME = 'gaiacpp';
