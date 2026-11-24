@@ -1393,7 +1393,7 @@ for (const locale of ['ar', 'en']) {
     });
 }
 
-const CONFIRM_TIMEOUT_LINE = "Confirmation for 'write_file_to_the_project_folder_after_checking_it' timed out (30 s). Execution denied.";
+const CONFIRM_TIMEOUT_LINE = "Confirmation for 'write_file_to_the_project_folder_after_checking_it_against_the_saved_notes_and_the_shared_drafts_folder' timed out (30 s). Execution denied.";
 const CONFIRM_TIMEOUT_LABEL = "You didn't answer in time, so GAIA didn't do this step.";
 
 async function withConfirmTimeout(page: Page): Promise<void> {
