@@ -23,10 +23,10 @@ export interface QueuedMessagesProps {
 function stateLine(item: HeldMessage, replying: boolean, t: Translate): string {
     switch (item.state) {
         case 'failed':
-            return t('queue.notSent');
+            return t('queue.notSentBare');
         case 'queued':
             if (item.note) return t('queue.steerRefused');
-            return t(replying ? 'queue.waiting' : 'queue.sendingNext');
+            return t(replying ? 'queue.queued' : 'queue.next');
         case 'sending':
             return t('queue.sending');
         default:
