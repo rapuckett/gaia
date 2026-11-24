@@ -44,6 +44,13 @@ describe('appearance to theme', () => {
         expect(() => withDerivedColors({ ...colors.dark, textPrimary: 'white' })).toThrow(/textPrimary/);
     });
 
+    it('hides the resource strip on a fresh install and keeps a saved choice', () => {
+        expect(DEFAULT_APPEARANCE.showResources).toBe(false);
+        expect(useAppearance.getState().showResources).toBe(false);
+        expect({ ...DEFAULT_APPEARANCE, ...parseStored({ showResources: true }) }.showResources).toBe(true);
+        expect({ ...DEFAULT_APPEARANCE, ...parseStored({ showResources: false }) }.showResources).toBe(false);
+    });
+
     it('ignores saved values it does not recognize', () => {
         expect(parseStored({ scheme: 'sepia', palette: 'nope', custom: { accent: 'red', base: '#112233' }, showResources: 'yes' })).toEqual({});
     });

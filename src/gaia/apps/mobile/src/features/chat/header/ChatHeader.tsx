@@ -1,7 +1,9 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
+import { View } from 'react-native';
 
 import { MAX_SESSION_TITLE_CHARS } from '@webui/utils/constants';
 import { isPlaceholderTitle } from '@webui/utils/sessionTitle';
@@ -11,12 +13,12 @@ import { useRenameSession, useSession, useTogglePrivate } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { exportChat } from '@/features/share/exportChat';
 import { describeHttpFailure, useT } from '@/i18n/useT';
-import { IconButton, Notice, Pressable, Row, Stack, Text, TextField } from '@/ui';
+import { Icon, IconButton, Notice, Pressable, Row, Stack, Text, TextField, useAppearance } from '@/ui';
 import { Activity, Check, Download, Eye, EyeOff, PanelRight, X } from '@/ui/icons';
 
 import { DocsBar } from './DocsBar';
 import { failureNotice } from './failureText';
-import { ResourceStrip } from './ResourceStrip';
+import { ResourceStripSlot } from './ResourceStripSlot';
 
 export interface ChatHeaderProps {
     sessionId: string;
@@ -39,7 +41,8 @@ function ChatHeaderForSession({ sessionId, onOpenSessionPanel, onManageDocuments
     const togglePrivate = useTogglePrivate();
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState('');
-    const [resources, setResources] = useState(false);
+    const resources = useAppearance((s) => s.showResources);
+    const setResources = useAppearance((s) => s.setShowResources);
     const client = useGaiaClient();
     const [error, setError] = useState<{ text: string; detail?: string } | null>(null);
     const [exporting, setExporting] = useState(false);
@@ -93,8 +96,8 @@ function ChatHeaderForSession({ sessionId, onOpenSessionPanel, onManageDocuments
                     testID="chat-title-input"
                 />
             </Stack>
-            <IconButton icon={Check} size="sm" label={t('settings.advanced.save')} onPress={save} />
-            <IconButton icon={X} size="sm" label={t('msg.editCancel')} onPress={() => setEditing(false)} />
+            <EditAction icon={Check} tone="accent" label={t('settings.advanced.save')} onPress={save} testID="chat-title-save" />
+            <EditAction icon={X} tone="muted" label={t('msg.editCancel')} onPress={() => setEditing(false)} testID="chat-title-cancel" />
         </Row>
     ) : (
         <Pressable
@@ -155,8 +158,19 @@ function ChatHeaderForSession({ sessionId, onOpenSessionPanel, onManageDocuments
                     <Notice tone="danger" message={error.text} detail={error.detail} onDismiss={() => setError(null)} testID="header-error" />
                 </Stack>
             ) : null}
-            {resources ? <ResourceStrip onClose={() => setResources(false)} /> : null}
+            <ResourceStripSlot />
             <DocsBar sessionId={sessionId} onFailed={setError} onManage={onManageDocuments} />
         </>
+    );
+}
+
+/** A rename-mode action with a toned glyph, as the desktop's inline edit: a gold check, a muted cross. */
+function EditAction({ icon, tone, label, onPress, testID }: { icon: LucideIcon; tone: 'accent' | 'muted'; label: string; onPress: () => void; testID: string }) {
+    return (
+        <Pressable onPress={onPress} accessibilityLabel={label} testID={testID} round>
+            <View style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon icon={icon} tone={tone} />
+            </View>
+        </Pressable>
     );
 }

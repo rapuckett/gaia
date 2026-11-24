@@ -20,7 +20,6 @@ a key). The calls mirror ``tui/internal/lemonade/cloud.go`` and
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 import os
 import socket
 import threading
@@ -71,6 +70,7 @@ from ..key_store import (
 )
 from ..local_models import DOWNLOADED, LOADED, NOT_DOWNLOADED
 from ..models import DownloadProgress, WireModel
+from ..public_address import public_addresses, public_https_host
 from ..security import (
     allowed_device,
     audit_approval,
@@ -2159,41 +2159,12 @@ _gateway_move_lock = GATEWAY_KEY_LOCK
 _READ_SAVED_KEY = object()
 
 
-def _is_public_address(address: str) -> bool:
-    ip = ipaddress.ip_address(address.split("%", 1)[0])
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
-        ip = ip.ipv4_mapped
-    return ip.is_global and not ip.is_multicast
-
-
 def _device_gateway_host(base_url: str) -> Tuple[str, int]:
     """The host and port of a device's gateway, checked from its text alone."""
-    url = urlparse(base_url.strip())
-    if url.scheme != "https":
-        raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_PUBLIC)
     try:
-        host = (url.hostname or "").rstrip(".").lower()
-        port = url.port or 443
+        return public_https_host(base_url)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_PUBLIC) from e
-    if not host or host == "localhost" or host.endswith((".local", ".localhost")):
-        raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_PUBLIC)
-    try:
-        literal = ipaddress.ip_address(host)
-    except ValueError:
-        return host, port
-    if not _is_public_address(literal.compressed):
-        raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_PUBLIC)
-    return host, port
-
-
-def _public_addresses(host: str, port: int) -> List[str]:
-    """*host*'s addresses from one lookup; raises unless every one is public."""
-    infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
-    addresses = list(dict.fromkeys(info[4][0] for info in infos))
-    if not addresses or not all(_is_public_address(a) for a in addresses):
-        raise ValueError(f"{host} resolves to an address that is not public")
-    return addresses
 
 
 #: How many of a gateway's addresses a device's check dials, each up to ``REACH_TIMEOUT``.
@@ -2423,7 +2394,7 @@ def _connect_device_gateway(
     unchanged_url = None
     try:
         if target is not None:
-            addresses = _public_addresses(*target)
+            addresses = public_addresses(*target)
             if _gateway_check_applies():
                 _dial_checked_addresses(*target, addresses)
         elif _gateway_check_applies():

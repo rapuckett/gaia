@@ -13,7 +13,7 @@ import { openLinkFromPress } from '@/platform/openLink';
 import { Button, Notice, Sheet, Stack, Text, TextField } from '@/ui';
 import { Check, ExternalLink } from '@/ui/icons';
 
-import { canSaveSetup, fieldHelp, fieldLabel, setupFields, setupPayload, setupProblem, type SetupField, type SetupForm } from './connectorList';
+import { canSaveSetup, connectorDescription, fieldHelp, fieldLabel, setupFields, setupPayload, setupProblem, type SetupField, type SetupForm } from './connectorList';
 import { ConnectorGuide } from './ConnectorGuide';
 import { OAuthClientLine } from './OAuthClientLine';
 
@@ -134,6 +134,9 @@ function SetupBody({
 
     return (
         <Stack gap="md">
+            {form === 'mcp' && connector.description ? (
+                <Text role="ui" tone="secondary" testID="connector-setup-description">{connectorDescription(t, connector)}</Text>
+            ) : null}
             {form === 'oauthSetup' && !guided ? <Text role="ui" tone="secondary">{t('settings.connectors.firstSetup')}</Text> : null}
             {guided ? <ConnectorGuide connectorId={connector.id} setupUrl={connector.setup_url} /> : null}
             {form === 'oauthClient' ? (

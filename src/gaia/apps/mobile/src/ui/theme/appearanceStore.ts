@@ -16,7 +16,7 @@ interface AppearanceActions {
     /** Like the web, picking custom colors also selects the Custom palette. */
     setCustom(custom: CustomColors): void;
     setShowResources(show: boolean): void;
-    /** Back to system, the default palette, the default custom pair and resource usage on. */
+    /** Back to system, the default palette, the default custom pair and resource usage off. */
     reset(): void;
 }
 
