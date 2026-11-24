@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { createContext, useContext, useEffect, useId, useRef, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useSyncExternalStore, type ComponentRef, type ReactNode } from 'react';
 import { BackHandler, Pressable as RNPressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { KeyboardAvoidingView, useKeyboardState } from 'react-native-keyboard-controller';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
@@ -23,6 +23,18 @@ const DISMISS_DISTANCE = 100;
 const DISMISS_VELOCITY = 900;
 
 const SheetScopeContext = createContext<string | undefined>(undefined);
+/** What a sheet's content can scroll into view: a measured child, its top edge brought to the top of the sheet's body. */
+export interface SheetScrollHandle {
+    scrollTo(target: ComponentRef<typeof View> | null): void;
+}
+
+export const SheetScrollContext = createContext<SheetScrollHandle | null>(null);
+
+/** The scroll handle of the sheet this content is shown in; null outside a sheet. */
+export function useSheetScroll(): SheetScrollHandle | null {
+    return useContext(SheetScrollContext);
+}
+
 const ParentSheetContext = createContext<string | undefined>(undefined);
 
 /** The sheet whose content renders here, if any. */
@@ -89,10 +101,26 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
     const { colors, radius, space, shadows } = useTheme();
     const { width, height } = useWindowDimensions();
     const insets = useSafeAreaInsets();
+    const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
     const keyboardHeight = useKeyboardState((k) => (k.isVisible ? k.height : 0));
     // The keyboard pads the panel upward; cap it so its header stays below the status bar and the body scrolls.
     const maxHeight = Math.min(height * 0.9, height - keyboardHeight - insets.top - space.sm);
     const reduced = useReducedMotion();
+    const content = useRef<ComponentRef<typeof View>>(null);
+    const scrollHandle = useMemo<SheetScrollHandle>(
+        () => ({
+            scrollTo(target) {
+                const inner = content.current;
+                if (!target || !inner) return;
+                target.measureLayout(
+                    inner,
+                    (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y), animated: !reduced }),
+                    () => undefined,
+                );
+            },
+        }),
+        [reduced],
+    );
     const wide = width >= WIDE_BREAKPOINT;
     const progress = useSharedValue(0);
     const drag = useSharedValue(0);
@@ -167,6 +195,7 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
 
     return (
         <ParentSheetContext.Provider value={entry.id}>
+        <SheetScrollContext.Provider value={scrollHandle}>
         <View
             style={StyleSheet.absoluteFill}
             accessibilityViewIsModal={!covered}
@@ -207,17 +236,24 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
                 >
                     {wide ? header : <GestureDetector gesture={pan}>{header}</GestureDetector>}
                     <ScrollView
+                        ref={scrollRef}
                         testID={entry.scrollTestID}
+                        onContentSizeChange={() => {
+                            if (entry.scrollToEnd) scrollRef.current?.scrollToEnd({ animated: true });
+                        }}
                         keyboardShouldPersistTaps="handled"
                         style={{ flexGrow: 0 }}
                         contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.lg }}
                     >
-                        {entry.children}
+                        <View ref={content} collapsable={false}>
+                            {entry.children}
+                        </View>
                     </ScrollView>
                     {entry.footer ? <View style={{ paddingHorizontal: space.gutter, paddingBottom: space.lg }}>{entry.footer}</View> : null}
                 </Animated.View>
             </KeyboardAvoidingView>
         </View>
+        </SheetScrollContext.Provider>
         </ParentSheetContext.Provider>
     );
 }

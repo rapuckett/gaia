@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import { scopeLabel } from '@webui/utils/connectorScopes';
-import { ref } from '@webui/i18n/registry';
+import { isolate, ref } from '@webui/i18n/registry';
+import { accountChoices, accountsOf, middleCut, showsAccountList } from '@webui/utils/connectorAccounts';
 import { useRouter } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useWindowDimensions, View } from 'react-native';
@@ -84,6 +85,7 @@ import {
     unavailableHint,
 } from './connectorList';
 import { BrowserSignInBlock } from './BrowserSignInBlock';
+import { AddAccount, ConnectorAccountList } from './ConnectorAccounts';
 import { useBrowserSignInAvailable } from './browserSignIn';
 import { ConnectorSetupSheet } from './ConnectorSetupSheet';
 import { OAuthClientLine } from './OAuthClientLine';
@@ -440,7 +442,7 @@ function StatusText({ connector, check, t }: { connector: ConnectorRow; check?: 
                         <View style={{ flexShrink: 1, minWidth: 0 }}>
                             {status.accountId ? (
                                 <Text role="label" tone="success" numberOfLines={1} largeLines={1} ellipsize="middle" accessibilityLabel={status.accountId}>
-                                    <Ltr>{status.accountId}</Ltr>
+                                    <Ltr>{middleCut(status.accountId, 40)}</Ltr>
                                 </Text>
                             ) : (
                                 <Text role="label" tone="success" numberOfLines={1}>{t('settings.connectors.connected')}</Text>
@@ -449,6 +451,18 @@ function StatusText({ connector, check, t }: { connector: ConnectorRow; check?: 
                     </Row>
                 </View>
             );
+        case 'accounts':
+            return (
+                <Row gap="sm" wrap>
+                    <Row gap="xs">
+                        {status.problem ? null : <Icon icon={CircleCheck} size="sm" tone="success" />}
+                        <Text role="label" tone="success">{t.plural('settings.connectors.accountCount', status.count, { n: isolate(String(status.count), 'ltr') })}</Text>
+                    </Row>
+                    {status.problem ? <Text role="label" tone="danger">{t(`settings.connectors.${status.problem}`)}</Text> : null}
+                </Row>
+            );
+        case 'attention':
+            return <Text role="label" tone="danger">{t(`settings.connectors.${status.problem}`)}</Text>;
         case 'paused':
             return <Pill label={t('settings.connectors.paused')} />;
         case 'setupRequired':
@@ -499,6 +513,8 @@ function ConnectorTile({
     const t = useT();
     const [menuOpen, setMenuOpen] = useState(false);
     const [confirmOpen, setConfirmOpen] = useState(false);
+    // Addresses the PC found when a plain disconnect was refused for having several: removed only once the person agrees.
+    const [removeAll, setRemoveAll] = useState<string[] | null>(null);
     const [connecting, setConnecting] = useState(false);
     const [message, setMessage] = useState<{ tone: 'info' | 'danger'; text: string; detail?: string } | null>(null);
     const action = useConnectorServerAction(connector.id, (outcome) => onDisconnected(disconnectNotice(outcome, connector, t)));
@@ -508,6 +524,9 @@ function ConnectorTile({
     const server = connector.type === 'mcp_server';
     const paused = connector.enabled === false;
     const form = setupForm(connector);
+    const accounts = accountsOf(connector);
+    const hasAccounts = accounts.length > 0;
+    const accountList = showsAccountList(connector);
     // Held back by the PC's key store: neither connected nor not, so no status and no actions until it is read.
     const unread = !!connector.key_store;
     const checkPrompt = useDevicePrompt({ kind: 'keyStore', action: CHECK_PROMPT_ACTION });
@@ -529,12 +548,15 @@ function ConnectorTile({
             onPress={() => refuse('connectPcOnly')}
         />
     );
-    function run(kind: 'disable' | 'disconnect') {
+    function run(kind: 'disable' | 'disconnect' | 'disconnectAll') {
         setMessage(null);
         onClearCheck();
-        if (kind === 'disconnect') onDisconnected(null);
+        if (kind !== 'disable') onDisconnected(null);
         action.mutate(kind, {
             onError: (e) => {
+                const choices = kind === 'disconnect' ? accountChoices(e) : null;
+                if (choices) return setRemoveAll(choices);
+                if (isPcRefusal(e)) return show({ tone: 'info', text: t('mobileApp.settings.pcOnly') });
                 const { text, detail } = describeHttpFailure(e, t);
                 show({ tone: 'danger', text, detail });
             },
@@ -622,12 +644,19 @@ function ConnectorTile({
                         })}
                         actions={[{ label: t('settings.connectors.disconnect'), icon: Trash2, destructive: true, testID: 'connector-disconnect-confirm', onPress: () => run('disconnect') }]}
                     />
+                    <ActionSheet
+                        open={removeAll !== null}
+                        onClose={() => setRemoveAll(null)}
+                        title={t('settings.connectors.disconnectAllAsk', { n: removeAll?.length ?? 0, name: connector.display_name })}
+                        message={`${(removeAll ?? []).map((address) => isolate(address, 'ltr')).join('\n')}\n\n${t('settings.connectors.disconnectAllBody')}`}
+                        actions={[{ label: t('settings.connectors.disconnectAll'), icon: Trash2, destructive: true, testID: 'connector-disconnect-all-confirm', onPress: () => run('disconnectAll') }]}
+                    />
                 </>
             }
         >
             <Stack gap="sm">
                 <Text role="label" tone="secondary">{connectorDescription(t, connector)}</Text>
-                {unread ? null : !connector.configured ? (
+                {unread ? null : !connector.configured && !hasAccounts ? (
                     form === 'oauthSetup' ? (
                         setupButton
                     ) : google ? (
@@ -665,33 +694,37 @@ function ConnectorTile({
                     )
                 ) : (
                     <>
-                        <Row gap="sm" wrap>
-                            {server && !paused && !checkOnPc ? (
+                        {accountList ? null : (
+                            <Row gap="sm" wrap>
+                                {server && !paused && !checkOnPc ? (
+                                    <ChipButton
+                                        label={t.bare('settings.connectors.check')}
+                                        accessibilityLabel={t('settings.connectors.check')}
+                                        disabled={action.isPending || check?.state === 'checking'}
+                                        onPress={onCheck}
+                                        testID={`connector-check-${connector.id}`}
+                                    />
+                                ) : null}
+                                {form === 'mcp' ? (
+                                    <ChipButton
+                                        label={t.bare('mobileApp.connectors.editSetup')}
+                                        accessibilityLabel={t('mobileApp.connectors.editSetup')}
+                                        onPress={onSetup}
+                                        testID={`connector-edit-${connector.id}`}
+                                    />
+                                ) : null}
                                 <ChipButton
-                                    label={t.bare('settings.connectors.check')}
-                                    accessibilityLabel={t('settings.connectors.check')}
-                                    disabled={action.isPending || check?.state === 'checking'}
-                                    onPress={onCheck}
-                                    testID={`connector-check-${connector.id}`}
+                                    label={t.bare('settings.connectors.disconnect')}
+                                    accessibilityLabel={t('settings.connectors.disconnect')}
+                                    variant="danger"
+                                    testID={`connector-disconnect-${connector.id}`}
+                                    disabled={action.isPending}
+                                    onPress={() => setConfirmOpen(true)}
                                 />
-                            ) : null}
-                            {form === 'mcp' ? (
-                                <ChipButton
-                                    label={t.bare('mobileApp.connectors.editSetup')}
-                                    accessibilityLabel={t('mobileApp.connectors.editSetup')}
-                                    onPress={onSetup}
-                                    testID={`connector-edit-${connector.id}`}
-                                />
-                            ) : null}
-                            <ChipButton
-                                label={t.bare('settings.connectors.disconnect')}
-                                accessibilityLabel={t('settings.connectors.disconnect')}
-                                variant="danger"
-                                testID={`connector-disconnect-${connector.id}`}
-                                disabled={action.isPending}
-                                onPress={() => setConfirmOpen(true)}
-                            />
-                        </Row>
+                            </Row>
+                        )}
+                        {accountList ? <ConnectorAccountList connector={connector} /> : null}
+                        {hasAccounts ? <AddAccount connector={connector} /> : null}
                         {server ? <CheckStatus connector={connector} check={check} onCheck={onCheck} /> : null}
                         {clientRow}
                         {messageNotice}

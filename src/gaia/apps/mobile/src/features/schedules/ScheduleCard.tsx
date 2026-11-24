@@ -11,7 +11,7 @@ import { useScheduleResults } from '@/data';
 import { ConfirmSheet } from '@/features/setup/sheets/ConfirmSheet';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Disclosure, Icon, Notice, Row, Stack, Surface, Text, useTheme } from '@/ui';
-import { Clock, MessageSquare, Pause, Play, Trash2, Zap } from '@/ui/icons';
+import { Clock, MessageSquare, Pause, Pencil, Play, Trash2, Zap } from '@/ui/icons';
 
 import { ChipButton } from './ChipButton';
 import { composeDateLocale, describeSchedule, formatNextClock, formatTime } from './scheduleText';
@@ -54,12 +54,13 @@ export interface ScheduleCardProps {
     onRunNow: () => void;
     onToggleStatus: () => void;
     onDelete: () => void;
+    onEdit: () => void;
     /** Dev gallery only: opens the card already confirming a delete, or with its history open. */
     initialConfirmDelete?: boolean;
     initialHistoryOpen?: boolean;
 }
 
-export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, onToggleStatus, onDelete, initialConfirmDelete = false, initialHistoryOpen = false }: ScheduleCardProps) {
+export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, onToggleStatus, onDelete, onEdit, initialConfirmDelete = false, initialHistoryOpen = false }: ScheduleCardProps) {
     const t = useT();
     const [confirmDelete, setConfirmDelete] = useState(initialConfirmDelete);
     const [historyOpen, setHistoryOpen] = useState(initialHistoryOpen);
@@ -148,6 +149,13 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                         icon={schedule.status === 'active' ? Pause : Play}
                         label={t(schedule.status === 'active' ? 'schedules.card.pause' : 'schedules.card.resume')}
                         onPress={onToggleStatus}
+                    />
+                    <ChipButton
+                        icon={Pencil}
+                        label={t('schedules.card.edit')}
+                        accessibilityLabel={t('schedules.card.editTitle')}
+                        disabled={running}
+                        onPress={onEdit}
                     />
                     <ChipButton
                         variant="danger"

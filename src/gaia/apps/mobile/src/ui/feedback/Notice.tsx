@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { useT } from '@/i18n/useT';
 import { Button } from '../controls/Button';
@@ -34,6 +35,8 @@ export interface NoticeProps {
     variant?: 'tint' | 'card';
     /** Shows a spinner in place of the tone icon while the thing the notice describes is still going. */
     busy?: boolean;
+    /** Extra content under the text, such as a folded "Details". */
+    children?: ReactNode;
     testID?: string;
 }
 
@@ -47,7 +50,7 @@ function withAlpha(hex: string, alpha: number): string {
 }
 
 // The icon carries the tone with the color, so it never rests on color alone.
-export function Notice({ tone, title, message, detail, action, onDismiss, dismissLabel, role, variant = 'tint', busy, testID }: NoticeProps) {
+export function Notice({ tone, title, message, detail, action, onDismiss, dismissLabel, role, variant = 'tint', busy, children, testID }: NoticeProps) {
     const t = useT();
     const { colors, radius, space } = useTheme();
     const largeText = useLargeText();
@@ -96,6 +99,7 @@ export function Notice({ tone, title, message, detail, action, onDismiss, dismis
                             </Text>
                         ) : null}
                     </View>
+                    {children}
                     {action ? <Button variant="secondary" label={action.label} onPress={action.onPress} full={largeText} shrink={false} /> : null}
                 </View>
                 {onDismiss ? <IconButton icon={X} size="sm" label={dismissLabel ?? t('banner.dismiss')} onPress={onDismiss} /> : null}

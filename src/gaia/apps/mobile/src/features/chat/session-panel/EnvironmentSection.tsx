@@ -88,7 +88,8 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
         );
     }
     const folders = env?.folders.filter((f) => f.kind === 'folder') ?? [];
-    const files = env?.folders.filter((f) => f.kind === 'file') ?? [];
+    // The Documents section lists the chat's documents.
+    const files = env?.folders.filter((f) => f.kind === 'file' && f.source !== 'document') ?? [];
     const shownFiles = allFiles ? files : files.slice(0, FILES_SHOWN);
     const confirm = (path: string) => {
         setEnvConfirm(null);
