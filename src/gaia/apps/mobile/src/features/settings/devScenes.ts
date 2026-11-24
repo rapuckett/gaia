@@ -6,7 +6,7 @@ import type { SystemStatus } from '@webui/types';
 import { tEn } from '@webui/i18n/translator';
 
 import type { SkillsAddSeed } from '@/features/skills';
-import type { AgentDownload, AgentProgram, AgentPrograms, Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, GatewayFields, CustomModelReport, ImageModel, ImageSettings, LocalModelStatus, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
+import type { AgentDownload, AgentProgram, AgentPrograms, Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill, ContextChoice, EmbedderView, Session, SkillInfo, DiscordStatus, GaiaClient, GatewayFields, CustomModelReport, ImageModel, ImageSettings, LocalModelStatus, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { DevicePromptKind, DevicePromptNote, DevicePromptState } from '@/features/devices/devicePrompts';
@@ -17,7 +17,7 @@ import type { SectionId } from './sections';
 
 /** A settings pane on a fake PC: which section, and the anchor it opens on. */
 export interface SettingsScene {
-    section: Extract<SectionId, 'advanced' | 'automations' | 'general' | 'images' | 'messaging' | 'model' | 'permissions' | 'privacy' | 'setup' | 'skills' | 'voice'>;
+    section: Extract<SectionId, 'advanced' | 'automations' | 'general' | 'images' | 'memory' | 'messaging' | 'model' | 'permissions' | 'privacy' | 'setup' | 'skills' | 'voice'>;
     target?: string;
     gpuMemory: GpuMemoryStatus | Error;
     status?: FakeClientData['status'];
@@ -185,6 +185,17 @@ const blockedProviders: NonNullable<FakeClientData['providers']> = {
     lemonade_error: null,
 };
 
+const EMBEDDER: EmbedderView = {
+    device: 'gpu', chosen: false, default_device: 'gpu',
+    options: [
+        { device: 'npu', model: 'nomic-embed-text-v1.5-FLM', display_name: 'Nomic Embed Text v1.5 (NPU)', proven: false, present: false, available: false, reason: "its search results aren't reliable yet, so GAIA embeds on the GPU", downloaded: true },
+        { device: 'gpu', model: 'nomic-embed-text-v2-moe-GGUF', display_name: 'Nomic Embed Text v2', proven: true, present: true, available: true, reason: null, downloaded: true },
+    ],
+};
+const EMBEDDER_NPU_OK: EmbedderView = { ...EMBEDDER, options: [{ ...EMBEDDER.options[0]!, present: true, proven: true, available: true, reason: null }, EMBEDDER.options[1]!] };
+const embedderScene = (embedder: EmbedderView, scene: Partial<SettingsScene> = {}): SettingsScene => ({
+    section: 'memory', gpuMemory: GPU, data: { memorySettings: { memory_enabled: true, mcp_memory_enabled: false, system_discovery_consent: false }, memoryEmbedder: embedder }, ...scene,
+});
 const never = () => new Promise<never>(() => undefined);
 const refused = () => Promise.reject(new GaiaApiError(403, PC_ONLY_REFUSAL));
 const TYPED_KEY = 'fw-demo-key-0000';
@@ -714,6 +725,15 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
         },
     },
     'privacy-delete-none': { section: 'privacy', gpuMemory: GPU, data: { settings: SETTINGS, sessions: [] } },
+    // MEM-61: the embedder setting in its normal state, then unproven NPU, no NPU, not downloaded, checking, applying and a refused change.
+    'memory-embedder': embedderScene(EMBEDDER),
+    'memory-embedder-unproven': embedderScene({ ...EMBEDDER, options: [{ ...EMBEDDER.options[0]!, present: true }, EMBEDDER.options[1]!] }),
+    'memory-embedder-no-npu': embedderScene({ ...EMBEDDER, options: [{ ...EMBEDDER.options[0]!, reason: 'No NPU on this PC' }, EMBEDDER.options[1]!] }),
+    'memory-embedder-not-downloaded': embedderScene({ ...EMBEDDER, options: [EMBEDDER.options[0]!, { ...EMBEDDER.options[1]!, downloaded: false }] }),
+    'memory-embedder-checking': embedderScene(EMBEDDER, { override: { getMemoryEmbedder: never } }),
+    // `#tap=memory-embedder,memory-embedder-option-npu` picks the NPU on a PC whose NPU embedder is proven.
+    'memory-embedder-applying': embedderScene(EMBEDDER_NPU_OK, { override: { setMemoryEmbedder: never } }),
+    'memory-embedder-refused': embedderScene(EMBEDDER_NPU_OK, { override: { setMemoryEmbedder: () => Promise.reject(new GaiaApiError(409, 'A reply is running. Change the embedder once it finishes.')) } }),
 };
 
 export function settingsSceneClient(scene: SettingsScene): GaiaClient {
