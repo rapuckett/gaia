@@ -200,7 +200,11 @@ export type MessagesFixture =
     | 'route'
     | 'route-degraded'
     | 'short'
-    | 'streaming';
+    | 'streaming'
+    | 'math-inline'
+    | 'math-display'
+    | 'math-wide'
+    | 'math-failed';
 
 export const PRESCAN_PAYLOAD = {
     kind: 'email_pre_scan',
@@ -353,5 +357,30 @@ export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Mes
     streaming: {
         messages: SHORT,
         live: { ...msg('assistant', 'Counting the files in', 6), id: -1 },
+    },
+    // CV-66: formulas drawn, money and code left as written.
+    'math-inline': {
+        messages: [
+            msg('user', 'What does E=mc² mean?', 0),
+            msg('assistant', 'Mass and energy are one thing: $E=mc^2$, where $c \\approx 3 \\times 10^8$ m/s. So one gram holds about $9 \\times 10^{13}$ J, and the share $\\frac{a}{b}$ sits in the line. A coffee still costs $5 and lunch $10.', 1),
+        ],
+    },
+    'math-display': {
+        messages: [
+            msg('user', 'Work out the area under y = x from 0 to 1.', 0),
+            msg('assistant', 'The area is the integral\n\n$$\\int_0^1 x\\,dx = \\left[\\frac{x^2}{2}\\right]_0^1 = \\frac{1}{2}$$\n\nand, for comparison, Euler\'s sum:\n\n$$\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}$$', 1),
+        ],
+    },
+    'math-wide': {
+        messages: [
+            msg('user', 'Write out the Taylor series of e^x.', 0),
+            msg('assistant', 'Term by term:\n\n$$e^x = 1 + x + \\frac{x^2}{2!} + \\frac{x^3}{3!} + \\frac{x^4}{4!} + \\frac{x^5}{5!} + \\frac{x^6}{6!} + \\frac{x^7}{7!} + \\cdots = \\sum_{n=0}^{\\infty} \\frac{x^n}{n!}$$\n\nIt converges for every $x \\in \\mathbb{R}$.', 1),
+        ],
+    },
+    'math-failed': {
+        messages: [
+            msg('user', 'Show the formula again.', 0),
+            msg('assistant', 'This one is cut off:\n\n$$\\frac{1}{$$\n\nand $\\badmacro{x}$ is not TeX.', 1),
+        ],
     },
 };

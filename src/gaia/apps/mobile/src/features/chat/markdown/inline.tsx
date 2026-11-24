@@ -23,12 +23,15 @@ import { openLinkFromPress } from '@/platform/openLink';
 import { Icon, Text } from '@/ui';
 import { FileText } from '@/ui/icons';
 
+import { InlineFormula, type MathContext } from './math/MathFormula';
+
 export interface InlineContext {
     index: CitationIndex;
     t: Translate;
     onOpenCitation?: (doc: LibraryDoc, page?: number) => void;
     /** The chat whose folders a file link may read; without one, a PC file link isn't offered. */
     sessionId?: string | null;
+    math: MathContext;
 }
 
 const OPENABLE_URL = /^(https?|mailto):/i;
@@ -189,9 +192,11 @@ function link(url: string, children: ReactNode, key: string, ctx: InlineContext)
 }
 
 /** The text of a phrasing node, for choosing a block's direction. */
-export function plainText(node: { value?: string; children?: unknown[] }): string {
+export function plainText(node: { type?: string; value?: string; children?: unknown[] }): string {
+    // A formula reads left to right whatever language surrounds it.
+    if (node.type === 'inlineMath' || node.type === 'math') return '';
     if (typeof node.value === 'string') return node.value;
-    return (node.children ?? []).map((c) => plainText(c as { value?: string; children?: unknown[] })).join(' ');
+    return (node.children ?? []).map((c) => plainText(c as { type?: string; value?: string; children?: unknown[] })).join(' ');
 }
 
 export function renderInline(nodes: PhrasingContent[], ctx: InlineContext, keyBase = ''): ReactNode[] {
@@ -236,6 +241,9 @@ export function renderInline(nodes: PhrasingContent[], ctx: InlineContext, keyBa
                 return;
             case 'break':
                 out.push('\n');
+                return;
+            case 'inlineMath':
+                out.push(<InlineFormula key={key} tex={node.value} math={ctx.math} />);
                 return;
             case 'link':
                 out.push(link(node.url, renderInline(node.children, ctx, `${key}.`), key, ctx));

@@ -2,19 +2,22 @@
 // SPDX-License-Identifier: MIT
 
 import type { PhrasingContent, Root, RootContent } from 'mdast';
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useWindowDimensions, View } from 'react-native';
 
 import { buildCitationIndex, type LibraryDoc } from '@webui/utils/citations';
 import { isolate } from '@webui/i18n/registry';
 import { useDirection, useT } from '@/i18n/useT';
 import { openPcFile } from '@/features/files/openPcFile';
 import { useFileScope } from '@/features/files/scopeContext';
-import { contentDir, Divider, HScroll, Icon, Notice, NumberMarker, Row, Stack, Surface, Text } from '@/ui';
+import { contentDir, Divider, HScroll, Icon, Notice, NumberMarker, Row, Stack, Surface, Text, useTheme } from '@/ui';
 import { Check, Square } from '@/ui/icons';
 import { ForcedDirection } from '@/ui/text/ForcedDirection';
 
 import { CodeBlock } from './CodeBlock';
 import { Caret, plainText, renderInline, type InlineContext } from './inline';
+import { BlockFormula, MATH_SCALE, splitWideFormulas, type MathContext } from './math/MathFormula';
+import { hasMath, mathRenderer } from './math/mathRenderer';
 import { parseAnswer, parseFormatting } from './parse';
 import { useThrottledText } from './useStreamingText';
 
@@ -108,12 +111,29 @@ function renderList(node: Extract<RootContent, { type: 'list' }>, ctx: RenderCon
 
 function renderBlock(node: RootContent, ctx: RenderContext, key: string, caret = false): ReactNode {
     switch (node.type) {
-        case 'paragraph':
-            return (
-                <Text key={key} role="prose" selectable dir={contentDir(plainText(node), ctx.uiDir)} align={contentDir(plainText(node), ctx.uiDir)}>
-                    {inline(node, ctx, key, caret)}
+        case 'paragraph': {
+            const dir = contentDir(plainText(node), ctx.uiDir);
+            const runs = splitWideFormulas(node.children, ctx.math);
+            const prose = (children: PhrasingContent[], runKey: string, withCaret: boolean) => (
+                <Text key={runKey} role="prose" selectable dir={dir} align={dir}>
+                    {inline({ children }, ctx, runKey, withCaret)}
                 </Text>
             );
+            if (runs.length === 1 && runs[0].kind === 'text') return prose(runs[0].nodes, key, caret);
+            return (
+                <Stack key={key} gap="xs">
+                    {runs.map((run, i) =>
+                        run.kind === 'wide' ? (
+                            <BlockFormula key={`${key}.${i}`} tex={run.tex} math={ctx.math} display={false} />
+                        ) : (
+                            prose(run.nodes, `${key}.${i}`, caret && i === runs.length - 1)
+                        ),
+                    )}
+                </Stack>
+            );
+        }
+        case 'math':
+            return <BlockFormula key={key} tex={node.value} math={ctx.math} display />;
         case 'heading': {
             const dir = contentDir(plainText(node), ctx.uiDir);
             const role = node.depth === 1 ? 'title' : node.depth === 2 ? 'body' : 'ui';
@@ -179,10 +199,16 @@ export function Markdown({ text, variant = 'answer', streaming: streamingProp = 
     const shown = useThrottledText(text, streaming, STREAM_PARSE_MS);
     const tree = useMemo(() => (formatting ? parseFormatting(shown) : parseAnswer(shown, streaming)), [shown, streaming, formatting]);
     const index = useMemo(() => buildCitationIndex(formatting ? NO_DOCS : documents), [documents, formatting]);
-    const ctx: RenderContext = { index, t, onOpenCitation: formatting ? undefined : (onOpenCitation ?? (sessionId ? openCitation : undefined)), sessionId: formatting ? null : sessionId, uiDir, streaming };
+    const needsMath = useMemo(() => hasMath(tree), [tree]);
+    const renderer = mathRenderer(needsMath);
+    const { colors, type } = useTheme();
+    const { fontScale } = useWindowDimensions();
+    const [columnWidth, setColumnWidth] = useState(0);
+    const math: MathContext = { renderer, size: type.prose * fontScale * MATH_SCALE, color: colors.textPrimary, columnWidth };
+    const ctx: RenderContext = { index, t, onOpenCitation: formatting ? undefined : (onOpenCitation ?? (sessionId ? openCitation : undefined)), sessionId: formatting ? null : sessionId, uiDir, streaming, math };
     const caretInline = streaming && endsInline(tree);
 
-    return (
+    const answer = (
         <Stack gap="md">
             {renderBlocks(tree.children, ctx, 'm', caretInline)}
             {streaming && !caretInline && (
@@ -199,4 +225,7 @@ export function Markdown({ text, variant = 'answer', streaming: streamingProp = 
             )}
         </Stack>
     );
+    // Only an answer with formulas measures its column, to know which ones are too wide for a line.
+    if (!needsMath) return answer;
+    return <View onLayout={(e) => setColumnWidth(e.nativeEvent.layout.width)}>{answer}</View>;
 }

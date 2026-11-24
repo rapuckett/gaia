@@ -3,20 +3,25 @@
 
 import type { PhrasingContent, Root, RootContent } from 'mdast';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
 
 import { cleanToolCallContent } from '@webui/utils/toolCallContent';
+import { normalizeMathDelimiters } from '@webui/utils/mathDelimiters';
 import remarkWindowsPaths from '@webui/utils/remarkWindowsPaths';
 import { remarkSoftBreaks } from '@webui/utils/remarkSoftBreaks';
 
-// The same plugins, in the same order, as the web UI's answer renderer.
-const processor = unified().use(remarkParse).use(remarkGfm).use(remarkWindowsPaths).use(remarkSoftBreaks);
+// The same plugins, in the same order, as the web UI's answer renderer. Single dollars are money ("$5 and $10"); normalizeMathDelimiters turns real maths into `$$`.
+const answerProcessor = unified().use(remarkParse).use(remarkGfm).use(remarkMath, { singleDollarTextMath: false }).use(remarkWindowsPaths).use(remarkSoftBreaks);
+const formattingProcessor = unified().use(remarkParse).use(remarkGfm).use(remarkWindowsPaths).use(remarkSoftBreaks);
 
-/** The answer's Markdown tree, after the tool-call JSON and think tags are cleaned out. */
-export function parseAnswer(text: string, streaming: boolean): Root {
+/** The answer's Markdown tree, after the tool-call JSON and think tags are cleaned out; with `math`, formulas are `math` and `inlineMath` nodes. */
+export function parseAnswer(text: string, streaming: boolean, math = true): Root {
     const cleaned = cleanToolCallContent(text, streaming);
-    return processor.runSync(processor.parse(cleaned), { value: cleaned }) as Root;
+    const processor = math ? answerProcessor : formattingProcessor;
+    const source = math ? normalizeMathDelimiters(cleaned) : cleaned;
+    return processor.runSync(processor.parse(source), { value: source }) as Root;
 }
 
 function formattingInline(nodes: PhrasingContent[]): PhrasingContent[] {
@@ -79,6 +84,6 @@ function formattingBlocks(nodes: RootContent[]): RootContent[] {
 
 /** The formatting-only tree: paragraphs, emphasis, strong, inline code, lists and code blocks. Links, images and headings are unwrapped here, and HTML becomes literal text. */
 export function parseFormatting(text: string): Root {
-    const tree = parseAnswer(text, false);
+    const tree = parseAnswer(text, false, false);
     return { ...tree, children: formattingBlocks(tree.children) };
 }
