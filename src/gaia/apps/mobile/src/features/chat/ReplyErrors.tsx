@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 
 import { failureRecordId } from '@webui/utils/streamErrors.core';
-import { isErrorContent } from '@webui/utils/answerErrors.core';
+import { isErrorContent, namesAgentLog } from '@webui/utils/answerErrors.core';
 
 import type { Message } from '@/api/client.types';
 import { useSession } from '@/data';
@@ -17,6 +17,7 @@ import { openLink } from '@/platform/openLink';
 import { Button, Icon, Notice, Row, Stack, Text } from '@/ui';
 import { Archive, Info, RotateCcw, ScrollText } from '@/ui/icons';
 
+import { savedActivity } from './activity/savedActivity';
 import { FailedLead, OpenSettingsButtons, causeTitleKey, failedTurnOf } from './FailedTurnCard';
 import { useMessageActionsContext } from './messages/MessageActionsContext';
 import { chatErrorInfo, namesFailureRecord, reportTitle } from './chatErrors';
@@ -69,10 +70,12 @@ export function SavedReplyErrors({ message, fixShownBelow = false, latest = fals
     const [retryFailure, setRetryFailure] = useState<{ text: string; detail?: string } | null>(null);
     const isError = message.failed === true || isErrorContent(message.content);
     const local = useSession(message.session_id).data?.inference_remote === false;
-    const showLog = local && isError;
+    const { endedBy } = useMemo(() => savedActivity(message), [message]);
+    const agentLog = (isError || endedBy !== null) && namesAgentLog(endedBy ?? message.content);
+    const showLog = local && isError && !agentLog;
     const showReport = failureRecordId(message.content) !== null;
     const turn = useMemo(() => (isError && !fixShownBelow ? failedTurnOf(message.content) : null), [isError, fixShownBelow, message.content]);
-    if (!isError && !showLog && !showReport) return null;
+    if (!isError && !showLog && !agentLog && !showReport) return null;
     const titleKey = turn ? causeTitleKey(turn) : null;
     const tryAgain = () => {
         setRetryFailure(null);
@@ -89,6 +92,11 @@ export function SavedReplyErrors({ message, fixShownBelow = false, latest = fals
                 </Row>
             ) : null}
             {turn ? <OpenSettingsButtons turn={turn} /> : null}
+            {agentLog ? (
+                <Row gap="sm" wrap stack>
+                    <Button size="sm" variant="secondary" icon={ScrollText} label={t('logs.agentLog')} onPress={() => router.push({ pathname: '/logs', params: { source: 'agent' } })} testID="agent-log" />
+                </Row>
+            ) : null}
             {showLog ? (
                 <Row gap="sm" wrap stack>
                     <Button size="sm" variant="secondary" icon={ScrollText} label={t('logs.serverLog')} onPress={() => router.push('/logs')} testID="server-log" />

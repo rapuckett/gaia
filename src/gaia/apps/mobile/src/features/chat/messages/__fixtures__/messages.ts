@@ -179,6 +179,7 @@ export type MessagesFixture =
     | 'cutoff-schedule-paused'
     | 'failed-context'
     | 'failed-model-load'
+    | 'failed-agent-crash'
     | 'failed-model-unavailable'
     | 'failed-report'
     | 'failed-unknown'
@@ -304,6 +305,7 @@ export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Mes
     'cutoff-schedule-deleted': { messages: CUT_OFF(CUT_OFF_NOTICE_TEXT.scheduleDeleted) },
     'cutoff-schedule-paused': { messages: CUT_OFF(CUT_OFF_NOTICE_TEXT.schedulePaused) },
     'failed-context': { messages: failedAfter('Failed to start the query run: Error: request (70211 tokens) exceeds the available context size (65536 tokens).') },
+    'failed-agent-crash': { messages: failedAfter('The agent stopped unexpectedly. Its log is in /Users/Shared/gaia-demo/.gaia/agents/gaia/logs') },
     'failed-model-load': { messages: failedAfter("Failed to start the query run: Failed to load model Gemma-4-E4B-it-GGUF: llama-server exited with code 1.") },
     'failed-model-unavailable': {
         messages: failedAfter("Failed to start the query run: Failed to preload model: Lemonade has no model called 'Gemma-4-E4B-it-GGUFF'. Check Settings › Advanced › Custom model ID."),
