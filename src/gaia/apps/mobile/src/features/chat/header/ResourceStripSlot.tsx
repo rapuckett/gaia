@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { useT } from '@/i18n/useT';
 import { Notice, Stack, useAppearance } from '@/ui';
+import { useAnnounceOnIos } from '@/ui/controls/Spinner';
 
 import { ResourceStrip } from './ResourceStrip';
 
@@ -12,7 +13,6 @@ const NOTE_MS = 12_000;
 
 /** The strip while Settings has it on; closing it hides it in every chat and says how it comes back, as on the desktop. */
 export function ResourceStripSlot() {
-    const t = useT();
     const show = useAppearance((s) => s.showResources);
     const setShow = useAppearance((s) => s.setShowResources);
     const [note, setNote] = useState(false);
@@ -40,15 +40,16 @@ export function ResourceStripSlot() {
         );
     }
     if (!note) return null;
+    return <HiddenNote onShow={() => setShow(true)} />;
+}
+
+function HiddenNote({ onShow }: { onShow: () => void }) {
+    const t = useT();
+    const message = t('resources.hiddenNote');
+    useAnnounceOnIos(message);
     return (
         <Stack paddingX="lg" paddingY="xs">
-            <Notice
-                tone="info"
-                role="status"
-                message={t('resources.hiddenNote')}
-                action={{ label: t('resources.show'), onPress: () => setShow(true) }}
-                testID="resources-hidden-note"
-            />
+            <Notice tone="info" role="status" message={message} action={{ label: t('resources.show'), onPress: onShow }} testID="resources-hidden-note" />
         </Stack>
     );
 }

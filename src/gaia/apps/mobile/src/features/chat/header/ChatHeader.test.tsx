@@ -4,9 +4,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { StyleSheet } from 'react-native';
+import { AccessibilityInfo, Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { textOf, walk } from '@/test-support/a11y';
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
@@ -100,6 +101,17 @@ describe('ChatHeader resource strip', () => {
         expect(useAppearance.getState().showResources).toBe(false);
         expect(screen.queryByTestId('resources-close')).toBeNull();
         expect(screen.getByText(translator('en')('resources.hiddenNote'))).toBeTruthy();
+    });
+
+    it('says the note aloud: a polite live region, and an announcement on iOS', async () => {
+        const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+        useAppearance.getState().setShowResources(true);
+        await mount();
+        await fireEvent.press(await screen.findByTestId('resources-close'));
+        const text = translator('en')('resources.hiddenNote');
+        expect(walk().some((n) => n.props.accessibilityLiveRegion === 'polite' && textOf(n) === text)).toBe(true);
+        expect(announce.mock.calls.filter(([m]) => m === text).length).toBe(Platform.OS === 'ios' ? 1 : 0);
+        announce.mockRestore();
     });
 
     it('brings the strip back from the note and from the header toggle', async () => {
