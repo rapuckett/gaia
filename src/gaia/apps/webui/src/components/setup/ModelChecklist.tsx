@@ -211,7 +211,8 @@ export function SelectionSummary({ plan, selection }: SummaryProps) {
 export function driveName(path: string | null): string | null {
     if (!path) return null;
     const win = /^([A-Za-z]:)[\\/]/.exec(path);
-    return win ? win[1] : path;
+    // Elsewhere the path names the user's home folder: show none, not the path.
+    return win ? win[1] : null;
 }
 
 function round1(n: number): number {

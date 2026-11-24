@@ -5433,6 +5433,18 @@ test('setup tight-model sheet says its warning once (en, dark)', async ({ page }
     expect(await audit(page)).toEqual([]);
 });
 
+test('the setup summary names no home folder on a Mac (en, dark)', async ({ page }) => {
+    const mac = SETUP_SCENES.find((s) => s.name === 'models-mac-disk')!;
+    await open(page, '', 'en', (p) => withSetup(p, mac.answers), 'dark');
+    await mac.reach(page);
+    const free = page.locator('.mc-stat-label').filter({ hasText: 'Free' }).first();
+    await expect(free).toBeVisible();
+    await expect(free).not.toContainText('Free on');
+    await expect(page.locator('body')).not.toContainText('/Users/you');
+    await shot(page, 'setup-en-dark-mac-disk-summary');
+    expect(await audit(page)).toEqual([]);
+});
+
 test.describe('first-run setup leaves no English in Arabic', () => {
     for (const s of SETUP_SCENES) {
         test(s.name, async ({ page }) => {

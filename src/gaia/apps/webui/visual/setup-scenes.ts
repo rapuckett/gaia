@@ -72,6 +72,8 @@ const PLAN_PRESENT = {
     catalog: CATALOG.map((e) => (e.planned ? { ...e, downloaded: true, size_gb: 0 } : e)),
 };
 const PLAN_SHORT = { ...PLAN, disk: { ...PLAN.disk, free_gb: 2.1 } };
+// A Mac or Linux model cache: the summary names no folder, only "Free".
+const PLAN_MAC_DISK = { ...PLAN, disk: { ...PLAN.disk, path: '/Users/you/.cache/huggingface/hub' } };
 // A 16 GB laptop: GAIA keeps 10.7 GB for other apps, so Qwen3.5 2B is the pick (13.1 GB left) and reads
 // images itself; the 4B and Gemma would load but are tight.
 const QWEN_2B = entry({ id: 'Qwen3.5-2B-GGUF', name: 'Qwen3.5 2B (Multimodal)', roles: ['chat'], size_gb: 2.01, full_size_gb: 2.01, recommended: true, planned: true, selected: true, need_gb: 4.1, capacity_gb: 10.7, reads_images: true, feature_tier: 'compact' });
@@ -562,6 +564,14 @@ export const SETUP_SCENES: SetupScene[] = [
             await toModels(page);
             await expect(page.locator('.setup-backend [role="radio"]')).toHaveCount(1);
             await expect(page.locator('.setup-backend .setup-hint')).toBeVisible();
+        },
+    },
+    {
+        name: 'models-mac-disk',
+        answers: { plan: PLAN_MAC_DISK },
+        reach: async (page) => {
+            await toModels(page);
+            await expect(page.locator('.mc-stat-label').first()).toBeVisible();
         },
     },
     {
