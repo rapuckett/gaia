@@ -8,7 +8,7 @@ import { useChatStore } from '../../stores/chatStore';
 import * as api from '../../services/api';
 import { ConnectionBanner } from '../ConnectionBanner';
 import { ErrorNotice } from '../settings/ErrorNotice';
-import { useModelStore } from '../../stores/modelStore';
+import { resetModelRetryForTests, useModelStore } from '../../stores/modelStore';
 import type { SystemStatus } from '../../types';
 
 vi.mock('../../services/api', async (importOriginal) => {
@@ -332,9 +332,36 @@ describe('a failed model download', () => {
         useModelStore.setState({ names: { [id]: 'gpt-oss 20B' } });
         useChatStore.setState({ systemStatus: { ...healthy, download_progress: progress('error', id) } as SystemStatus });
         render(<ConnectionBanner />);
-        expect(screen.getByRole('alert')).toHaveTextContent('Download of gpt-oss 20B failed. disk full');
+        expect(screen.getByRole('alert')).toHaveTextContent('Download of gpt-oss 20B failed.');
+        expect(screen.getByRole('alert')).toHaveTextContent('disk full');
         expect(screen.getByRole('alert')).not.toHaveTextContent('ggml');
         useModelStore.setState({ names: {} });
+    });
+
+    it('reads the model names itself, so a failed download shows the display name, not the id', async () => {
+        const id = 'Qwen3.6-35B-A3B-GGUF';
+        resetModelRetryForTests();
+        useModelStore.setState({ names: {} });
+        mocked.listProviderModels.mockResolvedValue({
+            provider: 'local', models: [{ id, display_name: 'Qwen 3.6 35B A3B' }],
+        } as never);
+        useChatStore.setState({ systemStatus: { ...healthy, download_progress: progress('error', id) } as SystemStatus });
+        render(<ConnectionBanner />);
+        await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Download of Qwen 3.6 35B A3B failed.'));
+        expect(screen.getByRole('alert')).not.toHaveTextContent(id);
+        useModelStore.setState({ names: {} });
+    });
+
+    it('puts the server text on its own line, apart from the failure sentence', () => {
+        const text = 'Lemonade /pull returned 404: model not found';
+        useChatStore.setState({
+            systemStatus: { ...healthy, download_progress: { ...progress('error'), message: text } } as SystemStatus,
+        });
+        render(<ConnectionBanner />);
+        const detail = screen.getByText(text);
+        expect(detail).toHaveClass('connection-banner__detail');
+        expect(detail.parentElement).toHaveTextContent('Download of Gemma-4-E4B-it-GGUF failed.');
+        expect(detail.textContent).toBe(text);
     });
 
     it('says the download failed in the interface language', () => {
