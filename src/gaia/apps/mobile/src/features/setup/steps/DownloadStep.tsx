@@ -172,7 +172,7 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
     const extras = view ? extrasLeftIds(view.run, view.active, isExtra).filter((id) => !skipped.has(id)) : [];
     const extrasNote = extras.length > 0 && !view?.componentFailed;
     const finishWithout = extrasNote ? (
-        <Button label={t('setup.download.finishWithoutExtras')} disabled={busy} onPress={() => void finishWithoutExtras(extras)} testID="download-finish-without-extras" />
+        <Button label={t('mobileApp.setup.skipExtras')} disabled={busy} onPress={() => void finishWithoutExtras(extras)} testID="download-finish-without-extras" />
     ) : null;
 
     let footer: ReactNode = null;

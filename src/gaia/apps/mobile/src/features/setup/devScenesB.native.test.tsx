@@ -47,7 +47,7 @@ async function mount(key: string, withClient?: ReturnType<typeof createFakeClien
 
 const SHOWS: Record<string, RegExp> = {
     'check/installing': /Now: /,
-    'download/extras-left': /Finish without the extras/,
+    'download/extras-left': /Skip the extras/,
     'download/logs': /Having trouble\?/,
     'gpu/guided-linux': /Show me how/,
     'gpu/not-applied': /may not have applied/,
