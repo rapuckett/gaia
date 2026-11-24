@@ -228,7 +228,8 @@ export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }:
                         attachments={attachments}
                         leftControls={
                             <PermissionChip
-                                mode={permissionMode.mode ?? 'ask'}
+                                mode={permissionMode.mode ?? null}
+                                readFailed={permissionMode.readFailed}
                                 onChange={(mode) => permissionMode.set.mutateAsync(mode)}
                                 onReread={() => queryClient.refetchQueries({ queryKey: modelMenuKeys.permissions(sessionId) }, { throwOnError: true })}
                                 promptWaiting={!!permission}
