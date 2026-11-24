@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { failureRecordId } from '@webui/utils/streamErrors.core';
 import { isErrorContent, namesAgentLog } from '@webui/utils/answerErrors.core';
@@ -63,15 +63,21 @@ function PcOnlyFailureLines({ showLog, showReport }: { showLog: boolean; showRep
     );
 }
 
+/** The agent's own crash, or a turn it ended, names its log folder: its log is offered, not the model server's. */
+export function offersAgentLog(message: Message): boolean {
+    const { endedBy } = savedActivity(message);
+    const isError = message.failed === true || isErrorContent(message.content);
+    return (isError || endedBy !== null) && namesAgentLog(endedBy ?? message.content);
+}
+
 /** What a saved reply that looks like an error needs beside it, decided as the web UI's message bubble does. */
-export function SavedReplyErrors({ message, fixShownBelow = false, latest = false }: { message: Message; fixShownBelow?: boolean; latest?: boolean }) {
+export function SavedReplyErrors({ message, fixShownBelow = false, latest = false, body }: { message: Message; fixShownBelow?: boolean; latest?: boolean; body?: ReactNode }) {
     const t = useT();
     const { retry, busy, readOnly } = useMessageActionsContext();
     const [retryFailure, setRetryFailure] = useState<{ text: string; detail?: string } | null>(null);
     const isError = message.failed === true || isErrorContent(message.content);
     const local = useSession(message.session_id).data?.inference_remote === false;
-    const { endedBy } = useMemo(() => savedActivity(message), [message]);
-    const agentLog = (isError || endedBy !== null) && namesAgentLog(endedBy ?? message.content);
+    const agentLog = useMemo(() => offersAgentLog(message), [message]);
     const showLog = local && isError && !agentLog;
     const showReport = failureRecordId(message.content) !== null;
     const turn = useMemo(() => (isError && !fixShownBelow ? failedTurnOf(message.content) : null), [isError, fixShownBelow, message.content]);
@@ -85,6 +91,7 @@ export function SavedReplyErrors({ message, fixShownBelow = false, latest = fals
         <Stack gap="sm">
             {isError && !fixShownBelow ? <ErrorBanner title={titleKey ? t(titleKey) : undefined} /> : null}
             {turn?.raw ? <FailedLead turn={turn} content={message.content} /> : null}
+            {body}
             {retryFailure ? <Notice tone="danger" message={retryFailure.text} detail={retryFailure.detail} testID="failed-retry-error" /> : null}
             {ownsTryAgain(message, { fixShownBelow, latest, busy, readOnly }) ? (
                 <Row gap="sm" wrap stack>
