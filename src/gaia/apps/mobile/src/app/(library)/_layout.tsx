@@ -13,10 +13,10 @@ export default function LibraryLayout() {
     const pathname = usePathname();
     const root = pathname === '/documents';
 
-    // The drawer's edge swipe would take the iOS swipe-back on a pushed screen.
+    // The drawer's edge swipe would take the iOS swipe-back on a pushed screen; leaving resets the stack to Documents.
     useEffect(() => {
-        navigation.setOptions({ swipeEnabled: root });
-        return () => navigation.setOptions({ swipeEnabled: true });
+        navigation.setOptions({ swipeEnabled: root, popToTopOnBlur: true });
+        return () => navigation.setOptions({ swipeEnabled: true, popToTopOnBlur: false });
     }, [navigation, root]);
 
     return <Stack screenOptions={{ headerShown: false }} />;

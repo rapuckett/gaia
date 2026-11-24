@@ -8,6 +8,7 @@ import { useSession } from '@/data';
 import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { ChatScreen } from '@/features/chat/ChatScreen';
 import { leaveMissingChat } from '@/features/nav/launch';
+import { openLibrary } from '@/features/nav/libraryEntry';
 
 export default function ChatRoute() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -18,7 +19,7 @@ export default function ChatRoute() {
     }, [error, router]);
     return (
         <AppErrorBoundary resetKey={id}>
-            <ChatScreen sessionId={id} onManageDocuments={() => router.push({ pathname: '/documents', params: { chat: id } })} />
+            <ChatScreen sessionId={id} onManageDocuments={() => openLibrary(router, id)} />
         </AppErrorBoundary>
     );
 }

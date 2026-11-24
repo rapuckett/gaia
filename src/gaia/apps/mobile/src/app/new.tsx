@@ -4,6 +4,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 
+import { openLibrary } from '@/features/nav/libraryEntry';
 import { NewChatScreen } from '@/features/new-chat';
 
 export default function NewChat() {
@@ -13,5 +14,5 @@ export default function NewChat() {
         (id: string) => router.replace({ pathname: '/chat/[id]', params: { id } }),
         [router],
     );
-    return <NewChatScreen onOpen={open} onChooseDocuments={() => router.push('/documents')} prompt={prompt ? { id: promptId ?? prompt, text: prompt } : undefined} />;
+    return <NewChatScreen onOpen={open} onChooseDocuments={() => openLibrary(router)} prompt={prompt ? { id: promptId ?? prompt, text: prompt } : undefined} />;
 }

@@ -13,6 +13,7 @@ import { useComposerQueueStore } from '@/features/composer/composerQueue';
 import { useChatStreamStore } from '@/state/chatStreams';
 import { useTheme } from '@/ui';
 
+import { openLibrary } from './libraryEntry';
 import { useIsPermanentDrawer } from './ScreenHeader';
 import { activeMenuRoute, menuRouteNames } from './routes';
 import { activeChatId, liveRunsFromTurns, openChat, openNewChat } from './navigation';
@@ -48,7 +49,8 @@ export function AppDrawer({ navigation, state }: DrawerContentComponentProps) {
                 routeNames={menuRouteNames(state.routeNames)}
                 activeRoute={activeMenuRoute(pathname)}
                 onOpenRoute={(route) => {
-                    router.push(`/${route}`);
+                    if (route === 'documents') openLibrary(router);
+                    else router.push(`/${route}`);
                     navigation.closeDrawer();
                 }}
                 onSelect={(id) => {

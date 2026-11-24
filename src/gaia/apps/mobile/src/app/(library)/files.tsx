@@ -5,10 +5,12 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { sendToOpenChat } from '@/features/chat/sendToOpenChat';
 import { FileBrowserScreen } from '@/features/files';
+import { useLibraryAnchorChat } from '@/features/nav/libraryEntry';
 
 export default function Files() {
     const router = useRouter();
     const { chat } = useLocalSearchParams<{ chat?: string }>();
+    useLibraryAnchorChat(chat);
     if (!chat) return <Redirect href="/documents" />;
     const ask = (prompt: string) => {
         if (!sendToOpenChat(prompt)) return false;
