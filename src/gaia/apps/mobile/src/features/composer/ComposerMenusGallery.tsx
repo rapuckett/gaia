@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { ActiveModel, ChatSpending, PermissionMode, ContextUsage, LocalModelStatus, ProviderModel } from '@/api/client.types';
+import type { ActiveModel, SkillInfo, ChatSpending, PermissionMode, ContextUsage, LocalModelStatus, ProviderModel } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
@@ -24,7 +24,7 @@ import { ModelChip } from './ModelChip';
 import { SpendMeter } from './SpendMeter';
 
 /** Developer gallery (`/dev/composer?state=`): the context meter, spend meter, model menu and picked-model load banner in each state. */
-export const COMPOSER_MENU_STATES = ['context', 'meterLow', 'meterHigh', 'warning', 'spend', 'spendOpen', 'permissionMenu', 'permissionAsk', 'permissionFull', 'permissionFullWaiting', 'permissionChecking', 'permissionUnknown', 'private-off', 'private-on', 'private-memoryOff', 'private-menu', 'folder-own', 'folder-add', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted'] as const;
+export const COMPOSER_MENU_STATES = ['context', 'meterLow', 'meterHigh', 'warning', 'spend', 'spendOpen', 'permissionMenu', 'permissionAsk', 'permissionFull', 'permissionFullWaiting', 'permissionChecking', 'permissionUnknown', 'private-off', 'private-on', 'private-memoryOff', 'private-menu', 'folder-own', 'folder-add', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted', 'skills', 'skillsFiltered', 'skillsLoading', 'skillsFailed'] as const;
 export type ComposerMenuState = (typeof COMPOSER_MENU_STATES)[number];
 
 const USAGE: ContextUsage = {
@@ -74,6 +74,15 @@ const CLOUD_ID = 'accounts/fireworks/models/qwen3p6';
 const CLOUD_NOTICE = tEn('providers.fireworks.notice');
 const CLOUD = [model(CLOUD_ID, { display_name: 'Qwen3.6', size_gb: null })];
 
+const skill = (name: string, description: string): SkillInfo => ({ name, description, version: null, tier: null, tools: [], path: `/skills/${name}`, always_on: false });
+const SKILLS = [
+    skill('summarize', 'Summarize a document or a long chat. Keeps the key points and decisions.'),
+    skill('coding', 'Write, run and fix code in a folder you choose.'),
+    skill('file-ops', 'Find, move and rename files.'),
+    skill('image-gen', 'Draw an image from a description.'),
+    skill('inbox-triage', 'Sort new mail by what needs a reply.'),
+];
+
 const OWN_FOLDER = { path: '/Users/avery/.gaia/documents', name: 'documents', gaia_folder: true, choosable: false };
 
 /** The left-hand chip under test; the private and permission chips keep their own state so a tap flips them. */
@@ -118,16 +127,20 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
             activeModel: active,
             localModel: cloud ? { ...LOCAL_STATUS, active_remote: true, active_display_name: 'Qwen3.6' } : LOCAL_STATUS,
             chatSpending: SPEND,
+            skills: { skills: SKILLS, invalid: {} },
             providerModels: { local: { provider: 'local', models: state === 'menuEmpty' ? [] : LOCAL }, ...(state === 'menuCloud' ? { fireworks: { provider: 'fireworks', models: CLOUD } } : {}) },
             providers: { providers: [
                 { id: 'local', name: 'Local', remote: false, configured: true, blocked: false, privacy_notice: '' },
                 { id: 'fireworks', name: 'Fireworks AI', remote: true, configured: state !== 'menu' && state !== 'menuInfo' && state !== 'menuSwitching' && state !== 'menuNeverStarted', blocked: false, privacy_notice: CLOUD_NOTICE },
             ] },
         });
+        if (state === 'skillsLoading') return { ...base, listSkills: () => new Promise<never>(() => undefined) };
+        if (state === 'skillsFailed') return { ...base, listSkills: () => Promise.reject(new Error('The PC did not answer.')) };
         return base;
     }, [state, cloud]);
     const queryClient = useMemo(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }), []);
     const noop = () => undefined;
+    const [text, setText] = useState(state === 'skillsFiltered' ? '/i' : state.startsWith('skills') ? '/' : '');
     useEffect(() => {
         if (state === 'pickLoading') usePickLoadStore.setState({ pickLoad: { model: 'Qwen3.6-35B-A3B-GGUF', seconds: 14, error: null } });
         else if (state === 'pickFailed') usePickLoadStore.setState({ pickLoad: { model: 'Qwen3.6-35B-A3B-GGUF', seconds: 0, error: { reason: 'Not enough free memory to load the model.' } } });
@@ -149,6 +162,8 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
                             ) : null}
                             <ContextWarning usage={state === 'warning' ? usage : null} />
                             <Composer
+                                value={text}
+                                onChange={setText}
                                 onSend={noop}
                                 onStop={noop}
                                 attachments={state === 'attachPaste' ? NO_ATTACHMENTS : undefined}
