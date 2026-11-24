@@ -26,9 +26,10 @@ describe('sizes, speeds and times', () => {
         expect(formatEta(3 * 3600, tEn)).toBe('over 2 hours');
     });
 
-    it('names the drive, or the folder when there is no drive letter', () => {
+    it('names a Windows drive, and no folder for other paths', () => {
         expect(driveName('C:\\Users\\me\\.cache\\huggingface\\hub')).toBe('C:');
-        expect(driveName('/home/me/.cache/huggingface/hub')).toBe('/home/me/.cache/huggingface/hub');
+        expect(driveName('/home/me/.cache/huggingface/hub')).toBeNull();
+        expect(driveName('/Users/me/.cache/huggingface/hub')).toBeNull();
         expect(driveName(null)).toBeNull();
     });
 
