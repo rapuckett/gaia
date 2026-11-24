@@ -4931,6 +4931,13 @@ export const enMessages = {
     'mobileApp.yourPc.setup.models.cantRun.chat': "{name} can't run on your PC. {why} Choose another chat model.",
     'mobileApp.yourPc.setup.models.cantRun.other': "{name} can't run on your PC. {why} Untick it to continue.",
     'mobileApp.yourPc.setup.npu.fixError.noPkexec': "GAIA can't ask for the administrator password on your PC because polkit isn't installed. GAIA's NPU guide has the steps to raise the limit by hand.",
+    'mobileApp.yourPc.chatError.savedReport': "GAIA saved a problem report for this on your PC as {id}; nothing was sent anywhere.",
+    'mobileApp.yourPc.tool.get_system_info.done': "Checked your PC",
+    'mobileApp.yourPc.tool.get_system_info.active': "Checking your PC",
+    'mobileApp.yourPc.setup.component.serverNote': "Runs the AI models on your PC (Lemonade).",
+    'mobileApp.yourPc.setup.fail.testMemory': "{name} is downloaded, but your PC didn’t have enough free memory to test it. Close some apps, then press Retry to test it again. Nothing is downloaded again.",
+    'mobileApp.yourPc.mem.source.discovery': "Found on your PC during profile setup",
+    'mobileApp.yourPc.resources.unavailableWhy': "{label} usage can't be read on your PC: {reason}",
     // Browser pane (desktop app)
     'browserPane.label': 'Browser pane',
     'browserPane.resize': 'Resize browser pane',
