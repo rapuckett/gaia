@@ -154,6 +154,8 @@ describeNative('ConnectorsGallery list states', () => {
         ['error', /connectors service is not running/],
         ['groups', 'Unavailable'],
         ['code', 'Sign in with a code'],
+        ['mcpConfigure', 'Create the Slack app'],
+        ['oauthSetup', 'Create a Google Cloud project'],
     ] as const)('%s shows its key text', async (state, text) => {
         await scene(state);
         expect(await screen.findByText(text)).toBeTruthy();
