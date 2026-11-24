@@ -6819,6 +6819,17 @@
         "default": 0,
         "title": "Tokens Per Second",
         "type": "number"
+      },
+      "waiting_seconds": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Waiting Seconds"
       }
     },
     "title": "InferenceStatsResponse",
@@ -17893,17 +17904,6 @@
         "title": "Installcommands",
         "type": "array"
       },
-      "publicIp": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "Publicip"
-      },
       "reason": {
         "anyOf": [
           {
@@ -17958,7 +17958,6 @@
       "error",
       "reason",
       "installCommands",
-      "publicIp",
       "device"
     ],
     "title": "TunnelStatus",

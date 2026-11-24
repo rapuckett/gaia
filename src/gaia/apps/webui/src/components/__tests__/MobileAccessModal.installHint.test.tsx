@@ -18,7 +18,6 @@ const ACTIVE: TunnelStatus = {
     token: 'tok',
     startedAt: null,
     error: null,
-    publicIp: null,
 };
 
 const STARTING: TunnelStatus = { ...ACTIVE, active: false, url: null, token: null };
@@ -66,7 +65,7 @@ describe('MobileAccessModal home-screen hint', () => {
     it('stays hidden while the tunnel is still starting, with no link to install yet', async () => {
         vi.mocked(api.getTunnelStatus).mockResolvedValue(STARTING);
         render(<MobileAccessModal isOpen onClose={vi.fn()} />);
-        expect(await screen.findByText(tEn('mobileAccess.starting'))).toBeInTheDocument();
+        expect(await screen.findByText(tEn('mobile.starting'))).toBeInTheDocument();
         expect(screen.queryByText('Keep GAIA on your phone')).toBeNull();
     });
 
@@ -80,7 +79,7 @@ describe('MobileAccessModal home-screen hint', () => {
         vi.mocked(api.getTunnelStatus).mockRejectedValue(new Error('offline'));
         render(<MobileAccessModal isOpen onClose={vi.fn()} />);
         await waitFor(() => expect(api.getTunnelStatus).toHaveBeenCalled());
-        expect(screen.getByText(tEn('mobileAccess.starting'))).toBeInTheDocument();
+        expect(screen.getByText(tEn('mobile.starting'))).toBeInTheDocument();
         expect(screen.queryByText('Keep GAIA on your phone')).toBeNull();
     });
 });

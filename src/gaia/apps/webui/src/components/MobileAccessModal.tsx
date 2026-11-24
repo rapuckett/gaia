@@ -10,6 +10,7 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useDialogFocus } from '../hooks/useDialogFocus';
 import { log } from '../utils/logger';
 import { useT } from '../i18n/useT';
+import type { MessageKey } from '../i18n/registry';
 import './MobileAccessModal.css';
 
 // QRCode loaded lazily via dynamic import
@@ -33,8 +34,6 @@ interface MobileAccessModalProps {
 
 const NGROK_DOWNLOAD_URL = 'https://ngrok.com/download';
 
-type MobileAccessKey = 'mobileAccess.qrUnavailable' | 'mobileAccess.qrThemeFailed' | 'mobileAccess.qrDrawFailed';
-
 export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommands, onRetry, awaitingStart, onStart }: MobileAccessModalProps) {
     const [status, setStatus] = useState<TunnelStatus | null>(null);
     const [copied, setCopied] = useState(false);
@@ -43,7 +42,7 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
     // Nothing to poll for or scan while the tunnel cannot start.
     const idle = !!awaitingStart && !!onStart;
     const halted = !!error || needsSetup || idle;
-    const [qrError, setQrError] = useState<MobileAccessKey | null>(null);
+    const [qrError, setQrError] = useState<MessageKey | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     useEscapeToClose(isOpen, onClose);
     const dialogRef = useRef<HTMLDivElement>(null);
@@ -85,7 +84,8 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
         if (!status?.active || !status.url || !status.token || !canvasRef.current) return;
 
         const mobileUrl = `${status.url}/?token=${status.token}`;
-        log.system.info(`Generating QR code for: ${mobileUrl}`);
+        // The link carries the access token, so only the host is logged.
+        log.system.info(`Generating QR code for the tunnel at ${status.url}`);
 
         // Load QRCode dynamically if not loaded
         const generateQR = async () => {
@@ -96,7 +96,7 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                     QRCodeLib = mod.default || mod;
                 } catch {
                     log.system.error('QR code library not available - install with: npm install qrcode');
-                    setQrError('mobileAccess.qrUnavailable');
+                    setQrError('mobile.qrUnavailable');
                     return;
                 }
             }
@@ -112,7 +112,7 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                     'QR code skipped: --text-primary/--bg-primary did not resolve. ' +
                         'styles/index.css must be loaded before this modal renders.',
                 );
-                setQrError('mobileAccess.qrThemeFailed');
+                setQrError('mobile.qrNoTheme');
                 return;
             }
 
@@ -125,7 +125,7 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                 });
             } catch (err) {
                 log.system.error('QR code generation failed', err);
-                setQrError('mobileAccess.qrDrawFailed');
+                setQrError('mobile.qrFailed');
             }
         };
 
@@ -181,12 +181,12 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                         }`} />
                         <span>
                             {status?.active
-                                ? t('mobileAccess.tunnelActive')
+                                ? t('mobile.tunnelActive')
                                 : needsSetup
                                     ? t('mobile.ngrokRequired')
                                     : error
-                                        ? t('mobileAccess.couldntStart')
-                                        : t('mobileAccess.starting')}
+                                        ? t('mobile.startFailed')
+                                        : t('mobile.starting')}
                         </span>
                         {!status?.active && !halted && <span className="tunnel-spinner" />}
                     </div>}
@@ -228,7 +228,7 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                             ) : (
                                 <div className="qr-placeholder">
                                     <div className="placeholder-spinner" />
-                                    <span>{t('mobileAccess.connecting')}</span>
+                                    <span>{t('mobile.connecting')}</span>
                                 </div>
                             )}
                         </div>
@@ -237,30 +237,18 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                     {/* URL display */}
                     {status?.active && mobileUrl && (
                         <div className="tunnel-url-area">
-                            <label>{t('mobileAccess.urlLabel')}</label>
+                            <label>{t('mobile.url')}</label>
                             <div className="tunnel-url-row">
-                                <input type="text" dir="ltr" readOnly value={mobileUrl} />
+                                <input type="text" readOnly dir="ltr" value={mobileUrl} />
                                 <button
                                     className={`copy-url-btn ${copied ? 'copied' : ''}`}
                                     onClick={copyUrl}
-                                    title={t('mobileAccess.copyUrl')}
+                                    title={t('mobile.copyUrl')}
                                 >
                                     {copied ? <Check size={13} /> : <Copy size={13} />}
-                                    {copied ? t('code.copied') : t('code.copy')}
+                                    {copied ? t('mobile.copied') : t('mobile.copy')}
                                 </button>
                             </div>
-                        </div>
-                    )}
-
-                    {/* Tunnel password hint (for random ngrok URLs with interstitial) */}
-                    {status?.active && status?.publicIp && status?.url &&
-                     !status.url.includes('ngrok-free.app') && (
-                        <div className="tunnel-password-hint">
-                            <label>{t('mobileAccess.passwordLabel')}</label>
-                            <div className="tunnel-password-value" dir="ltr">{status.publicIp}</div>
-                            <span className="tunnel-password-note">
-                                {t('mobileAccess.passwordNote')}
-                            </span>
                         </div>
                     )}
 
@@ -270,14 +258,11 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                             <ol>
                                 <li>
                                     {qrError
-                                        ? t('mobileAccess.stepOpenUrl')
-                                        : t('mobileAccess.stepScan')}
+                                        ? t('mobile.stepOpenUrl')
+                                        : t('mobile.stepScan')}
                                 </li>
-                                {status?.url && !status.url.includes('ngrok-free.app') && (
-                                    <li>{t('mobileAccess.stepPassword')}</li>
-                                )}
-                                <li>{t('mobileAccess.stepChat')}</li>
-                                <li>{t('mobileAccess.stepSecure')}</li>
+                                <li>{t('mobile.stepChat')}</li>
+                                <li>{t('mobile.thirdParty')}</li>
                             </ol>
                         </div>
                     )}
@@ -296,9 +281,9 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                             <button
                                 className="btn-danger"
                                 onClick={onStop}
-                                title={t('mobileAccess.stopHint')}
+                                title={t('mobile.stopTitle')}
                             >
-                                {t('mobileAccess.stop')}
+                                {t('mobile.stop')}
                             </button>
                         )}
                         {idle && (

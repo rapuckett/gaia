@@ -201,7 +201,7 @@ describe('a message added to a reply that ended with nobody watching', () => {
         queue(A, ['d', 'delivered']);
         await dispatchNext(A, manualSender().send, () => true);
         expect(states(A)).toEqual([['d', 'failed']]);
-        expect(useChatStore.getState().messageQueues[A][0].error).toContain('HTTP 500');
+        expect(useChatStore.getState().messageQueues[A][0].error).toEqual({ key: 'queue.errorUnread', detail: expect.stringContaining('HTTP 500') });
     });
 
     it('stays as it is when the chat turns out to be answering again', async () => {
