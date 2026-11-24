@@ -105,7 +105,7 @@ describeNative('AboutPane', () => {
         fireEvent.press(screen.getByTestId('memory-about-more-k8'));
         const copy = await screen.findByTestId('memory-about-copy-k8');
         const order = [copy, screen.getByTestId('memory-about-edit-open-k8'), screen.getByTestId('memory-about-forget-k8')].map((n) => n.props.accessibilityLabel);
-        expect(order).toEqual(['Copy message', 'Edit', 'Forget']);
+        expect(order).toEqual(['Copy', 'Edit', 'Forget']);
         fireEvent.press(copy);
         await waitFor(() => expect(Clipboard.setStringAsync).toHaveBeenCalledWith('Call me Sam.'));
     });

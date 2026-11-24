@@ -88,7 +88,7 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
         Clipboard.setStringAsync(item.content).catch((error: unknown) => notify({ tone: 'danger', text: describeError(error, t) }));
 
     const actions: SheetAction[] = [
-        { label: t('msg.copy'), icon: Copy, disabled: hidden, onPress: copy, testID: `memory-about-copy-${item.id}` },
+        { label: t('mobile.copy'), icon: Copy, disabled: hidden, onPress: copy, testID: `memory-about-copy-${item.id}` },
         { label: t('mem.about.edit'), icon: Pencil, disabled: hidden, onPress: open, testID: `memory-about-edit-open-${item.id}` },
         { label: t('mem.about.forget'), icon: Trash2, destructive: true, disabled: forgetting, onPress: () => onForget(item), testID: `memory-about-forget-${item.id}` },
     ];
