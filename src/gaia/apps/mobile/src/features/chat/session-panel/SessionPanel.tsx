@@ -6,6 +6,7 @@ import { useWindowDimensions } from 'react-native';
 
 import { useChatStream } from '@/data';
 import { useT } from '@/i18n/useT';
+import { usePermissionPrompt } from '../permission/usePermissionPrompt';
 import { Sheet, Stack, Text } from '@/ui';
 
 import { DETAILS_HEADING, SECTIONS } from './sections';
@@ -32,6 +33,7 @@ function PanelBody({ sessionId, close }: { sessionId: string; close: () => void 
     const t = useT();
     const { height } = useWindowDimensions();
     const live = useChatStream(sessionId).status !== 'idle';
+    const promptWaiting = usePermissionPrompt(sessionId) !== null;
     const firstDetails = SECTIONS.findIndex((s) => s.group === 'details');
     return (
         <Stack gap="md" paddingY="sm" minHeight={height * 0.6}>
@@ -42,7 +44,7 @@ function PanelBody({ sessionId, close }: { sessionId: string; close: () => void 
                             {t(DETAILS_HEADING)}
                         </Text>
                     ) : null}
-                    {section.render({ sessionId, live, close })}
+                    {section.render({ sessionId, live, promptWaiting, close })}
                 </Fragment>
             ))}
         </Stack>
