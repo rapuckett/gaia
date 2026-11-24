@@ -84,7 +84,6 @@ export default function appConfig(): ExpoConfig {
             ['./plugins/withCleartextHosts', { hosts: dev ? DEV_HTTP_HOSTS : [] }],
             './plugins/withBackupExclusions',
             './plugins/withNinjaJobs',
-            './plugins/withWorkManagerKeep',
         ],
     };
 }
