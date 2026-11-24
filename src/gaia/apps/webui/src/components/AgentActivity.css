@@ -91,6 +91,17 @@
     flex-shrink: 0;
     color: var(--accent-yellow);
 }
+.flow-warning {
+    flex-wrap: wrap;
+}
+.flow-warning-details {
+    flex-basis: 100%;
+    margin-inline-start: 20px;
+    font-size: 12px;
+}
+.flow-warning-details summary {
+    cursor: pointer;
+}
 
 .flow-done {
     display: flex;

@@ -47,6 +47,20 @@ def test_an_unanswered_prompt_is_recorded_as_a_timeout():
     assert not handler.confirmation_timed_out("edit_file")
 
 
+def test_the_timeout_status_names_its_phase_tool_and_wait():
+    handler = SSEOutputHandler()
+    assert not handler.confirm_tool_execution("write_file", {}, timeout=0.01)
+    events = [handler.event_queue.get_nowait() for _ in range(2)]
+    assert events[0]["type"] == "permission_request"
+    event = events[1]
+    assert event["type"] == "status"
+    assert event["status"] == "warning"
+    assert event["phase"] == "confirm_timeout"
+    assert event["tool"] == "write_file"
+    assert event["timeout_s"] == 0.01
+    assert "timed out" in event["message"]
+
+
 def test_a_refusal_is_not_recorded_as_a_timeout():
     handler = SSEOutputHandler()
     worker = threading.Thread(
