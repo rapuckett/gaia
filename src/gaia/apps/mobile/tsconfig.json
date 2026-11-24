@@ -4,7 +4,8 @@
     "strict": true,
     "jsx": "react-jsx",
     "types": ["jest", "node", "expo/types"],
-    "paths": { "@/*": ["./src/*"], "@webui/*": ["../webui/src/*"] }
+    // Web UI files resolve their packages here, as Metro and jest do: webui may have no node_modules of its own.
+    "paths": { "@/*": ["./src/*"], "@webui/*": ["../webui/src/*"], "zustand": ["./node_modules/zustand"] }
   },
   "include": ["src", "app.config.ts", "expo-env.d.ts", ".expo/types/**/*.ts"]
 }
