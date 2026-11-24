@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { permissionChipView } from '@webui/utils/permissionChip.core';
 
 import type { PermissionMode } from '@/api/client.types';
-import { describeErrorWith, describeHttpFailure, useT } from '@/i18n/useT';
+import { describeHttpFailure, plainOr, useT } from '@/i18n/useT';
 import { Button, ListRow, Notice, Sheet, Stack } from '@/ui';
 import { ShieldAlert, ShieldCheck } from '@/ui/icons';
 
@@ -58,7 +58,7 @@ export function PermissionChip({ mode, readFailed = false, onChange, onReread, p
                 try {
                     await onReread();
                 } catch (e) {
-                    message = `${message} ${t.compose((say) => say('perm.rereadFailed', { error: describeErrorWith(e, say) }))}`;
+                    message = `${message} ${plainOr(t, 'perm.rereadFailed', {}, e)}`;
                 }
             }
             setError({ text: message, detail: failed.detail });

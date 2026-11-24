@@ -6,7 +6,7 @@ import { useWindowDimensions, View } from 'react-native';
 import { firstSentence, isTypingSkillCommand, matchSkillCommands } from '@webui/utils/skillCommands.core';
 
 import { useSkills } from '@/data/skills';
-import { describeError, ltr, serverText, useT } from '@/i18n/useT';
+import { ltr, plainOr, serverText, useT } from '@/i18n/useT';
 import { List, ListRow, Row, Spinner, Stack, Surface, Text } from '@/ui';
 
 /** The menu's tallest size, and the share of the screen it may take, so it never covers the field. */
@@ -44,7 +44,7 @@ function OpenSkillMenu({ value, onPick }: SkillMenuProps) {
                 <Row gap="sm">
                     {failed ? null : <Spinner />}
                     <Text role="caption" tone={failed ? 'danger' : 'muted'} accessibilityRole={failed ? 'alert' : undefined}>
-                        {failed ? t('composer.skillsFailed', { error: describeError(skills.error, t) }) : t('composer.skillsLoading')}
+                        {failed ? plainOr(t, 'composer.skillsFailed', {}, skills.error) : t('composer.skillsLoading')}
                     </Text>
                 </Row>
                 {failed && failureDetail ? (

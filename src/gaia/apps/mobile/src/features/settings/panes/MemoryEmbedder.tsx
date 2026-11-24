@@ -52,10 +52,14 @@ export default function MemoryEmbedder() {
             <Select
                 label={t('settings.memory.embedder.label')}
                 value={embedderSelected(view)}
-                options={choices.map((c) => ({ value: c.value, label: label(c) }))}
+                options={choices.map((c) => ({
+                    value: c.value,
+                    label: label(c),
+                    disabled: c.disabled,
+                    reason: c.disabled && c.kind === 'unproven' ? t.bare('settings.memory.embedder.npuUnproven') : undefined,
+                }))}
                 disabled={set.isPending}
                 onChange={(value) => {
-                    if (choices.find((c) => c.value === value)?.disabled) return;
                     set.mutate(embedderRequestDevice(value));
                 }}
                 testID="memory-embedder"

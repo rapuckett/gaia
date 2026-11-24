@@ -7,7 +7,7 @@ import { ABOUT_GROUPS, ABOUT_PAGE_SIZE, oneLineQuote, type AboutYouItem } from '
 
 import { useAddMemory, useForgetMemory, useMemoryKnowledge } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
-import { describeFailureWith, useT } from '@/i18n/useT';
+import { plainFailure, plainFailureText, useT } from '@/i18n/useT';
 import { Button, Divider, LoadingState, SectionHeader, Stack, Surface, Text } from '@/ui';
 
 import { AddMemory } from '../about/AddMemory';
@@ -50,7 +50,7 @@ export function AboutPane({ notify, memoryEnabled, onOpenAdvanced }: MemoryPaneP
                 sensitive: item.sensitive,
                 due_at: item.due_at ?? undefined,
             },
-            { onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.about.restoreFailed', { error: describeFailureWith(error, say) })) }) },
+            { onError: (error) => notify({ tone: 'danger', text: plainFailureText(t, 'mem.about.restoreFailed', {}, error) }) },
         );
 
     const onForget = (item: AboutYouItem) => {
@@ -63,7 +63,7 @@ export function AboutPane({ notify, memoryEnabled, onOpenAdvanced }: MemoryPaneP
                     sticky: true,
                     action: { label: t('mem.about.undo'), onPress: () => undo(item) },
                 }),
-            onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.about.forgetFailed', { error: describeFailureWith(error, say) })) }),
+            onError: (error) => notify({ tone: 'danger', text: plainFailureText(t, 'mem.about.forgetFailed', {}, error) }),
             onSettled: () => setForgetting(null),
         });
     };
@@ -73,6 +73,7 @@ export function AboutPane({ notify, memoryEnabled, onOpenAdvanced }: MemoryPaneP
     const groups = ABOUT_GROUPS.map((group) => ({ ...group, rows: (items ?? []).filter((item) => group.categories.includes(item.category)) })).filter(
         (group) => group.rows.length > 0,
     );
+    const loadFailure = list.error ? plainFailure(t, 'mem.about.loadFailed', {}, list.error) : null;
 
     return (
         <Stack gap="lg" paddingY="md" testID="memory-pane-about">
@@ -85,9 +86,14 @@ export function AboutPane({ notify, memoryEnabled, onOpenAdvanced }: MemoryPaneP
                 <Stack paddingX="lg">
                     <PcOnlyNotice testID="memory-about-pc-only" />
                 </Stack>
-            ) : list.isError && !items ? (
+            ) : loadFailure && !items ? (
                 <Stack gap="md" paddingX="lg" align="start" testID="memory-about-failed">
-                    <Text tone="danger">{t.compose((say) => say('mem.about.loadFailed', { error: describeFailureWith(list.error, say) }))}</Text>
+                    <Text tone="danger">{loadFailure.text}</Text>
+                    {loadFailure.detail ? (
+                        <Text role="caption" tone="muted" dir="ltr">
+                            {loadFailure.detail}
+                        </Text>
+                    ) : null}
                     <Button label={t.bare('mem.about.retry')} accessibilityLabel={t('mem.about.retry')} variant="secondary" onPress={() => void list.refetch()} />
                 </Stack>
             ) : !items ? (

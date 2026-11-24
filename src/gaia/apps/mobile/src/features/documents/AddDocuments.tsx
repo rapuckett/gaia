@@ -6,7 +6,7 @@ import { useState } from 'react';
 import type { DocumentResponse, IndexFolderResponse } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useAddDocument, useAddPcPath, useSetupPreflight } from '@/data';
-import { describeError, describeErrorWith, describeHttpFailure, useT } from '@/i18n/useT';
+import { describeError, describeHttpFailure, plainOr, useT } from '@/i18n/useT';
 import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
 import { Button, Notice, ProgressLine, Row, Stack, Text, TextField } from '@/ui';
 import { FileText, FolderOpen, Image as ImageIcon } from '@/ui/icons';
@@ -127,7 +127,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
     const pathExample = pcOs == null ? undefined : phonePathExample(examplePath(/darwin/i.test(pcOs) ? 'Mac' : pcOs));
 
     function attachFailed(filename: string, attachError: Error): AddLine {
-        const error = t.compose((say) => say('docs.attachFailedAfterIndex', { chat: chatName ?? '', error: describeErrorWith(attachError, say) }));
+        const error = plainOr(t, 'docs.attachFailedAfterIndex', { chat: chatName ?? '' }, attachError);
         return { kind: 'failed', error: describeUploadError(t, { filename, error }) };
     }
 

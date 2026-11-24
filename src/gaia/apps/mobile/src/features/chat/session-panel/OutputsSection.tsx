@@ -7,7 +7,7 @@ import type { OutputItem, OutputKind } from '@/api/client.types';
 import { useSessionOutputs } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { openPcFile } from '@/features/files/openPcFile';
-import { dateLocale, describeFailureWith, useT } from '@/i18n/useT';
+import { dateLocale, plainFailure, useT } from '@/i18n/useT';
 import { Button, Icon, Notice, Pressable, Row, Stack, Text } from '@/ui';
 import { Brain, CalendarClock, CornerDownRight, FileOutput, FileText, Image, Library, Volume2 } from '@/ui/icons';
 import { isolate, ref, type MessageKey } from '@webui/i18n/registry';
@@ -55,7 +55,10 @@ function OutputList({ sessionId, items, error, close }: { sessionId: string; ite
     const [now] = useState(Date.now);
     const [notLoaded, setNotLoaded] = useState(false);
     if (isPcRefusal(error)) return <PcOnlyNotice testID="outputs-pc-only" />;
-    if (error) return <Notice tone="danger" message={t.compose((say) => say('out.listError', { error: describeFailureWith(error, say) }))} />;
+    if (error) {
+        const failure = plainFailure(t, 'out.listError', {}, error);
+        return <Notice tone="danger" message={failure.text} detail={failure.detail} />;
+    }
     if (!items) return <Text tone="muted">{t('sp.checking')}</Text>;
     if (items.length === 0) return <Text tone="secondary">{t('out.empty')}</Text>;
     const shown = all ? items : items.slice(0, OUTPUTS_SHOWN);
