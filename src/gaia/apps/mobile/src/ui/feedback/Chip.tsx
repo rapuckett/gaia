@@ -17,8 +17,8 @@ export interface ChipProps {
     /** What pressing it does, when the label alone doesn't say. */
     hint?: string;
     selected?: boolean;
-    /** `tab` for a chip in a tab list; the others stay buttons. */
-    role?: 'tab';
+    /** `tab` for a chip in a tab list, `checkbox` for an on/off chip (`selected` is its checked state); the others stay buttons. */
+    role?: 'tab' | 'checkbox';
     onPress?: () => void;
     icon?: LucideIcon;
     testID?: string;
@@ -28,7 +28,7 @@ export interface ChipProps {
 export function Chip({ label, accessibilityLabel, hint, selected, role, onPress, icon, testID }: ChipProps) {
     const { colors, radius } = useTheme();
     return (
-        <Pressable inline hugHeight shape={{ radius: radius.full, hug: true }} onPress={onPress} accessibilityRole={role} accessibilityLabel={accessibilityLabel ?? label} accessibilityHint={hint} aria-selected={!!selected} testID={testID}>
+        <Pressable inline hugHeight shape={{ radius: radius.full, hug: true }} onPress={onPress} accessibilityRole={role} accessibilityLabel={accessibilityLabel ?? label} accessibilityHint={hint} aria-selected={role === 'checkbox' ? undefined : !!selected} aria-checked={role === 'checkbox' ? !!selected : undefined} testID={testID}>
             <View
                 style={{
                     alignSelf: 'flex-start',
