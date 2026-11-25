@@ -114,7 +114,10 @@ export function SchedulesScreen({ onOpenChat, onOpenAutomations, dev }: Schedule
                 <Stack flex={1} align="center" justify="center" gap="md" padding="xl" testID="schedules-empty">
                     <Icon icon={Clock} size="lg" tone="muted" />
                     <Text role="title" weight="semibold" align="center">
-                        {t('schedules.empty')}
+                        {t('mobileApp.schedules.emptyTitle')}
+                    </Text>
+                    <Text tone="secondary" align="center">
+                        {t('mobileApp.schedules.emptyHint')}
                     </Text>
                     <Row justify="center">
                         <Button label={t('schedules.new')} icon={Plus} variant="secondary" testID="schedules-empty-new" onPress={() => setCreating(true)} />

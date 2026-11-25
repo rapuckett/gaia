@@ -63,6 +63,7 @@ describeNative('SCH-06 tapping a schedule card opens its chat', () => {
         await fireEvent.press(await screen.findByTestId(`schedule-card-${DAILY.name}`));
         expect(router.replace).toHaveBeenCalledWith({ pathname: '/chat/[id]', params: { id: DAILY.session_id } });
         expect(screen.queryByText('Open Chat')).toBeNull();
+        expect(screen.getByTestId(`schedule-card-${DAILY.name}`).props.accessibilityHint).toBe('Opens its chat');
     });
 });
 
@@ -123,7 +124,8 @@ describeNative('the empty list', () => {
             </QueryClientProvider>,
         );
         expect(await screen.findByTestId('schedules-empty')).toBeTruthy();
-        expect(screen.getByText('No scheduled tasks yet. Create one to get started.')).toBeTruthy();
+        expect(screen.getByText('No scheduled tasks yet')).toBeTruthy();
+        expect(screen.getByText('Make one to have GAIA run a job for you on a schedule, like a morning summary.')).toBeTruthy();
         expect(screen.queryByTestId('schedules-new')).toBeNull();
         await fireEvent.press(screen.getByTestId('schedules-empty-new'));
         expect(await screen.findByText('Create schedule')).toBeTruthy();

@@ -93,6 +93,7 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                     minSize={0}
                     disabled={!schedule.session_id}
                     dimmed={false}
+                    accessibilityHint={schedule.session_id ? t('mobileApp.schedules.openChatHint') : undefined}
                     onPress={() => onOpenChat(schedule.session_id!)}
                     testID={`schedule-card-${schedule.name}`}
                 >
