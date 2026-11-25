@@ -21,11 +21,13 @@ export interface ChipProps {
     role?: 'tab' | 'checkbox';
     onPress?: () => void;
     icon?: LucideIcon;
+    /** Shows only the icon (and the check when selected); the label stays the accessibility label. Needs `icon`. */
+    iconOnly?: boolean;
     testID?: string;
 }
 
 // Selected shows a check beside the label as well as the accent fill.
-export function Chip({ label, accessibilityLabel, hint, selected, role, onPress, icon, testID }: ChipProps) {
+export function Chip({ label, accessibilityLabel, hint, selected, role, onPress, icon, iconOnly, testID }: ChipProps) {
     const { colors, radius } = useTheme();
     return (
         <Pressable inline hugHeight shape={{ radius: radius.full, hug: true }} onPress={onPress} accessibilityRole={role} accessibilityLabel={accessibilityLabel ?? label} accessibilityHint={hint} aria-selected={role === 'checkbox' ? undefined : !!selected} aria-checked={role === 'checkbox' ? !!selected : undefined} testID={testID}>
@@ -34,7 +36,7 @@ export function Chip({ label, accessibilityLabel, hint, selected, role, onPress,
                     alignSelf: 'flex-start',
                     maxWidth: '100%',
                     minHeight: 32,
-                    paddingHorizontal: 12,
+                    paddingHorizontal: iconOnly ? 8 : 12,
                     justifyContent: 'center',
                     borderRadius: radius.full,
                     borderWidth: 1,
@@ -43,12 +45,15 @@ export function Chip({ label, accessibilityLabel, hint, selected, role, onPress,
                 }}
             >
                 <Row gap="xs">
-                    {selected ? <Icon icon={Check} size="sm" tone="accent" /> : icon ? <Icon icon={icon} size="sm" tone="secondary" /> : null}
-                    <View style={{ flexShrink: 1 }}>
-                        <Text role="label" weight="medium" tone={selected ? 'accent' : 'primary'} numberOfLines={1} compact>
-                            {label}
-                        </Text>
-                    </View>
+                    {iconOnly && icon ? <Icon icon={icon} size="sm" tone={selected ? 'accent' : 'secondary'} /> : null}
+                    {selected ? <Icon icon={Check} size="sm" tone="accent" /> : icon && !iconOnly ? <Icon icon={icon} size="sm" tone="secondary" /> : null}
+                    {iconOnly && icon ? null : (
+                        <View style={{ flexShrink: 1 }}>
+                            <Text role="label" weight="medium" tone={selected ? 'accent' : 'primary'} numberOfLines={1} compact>
+                                {label}
+                            </Text>
+                        </View>
+                    )}
                 </Row>
             </View>
         </Pressable>
