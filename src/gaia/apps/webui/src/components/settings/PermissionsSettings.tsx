@@ -6,7 +6,7 @@ import { ChevronDown } from 'lucide-react';
 import * as api from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
 import { useT } from '../../i18n/useT';
-import { useAnnounce } from '../LiveAnnouncer';
+import { announce } from '../LiveAnnouncer';
 import type { PermissionMode, SessionPermissions } from '../../types';
 import { announcePermissionMode } from '../../utils/permissionModeEvents';
 import { SettingsDisclosure } from './SettingsDisclosure';
@@ -20,7 +20,6 @@ export function PermissionsSettings() {
     const [confirming, setConfirming] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [revokedAll, setRevokedAll] = useState(false);
-    useAnnounce(revokedAll ? t('settings.permissions.revokedAll') : null);
     const revokedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => () => { if (revokedTimer.current) clearTimeout(revokedTimer.current); }, []);
 
@@ -54,8 +53,10 @@ export function PermissionsSettings() {
         if (!(await act(() => api.revokeGrants(sessionId)))) return;
         if (revokedTimer.current) clearTimeout(revokedTimer.current);
         setRevokedAll(true);
+        // Every success is read, even a second one while the first toast still shows.
+        announce(t('settings.permissions.revokedAll'));
         revokedTimer.current = setTimeout(() => setRevokedAll(false), 4000);
-    }, [act]);
+    }, [act, t]);
 
     const saveDefault = useCallback(async (mode: PermissionMode) => {
         setConfirming(false);

@@ -77,6 +77,14 @@ describe('PermissionsSettings', () => {
         expect(screen.getByText("Removed this chat's extra permissions.")).not.toHaveAttribute('role');
     });
 
+    it('announces a second revoke-all made while the first toast still shows', async () => {
+        render(<PermissionsSettings />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Revoke all in this chat' }));
+        await waitFor(() => expect(announce).toHaveBeenCalledTimes(1));
+        fireEvent.click(await screen.findByRole('button', { name: 'Revoke all in this chat' }));
+        await waitFor(() => expect(announce).toHaveBeenCalledTimes(2));
+    });
+
     it('shows no success toast when revoke-all fails', async () => {
         mockedApi.revokeGrants.mockRejectedValue(new Error('Chat is gone'));
         render(<PermissionsSettings />);
