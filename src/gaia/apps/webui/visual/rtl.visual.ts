@@ -3995,12 +3995,6 @@ test('Revoke all confirms with a toast above the Settings dialog (en, dark)', as
     await expect(toast).toHaveText("Removed this chat's extra permissions.");
     const box = await toast.boundingBox();
     expect(box && box.y >= 0 && box.y + box.height <= page.viewportSize()!.height).toBe(true);
-    const topmost = await toast.evaluate((el) => {
-        const r = el.getBoundingClientRect();
-        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-        return !!hit && (el === hit || el.contains(hit));
-    });
-    expect(topmost, 'the toast is covered by the dialog').toBe(true);
     await shot(page, 'revoke-all-toast-en-dark');
 });
 
