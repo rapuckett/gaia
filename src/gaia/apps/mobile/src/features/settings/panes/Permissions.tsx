@@ -22,10 +22,10 @@ import { SettingsAnchor } from '../targets';
 /** Dev scenes only: opens the full-access confirm sheet on arrival. */
 export const SeedConfirmFullAccess = createContext(false);
 
-/** A grant's key is `<tool>:<scope>`; the tool's activity label is the one the approval card words it with. */
+/** A grant's key starts with its tool (`run_shell_command:ls`, `run_python`); no key for that tool means no kind line. */
 function grantKindKey(key: string) {
-    const kind = `tool.${key.split(':', 1)[0]}.active`;
-    return key.includes(':') && isMessageKey(kind) ? kind : null;
+    const kind = `mobileApp.permissions.kind.${key.split(':', 1)[0]}`;
+    return isMessageKey(kind) ? kind : null;
 }
 
 /** Settings > Permissions: the default mode for new chats, and every chat holding full access or "always allow" grants. */
