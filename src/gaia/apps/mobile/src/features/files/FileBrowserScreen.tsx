@@ -31,7 +31,6 @@ import {
     Screen,
     SearchField,
     Stack,
-    Switch,
     Text,
     useTheme,
 } from '@/ui';
@@ -254,8 +253,6 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                 />
                 <Row gap="sm">
                     <Button label={filterLabel} iconEnd={ChevronDown} testID="file-type-filter" accessibilityLabel={`${t('fileBrowser.typeFilter')}: ${filterLabel}`} onPress={() => setFilterOpen(true)} />
-                    <Stack flex={1} />
-                    <Button label={search.isFetching ? t('fileBrowser.searching') : t('fileBrowser.search')} variant="secondary" disabled={!text.trim() || search.isFetching} onPress={runSearch} />
                 </Row>
                 {searching ? (
                     <Stack gap="xs">
@@ -292,8 +289,8 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                                 </HScroll>
                             </Stack>
                             {parentPath ? <IconButton icon={ArrowUp} variant="outlined" label={t('fileBrowser.goUp')} onPress={() => open(parentPath)} /> : null}
+                            <Chip label={t('fileBrowser.showHidden')} role="checkbox" selected={showHidden} onPress={() => setShowHidden(!showHidden)} testID="file-show-hidden" />
                         </Row>
-                        <Switch label={t('fileBrowser.showHidden')} value={showHidden} onValueChange={setShowHidden} />
                     </Stack>
                 )}
                 {denied ? <Notice tone="danger" message={t(pcIsMac ? 'fileBrowser.deniedMac' : 'fileBrowser.denied', { name: denied })} /> : null}
