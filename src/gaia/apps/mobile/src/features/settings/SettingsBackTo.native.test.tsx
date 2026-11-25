@@ -60,6 +60,20 @@ beforeEach(() => jest.clearAllMocks());
         expect(screen.queryByText(/^Back to /)).toBeNull();
     });
 
+    it.each([
+        ['messaging', 'automations', 'Back to Automations'],
+        ['model', 'advanced', 'Back to Advanced'],
+    ])('SET-NAV-04: a jump into %s from %s with no target still shows "%s", and pressing it replaces to that section', async (section, from, label) => {
+        await open({ section, from });
+        await fireEvent.press(await screen.findByText(label));
+        expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/settings/[section]', params: { section: from } });
+    });
+
+    it('SET-NAV-04: a deep link with only a target shows no "Back to"', async () => {
+        await open({ section: 'privacy', target: 'report' });
+        expect(screen.queryByText(/^Back to /)).toBeNull();
+    });
+
     it('SET-NAV-04: openSettings pushes the section, target and from the screen reads', () => {
         const nav = { push: jest.fn() };
         openSettings('privacy', 'report', 'about', nav);
