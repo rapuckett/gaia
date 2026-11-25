@@ -10,7 +10,8 @@ import { GaiaApiError } from '@/api/errors';
 import { useAutomationAction, useAutomations, useDeleteAutomation, useQueryFailure } from '@/data';
 import { composeDateLocale } from '@/features/schedules/scheduleText';
 import { technicalDetail, useT, type Translate } from '@/i18n/useT';
-import { Badge, Button, Card, Notice, Row, Spinner, Stack, Text } from '@/ui';
+import { Badge, Button, Card, ErrorState, Icon, Notice, Row, Spinner, Stack, Text } from '@/ui';
+import { Bell } from '@/ui/icons';
 
 import { ConfirmSheet } from '../../setup/sheets/ConfirmSheet';
 import { openSettings } from '../openSettings';
@@ -90,8 +91,9 @@ function AutomationCard({ item, busy, onToggle, onRemove }: { item: Automation; 
                         {t.plural('settings.automations.failing', item.failures)}
                     </Text>
                 ) : null}
-                <Row gap="sm" wrap>
+                <Row gap="xs" wrap>
                     <Button
+                        size="sm"
                         variant="secondary"
                         label={t(item.paused ? 'settings.automations.resume' : 'settings.automations.pause')}
                         busy={busy}
@@ -99,7 +101,7 @@ function AutomationCard({ item, busy, onToggle, onRemove }: { item: Automation; 
                         onPress={onToggle}
                         testID={`automation-toggle-${item.id}`}
                     />
-                    <Button variant="danger" label={t('settings.automations.remove')} disabled={busy} onPress={onRemove} testID={`automation-remove-${item.id}`} />
+                    <Button size="sm" variant="danger" label={t('settings.automations.remove')} disabled={busy} onPress={onRemove} testID={`automation-remove-${item.id}`} />
                 </Row>
             </Stack>
         </Card>
@@ -152,13 +154,13 @@ export default function Automations() {
                 ) : null}
                 {failure.failed && isPcRefusal(failure.error) ? <PcOnlyNotice testID="automations-pc-only" /> : null}
                 {failure.failed && !isPcRefusal(failure.error) ? (
-                    <Notice
-                        tone="danger"
-                        message={t('mobileApp.settings.automations.loadFailed')}
-                        detail={failureDetail(failure.error)}
-                        action={{ label: t('settings.automations.retry'), onPress: () => void query.refetch() }}
-                        testID="automations-load-failed"
-                    />
+                    <Stack testID="automations-load-failed">
+                        <ErrorState
+                            title={t('mobileApp.settings.automations.loadFailed')}
+                            detail={failureDetail(failure.error)}
+                            action={{ label: t('settings.automations.retry'), onPress: () => void query.refetch() }}
+                        />
+                    </Stack>
                 ) : null}
                 {list && list.delivers === null && items.length > 0 ? (
                     <Text role="label" tone="muted" testID="automations-delivery-unknown">
@@ -183,9 +185,15 @@ export default function Automations() {
                     />
                 ) : null}
                 {list && items.length === 0 ? (
-                    <Text role="ui" tone="muted" testID="automations-empty">
-                        {t('settings.automations.empty')}
-                    </Text>
+                    <Stack align="center" gap="md" padding="xl" testID="automations-empty">
+                        <Icon icon={Bell} size="lg" tone="muted" />
+                        <Text role="title" weight="semibold" align="center">
+                            {t('mobileApp.settings.automations.emptyTitle')}
+                        </Text>
+                        <Text tone="secondary" align="center">
+                            {t('mobileApp.settings.automations.emptyHint')}
+                        </Text>
+                    </Stack>
                 ) : null}
                 {items.map((item) => (
                     <AutomationCard
