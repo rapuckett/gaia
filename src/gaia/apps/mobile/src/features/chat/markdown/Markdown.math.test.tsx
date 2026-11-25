@@ -67,15 +67,21 @@ describe('formulas in an answer', () => {
         expect(screen.queryByTestId('math-inline')).toBeNull();
     });
 
-    it('fades the trailing edge of a wide formula while more of it is hidden', async () => {
+    it('fades a wide formula at the edge where more is hidden, and at the start once scrolled', async () => {
         await show('Term by term:\n\n$$e^x = 1 + x + \\frac{x^2}{2!} + \\frac{x^3}{3!} + \\frac{x^4}{4!} + \\frac{x^5}{5!} + \\frac{x^6}{6!}$$');
         const scroller = await screen.findByTestId('math-display-scroll');
+        expect(scroller.props.horizontal).toBe(true);
         expect(screen.queryByTestId('math-display-scroll-fade')).toBeNull();
         await act(async () => fireEvent(scroller, 'layout', { nativeEvent: { layout: { width: 358, height: 40 } } }));
         await act(async () => fireEvent(scroller, 'contentSizeChange', 700, 40));
         expect(screen.getByTestId('math-display-scroll-fade')).toBeTruthy();
+        expect(screen.queryByTestId('math-display-scroll-fade-start')).toBeNull();
+        await act(async () => fireEvent.scroll(scroller, { nativeEvent: { contentOffset: { x: 100, y: 0 } } }));
+        expect(screen.getByTestId('math-display-scroll-fade')).toBeTruthy();
+        expect(screen.getByTestId('math-display-scroll-fade-start')).toBeTruthy();
         await act(async () => fireEvent.scroll(scroller, { nativeEvent: { contentOffset: { x: 342, y: 0 } } }));
         expect(screen.queryByTestId('math-display-scroll-fade')).toBeNull();
+        expect(screen.getByTestId('math-display-scroll-fade-start')).toBeTruthy();
     });
 
     it('gives a paragraph with a tall inline formula enough line height, and leaves other paragraphs alone', async () => {

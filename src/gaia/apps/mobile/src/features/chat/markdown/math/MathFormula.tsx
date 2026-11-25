@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 import type { PhrasingContent } from 'mdast';
-import { useId, useState, type ReactNode } from 'react';
-import { Platform, ScrollView, View, type ViewStyle } from 'react-native';
+import type { ReactNode } from 'react';
+import { Platform, View, type ViewStyle } from 'react-native';
 
 import { dirProp } from '@/platform/dirProp';
-import { useTheme } from '@/ui';
+import { ScrollFade } from '@/ui';
 
 import { CodeBlock } from '../CodeBlock';
 import type { DrawnFormula } from './texToSvg';
@@ -25,7 +25,6 @@ export interface MathContext {
 
 // The desktop draws formulas at 1.05em of the prose.
 export const MATH_SCALE = 1.05;
-const FADE_WIDTH = 24;
 
 function rendererOf(math: MathContext): MathModule {
     if (!math.renderer) throw new Error('A formula was rendered without the formula renderer: Markdown loads it when the tree has math.');
@@ -53,41 +52,18 @@ export function FormulaDrawing({ formula, tex, math, inline }: { formula: DrawnF
     );
 }
 
-/** Content wider than the answer scrolls sideways on its own, with a fade at the trailing edge while more is hidden. */
-function FormulaScroller({ children, math, center, testID }: { children: ReactNode; math: MathContext; center: boolean; testID: string }) {
-    const { colors } = useTheme();
-    const { Svg, Defs, LinearGradient, Stop, Rect } = rendererOf(math);
-    const gradient = `fade${useId().replace(/[^A-Za-z0-9]/g, '')}`;
-    const [box, setBox] = useState({ view: 0, content: 0, offset: 0 });
-    const more = box.content - box.view - box.offset > 1;
+/** Content wider than the answer scrolls sideways on its own, with the shared fades at the edges while more is hidden. */
+function FormulaScroller({ children, center, testID }: { children: ReactNode; center: boolean; testID: string }) {
     return (
         <View style={{ direction: 'ltr' }} {...dirProp('ltr')}>
-            <ScrollView
-                horizontal
+            <ScrollFade
                 showsHorizontalScrollIndicator={false}
                 nestedScrollEnabled
                 contentContainerStyle={center ? { flexGrow: 1, justifyContent: 'center' } : undefined}
-                onLayout={(e) => setBox((b) => ({ ...b, view: e.nativeEvent.layout.width }))}
-                onContentSizeChange={(w) => setBox((b) => ({ ...b, content: w }))}
-                onScroll={(e) => setBox((b) => ({ ...b, offset: e.nativeEvent.contentOffset.x }))}
-                scrollEventThrottle={32}
                 testID={testID}
             >
                 {children}
-            </ScrollView>
-            {more ? (
-                <View pointerEvents="none" testID={`${testID}-fade`} style={{ position: 'absolute', top: 0, bottom: 0, end: 0, width: FADE_WIDTH }}>
-                    <Svg width="100%" height="100%">
-                        <Defs>
-                            <LinearGradient id={gradient} x1="0" y1="0" x2="1" y2="0">
-                                <Stop offset="0" stopColor={colors.bgPrimary} stopOpacity={0} />
-                                <Stop offset="1" stopColor={colors.bgPrimary} stopOpacity={1} />
-                            </LinearGradient>
-                        </Defs>
-                        <Rect width="100%" height="100%" fill={`url(#${gradient})`} />
-                    </Svg>
-                </View>
-            ) : null}
+            </ScrollFade>
         </View>
     );
 }
@@ -97,7 +73,7 @@ export function BlockFormula({ tex, math, display, streaming = false }: { tex: s
     const formula = drawFormula(math, tex, display);
     if (!formula) return <CodeBlock lang="tex" code={tex} streaming={streaming} />;
     return (
-        <FormulaScroller math={math} center={display} testID={display ? 'math-display-scroll' : 'math-wide-scroll'}>
+        <FormulaScroller center={display} testID={display ? 'math-display-scroll' : 'math-wide-scroll'}>
             <FormulaDrawing formula={formula} tex={tex} math={math} inline={false} />
         </FormulaScroller>
     );
