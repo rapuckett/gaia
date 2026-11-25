@@ -7,7 +7,7 @@ import type { Schedule } from '@/api/client.types';
 import { useDeleteSchedule, useRunSchedule, useQueryFailure, useSchedules, useUpdateScheduleStatus } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeHttpFailure, useT } from '@/i18n/useT';
-import { ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
+import { Button, ErrorState, Icon, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { Clock, Plus, X } from '@/ui/icons';
 
 import { ChipButton } from './ChipButton';
@@ -94,7 +94,9 @@ export function SchedulesScreen({ onOpenChat, onOpenAutomations, dev }: Schedule
             {editing ? <NewScheduleSheet key={editing.id} open editing={editing} onClose={() => setEditingName(null)} /> : null}
             <Stack paddingX="lg" paddingY="sm">
                 <Row gap="sm" wrap>
-                    <ChipButton label={t.bare('schedules.new')} accessibilityLabel={t('schedules.new')} icon={Plus} variant="accent" onPress={() => setCreating(true)} />
+                    {schedules.length > 0 ? (
+                        <ChipButton label={t.bare('schedules.new')} accessibilityLabel={t('schedules.new')} icon={Plus} variant="accent" onPress={() => setCreating(true)} testID="schedules-new" />
+                    ) : null}
                     <ChipButton
                         label={t.bare('mobileApp.schedules.automationsLink')}
                         accessibilityLabel={t('mobileApp.schedules.automationsLink')}
@@ -109,16 +111,18 @@ export function SchedulesScreen({ onOpenChat, onOpenAutomations, dev }: Schedule
                 <ErrorState title={t('schedules.loadFailed')} message={describeHttpFailure(failure.error, t).text} detail={describeHttpFailure(failure.error, t).detail} onRetry={() => void query.refetch()} />
             ) : null}
             {query.data && schedules.length === 0 ? (
-                <>
-                    <Stack paddingX="lg" paddingY="sm">
-                        <ListHeading title={t('schedules.list')} />
-                    </Stack>
-                    <Stack paddingX="lg" paddingY="xl" align="center">
-                        <Text role="ui" tone="muted" align="center">
-                            {t('schedules.empty')}
-                        </Text>
-                    </Stack>
-                </>
+                <Stack flex={1} align="center" justify="center" gap="md" padding="xl" testID="schedules-empty">
+                    <Icon icon={Clock} size="lg" tone="muted" />
+                    <Text role="title" weight="semibold" align="center">
+                        {t('mobileApp.schedules.emptyTitle')}
+                    </Text>
+                    <Text tone="secondary" align="center">
+                        {t('mobileApp.schedules.emptyHint')}
+                    </Text>
+                    <Row justify="center">
+                        <Button label={t('schedules.new')} icon={Plus} variant="secondary" testID="schedules-empty-new" onPress={() => setCreating(true)} />
+                    </Row>
+                </Stack>
             ) : null}
             {schedules.length > 0 ? (
                 <List<Schedule>

@@ -59,7 +59,8 @@ describeNative('the schedule delete dialog', () => {
     it('says what deleting does, and deletes only on confirm', async () => {
         const onDelete = jest.fn();
         await mount({ ...failed, session_id: 'chat-1' } as Schedule, onDelete);
-        await fireEvent.press(screen.getByText('Delete'));
+        await fireEvent.press(screen.getByTestId('schedule-more-inbox-triage'));
+        await fireEvent.press(await screen.findByTestId('schedule-delete-inbox-triage'));
         expect(await screen.findByText('Delete the schedule "inbox-triage"?')).toBeTruthy();
         expect(await screen.findByText("It won't run again, and the run history shown here is deleted. This can't be undone.")).toBeTruthy();
         expect(await screen.findByText('Its chat stays, with the answers from past runs.')).toBeTruthy();
@@ -71,7 +72,8 @@ describeNative('the schedule delete dialog', () => {
 
     it('adds the run-stops line only while a run is in progress', async () => {
         await mount({ ...failed, running: true } as Schedule);
-        await fireEvent.press(screen.getByText('Delete'));
+        await fireEvent.press(screen.getByTestId('schedule-more-inbox-triage'));
+        await fireEvent.press(await screen.findByTestId('schedule-delete-inbox-triage'));
         expect(await screen.findByText('The run in progress stops now.')).toBeTruthy();
         expect(screen.queryByText('Its chat stays, with the answers from past runs.')).toBeNull();
     });
