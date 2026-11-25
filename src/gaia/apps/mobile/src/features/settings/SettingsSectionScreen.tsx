@@ -58,7 +58,7 @@ export function SettingsSectionScreen() {
 
     const section = params.section;
     const Pane = CRASH_ENABLED && params.crash === '1' ? Crash : SETTINGS_SECTIONS[section].pane;
-    const from = isSectionId(params.from) && params.target ? params.from : null;
+    const from = isSectionId(params.from) ? params.from : null;
 
     return (
         <Screen

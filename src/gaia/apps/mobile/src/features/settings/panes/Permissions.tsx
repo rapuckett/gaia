@@ -1,8 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { createContext, useContext, useState } from 'react';
-import { View } from 'react-native';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { AccessibilityInfo, Platform, View } from 'react-native';
 
 import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
@@ -33,11 +33,21 @@ export default function Permissions() {
     const [howOpen, setHowOpen] = useState(false);
     const [chatsOpen, setChatsOpen] = useState(true);
     const [menuFor, setMenuFor] = useState<SessionPermissions | null>(null);
+    const [revokedAll, setRevokedAll] = useState(false);
+
+    useEffect(() => {
+        if (!revokedAll) return undefined;
+        // iOS ignores live regions, so the confirmation is spoken explicitly there.
+        if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(t('settings.permissions.revokedAll'));
+        const timer = setTimeout(() => setRevokedAll(false), 4000);
+        return () => clearTimeout(timer);
+    }, [revokedAll, t]);
 
     const fail = (err: unknown) => setError(err instanceof GaiaApiError && err.status === 403 ? { text: t('mobileApp.settings.pcOnly'), info: true } : describeHttpFailure(err, t));
-    const run = (pending: Promise<unknown>) => {
+    const run = (pending: Promise<unknown>, onDone?: () => void) => {
         setError(null);
-        pending.catch(fail);
+        setRevokedAll(false);
+        pending.then(() => onDone?.(), fail);
     };
 
     const titleOf = (id: string) => sessions.data?.sessions.find((s) => s.id === id)?.title ?? id;
@@ -76,6 +86,7 @@ export default function Permissions() {
                 </Card>
 
                 {error ? <Notice tone={error.info ? 'info' : 'danger'} message={error.text} detail={error.detail} testID="permissions-error" /> : null}
+                {revokedAll ? <Notice tone="success" message={t('settings.permissions.revokedAll')} testID="permissions-revoked-all" /> : null}
 
                 {all.isError && isPcRefusal(all.error) ? (
                     <PcOnlyNotice testID="permissions-pc-only" />
@@ -170,7 +181,7 @@ export default function Permissions() {
                         ? [{ label: t('settings.permissions.turnOff'), testID: 'perm-chat-turn-off-full', onPress: () => run(setChatMode.mutateAsync({ sessionId: menuFor.session_id, mode: 'ask' })) }]
                         : []),
                     ...(menuFor && menuFor.grants.length > 1
-                        ? [{ label: t('settings.permissions.revokeAll'), testID: 'perm-chat-revoke-all', destructive: true, onPress: () => run(revoke.mutateAsync({ sessionId: menuFor.session_id })) }]
+                        ? [{ label: t('settings.permissions.revokeAll'), testID: 'perm-chat-revoke-all', destructive: true, onPress: () => run(revoke.mutateAsync({ sessionId: menuFor.session_id }), () => setRevokedAll(true)) }]
                         : []),
                 ]}
             />

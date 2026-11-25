@@ -3027,6 +3027,7 @@ export const enMessages = {
     'settings.permissions.revoke': 'Revoke',
     'settings.permissions.revokeAria': 'Revoke {name}',
     'settings.permissions.revokeAll': 'Revoke all in this chat',
+    'settings.permissions.revokedAll': 'Removed this chat\'s extra permissions.',
     'settings.alerts.lede': "When a chat you aren't looking at needs you or finishes. A banner also counts on the badge.",
     'settings.alerts.when': 'Alerts',
     'settings.alerts.approval': 'Needs your approval',

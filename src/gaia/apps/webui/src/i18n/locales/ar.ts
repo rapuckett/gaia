@@ -3027,6 +3027,7 @@ const messages: Messages = {
     'settings.permissions.revoke': 'إلغاء',
     'settings.permissions.revokeAria': 'إلغاء {name}',
     'settings.permissions.revokeAll': 'إلغاء الكل في هذه المحادثة',
+    'settings.permissions.revokedAll': 'أُزيلت الأذونات الإضافية لهذه المحادثة.',
     'settings.alerts.lede': 'عندما تحتاج إليك محادثة لا تنظر إليها أو تنتهي. يُحتسب الإشعار المنبثق في الشارة أيضًا.',
     'settings.alerts.when': 'التنبيهات',
     'settings.alerts.approval': 'تحتاج إلى موافقتك',
