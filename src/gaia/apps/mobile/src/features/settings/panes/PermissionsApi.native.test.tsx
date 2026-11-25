@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { createHttpClient } from '@/api/http';
@@ -95,10 +95,12 @@ describeNative('Settings > Permissions against the real client', () => {
         expect(screen.getByText(grant('cat'))).toBeTruthy();
         expect(screen.getByText(grant('git status'))).toBeTruthy();
         expect(deletes(calls)).toHaveLength(1);
+        expect(screen.queryByTestId('permissions-revoked-all')).toBeNull();
         queryClient.clear();
     });
 
     it("SET-PERM-08: Revoke all sends one DELETE for that chat with no key, from the chat's menu; opening the menu and closing it sends nothing", async () => {
+        const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
         const { calls, queryClient, wrapper } = mount();
         await render(<Permissions />, { wrapper });
         await screen.findByText('Alpha chat');
@@ -116,6 +118,9 @@ describeNative('Settings > Permissions against the real client', () => {
         await waitFor(() => expect(screen.queryByText('Alpha chat')).toBeNull());
         expect(screen.getByText('Beta chat')).toBeTruthy();
         expect(screen.getByText(grant('git status'))).toBeTruthy();
+        expect(await screen.findByTestId('permissions-revoked-all')).toHaveTextContent("Removed this chat's extra permissions.");
+        if (Platform.OS === 'ios') expect(announce).toHaveBeenCalledWith("Removed this chat's extra permissions.");
+        announce.mockRestore();
         queryClient.clear();
     });
 });
