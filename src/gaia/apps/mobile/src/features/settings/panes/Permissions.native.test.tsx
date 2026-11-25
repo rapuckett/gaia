@@ -120,4 +120,38 @@ describeNative('Permissions pane', () => {
         expect(StyleSheet.flatten(slot.props.style).width).toBe(PRESSABLE_MIN_SIZE);
         queryClient.clear();
     });
+
+    it('a grant reads its tool kind from the catalog, and an unknown tool shows no kind line', async () => {
+        const client = createFakeClient({
+            sessions: [{ id: 'a', title: 'Chat a', created_at: '2026-11-13T00:00:00Z', updated_at: '2026-11-13T00:00:00Z' }] as never,
+            permissions: { a: 'ask' },
+            permissionGrants: {
+                a: [
+                    { key: 'run_shell_command:ls', label: 'ls' },
+                    { key: 'run_python', label: 'Python snippets' },
+                    { key: 'mystery_tool:x', label: 'x' },
+                    { key: 'file_change:/p/*', label: 'changes to files in /p' },
+                ],
+            },
+            defaultPermissionMode: 'ask',
+        });
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const wrap = ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={queryClient}>
+                <GaiaClientProvider client={client}>
+                    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                        <ThemeProvider>
+                            <SheetHost>{children}</SheetHost>
+                        </ThemeProvider>
+                    </SafeAreaProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>
+        );
+        await render(<Permissions />, { wrapper: wrap });
+        expect(await screen.findByText('Run commands')).toBeTruthy();
+        expect(screen.getByText('Run Python code')).toBeTruthy();
+        expect(screen.queryByText(/mystery_tool|file_change|\.active|Running command/)).toBeNull();
+        expect(screen.getAllByText(/^Run /)).toHaveLength(2);
+        queryClient.clear();
+    });
 });

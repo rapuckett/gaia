@@ -44,6 +44,12 @@ describeNative('read aloud polish', () => {
         expect(screen.queryByTestId('read-aloud-details-toggle')).toBeNull();
     });
 
+    it.each(['unavailable', 'unsupported'] as const)('labels the dismiss X on the %s notice', async (kind) => {
+        useReadAloudStore.setState({ error: { messageId: 'm', kind, cause: new GaiaApiError(409, 'x') } });
+        await render(<ReadAloudErrorNotice messageId="m" />, { wrapper: wrap });
+        expect(screen.getByLabelText(translator('en')('mobileApp.readAloud.dismissError'))).toBeTruthy();
+    });
+
     it('keeps the row still while generating: the ring is an overlay, not a sibling in the row', async () => {
         const row = (c: ReadAloudControl) => (
             <Row testID="row">

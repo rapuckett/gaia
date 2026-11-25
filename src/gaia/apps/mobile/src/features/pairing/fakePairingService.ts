@@ -2,20 +2,24 @@
 // SPDX-License-Identifier: MIT
 
 import type { PairingInvite } from './invite';
-import type { PairedPc, PairingService, PairingStatus, RedeemResult } from './service';
+import type { PairedPc, PairingService, PairingStatus, PcRecheck, RedeemResult } from './service';
 
 export interface FakePairingOptions {
     /** What redeeming ends in. `paired` goes through `pending` first, as the PC makes the person choose Allow. */
     outcome?: 'paired' | 'refused' | 'unreachable';
     /** Status polls that answer `pending` before the outcome. */
     pendingPolls?: number;
+    /** What asking a paired PC again answers. */
+    recheck?: (pcId: string, signal?: AbortSignal) => Promise<PcRecheck>;
+    /** PCs paired before the fake starts. */
+    paired?: PairedPc[];
 }
 
 /** A PairingService with no network, for development and tests. */
-export function createFakePairingService({ outcome = 'paired', pendingPolls = 2 }: FakePairingOptions = {}): PairingService {
+export function createFakePairingService({ outcome = 'paired', pendingPolls = 2, recheck, paired: initial = [] }: FakePairingOptions = {}): PairingService {
     let invite: PairingInvite | null = null;
     let polls = 0;
-    let paired: PairedPc[] = [];
+    let paired: PairedPc[] = [...initial];
 
     const settled = (): RedeemResult => {
         if (outcome === 'refused') return { state: 'refused' };
@@ -52,6 +56,9 @@ export function createFakePairingService({ outcome = 'paired', pendingPolls = 2 
         },
         async forget(pcId) {
             paired = paired.filter((p) => p.id !== pcId);
+        },
+        async recheck(pcId, signal) {
+            return recheck ? recheck(pcId, signal) : { state: 'known' };
         },
     };
 }

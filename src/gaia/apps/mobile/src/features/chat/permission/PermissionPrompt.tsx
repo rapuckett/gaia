@@ -221,7 +221,7 @@ function MailFacts({ header }: { header: MailHeader }) {
     );
 }
 
-type CallWarning = { key: string; testID?: string; text: string };
+type CallWarning = { key: string; testID?: string; text: string; pc?: boolean };
 
 /** What a call is, worked out once: the body shows it and the card pins its warnings above the buttons. */
 function describeCall(prompt: GaiaNotification, t: ReturnType<typeof useT>) {
@@ -271,7 +271,7 @@ function describeCall(prompt: GaiaNotification, t: ReturnType<typeof useT>) {
     // Notes the person must read before approving, in the order the body showed them.
     const warnings: CallWarning[] = [];
     if (riskNote) {
-        warnings.push({ key: 'risk', text: outsidePath ? t('prompt.outsideFolders', { path: markName(outsidePath) }) : riskNote });
+        warnings.push(outsidePath ? { key: 'risk', text: t('prompt.outsideFolders', { path: markName(outsidePath) }) } : { key: 'risk', testID: 'perm-risk-note', text: riskNote, pc: true });
     }
     if (script?.hiddenLines) {
         warnings.push({
@@ -302,8 +302,15 @@ function CallWarnings({ warnings }: { warnings: CallWarning[] }) {
     if (!warnings.length) return null;
     return (
         <Stack gap="xs" testID="perm-warnings">
-            {warnings.map(({ key, testID, text }) => (
-                <Text key={key} role="caption" tone="warning" testID={testID} accessibilityRole={key === 'risk' ? 'text' : undefined}>
+            {warnings.map(({ key, testID, text, pc }) => (
+                <Text
+                    key={key}
+                    role="caption"
+                    tone="warning"
+                    testID={testID}
+                    accessibilityRole={key === 'risk' ? 'text' : undefined}
+                    {...(pc ? { dir: 'ltr' as const, align: 'ltr' as const } : null)}
+                >
                     {text}
                 </Text>
             ))}

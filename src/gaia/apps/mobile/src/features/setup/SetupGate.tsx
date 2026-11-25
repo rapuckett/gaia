@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { GaiaApiError, GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
 import { useGaiaClient, useSetupGate } from '@/data';
@@ -41,9 +41,9 @@ export function SetupGate({
 }) {
     const client = useGaiaClient();
     const t = useT();
-    const { gate, recheck, finish, open } = useSetupGate();
-    const pairAgain = usePairAgain();
     const connection = useConnectionStore((s) => s.connection);
+    const { gate, recheck, finish, open } = useSetupGate(connection?.pcId ?? null);
+    const pairAgain = usePairAgain(useCallback(() => void recheck(), [recheck]));
     const ambientBanner = useScreenBanner();
     const serverBanner = isServerDownBanner(useBannerPick().picked);
 
@@ -66,7 +66,17 @@ export function SetupGate({
 
     // A PC whose certificate changed is a hard stop: the only way on is to pair again.
     if (gate.state === 'unknown' && gate.error instanceof GaiaPinMismatchError) {
-        return <PinMismatchScreen onPairAgain={() => pairAgain.mutate()} busy={pairAgain.isPending} />;
+        return (
+            <PinMismatchScreen
+                onPairAgain={pairAgain.run}
+                checking={pairAgain.state === 'checking'}
+                unreachablePc={pairAgain.state === 'unreachable' ? pairAgain.pcName : null}
+                otherDevicePc={pairAgain.otherDevice?.name ?? null}
+                onForget={pairAgain.forget}
+                forgetting={pairAgain.forgetting}
+                forgetError={pairAgain.forgetError}
+            />
+        );
     }
     const unreachable = gate.state === 'unknown' && !gate.upgradeFailed && gate.error instanceof GaiaNetworkError;
 

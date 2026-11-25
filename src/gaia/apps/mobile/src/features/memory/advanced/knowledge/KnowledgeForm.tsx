@@ -12,7 +12,7 @@ import { Button, Chip, Notice, Row, Stack, Switch, Text, TextField } from '@/ui'
 
 import { parseWhen, whenText } from '../../about/whenInput';
 import type { MemoryPaneProps } from '../../tabs';
-import { categoryLabel, failureText, savedNotice, type KnowledgeFeedback } from './knowledgeUi';
+import { categoryLabel, failureFeedback, savedNotice, type KnowledgeFeedback } from './knowledgeUi';
 
 interface FormValues {
     content: string;
@@ -79,14 +79,14 @@ export function KnowledgeForm({ item, add, edit, notify, onSaved, onCancel }: Kn
         if (!body || saving) return;
         setFeedback(null);
         const failed = (key: 'mem.toast.createFailed' | 'mem.toast.updateFailed') => (error: Error) =>
-            setFeedback({ tone: 'danger', text: failureText(code, key, error) });
+            setFeedback(failureFeedback(code, key, error));
         if (item) edit.mutate({ id: item.id, body }, { onSuccess: done, onError: failed('mem.toast.updateFailed') });
         else add.mutate(body, { onSuccess: done, onError: failed('mem.toast.createFailed') });
     };
 
     return (
         <Stack gap="lg" testID="memory-knowledge-form">
-            {feedback ? <Notice tone={feedback.tone} message={feedback.text} testID="memory-knowledge-form-error" /> : null}
+            {feedback ? <Notice tone={feedback.tone} message={feedback.text} detail={feedback.detail} testID="memory-knowledge-form-error" /> : null}
             <TextField
                 value={values.content}
                 onChangeText={(text) => set('content', text)}

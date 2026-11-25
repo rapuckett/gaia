@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import type { LucideIcon } from 'lucide-react-native';
+import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
+import { useDirection } from '@/i18n/useT';
 import { Icon } from '../controls/Icon';
 import { Pressable } from '../controls/Pressable';
 import { Row } from '../layout/layout';
+import { ScrollFade, type ScrollFadeHandle } from '../layout/ScrollFade';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
 
@@ -27,21 +30,32 @@ export interface PillTabsProps {
     testID?: string;
 }
 
-/** The desktop's `.provider-tabs`: wrapping pills, the active one accent-tinted. */
+/** The desktop's `.provider-tabs` as one scrolling row: the active pill accent-tinted and kept in view, a fade while more is hidden. */
 export function PillTabs({ tabs, value, onChange, accessibilityLabel, testID }: PillTabsProps) {
     const { colors, radius, space } = useTheme();
+    const dir = useDirection();
+    const scroller = useRef<ScrollFadeHandle>(null);
+    const xs = useRef<Record<string, number>>({});
+    const reveal = () => {
+        const x = xs.current[value];
+        if (x !== undefined && dir === 'ltr') scroller.current?.scrollTo({ x: Math.max(0, x - space.sm), animated: true });
+    };
+    useEffect(reveal, [value]); // eslint-disable-line react-hooks/exhaustive-deps
     return (
-        <View
+        <ScrollFade
+            ref={scroller}
+            showsHorizontalScrollIndicator={false}
             testID={testID}
             accessibilityRole="radiogroup"
             accessibilityLabel={accessibilityLabel}
-            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}
+            contentContainerStyle={{ gap: space.sm }}
+            onContentSizeChange={reveal}
         >
             {tabs.map((tab) => {
                 const on = tab.value === value;
                 return (
+                    <View key={tab.value} onLayout={(e) => { xs.current[tab.value] = e.nativeEvent.layout.x; if (on) reveal(); }}>
                     <Pressable
-                        key={tab.value}
                         onPress={() => onChange(tab.value)}
                         disabled={tab.disabled && !on}
                         accessibilityRole="radio"
@@ -78,8 +92,9 @@ export function PillTabs({ tabs, value, onChange, accessibilityLabel, testID }: 
                             </Row>
                         </View>
                     </Pressable>
+                    </View>
                 );
             })}
-        </View>
+        </ScrollFade>
     );
 }

@@ -76,6 +76,9 @@ describeNative('Connector accounts', () => {
         fireEvent.press(await screen.findByLabelText('Google'));
         expect(await screen.findByTestId('connector-accounts-google')).toBeTruthy();
         expect(screen.getByText('Default')).toBeTruthy();
+        const list = screen.getByTestId('connector-accounts-google');
+        expect(list.props.accessible).not.toBe(true);
+        expect(screen.getByLabelText(/Make .*blake@example.com.* the default/).props.accessible).not.toBe(false);
         expect(screen.getByText("GAIA sends from the default account when you don't name one.")).toBeTruthy();
         fireEvent.press(screen.getByLabelText(/Make .*blake@example.com.* the default/));
         await waitFor(() => expect(client.accountCalls).toEqual([{ kind: 'default', connectorId: 'google', accountId: B.account_id }]));

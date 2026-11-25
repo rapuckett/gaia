@@ -1,9 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { createContext, useContext, useState } from 'react';
-import { View } from 'react-native';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { AccessibilityInfo, Platform, View } from 'react-native';
 
+import { isMessageKey } from '@webui/i18n/registry';
 import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { useDeviceRefused } from '@/api/routeAccess';
@@ -11,7 +12,7 @@ import type { SessionPermissions } from '@/api/client.types';
 import { useAllPermissions, usePermissionActions, useSessions } from '@/data';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import {
-    ActionSheet, Badge, Button, Card, Disclosure, Divider, ErrorState, IconButton, ListSkeleton, Ltr, Notice, PRESSABLE_MIN_SIZE, Row, Sheet, Stack, Switch, Text,
+    ActionSheet, Badge, Button, Card, Disclosure, Divider, ErrorState, IconButton, ListSkeleton, Ltr, Notice, PRESSABLE_MIN_SIZE, Pressable, Row, Sheet, SmallButton, Stack, Switch, Text,
 } from '@/ui';
 import { Ellipsis } from '@/ui/icons';
 
@@ -20,6 +21,12 @@ import { SettingsAnchor } from '../targets';
 
 /** Dev scenes only: opens the full-access confirm sheet on arrival. */
 export const SeedConfirmFullAccess = createContext(false);
+
+/** A grant's key starts with its tool (`run_shell_command:ls`, `run_python`); no key for that tool means no kind line. */
+function grantKindKey(key: string) {
+    const kind = `mobileApp.permissions.kind.${key.split(':', 1)[0]}`;
+    return isMessageKey(kind) ? kind : null;
+}
 
 /** Settings > Permissions: the default mode for new chats, and every chat holding full access or "always allow" grants. */
 export default function Permissions() {
@@ -33,11 +40,21 @@ export default function Permissions() {
     const [howOpen, setHowOpen] = useState(false);
     const [chatsOpen, setChatsOpen] = useState(true);
     const [menuFor, setMenuFor] = useState<SessionPermissions | null>(null);
+    const [revokedAll, setRevokedAll] = useState(false);
+
+    useEffect(() => {
+        if (!revokedAll) return undefined;
+        // iOS ignores live regions, so the confirmation is spoken explicitly there.
+        if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(t('settings.permissions.revokedAll'));
+        const timer = setTimeout(() => setRevokedAll(false), 4000);
+        return () => clearTimeout(timer);
+    }, [revokedAll, t]);
 
     const fail = (err: unknown) => setError(err instanceof GaiaApiError && err.status === 403 ? { text: t('mobileApp.settings.pcOnly'), info: true } : describeHttpFailure(err, t));
-    const run = (pending: Promise<unknown>) => {
+    const run = (pending: Promise<unknown>, onDone?: () => void) => {
         setError(null);
-        pending.catch(fail);
+        setRevokedAll(false);
+        pending.then(() => onDone?.(), fail);
     };
 
     const titleOf = (id: string) => sessions.data?.sessions.find((s) => s.id === id)?.title ?? id;
@@ -76,6 +93,7 @@ export default function Permissions() {
                 </Card>
 
                 {error ? <Notice tone={error.info ? 'info' : 'danger'} message={error.text} detail={error.detail} testID="permissions-error" /> : null}
+                {revokedAll ? <Notice tone="success" message={t('settings.permissions.revokedAll')} testID="permissions-revoked-all" /> : null}
 
                 {all.isError && isPcRefusal(all.error) ? (
                     <PcOnlyNotice testID="permissions-pc-only" />
@@ -99,7 +117,17 @@ export default function Permissions() {
                                         <Row gap="sm">
                                             <Stack flex={1} gap="xs">
                                                 <Text role="label" weight="medium" dir="auto" numberOfLines={2}>{titleOf(r.session_id)}</Text>
-                                                <Row><Badge label={t.bare(r.mode === 'full_access' ? 'perm.full' : 'perm.ask')} accessibilityLabel={t(r.mode === 'full_access' ? 'perm.full' : 'perm.ask')} tone={r.mode === 'full_access' ? 'warning' : 'neutral'} /></Row>
+                                                <Row gap="sm" wrap>
+                                                    <Badge label={t.bare(r.mode === 'full_access' ? 'perm.full' : 'perm.ask')} accessibilityLabel={t(r.mode === 'full_access' ? 'perm.full' : 'perm.ask')} tone={r.mode === 'full_access' ? 'warning' : 'neutral'} />
+                                                    {r.mode === 'full_access' ? (
+                                                        <SmallButton
+                                                            label={t.bare('settings.permissions.turnOff')}
+                                                            accessibilityLabel={t('settings.permissions.turnOff')}
+                                                            testID={`perm-chat-turn-off-${r.session_id}`}
+                                                            onPress={() => run(setChatMode.mutateAsync({ sessionId: r.session_id, mode: 'ask' }))}
+                                                        />
+                                                    ) : null}
+                                                </Row>
                                             </Stack>
                                             {r.mode === 'full_access' || r.grants.length > 1 ? (
                                                 <IconButton
@@ -117,16 +145,20 @@ export default function Permissions() {
                                             <Stack key={g.key} gap="xs">
                                                 <Divider />
                                                 <Row gap="sm">
-                                                    <Stack flex={1}><Text code numberOfLines={2}><Ltr>{g.label}</Ltr></Text></Stack>
-                                                    <Button
-                                                        label={t.bare('settings.permissions.revoke')}
-                                                        accessibilityLabel={t('settings.permissions.revokeAria', { name: g.label })}
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        shrink={false}
-                                                        testID={`perm-grant-revoke-${r.session_id}-${gi}`}
+                                                    <Stack flex={1} gap="xs">
+                                                        {grantKindKey(g.key) ? <Text role="caption" tone="muted">{t(grantKindKey(g.key)!)}</Text> : null}
+                                                        <Text role="caption" mono numberOfLines={2}><Ltr>{g.label}</Ltr></Text>
+                                                    </Stack>
+                                                    <Pressable
                                                         onPress={() => run(revoke.mutateAsync({ sessionId: r.session_id, key: g.key }))}
-                                                    />
+                                                        accessibilityRole="button"
+                                                        accessibilityLabel={t('settings.permissions.revokeAria', { name: g.label })}
+                                                        minSize={44}
+                                                        inline
+                                                        testID={`perm-grant-revoke-${r.session_id}-${gi}`}
+                                                    >
+                                                        <Text role="caption" weight="medium" tone="accent">{t.bare('settings.permissions.revoke')}</Text>
+                                                    </Pressable>
                                                 </Row>
                                             </Stack>
                                         ))}
@@ -170,7 +202,7 @@ export default function Permissions() {
                         ? [{ label: t('settings.permissions.turnOff'), testID: 'perm-chat-turn-off-full', onPress: () => run(setChatMode.mutateAsync({ sessionId: menuFor.session_id, mode: 'ask' })) }]
                         : []),
                     ...(menuFor && menuFor.grants.length > 1
-                        ? [{ label: t('settings.permissions.revokeAll'), testID: 'perm-chat-revoke-all', destructive: true, onPress: () => run(revoke.mutateAsync({ sessionId: menuFor.session_id })) }]
+                        ? [{ label: t('settings.permissions.revokeAll'), testID: 'perm-chat-revoke-all', destructive: true, onPress: () => run(revoke.mutateAsync({ sessionId: menuFor.session_id }), () => setRevokedAll(true)) }]
                         : []),
                 ]}
             />

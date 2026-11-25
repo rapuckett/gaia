@@ -3,13 +3,13 @@
 
 import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
-import { Share } from 'react-native';
+import { Share, useWindowDimensions } from 'react-native';
 
 import type { MessageKey } from '@webui/i18n/registry';
 
 import { isProblem, useLogRead, type LogSource } from '@/data';
 import { serverText, useT } from '@/i18n/useT';
-import { Button, ErrorState, LoadingState, Notice, Row, ScrollBox, Stack, Switch, Text } from '@/ui';
+import { Chip, ErrorState, IconButton, LoadingState, Notice, Row, ScrollBox, Stack, Text } from '@/ui';
 import { Check, Copy, RotateCw, Share2 } from '@/ui/icons';
 
 const REASONS: Record<string, MessageKey> = {
@@ -51,6 +51,7 @@ export function LogView({ source, file, active, initialFollow = true, initialPro
     initialProblemsOnly?: boolean;
 }) {
     const t = useT();
+    const narrow = useWindowDimensions().width < 360;
     const [follow, setFollow] = useState(initialFollow);
     const [problemsOnly, setProblemsOnly] = useState(initialProblemsOnly);
     const [notice, setNotice] = useState<{ ok: boolean; text: string; detail?: string } | null>(null);
@@ -84,6 +85,19 @@ export function LogView({ source, file, active, initialFollow = true, initialPro
     const reason = !read?.available && read?.reason
         ? t(source !== 'model_server' && read.reason === 'no_file' ? 'logs.reason.notWritten' : (REASONS[read.reason] ?? 'mobileApp.logs.readFailed'))
         : undefined;
+    const chips = (
+        <>
+            <Chip label={t('logs.follow')} role="checkbox" selected={follow} onPress={() => setFollow(!follow)} testID="log-follow" />
+            <Chip label={t('logs.problemsOnly')} role="checkbox" selected={problemsOnly} onPress={() => setProblemsOnly(!problemsOnly)} testID="log-problems-only" />
+        </>
+    );
+    const actions = (
+        <Row gap="xs">
+            <IconButton icon={RotateCw} variant="outlined" label={t('logs.refresh')} onPress={() => void log.refresh()} disabled={log.isFetching} testID="log-refresh" />
+            <IconButton icon={notice?.ok ? Check : Copy} variant="outlined" label={t('logs.copy')} onPress={copy} disabled={!text} testID="log-copy" />
+            <IconButton icon={Share2} variant="outlined" label={t('mobileApp.logs.share')} onPress={share} disabled={!text} testID="log-share" />
+        </Row>
+    );
     return (
         <Stack gap="md">
             <Text role="caption" tone="muted">{t(SOURCE_HINTS[source])}</Text>
@@ -100,13 +114,14 @@ export function LogView({ source, file, active, initialFollow = true, initialPro
                 <Notice tone="danger" message={t('mobileApp.logs.updateFailed')} detail={serverText(log.error)} testID="log-update-failed" />
             ) : null}
 
-            <Switch label={t('logs.follow')} value={follow} onValueChange={setFollow} testID="log-follow" />
-            <Switch label={t('logs.problemsOnly')} value={problemsOnly} onValueChange={setProblemsOnly} testID="log-problems-only" />
-            <Row gap="sm" wrap>
-                <Button label={t('logs.refresh')} icon={RotateCw} onPress={() => void log.refresh()} disabled={log.isFetching} testID="log-refresh" />
-                <Button label={t('logs.copy')} icon={notice?.ok ? Check : Copy} onPress={copy} disabled={!text} testID="log-copy" />
-                <Button label={t('mobileApp.logs.share')} icon={Share2} onPress={share} disabled={!text} testID="log-share" />
-            </Row>
+            {/* The chips share the row with the icon buttons while there is room; below 360 pt the buttons drop under them, never a chip cut short. */}
+            <Stack gap="xs">
+                <Row gap="sm" align="center">
+                    <Stack gap="xs" flex={1}>{chips}</Stack>
+                    {narrow ? null : actions}
+                </Row>
+                {narrow ? <Row justify="end">{actions}</Row> : null}
+            </Stack>
             {notice ? (
                 <Notice tone={notice.ok ? 'success' : 'danger'} message={notice.text} detail={notice.detail} testID="log-notice" />
             ) : null}
@@ -119,7 +134,7 @@ export function LogView({ source, file, active, initialFollow = true, initialPro
                 <ScrollBox maxHeight={LOG_BOX_HEIGHT} stickToEnd testID="log-lines">
                     <Text role="caption" mono dir="ltr" align="ltr" selectable accessibilityLabel={t(SOURCE_LABELS[source])}>
                         {shown.map((line, i) => (
-                            <Text key={i} tone={line.severity === 'error' ? 'danger' : line.severity === 'warning' ? 'warning' : undefined}>
+                            <Text key={i} mono tone={line.severity === 'error' ? 'danger' : line.severity === 'warning' ? 'warning' : undefined}>
                                 {line.text}
                                 {'\n'}
                             </Text>

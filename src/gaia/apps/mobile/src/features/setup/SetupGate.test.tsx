@@ -23,7 +23,7 @@ jest.mock('@/data', () => ({
 }));
 let mockPicked: { id: string } | null = null;
 jest.mock('@/features/banners/useBannerPick', () => ({ useBannerPick: () => ({ picked: mockPicked, refetch: jest.fn(), status: {} }) }));
-jest.mock('@/features/pairing', () => ({ PinMismatchScreen: () => null, usePairAgain: () => ({ mutate: jest.fn(), isPending: false }) }));
+jest.mock('@/features/pairing', () => ({ PinMismatchScreen: () => null, usePairAgain: () => ({ state: 'idle', run: jest.fn() }) }));
 jest.mock('./SetupScreen', () => ({ SetupScreen: () => null }));
 jest.mock('./StartupScreen', () => ({ StartupScreen: () => null }));
 const mockExpoConfig = { scheme: '' };

@@ -8,7 +8,7 @@ import { Button, Notice, Stack, Text } from '@/ui';
 import type { LucideIcon } from '@/ui/icons';
 
 /** A web button whose route refuses a phone: it stays, and pressing it shows why (never fake data). */
-export function PcOnlyAction({ label, icon, note, detail, testID }: {
+export function PcOnlyAction({ label, icon, note, detail, testID, full = true }: {
     label: string;
     icon: LucideIcon;
     /** The web's note under the button. */
@@ -16,6 +16,8 @@ export function PcOnlyAction({ label, icon, note, detail, testID }: {
     /** The phone-perspective line shown with the refusal. */
     detail: string;
     testID: string;
+    /** False keeps the button at its natural width, aligned to the start. */
+    full?: boolean;
 }) {
     const t = useT();
     const [pressed, setPressed] = useState(false);
@@ -23,7 +25,7 @@ export function PcOnlyAction({ label, icon, note, detail, testID }: {
     const generic = t('mobileApp.settings.pcOnly');
     return (
         <Stack gap="sm">
-            <Button full wrap label={label} icon={icon} onPress={() => setPressed(true)} testID={testID} />
+            <Button full={full} wrap label={label} icon={icon} onPress={() => setPressed(true)} testID={testID} />
             {note ? <Text role="caption" tone="muted">{note}</Text> : null}
             {pressed ? (
                 <Notice tone="info" message={detail === generic ? refusal : `${refusal} ${detail}`} testID={`${testID}-refusal`} />

@@ -8,6 +8,7 @@ import { providerName, providerNameFull, providerNotice } from '@webui/utils/pro
 import type { ProviderId, ProviderModel } from '@/api/client.types';
 import {
     useActiveModel,
+    useLocalModels,
     useLocalModelStatus,
     useProviderModels,
     useProviders,
@@ -49,6 +50,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
     const activeQuery = useActiveModel();
     const systemStatus = useSystemStatus();
     const select = useSelectModel();
+    const localModels = useLocalModels(true);
     const [picked, setPicked] = useState<ProviderId | null>(null);
     const [howOpen, setHowOpen] = useState(false);
     const [switched, setSwitched] = useState<string | null>(null);
@@ -99,6 +101,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
                 active={active}
                 readFailed={!!activeQuery.error}
                 row={row}
+                localModels={localModels.data?.models}
                 waitingServer={serverHung}
                 choices={choices}
                 busy={select.isPending}

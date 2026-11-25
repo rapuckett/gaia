@@ -53,6 +53,15 @@ describeNative('GoalsPane', () => {
         await waitFor(() => expect(client.goalCalls[1]).toEqual({ action: 'delete', id: 'g4' }));
     });
 
+    it('shows the four counts as one row of pills, keeping a zero', async () => {
+        await mount({ goals: SAMPLE_GOALS.filter((g) => g.status !== 'failed') });
+        await waitFor(() => expect(screen.getByTestId('goals-stat-queued')).toHaveAccessibleName('queued: 1'));
+        expect(screen.getByTestId('goals-stat-in_progress')).toHaveAccessibleName('in progress: 1');
+        expect(screen.getByTestId('goals-stat-completed')).toHaveAccessibleName('completed: 2');
+        expect(screen.getByTestId('goals-stat-failed')).toHaveAccessibleName('failed: 0');
+        expect(screen.getByText('Failed')).toBeTruthy();
+    });
+
     it('keeps Create off until the goal has a title, then sends it', async () => {
         const client = await mount({ goals: [] });
         await screen.findByTestId('goals-empty');

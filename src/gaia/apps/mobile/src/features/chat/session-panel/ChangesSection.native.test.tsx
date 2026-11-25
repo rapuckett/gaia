@@ -111,3 +111,30 @@ const changes: SessionChanges = {
         expect(await screen.findByText(reason)).toBeTruthy();
     });
 });
+
+(Platform.OS === 'web' ? describe.skip : describe)('Undo all confirm accessibility', () => {
+    it('reads the sentence as a header, then reaches Undo all and Cancel on their own', async () => {
+        const client = createFakeClient({ sessionChanges: { s1: changes } });
+        await render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <GaiaClientProvider client={client}>
+                    <ThemeProvider>
+                        <ChangesSection sessionId="s1" live={false} />
+                    </ThemeProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>,
+        );
+        await fireEvent.press(await screen.findByTestId('changes-undo-all'));
+
+        const prompt = screen.getByRole('header');
+        expect(prompt.props.accessibilityRole).toBe('header');
+        for (const id of ['changes-undo-confirm', 'changes-undo-cancel']) {
+            type Node = { parent: Node | null; props: { accessible?: boolean } };
+            for (let node = (screen.getByTestId(id) as unknown as Node).parent; node; node = node.parent) {
+                expect(node.props.accessible).not.toBe(true);
+            }
+        }
+        expect(screen.getByRole('button', { name: t('chg.undoAll') })).toBeTruthy();
+        expect(screen.getByRole('button', { name: t('mobileApp.changes.cancel') })).toBeTruthy();
+    });
+});

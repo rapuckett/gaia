@@ -39,6 +39,10 @@ const EXPECTED: Record<string, string> = {
     'changes-unknown-kind': 'cameraEnabled',
     'local-network-explainer': t('mobileApp.localNetwork.next'),
     'local-network-denied': t('mobileApp.localNetwork.openSettings'),
+    'pair-again-checking': t('mobileApp.pairing.again.busy'),
+    'pair-again-unreachable': t('mobileApp.pairing.again.unreachable', { pc: 'Studio PC' }),
+    'pair-again-forgotten': t('mobileApp.pairing.again.forgottenTitle', { pc: 'Studio PC' }),
+    'pair-again-other-device': t('mobileApp.pairing.again.otherDevice.title', { pc: 'Studio PC' }),
 };
 
 const hidden = { includeHiddenElements: true };

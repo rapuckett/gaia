@@ -1,11 +1,12 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import * as api from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
 import { useT } from '../../i18n/useT';
+import { announce } from '../LiveAnnouncer';
 import type { PermissionMode, SessionPermissions } from '../../types';
 import { announcePermissionMode } from '../../utils/permissionModeEvents';
 import { SettingsDisclosure } from './SettingsDisclosure';
@@ -18,6 +19,9 @@ export function PermissionsSettings() {
     const [defaultMode, setDefaultMode] = useState<PermissionMode | null>(null);
     const [confirming, setConfirming] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [revokedAll, setRevokedAll] = useState(false);
+    const revokedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => { if (revokedTimer.current) clearTimeout(revokedTimer.current); }, []);
 
     const load = useCallback(async () => {
         setError(null);
@@ -33,15 +37,26 @@ export function PermissionsSettings() {
     }, []);
     useEffect(() => { void load(); }, [load]);
 
-    const act = useCallback(async (fn: () => Promise<unknown>) => {
+    const act = useCallback(async (fn: () => Promise<unknown>): Promise<boolean> => {
         setError(null);
         try {
             await fn();
             await load();
+            return true;
         } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
+            return false;
         }
     }, [load]);
+
+    const revokeAll = useCallback(async (sessionId: string) => {
+        if (!(await act(() => api.revokeGrants(sessionId)))) return;
+        if (revokedTimer.current) clearTimeout(revokedTimer.current);
+        setRevokedAll(true);
+        // Every success is read, even a second one while the first toast still shows.
+        announce(t('settings.permissions.revokedAll'));
+        revokedTimer.current = setTimeout(() => setRevokedAll(false), 4000);
+    }, [act, t]);
 
     const saveDefault = useCallback(async (mode: PermissionMode) => {
         setConfirming(false);
@@ -136,7 +151,7 @@ export function PermissionsSettings() {
                             </ul>
                         )}
                         {r.grants.length > 1 && (
-                            <button type="button" className="link-btn" onClick={() => act(() => api.revokeGrants(r.session_id))}>
+                            <button type="button" className="link-btn" onClick={() => void revokeAll(r.session_id)}>
                                 {t('settings.permissions.revokeAll')}
                             </button>
                         )}
@@ -144,6 +159,7 @@ export function PermissionsSettings() {
                 ))}
                 </SettingsDisclosure>
             )}
+            {revokedAll && <div className="toast app-restore-toast">{t('settings.permissions.revokedAll')}</div>}
         </div>
     );
 }

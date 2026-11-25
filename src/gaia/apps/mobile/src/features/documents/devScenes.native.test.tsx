@@ -36,7 +36,7 @@ const mount = async (state: string) => {
     it.each(Object.keys(DOCUMENTS_SCENES))('renders the %s scene', async (name) => {
         await mount(name);
         expect(screen.queryByText(/^No documents scene/)).toBeNull();
-        expect((await screen.findAllByText(/Add a file|Couldn.t load your documents/, {}, { timeout: 3000 })).length).toBeGreaterThan(0);
+        expect((await screen.findAllByText(/Add documents|Couldn.t load your documents/, {}, { timeout: 3000 })).length).toBeGreaterThan(0);
     });
 
     it('names the scenes when the state is unknown', async () => {

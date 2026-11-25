@@ -12,10 +12,11 @@ import { CircleAlert, Clock, Monitor, Smartphone, Wifi } from '@/ui/icons';
 
 import { parseInvite, type PairingInvite } from './invite';
 import { localNetworkDenied, localNetworkStep, markAllowed, markExplained, watchForeground } from './localNetwork';
+import { forgetPc, switchToPc } from './pairedPcs';
 import { PairingScanner } from './PairingScanner';
 import { isNetworkFailure, pollSettled } from './pollSettled';
 import { getPairingService } from './registry';
-import type { PairingStatus, RedeemResult } from './service';
+import type { PairedPc, PairingStatus, RedeemResult } from './service';
 
 export type PairingStep = 'welcome' | 'how' | 'manual' | 'scan';
 
@@ -51,7 +52,9 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
     const t = useT();
     const setConnection = useConnectionStore((s) => s.setConnection);
     const removedFrom = useConnectionStore((s) => s.removedFrom);
-    const [view, setView] = useState<View>(initialStep);
+    const forgottenPc = useConnectionStore((s) => s.forgottenPc);
+    const noPcInUse = useConnectionStore((s) => s.connection === null);
+    const [view, setView] = useState<View>(forgottenPc ? 'how' : initialStep);
     const [text, setText] = useState('');
     const [error, setError] = useState<{ text: string; detail?: string } | null>(null);
     const [busy, setBusy] = useState(false);
@@ -89,6 +92,17 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
         },
         [onPaired, setConnection],
     );
+
+    // The PC no longer knows this phone, and the notice saying so is on screen: only now is it forgotten here.
+    const forgetting = useRef<string | null>(null);
+    useEffect(() => {
+        if (!forgottenPc || view !== 'how' || forgetting.current === forgottenPc.id) return;
+        forgetting.current = forgottenPc.id;
+        forgetPc(forgottenPc.id).catch((e: unknown) => {
+            console.error(`Forgetting ${forgottenPc.name} on this phone failed`, e);
+            if (alive.current) setError(describeHttpFailure(e, t));
+        });
+    }, [forgottenPc, view, t]);
 
     // A phone that was already waiting for Allow when the app reopened picks up where it was.
     useEffect(() => {
@@ -334,6 +348,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
             <Page icon={Smartphone} title={t('mobileApp.pairing.welcome.title')} body={t('mobileApp.pairing.welcome.body')}>
                 {removedFrom ? <Notice tone="warning" message={t('mobileApp.pairing.removed', { pc: removedFrom })} testID="pairing-removed" /> : null}
                 <Button variant="primary" label={t('mobileApp.pairing.welcome.start')} onPress={() => setView('how')} full testID="pairing-start" />
+                {noPcInUse ? <SavedPcs hide={forgottenPc?.id ?? null} /> : null}
             </Page>
         );
     }
@@ -354,6 +369,16 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
             <Page
                 title={t('mobileApp.pairing.how.title')}
                 up={onExit ? <UpButton onPress={onExit} testID="pairing-up" /> : undefined}
+                notice={
+                    forgottenPc ? (
+                        <Notice
+                            tone="warning"
+                            title={t('mobileApp.pairing.again.forgottenTitle', { pc: forgottenPc.name })}
+                            message={t('mobileApp.pairing.again.forgottenBody')}
+                            testID="pairing-forgotten"
+                        />
+                    ) : undefined
+                }
             >
                 <Card>
                     <Stack gap="md">
@@ -371,6 +396,8 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit,
                 </Card>
                 {canScan ? <Button variant="primary" label={t('mobileApp.pairing.how.scan')} onPress={onScan ?? (() => setView('scan'))} full /> : null}
                 <Button variant={canScan ? 'secondary' : 'primary'} label={t('mobileApp.pairing.how.paste')} onPress={() => setView('manual')} full testID="pairing-paste" />
+                {error ? <Notice tone="danger" message={error.text} detail={error.detail} /> : null}
+                {noPcInUse ? <SavedPcs hide={forgottenPc?.id ?? null} /> : null}
             </Page>
         );
     }
@@ -406,6 +433,50 @@ function rememberAllowed() {
 }
 
 type ShownError = { text: string; detail?: string } | null;
+
+/** With no PC in use, the PCs still paired here, so the person can pick one; none is picked for them. `hide` is one being forgotten. */
+function SavedPcs({ hide }: { hide: string | null }) {
+    const t = useT();
+    const [pcs, setPcs] = useState<PairedPc[]>([]);
+    const [using, setUsing] = useState<string | null>(null);
+    const [error, setError] = useState<ShownError>(null);
+    const alive = useRef(true);
+    useEffect(() => {
+        alive.current = true;
+        getPairingService()
+            .list()
+            .then((list) => alive.current && setPcs(list))
+            .catch((e: unknown) => alive.current && setError(describeHttpFailure(e, t)));
+        return () => {
+            alive.current = false;
+        };
+    }, [t]);
+    const shown = pcs.filter((pc) => pc.id !== hide);
+    if (shown.length === 0 && !error) return null;
+    const use = (pc: PairedPc) => {
+        setError(null);
+        setUsing(pc.id);
+        switchToPc(pc).catch((e: unknown) => {
+            if (!alive.current) return;
+            setUsing(null);
+            setError(describeHttpFailure(e, t));
+        });
+    };
+    return (
+        <Stack gap="sm" testID="pairing-saved-pcs">
+            <Text role="label" tone="muted">{t('mobileApp.pairing.pcs.title')}</Text>
+            {shown.map((pc) => (
+                <Row key={pc.id} gap="md">
+                    <Stack flex={1}>
+                        <Text role="body">{pc.name}</Text>
+                    </Stack>
+                    <Button size="sm" label={t('mobileApp.pairing.pcs.use')} onPress={() => use(pc)} busy={using === pc.id} testID={`pairing-use-${pc.id}`} />
+                </Row>
+            ))}
+            {error ? <Notice tone="danger" message={error.text} detail={error.detail} /> : null}
+        </Stack>
+    );
+}
 
 /** Design's explainer before iOS's local network prompt; Continue makes the connection that raises it, so there is no skip. */
 export function LocalNetworkExplainer({ onContinue, busy, error }: { onContinue: () => void; busy?: boolean; error?: ShownError }) {
@@ -452,6 +523,7 @@ function Page({
     busy,
     footer,
     up,
+    notice,
     children,
 }: {
     icon?: typeof Clock;
@@ -463,6 +535,8 @@ function Page({
     footer?: React.ReactNode;
     /** A leading up control in a bare top bar, for a screen opened from another one. */
     up?: React.ReactNode;
+    /** Above everything else on the page. */
+    notice?: React.ReactNode;
     children?: React.ReactNode;
 }) {
     return (
@@ -481,6 +555,7 @@ function Page({
             }
         >
             <Stack flex={1} gap="lg" padding="xl" justify="center" width="100%" testID="pairing-page">
+                {notice}
                 {icon ? (
                     <Stack align="center">
                         <Icon icon={icon} size={iconSize} tone="accent" />

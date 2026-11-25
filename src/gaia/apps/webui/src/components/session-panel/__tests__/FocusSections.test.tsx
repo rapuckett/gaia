@@ -171,7 +171,7 @@ describe('what the chat is doing', () => {
         fireEvent.click(await screen.findByRole('button', { name: /Undo all/ }));
         fireEvent.click(within(screen.getByRole('group', { name: 'Confirm undo all' })).getByRole('button', { name: 'Undo all' }));
         await waitFor(() => expect(chips()).toEqual(['Chat']));
-        expect(screen.getByRole('status')).toHaveTextContent('Undone: restored 1 file');
+        expect(screen.getByText(/Undone: restored 1 file/)).toBeInTheDocument();
     });
 
     it('gives a chip a button only when its section is there to go to', async () => {

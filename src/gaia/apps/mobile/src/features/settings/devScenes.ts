@@ -351,9 +351,9 @@ const PERM_CHATS: FakeClientData = {
     sessions: [chat('a'), chat('b'), chat('c')],
     permissions: { a: 'full_access', b: 'ask', c: 'ask' },
     permissionGrants: {
-        a: [{ key: 'shell:git status', label: 'git status' }],
-        b: [{ key: 'shell:npm test', label: 'npm test' }, { key: 'shell:ls', label: 'ls' }],
-        c: [{ key: 'write:notes.md', label: 'notes.md' }],
+        a: [{ key: 'run_shell_command:git status', label: 'git status' }],
+        b: [{ key: 'run_shell_command:npm test', label: 'npm test' }, { key: 'run_shell_command:ls', label: 'ls' }],
+        c: [{ key: 'write_file:notes.md', label: 'notes.md' }],
     },
     defaultPermissionMode: 'ask',
 };
@@ -383,6 +383,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-server-down-own': downScene(true, 'local'),
     'model-server-down-yours-local': downScene(false, 'local'),
     'model-server-down-yours-gateway': downScene(false, 'amd'),
+    // SET-MODEL-02: the top of the pane: the provider chips in one scrolling row, and the in-use model by its display name.
+    'model-top': { section: 'model', gpuMemory: GPU, data: { providers: providers(false), ...local([HAVE]) } },
     'gpu-adjustable': { section: 'model', target: 'gpu-memory', gpuMemory: GPU },
     'gpu-adjustable-setup': { section: 'setup', gpuMemory: GPU },
     // Linux, where GAIA writes the size itself: the sizes, Apply (asks first), and Undo once GAIA has changed it.
@@ -711,6 +713,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'lang-switch-ar-ios': { section: 'general', gpuMemory: GPU, languageSwitch: 'ios' },
     // SET-PRIV-06: the Delete chats card with chats (`#tap=privacy-delete-all` opens the confirm sheet), and with none.
     'privacy-delete': { section: 'privacy', gpuMemory: GPU, data: { settings: SETTINGS, sessions: [chat('a'), chat('b'), chat('c')] } },
+    // SET-PRIV-09: the PC reports its data folder, so Where your data is shows the Data folder row.
+    'privacy-data-folder': { section: 'privacy', gpuMemory: GPU, status: { ...RUNNING, data_dir: '/Users/Shared/gaia-demo/.gaia' } as SystemStatus, data: { settings: SETTINGS, sessions: [chat('a'), chat('b'), chat('c')] } },
     // SET-PRIV-08: Local only turned on (`#tap=privacy-local-only`) while the model server is down.
     'privacy-server-down': {
         section: 'privacy',
@@ -739,6 +743,17 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
         section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE]),
         override: { getSetupPlan: () => Promise.reject(new GaiaApiError(500, 'lemond is not responding: connection refused')) },
     },
+    // Six chats the PC refuses to delete: `#tap=privacy-delete-all,privacy-delete-confirm` shows the plain sentence over five "title: reason" lines and "+1 more".
+    'privacy-delete-failed': {
+        section: 'privacy', gpuMemory: GPU,
+        data: {
+            settings: SETTINGS,
+            sessions: ['a', 'b', 'c', 'd', 'e', 'f'].map(chat),
+            deleteSessionErrors: Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f'].map((id) => [id, new GaiaApiError(500, `chat ${id} is open on the PC`)])),
+        },
+    },
+    // The read-aloud settings read fails with the PC's own text, kept on the detail line.
+    'read-aloud-load-failed': { section: 'voice', gpuMemory: GPU, override: { getSpeechSettings: () => Promise.reject(new GaiaApiError(500, 'speech service is not running')) } },
 };
 
 export function settingsSceneClient(scene: SettingsScene): GaiaClient {

@@ -35,7 +35,7 @@ export function CompactRow({ icon, accessibilityLabel, interactive, children, en
     );
     return (
         <Stack testID={testID}>
-            <Stack minHeight={COMPACT_ROW} justify="center" accessibilityLabel={interactive ? undefined : accessibilityLabel}>
+            <Stack minHeight={COMPACT_ROW} justify="center" accessible={!interactive && !!accessibilityLabel} accessibilityLabel={interactive ? undefined : accessibilityLabel}>
                 {line}
             </Stack>
             {below}
