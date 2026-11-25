@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import { ScrollView as RNScrollView, useWindowDimensions, View, type AccessibilityActionEvent, type ScrollView } from 'react-native';
+import { useWindowDimensions, View, type AccessibilityActionEvent, type ScrollView } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import { isolate } from '@webui/i18n/registry';
@@ -25,7 +25,7 @@ import {
     useNotificationStore,
 } from '@/state/notifications';
 import { usePermissionPromptStore } from '@/state/permissionPrompts';
-import { Badge, Button, Chip, Divider, EmptyState, FirstLine, Icon, IconButton, Notice, Pressable, Row, Screen, Stack, Text, useTheme } from '@/ui';
+import { Badge, Button, Chip, Divider, EmptyState, FirstLine, Icon, IconButton, Notice, Pressable, Row, Screen, ScrollFade, type ScrollFadeHandle, Stack, Text, useTheme } from '@/ui';
 import { useLargeText } from '@/ui/theme/a11y';
 import { Bell, Check, CircleAlert, CircleCheck, Info, ShieldAlert, Trash2, TriangleAlert, X, type LucideIcon } from '@/ui/icons';
 
@@ -111,54 +111,36 @@ export function NotificationCenterScreen({ onBack, onOpenChat, receiptId }: { on
     );
 }
 
-const FADE_STEPS = [0.15, 0.35, 0.55, 0.75, 0.9];
-
 /** One scrolling row of filter chips: a fade marks more to the side, and the selected chip is kept in view. */
 function FilterRow({ filter }: { filter: NotificationType | null }) {
     const t = useT();
-    const { colors, space } = useTheme();
+    const { space } = useTheme();
     const dir = useDirection();
-    const ref = useRef<ComponentRef<typeof RNScrollView>>(null);
+    const ref = useRef<ScrollFadeHandle>(null);
     const xs = useRef<Record<string, number>>({});
-    const [box, setBox] = useState({ view: 0, content: 0 });
-    const [offset, setOffset] = useState(0);
     const key = filter ?? 'all';
-    const more = box.content > box.view + 1 && offset < box.content - box.view - 1;
     const reveal = () => {
         const x = xs.current[key];
         if (x !== undefined && dir === 'ltr') ref.current?.scrollTo({ x: Math.max(0, x - space.gutter), animated: true });
     };
-    useEffect(reveal, [key, box.content]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(reveal, [key]); // eslint-disable-line react-hooks/exhaustive-deps
     const chip = (id: string, label: string, kind: NotificationType | null) => (
         <View key={id} onLayout={(e) => { xs.current[id] = e.nativeEvent.layout.x; if (id === key) reveal(); }}>
             <Chip role="tab" label={label} selected={filter === kind} onPress={() => setNotificationFilter(kind)} testID={`ntf-filter-${id}`} />
         </View>
     );
     return (
-        <View>
-            <RNScrollView
-                ref={ref}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                accessibilityRole="tablist"
-                contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.gutter, paddingVertical: space.sm }}
-                onLayout={(e) => setBox((b) => ({ ...b, view: e.nativeEvent.layout.width }))}
-                onContentSizeChange={(w) => setBox((b) => ({ ...b, content: w }))}
-                onScroll={(e) => setOffset(e.nativeEvent.contentOffset.x)}
-                scrollEventThrottle={64}
-                testID="ntf-filters"
-            >
-                {chip('all', t('notifications.filter.all'), null)}
-                {FILTER_ORDER.map((kind) => chip(kind, t(FILTER_LABELS[kind]), kind))}
-            </RNScrollView>
-            {more ? (
-                <View pointerEvents="none" testID="ntf-filters-fade" style={{ position: 'absolute', end: 0, top: 0, bottom: 0, flexDirection: 'row' }}>
-                    {(dir === 'ltr' ? FADE_STEPS : [...FADE_STEPS].reverse()).map((o, i) => (
-                        <View key={i} style={{ width: 6, backgroundColor: colors.bgPrimary, opacity: o }} />
-                    ))}
-                </View>
-            ) : null}
-        </View>
+        <ScrollFade
+            ref={ref}
+            showsHorizontalScrollIndicator={false}
+            accessibilityRole="tablist"
+            contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.gutter, paddingVertical: space.sm }}
+            onContentSizeChange={reveal}
+            testID="ntf-filters"
+        >
+            {chip('all', t('notifications.filter.all'), null)}
+            {FILTER_ORDER.map((kind) => chip(kind, t(FILTER_LABELS[kind]), kind))}
+        </ScrollFade>
     );
 }
 

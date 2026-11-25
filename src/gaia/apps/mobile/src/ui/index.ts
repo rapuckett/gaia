@@ -12,6 +12,7 @@ export { contentDir } from './text/direction';
 export { Stack, Row, Spacer, type StackProps, type RowProps } from './layout/layout';
 export { Floating, type FloatingProps } from './layout/Floating';
 export { HScroll } from './layout/HScroll';
+export { ScrollFade, SCROLL_FADE_WIDTH, type ScrollFadeHandle, type ScrollFadeProps } from './layout/ScrollFade';
 export { Surface, Card, Divider, type SurfaceProps, type CardProps } from './layout/Surface';
 export { PRESSABLE_MIN_SIZE, Pressable, type PressableProps } from './controls/Pressable';
 export { Button, type ButtonProps } from './controls/Button';
