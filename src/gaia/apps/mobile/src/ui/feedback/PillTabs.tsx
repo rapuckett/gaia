@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 import type { LucideIcon } from 'lucide-react-native';
-import { View } from 'react-native';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { ScrollView, View } from 'react-native';
+import { useDirection } from '@/i18n/useT';
 import { Icon } from '../controls/Icon';
 import { Pressable } from '../controls/Pressable';
 import { Row } from '../layout/layout';
@@ -27,21 +29,42 @@ export interface PillTabsProps {
     testID?: string;
 }
 
-/** The desktop's `.provider-tabs`: wrapping pills, the active one accent-tinted. */
+const FADE_STEPS = [0.15, 0.35, 0.55, 0.75, 0.9];
+
+/** The desktop's `.provider-tabs` as one scrolling row: the active pill accent-tinted and kept in view, a fade while more is hidden. */
 export function PillTabs({ tabs, value, onChange, accessibilityLabel, testID }: PillTabsProps) {
     const { colors, radius, space } = useTheme();
+    const dir = useDirection();
+    const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
+    const xs = useRef<Record<string, number>>({});
+    const [box, setBox] = useState({ view: 0, content: 0 });
+    const [offset, setOffset] = useState(0);
+    const more = box.content > box.view + 1 && Math.abs(offset) < box.content - box.view - 1;
+    const reveal = () => {
+        const x = xs.current[value];
+        if (x !== undefined && dir === 'ltr') scroller.current?.scrollTo({ x: Math.max(0, x - space.sm), animated: true });
+    };
+    useEffect(reveal, [value, box.content]); // eslint-disable-line react-hooks/exhaustive-deps
     return (
-        <View
+        <View>
+        <ScrollView
+            ref={scroller}
+            horizontal
+            showsHorizontalScrollIndicator={false}
             testID={testID}
             accessibilityRole="radiogroup"
             accessibilityLabel={accessibilityLabel}
-            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}
+            contentContainerStyle={{ gap: space.sm }}
+            onLayout={(e) => setBox((b) => ({ ...b, view: e.nativeEvent.layout.width }))}
+            onContentSizeChange={(w) => setBox((b) => ({ ...b, content: w }))}
+            onScroll={(e) => setOffset(e.nativeEvent.contentOffset.x)}
+            scrollEventThrottle={64}
         >
             {tabs.map((tab) => {
                 const on = tab.value === value;
                 return (
+                    <View key={tab.value} onLayout={(e) => { xs.current[tab.value] = e.nativeEvent.layout.x; if (on) reveal(); }}>
                     <Pressable
-                        key={tab.value}
                         onPress={() => onChange(tab.value)}
                         disabled={tab.disabled && !on}
                         accessibilityRole="radio"
@@ -78,8 +101,17 @@ export function PillTabs({ tabs, value, onChange, accessibilityLabel, testID }: 
                             </Row>
                         </View>
                     </Pressable>
+                    </View>
                 );
             })}
+        </ScrollView>
+        {more ? (
+            <View pointerEvents="none" testID={testID ? `${testID}-fade` : undefined} style={{ position: 'absolute', end: 0, top: 0, bottom: 0, flexDirection: 'row' }}>
+                {(dir === 'ltr' ? FADE_STEPS : [...FADE_STEPS].reverse()).map((o, i) => (
+                    <View key={i} style={{ width: 6, backgroundColor: colors.bgPrimary, opacity: o }} />
+                ))}
+            </View>
+        ) : null}
         </View>
     );
 }

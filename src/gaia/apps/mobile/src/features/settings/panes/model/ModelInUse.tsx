@@ -7,7 +7,7 @@ import { Badge, Ltr, Notice, Row, Select, Spinner, Stack, Surface, Text } from '
 
 import { SettingsAnchor } from '../../targets';
 import { ContextSize } from './ContextSize';
-import { ctxLabel, isolate, modelLabel, sameModelId } from './modelText';
+import { ctxLabel, inUseName, isolate, modelLabel, sameModelId } from './modelText';
 
 export interface ModelInUseProps {
     active: ActiveModel | undefined;
@@ -15,6 +15,8 @@ export interface ModelInUseProps {
     readFailed: boolean;
     /** The in-use model's row, once a list held it; carries its device and size. */
     row: ProviderModel | null;
+    /** The Local list, for the display name when the viewed provider's list doesn't hold the model. */
+    localModels?: ProviderModel[];
     waitingServer: boolean;
     /** Models the Switch model select offers: ready to use, on the provider being viewed. */
     choices: ProviderModel[];
@@ -23,7 +25,7 @@ export interface ModelInUseProps {
 }
 
 /** The answer to "what am I using?": the model, what it runs on, and its context size. */
-export function ModelInUse({ active, readFailed, row, waitingServer, choices, busy, onSwitch }: ModelInUseProps) {
+export function ModelInUse({ active, readFailed, row, localModels, waitingServer, choices, busy, onSwitch }: ModelInUseProps) {
     const t = useT();
     const model = active?.model ?? null;
     const remote = !!active?.remote;
@@ -52,7 +54,7 @@ export function ModelInUse({ active, readFailed, row, waitingServer, choices, bu
                     </Text>
                     {model ? (
                         <Text role="title" weight="semibold">
-                            <Ltr>{row?.display_name || active?.display_name || modelLabel({ id: model })}</Ltr>
+                            <Ltr>{inUseName(model, row, localModels, active?.display_name)}</Ltr>
                         </Text>
                     ) : active || readFailed ? (
                         <Text role="label" tone="muted">{t('settings.model.noneInUse')}</Text>

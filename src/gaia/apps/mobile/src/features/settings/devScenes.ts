@@ -383,6 +383,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-server-down-own': downScene(true, 'local'),
     'model-server-down-yours-local': downScene(false, 'local'),
     'model-server-down-yours-gateway': downScene(false, 'amd'),
+    // SET-MODEL-02: the top of the pane: the provider chips in one scrolling row, and the in-use model by its display name.
+    'model-top': { section: 'model', gpuMemory: GPU, data: { providers: providers(false), ...local([HAVE]) } },
     'gpu-adjustable': { section: 'model', target: 'gpu-memory', gpuMemory: GPU },
     'gpu-adjustable-setup': { section: 'setup', gpuMemory: GPU },
     // Linux, where GAIA writes the size itself: the sizes, Apply (asks first), and Undo once GAIA has changed it.
