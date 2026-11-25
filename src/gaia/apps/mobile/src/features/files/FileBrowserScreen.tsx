@@ -302,7 +302,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                                 </View>
                             ) : null}
                             <View style={{ flexShrink: 0 }}>
-                                <Chip label={t('fileBrowser.showHidden')} role="checkbox" selected={showHidden} onPress={() => setShowHidden(!showHidden)} testID="file-show-hidden" />
+                                <Chip label={t('fileBrowser.showHidden')} icon={Eye} iconOnly={narrow} role="checkbox" selected={showHidden} onPress={() => setShowHidden(!showHidden)} testID="file-show-hidden" />
                             </View>
                         </Row>
                     </Stack>
