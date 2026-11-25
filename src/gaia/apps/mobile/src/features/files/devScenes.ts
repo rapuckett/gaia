@@ -5,10 +5,11 @@ import type { BrowseResponse, PreflightReport } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 
-export type FileBrowserScene = 'root' | 'folder' | 'search' | 'denied' | 'searchStopped' | 'selected' | 'askPartial';
+export type FileBrowserScene = 'root' | 'folder' | 'search' | 'denied' | 'searchStopped' | 'selected' | 'askPartial' | 'deep';
 
 const HOME = '/Users/me';
 const DOCS = `${HOME}/Documents`;
+const DEEP = `${DOCS}/Projects/2026/Reports`;
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
 const root: BrowseResponse = {
@@ -46,7 +47,7 @@ export function fileBrowserScene(scene: FileBrowserScene) {
     const client = createFakeClient({
         sessions: [{ id: 'chat-1', title: 'Board prep', created_at: ago(60), updated_at: ago(5), model: '', system_prompt: null, message_count: 1, document_ids: [] }],
         preflight: { os: 'mac-arm64', detected_platform: 'mac-arm64', ram_gb: 32, disk_free_gb: 200, npu_detected: false, gpu_name: null, gpu_vram_gb: null, lemonade_running: true, compatible: true } as PreflightReport,
-        fileFolders: { '': root, [DOCS]: folder, [`${HOME}/Desktop`]: 'denied' },
+        fileFolders: { '': root, [DOCS]: folder, [DEEP]: { ...folder, current_path: DEEP, parent_path: `${DOCS}/Projects/2026` }, [`${HOME}/Desktop`]: 'denied' },
         fileSearch: {
             query: 'board',
             total: 2,
@@ -68,6 +69,7 @@ export function fileBrowserScene(scene: FileBrowserScene) {
 export const FILE_BROWSER_START: Record<FileBrowserScene, { path?: string; search?: string; selected?: string[]; ask?: boolean }> = {
     root: {},
     folder: { path: DOCS },
+    deep: { path: DEEP },
     askPartial: { path: DOCS, selected: [`${DOCS}/q3-board.pdf`, `${DOCS}/budget.xlsx`], ask: true },
     selected: { path: DOCS, selected: [`${DOCS}/q3-board.pdf`, `${DOCS}/budget.xlsx`] },
     search: { search: 'board' },

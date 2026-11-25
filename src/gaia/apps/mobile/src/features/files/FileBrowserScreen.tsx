@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
 import { formatTimestamp } from '@webui/utils/documentLibrary.core';
@@ -99,6 +99,7 @@ export interface FileBrowserScreenProps {
 export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }: FileBrowserScreenProps) {
     const t = useT();
     const uiRtl = useDirection() === 'rtl';
+    const narrow = useWindowDimensions().width < 360;
     const preflight = useSetupPreflight();
     const pcIsMac = /^(mac|darwin)/i.test(preflight.data?.os ?? '');
 
@@ -197,6 +198,9 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
     }, [chosen.length]);
 
     const crumbs = breadcrumbs(currentPath);
+    // A long path keeps its last two folders; the head folds into one "…" that opens the folder just above them, dropped on a narrow screen to leave the two names room.
+    const shownCrumbs: { label: string; path: string; collapsed?: boolean }[] =
+        crumbs.length > 3 ? [{ label: crumbs[crumbs.length - 3]!.label, path: crumbs[crumbs.length - 3]!.path, collapsed: true }, ...crumbs.slice(-2)].slice(narrow ? 1 : 0) : crumbs;
     const filterLabel = t(FILE_TYPE_FILTERS.find((f) => f.value === typeFilter)?.label ?? 'fileBrowser.filter.all');
     const scope = search.data?.searched_locations ?? [];
     const scopeText = searchScopeText(scope, t);
@@ -271,25 +275,35 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                     <Stack gap="xs">
                         <Row gap="xs">
                             <Stack flex={1}>
-                                <HScroll dir="ltr">
-                                    <View style={{ minWidth: '100%', flexDirection: 'row', justifyContent: uiRtl ? 'flex-end' : 'flex-start' }} testID="file-breadcrumbs">
-                                        <Row dir="ltr" gap="xs">
-                                            {crumbs.map((crumb, i) => (
-                                                <Row key={crumb.path} dir="ltr" gap="xs">
-                                                    {i > 0 ? <Icon icon={ChevronRight} size="sm" tone="muted" fixed /> : null}
-                                                    <Pressable inline accessibilityLabel={crumb.label} onPress={() => open(crumb.path)}>
-                                                        <Text role="label" dir="ltr" tone={i === crumbs.length - 1 ? 'primary' : 'secondary'}>
-                                                            {crumb.label}
-                                                        </Text>
-                                                    </Pressable>
-                                                </Row>
-                                            ))}
-                                        </Row>
+                                <View style={{ minWidth: 0, overflow: 'hidden', flexDirection: 'row', justifyContent: uiRtl ? 'flex-end' : 'flex-start' }} testID="file-breadcrumbs">
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, direction: 'ltr', flexShrink: 1, minWidth: 0 }}>
+                                        {shownCrumbs.map((crumb, i) => (
+                                            <View key={crumb.path} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, direction: 'ltr', flexShrink: crumb.collapsed ? 0 : 1, minWidth: 0, overflow: 'hidden' }}>
+                                                {i > 0 ? (
+                                                    <View style={{ flexShrink: 0 }}>
+                                                        <Icon icon={ChevronRight} size="sm" tone="muted" fixed />
+                                                    </View>
+                                                ) : null}
+                                                <View style={{ flexShrink: 1, minWidth: 0 }}>
+                                                <Pressable inline accessibilityLabel={crumb.label} onPress={() => open(crumb.path)}>
+                                                    <Text role="label" dir="ltr" numberOfLines={1} tone={i === shownCrumbs.length - 1 ? 'primary' : 'secondary'}>
+                                                        {crumb.collapsed ? '…' : crumb.label}
+                                                    </Text>
+                                                </Pressable>
+                                                </View>
+                                            </View>
+                                        ))}
                                     </View>
-                                </HScroll>
+                                </View>
                             </Stack>
-                            {parentPath ? <IconButton icon={ArrowUp} variant="outlined" label={t('fileBrowser.goUp')} onPress={() => open(parentPath)} /> : null}
-                            <Chip label={t('fileBrowser.showHidden')} role="checkbox" selected={showHidden} onPress={() => setShowHidden(!showHidden)} testID="file-show-hidden" />
+                            {parentPath ? (
+                                <View style={{ flexShrink: 0 }}>
+                                    <IconButton icon={ArrowUp} variant="outlined" label={t('fileBrowser.goUp')} onPress={() => open(parentPath)} />
+                                </View>
+                            ) : null}
+                            <View style={{ flexShrink: 0 }}>
+                                <Chip label={t('fileBrowser.showHidden')} role="checkbox" selected={showHidden} onPress={() => setShowHidden(!showHidden)} testID="file-show-hidden" />
+                            </View>
                         </Row>
                     </Stack>
                 )}
