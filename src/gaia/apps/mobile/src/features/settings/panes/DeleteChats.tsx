@@ -48,7 +48,6 @@ export function DeleteChats() {
                 </Text>
                 <Button
                     variant="danger"
-                    full
                     label={t('settings.privacy.delete')}
                     busy={deleteAll.isPending}
                     disabled={sessions.length === 0}

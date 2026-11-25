@@ -713,6 +713,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'lang-switch-ar-ios': { section: 'general', gpuMemory: GPU, languageSwitch: 'ios' },
     // SET-PRIV-06: the Delete chats card with chats (`#tap=privacy-delete-all` opens the confirm sheet), and with none.
     'privacy-delete': { section: 'privacy', gpuMemory: GPU, data: { settings: SETTINGS, sessions: [chat('a'), chat('b'), chat('c')] } },
+    // SET-PRIV-09: the PC reports its data folder, so Where your data is shows the Data folder row.
+    'privacy-data-folder': { section: 'privacy', gpuMemory: GPU, status: { ...RUNNING, data_dir: '/Users/Shared/gaia-demo/.gaia' } as SystemStatus, data: { settings: SETTINGS, sessions: [chat('a'), chat('b'), chat('c')] } },
     // SET-PRIV-08: Local only turned on (`#tap=privacy-local-only`) while the model server is down.
     'privacy-server-down': {
         section: 'privacy',

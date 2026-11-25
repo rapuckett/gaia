@@ -209,6 +209,7 @@ function TroubleshootingReport() {
                     <PcOnlyAction
                         label={t('setup.logs.report')}
                         icon={Archive}
+                        full={false}
                         detail={t('setup.logs.reportOnPc')}
                         testID="privacy-report-pc-only"
                     />
