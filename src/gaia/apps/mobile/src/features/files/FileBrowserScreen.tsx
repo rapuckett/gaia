@@ -329,6 +329,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                                 title={item.name}
                                 subtitle={unsupported ? (narrow ? `${t.bare('fileBrowser.notIndexable')} · ${t('fileBrowser.notIndexableTitle')}` : t('fileBrowser.notIndexableTitle')) : subtitle}
                                 subtitleLines={unsupported ? 3 : 1}
+                                subtitleTone={unsupported && narrow ? 'warning' : undefined}
                                 selected={picked}
                                 accessibilityLabel={isFolder ? item.name : t('fileBrowser.selectAria', { name: item.name })}
                                 onPress={isFolder ? () => open(item.path) : unsupported ? undefined : () => toggle(item.path)}
