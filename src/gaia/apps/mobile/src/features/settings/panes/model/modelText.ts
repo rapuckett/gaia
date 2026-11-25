@@ -19,6 +19,17 @@ export function modelLabel(m: Pick<ProviderModel, 'id' | 'display_name'>): strin
     return m.display_name || shortModelName(m.id);
 }
 
+/** The in-use model's display name: its row's, else the Local list's, else the active answer's, else its short id. */
+export function inUseName(
+    model: string,
+    row: Pick<ProviderModel, 'display_name'> | null | undefined,
+    localModels: Pick<ProviderModel, 'id' | 'display_name'>[] | undefined,
+    activeName?: string | null,
+): string {
+    const local = localModels?.find((m) => sameModelId(model, m.id));
+    return row?.display_name || local?.display_name || activeName || modelLabel({ id: model });
+}
+
 /** What went wrong, in the PC's own words when it gave them. */
 export function errorText(err: unknown, t: Translate): string {
     return err instanceof GaiaApiError ? ltr(err.detail) : describeError(err, t);

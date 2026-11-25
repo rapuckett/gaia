@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import * as memoryApi from '../../services/memoryApi';
 import { useT } from '../../i18n/useT';
+import { useAnnounce } from '../LiveAnnouncer';
 import { isolate } from '../../i18n/registry';
 import {
     EMBEDDER_PROFILE as PROFILE,
@@ -22,6 +23,7 @@ export function EmbedderSetting() {
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [notice, setNotice] = useState(false);
+    useAnnounce(notice ? t('settings.memory.embedder.changed') : null);
 
     useEffect(() => {
         memoryApi.getEmbedder()
@@ -85,7 +87,7 @@ export function EmbedderSetting() {
                 <span className="settings-hint">{t('settings.memory.embedder.notDownloaded')}</span>
             )}
             {busy && <span className="settings-hint"><Loader2 size={13} className="spin" /> {t('settings.memory.embedder.applying')}</span>}
-            {notice && <p className="settings-ok" role="status">{t('settings.memory.embedder.changed')}</p>}
+            {notice && <p className="settings-ok">{t('settings.memory.embedder.changed')}</p>}
             {error && <p className="settings-error" role="alert">{error}</p>}
         </>
     );

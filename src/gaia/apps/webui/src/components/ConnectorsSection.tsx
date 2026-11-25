@@ -38,6 +38,7 @@ import { ConfirmSheet } from './setup/ConfirmSheet';
 import { DOWNLOAD_POLL_MS } from './settings/ModelSettings';
 import { SettingsDisclosure } from './settings/SettingsDisclosure';
 import { ltrIn } from './setup/format';
+import { useAnnounce } from './LiveAnnouncer';
 import './ConnectorsSection.css';
 
 export { connectScopes };
@@ -1213,6 +1214,7 @@ function MCPServerConfigureBody({
     onClearCheck: () => void;
 }) {
     const t = useT();
+    useAnnounce(check?.state === 'ok' ? t('settings.connectors.checkOk', { name: connector.display_name }) : null);
     const [values, setValues] = useState<Record<string, string>>(() =>
         Object.fromEntries(connector.mcp_env_keys.map((k) => [k, ''])),
     );
@@ -1451,7 +1453,7 @@ function MCPServerConfigureBody({
                 </p>
             )}
             {check?.state === 'ok' && (
-                <p className="connector-check connector-check--ok" role="status">
+                <p className="connector-check connector-check--ok">
                     <CheckCircle2 size={12} />
                     {t('settings.connectors.checkOk', { name: connector.display_name })}
                 </p>

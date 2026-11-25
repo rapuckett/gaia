@@ -19,6 +19,7 @@ import {
 } from '../../services/messagingApi';
 import { setVisibleInterval } from '../../utils/visibleInterval';
 import { ConfirmSheet } from '../setup/ConfirmSheet';
+import { useAnnounce } from '../LiveAnnouncer';
 
 const POLL_MS = 3000;
 /** States the bridge can leave by itself (a crash included), so the card watches them. */
@@ -88,6 +89,7 @@ export function MessagingSettings() {
     const [copied, setCopied] = useState<{ code: string; ok: boolean } | null>(null);
     const [confirmDisconnect, setConfirmDisconnect] = useState(false);
     const wasPairing = useRef(false);
+    useAnnounce(justPaired ? t('settings.messaging.paired') : null);
 
     const show = useCallback((next: DiscordStatus) => {
         if (wasPairing.current && next.paired && next.state === 'connected') setJustPaired(true);
@@ -324,7 +326,7 @@ export function MessagingSettings() {
 
                 {answering && (
                     <>
-                        {justPaired && <p className="settings-ok" role="status">{t('settings.messaging.paired')}</p>}
+                        {justPaired && <p className="settings-ok">{t('settings.messaging.paired')}</p>}
                         <p className="messaging-answering">
                             <span className="settings-key-status settings-ok" />
                             <span className="messaging-answering-text">

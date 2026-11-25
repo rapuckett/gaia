@@ -111,8 +111,8 @@ describe('setup logs', () => {
         });
         expect(mocked.fetchSetupReport).toHaveBeenCalledWith('diagnostics-20261102-091500.tgz');
         expect(click).toHaveBeenCalled();
-        expect(screen.getByRole('status')).toHaveTextContent('Saved (2 MB)');
-        expect(screen.getByRole('status')).toHaveTextContent('.gaia\\diagnostics-20261102-091500.tgz');
+        const saved = screen.getByText(/Saved \(2 MB\)/);
+        expect(saved).toHaveTextContent('.gaia\\diagnostics-20261102-091500.tgz');
         click.mockRestore();
     });
 

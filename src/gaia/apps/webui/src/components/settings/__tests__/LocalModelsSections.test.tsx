@@ -12,6 +12,9 @@ import { NO_GPU_SPLIT } from '../../../test/setupApiMocks';
 import { DownloadChip } from '../../setup/DownloadChip';
 import { EMBED, GEMMA, GPT_OSS, KOKORO, QWEN, SDXL, WHISPER, gpuStatus, plan, progress, runStatus } from '../../setup/__tests__/fixtures';
 import { LocalModelsSections } from '../LocalModelsSections';
+import { announce } from '../../../test/announcerMock';
+
+vi.mock('../../../components/LiveAnnouncer', () => import('../../../test/announcerMock'));
 
 vi.mock('../../../services/api', async (importOriginal) => {
     const real = await importOriginal<typeof api>();
@@ -25,6 +28,7 @@ const on = <T extends typeof QWEN>(e: T) => ({ ...e, downloaded: true, size_gb: 
 const AFTER_SETUP = () => plan([on(QWEN), { ...GEMMA, skipped: true, selected: false }, on(EMBED), GPT_OSS]);
 
 beforeEach(() => {
+    announce.mockClear();
     vi.clearAllMocks();
     resetSetupDownloads();
     useChatStore.setState({ systemStatus: null });
@@ -128,6 +132,7 @@ describe('Settings > Models on this PC', () => {
         fireEvent.click(within(sheet).getByRole('button', { name: 'Remove' }));
         await waitFor(() => expect(mocked.removeSetupModel).toHaveBeenCalledExactlyOnceWith(GEMMA.id));
         expect(await screen.findByText('Removed Gemma-4-E4B-it; 6.0 GB freed.')).toBeInTheDocument();
+        expect(announce).toHaveBeenCalledWith('Removed Gemma-4-E4B-it; 6.0 GB freed.');
     });
 
     it("says it can't list models while the model server is down", async () => {

@@ -7,6 +7,7 @@ import * as memoryApi from '../services/memoryApi';
 import { ref } from '../i18n/registry';
 import { useT } from '../i18n/useT';
 import { log } from '../utils/logger';
+import { announce } from './LiveAnnouncer';
 import {
     ABOUT_GROUPS,
     ABOUT_PAGE_SIZE,
@@ -137,6 +138,7 @@ export function MemoryDashboardAboutYou({ memoryEnabled, reloadKey, onChanged, o
             setItems(prev => (prev ?? []).filter(i => i.id !== item.id));
             setTotal(prev => Math.max(prev - 1, 0));
             setForgotten(prev => [item, ...prev]);
+            announce(t('mem.about.forgotAnnounce'));
             onChanged();
         } catch (err) {
             log.system.error('Failed to forget memory', err);
@@ -251,7 +253,7 @@ export function MemoryDashboardAboutYou({ memoryEnabled, reloadKey, onChanged, o
             </form>
 
             {forgotten.map(item => (
-                <div key={item.id} className="mem-about-forgotten" role="status">
+                <div key={item.id} className="mem-about-forgotten">
                     <span title={item.sensitive ? undefined : item.content}>
                         {item.sensitive ? t('mem.about.forgottenSensitive') : t('mem.about.forgotten', { content: oneLineQuote(item.content) })}
                     </span>
