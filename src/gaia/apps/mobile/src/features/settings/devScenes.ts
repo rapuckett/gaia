@@ -351,9 +351,9 @@ const PERM_CHATS: FakeClientData = {
     sessions: [chat('a'), chat('b'), chat('c')],
     permissions: { a: 'full_access', b: 'ask', c: 'ask' },
     permissionGrants: {
-        a: [{ key: 'shell:git status', label: 'git status' }],
-        b: [{ key: 'shell:npm test', label: 'npm test' }, { key: 'shell:ls', label: 'ls' }],
-        c: [{ key: 'write:notes.md', label: 'notes.md' }],
+        a: [{ key: 'run_shell_command:git status', label: 'git status' }],
+        b: [{ key: 'run_shell_command:npm test', label: 'npm test' }, { key: 'run_shell_command:ls', label: 'ls' }],
+        c: [{ key: 'write_file:notes.md', label: 'notes.md' }],
     },
     defaultPermissionMode: 'ask',
 };

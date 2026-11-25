@@ -24,7 +24,7 @@ export function KeyValueCard({ data }: { data: unknown }) {
                 {data.items.slice(0, MAX_ITEMS).map((item, i) => {
                     const value = scalarText(item.value);
                     return (
-                        <Stack key={i} gap="xs" accessibilityLabel={t.bare('mobileApp.render.keyValue', { key: item.key, value })}>
+                        <Stack key={i} gap="xs" accessible accessibilityLabel={t.bare('mobileApp.render.keyValue', { key: item.key, value })}>
                             <Text role="caption" tone="secondary" dir={valueDir(item.key)}>
                                 {item.key}
                             </Text>

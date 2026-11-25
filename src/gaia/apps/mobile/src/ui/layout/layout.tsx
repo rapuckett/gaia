@@ -38,8 +38,10 @@ export interface StackProps extends BoxProps {
     padding?: Space;
     paddingX?: Space;
     paddingY?: Space;
-    /** Reads the whole box as one item with this label. */
+    /** The box's label. With `accessible` it is the one item a screen reader reads; without, it only labels the group. */
     accessibilityLabel?: string;
+    /** Merge the box into ONE screen-reader item. Only for a leaf with nothing to press: a merged box hides its children. */
+    accessible?: boolean;
 }
 
 export interface RowProps extends BoxProps {
@@ -64,7 +66,7 @@ function boxStyle(space: Record<Space, number>, p: BoxProps): Mut<ViewStyle> {
     return style;
 }
 
-export function Stack({ children, padding, paddingX, paddingY, testID, accessibilityRole, accessibilityLabel, ...box }: StackProps) {
+export function Stack({ children, padding, paddingX, paddingY, testID, accessibilityRole, accessibilityLabel, accessible, ...box }: StackProps) {
     const { space } = useTheme();
     const style = boxStyle(space, box);
     if (padding) style.padding = space[padding];
@@ -76,7 +78,7 @@ export function Stack({ children, padding, paddingX, paddingY, testID, accessibi
             {...(box.dir ? dirProp(box.dir) : {})}
             testID={testID}
             accessibilityRole={accessibilityRole}
-            accessible={accessibilityLabel ? true : undefined}
+            accessible={accessible ? true : undefined}
             accessibilityLabel={accessibilityLabel}
         >
             {children}

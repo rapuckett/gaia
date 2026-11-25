@@ -4,6 +4,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { AccessibilityInfo, Platform, View } from 'react-native';
 
+import { isMessageKey } from '@webui/i18n/registry';
 import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { useDeviceRefused } from '@/api/routeAccess';
@@ -11,7 +12,7 @@ import type { SessionPermissions } from '@/api/client.types';
 import { useAllPermissions, usePermissionActions, useSessions } from '@/data';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import {
-    ActionSheet, Badge, Button, Card, Disclosure, Divider, ErrorState, IconButton, ListSkeleton, Ltr, Notice, PRESSABLE_MIN_SIZE, Row, Sheet, Stack, Switch, Text,
+    ActionSheet, Badge, Button, Card, Disclosure, Divider, ErrorState, IconButton, ListSkeleton, Ltr, Notice, PRESSABLE_MIN_SIZE, Pressable, Row, Sheet, SmallButton, Stack, Switch, Text,
 } from '@/ui';
 import { Ellipsis } from '@/ui/icons';
 
@@ -20,6 +21,12 @@ import { SettingsAnchor } from '../targets';
 
 /** Dev scenes only: opens the full-access confirm sheet on arrival. */
 export const SeedConfirmFullAccess = createContext(false);
+
+/** A grant's key starts with its tool (`run_shell_command:ls`, `run_python`); no key for that tool means no kind line. */
+function grantKindKey(key: string) {
+    const kind = `mobileApp.permissions.kind.${key.split(':', 1)[0]}`;
+    return isMessageKey(kind) ? kind : null;
+}
 
 /** Settings > Permissions: the default mode for new chats, and every chat holding full access or "always allow" grants. */
 export default function Permissions() {
@@ -110,7 +117,17 @@ export default function Permissions() {
                                         <Row gap="sm">
                                             <Stack flex={1} gap="xs">
                                                 <Text role="label" weight="medium" dir="auto" numberOfLines={2}>{titleOf(r.session_id)}</Text>
-                                                <Row><Badge label={t.bare(r.mode === 'full_access' ? 'perm.full' : 'perm.ask')} accessibilityLabel={t(r.mode === 'full_access' ? 'perm.full' : 'perm.ask')} tone={r.mode === 'full_access' ? 'warning' : 'neutral'} /></Row>
+                                                <Row gap="sm" wrap>
+                                                    <Badge label={t.bare(r.mode === 'full_access' ? 'perm.full' : 'perm.ask')} accessibilityLabel={t(r.mode === 'full_access' ? 'perm.full' : 'perm.ask')} tone={r.mode === 'full_access' ? 'warning' : 'neutral'} />
+                                                    {r.mode === 'full_access' ? (
+                                                        <SmallButton
+                                                            label={t.bare('settings.permissions.turnOff')}
+                                                            accessibilityLabel={t('settings.permissions.turnOff')}
+                                                            testID={`perm-chat-turn-off-${r.session_id}`}
+                                                            onPress={() => run(setChatMode.mutateAsync({ sessionId: r.session_id, mode: 'ask' }))}
+                                                        />
+                                                    ) : null}
+                                                </Row>
                                             </Stack>
                                             {r.mode === 'full_access' || r.grants.length > 1 ? (
                                                 <IconButton
@@ -128,16 +145,20 @@ export default function Permissions() {
                                             <Stack key={g.key} gap="xs">
                                                 <Divider />
                                                 <Row gap="sm">
-                                                    <Stack flex={1}><Text code numberOfLines={2}><Ltr>{g.label}</Ltr></Text></Stack>
-                                                    <Button
-                                                        label={t.bare('settings.permissions.revoke')}
-                                                        accessibilityLabel={t('settings.permissions.revokeAria', { name: g.label })}
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        shrink={false}
-                                                        testID={`perm-grant-revoke-${r.session_id}-${gi}`}
+                                                    <Stack flex={1} gap="xs">
+                                                        {grantKindKey(g.key) ? <Text role="caption" tone="muted">{t(grantKindKey(g.key)!)}</Text> : null}
+                                                        <Text role="caption" mono numberOfLines={2}><Ltr>{g.label}</Ltr></Text>
+                                                    </Stack>
+                                                    <Pressable
                                                         onPress={() => run(revoke.mutateAsync({ sessionId: r.session_id, key: g.key }))}
-                                                    />
+                                                        accessibilityRole="button"
+                                                        accessibilityLabel={t('settings.permissions.revokeAria', { name: g.label })}
+                                                        minSize={44}
+                                                        inline
+                                                        testID={`perm-grant-revoke-${r.session_id}-${gi}`}
+                                                    >
+                                                        <Text role="caption" weight="medium" tone="accent">{t.bare('settings.permissions.revoke')}</Text>
+                                                    </Pressable>
                                                 </Row>
                                             </Stack>
                                         ))}

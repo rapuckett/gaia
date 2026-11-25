@@ -137,8 +137,8 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
             </Row>
             {live && phase !== 'confirm' && phase !== 'conflict' ? <Text role="caption" tone="muted">{t('chg.wait')}</Text> : null}
             {phase === 'confirm' ? (
-                <Stack gap="sm" accessibilityRole="summary" accessibilityLabel={t('chg.confirmLabel')}>
-                    <Text role="caption" dir="auto">{t(count === 1 ? 'chg.confirm.one' : 'chg.confirm.other', { files: filesRef(count) })}</Text>
+                <Stack gap="sm">
+                    <Text role="caption" dir="auto" accessibilityRole="header">{t(count === 1 ? 'chg.confirm.one' : 'chg.confirm.other', { files: filesRef(count) })}</Text>
                     <Row gap="sm" wrap stack>
                         <Button size="sm" variant="danger" label={t('chg.undoAll')} disabled={live} onPress={() => void run(false)} testID="changes-undo-confirm" />
                         <Button size="sm" variant="secondary" label={t('mobileApp.changes.cancel')} onPress={() => setPhase('idle')} testID="changes-undo-cancel" />

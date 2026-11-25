@@ -23,10 +23,10 @@ const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 const BASE = 'http://192.168.1.20:4200';
 const g = (key: string) => ({ key, label: key.replace('shell:', '') });
 
-function mount() {
+function mount(betaMode = 'ask') {
     const state: Record<string, { mode: string; grants: { key: string; label: string }[] }> = {
         'chat a': { mode: 'ask', grants: [g('shell:ls'), g('shell:pwd'), g('shell:cat')] },
-        'chat-b': { mode: 'ask', grants: [g('shell:git status')] },
+        'chat-b': { mode: betaMode, grants: [g('shell:git status')] },
     };
     const view = (id: string) => ({ session_id: id, ...state[id]! });
     const { fetch, calls } = createRecordingFetch((call) => {
@@ -36,6 +36,12 @@ function mount() {
             const id = decodeURIComponent(del[1]!);
             const key = url.searchParams.get('key');
             state[id]!.grants = key === null ? [] : state[id]!.grants.filter((x) => x.key !== key);
+            return jsonResponse(view(id));
+        }
+        const put = /^\/api\/chat\/permissions\/(.+)$/.exec(url.pathname);
+        if (call.method === 'PUT' && put) {
+            const id = decodeURIComponent(put[1]!);
+            state[id]!.mode = JSON.parse(String(call.body)).mode;
             return jsonResponse(view(id));
         }
         if (url.pathname === '/api/chat/permissions') {
@@ -64,6 +70,7 @@ function mount() {
 
 // A grant label is wrapped in direction marks, so match around them.
 const grant = (label: string) => new RegExp(`^\\W*${label}\\W*$`);
+const puts = (calls: RecordedCall[]) => calls.filter((c) => c.method === 'PUT');
 const deletes = (calls: RecordedCall[]) => calls.filter((c) => c.method === 'DELETE');
 
 describeNative('Settings > Permissions against the real client', () => {
@@ -122,5 +129,27 @@ describeNative('Settings > Permissions against the real client', () => {
         if (Platform.OS === 'ios') expect(announce).toHaveBeenCalledWith("Removed this chat's extra permissions.");
         announce.mockRestore();
         queryClient.clear();
+    });
+
+    it('turn-off button shows only on a full-access chat and sends the same PUT as the "..." action', async () => {
+        const { calls, queryClient, wrapper } = mount('full_access');
+        await render(<Permissions />, { wrapper });
+        await screen.findByText('Alpha chat');
+        expect(screen.queryByTestId('perm-chat-turn-off-chat a')).toBeNull();
+        await fireEvent.press(screen.getByTestId('perm-chat-turn-off-chat-b'));
+        await waitFor(() => expect(puts(calls)).toHaveLength(1));
+        const direct = puts(calls)[0]!;
+        expect(direct).toMatchObject({ method: 'PUT', url: `${BASE}/api/chat/permissions/chat-b`, headers: { Authorization: 'Bearer tok-1' } });
+        expect(JSON.parse(String(direct.body))).toEqual({ mode: 'ask' });
+
+        const again = mount('full_access');
+        await render(<Permissions />, { wrapper: again.wrapper });
+        await screen.findAllByText('Beta chat');
+        await fireEvent.press(screen.getAllByTestId('perm-chat-menu-chat-b')[0]!);
+        await fireEvent.press(await screen.findByTestId('perm-chat-turn-off-full'));
+        await waitFor(() => expect(puts(again.calls)).toHaveLength(1));
+        expect(puts(again.calls)[0]).toMatchObject({ method: direct.method, url: direct.url, headers: direct.headers, body: direct.body });
+        queryClient.clear();
+        again.queryClient.clear();
     });
 });
