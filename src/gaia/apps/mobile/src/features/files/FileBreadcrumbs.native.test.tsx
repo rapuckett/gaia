@@ -39,3 +39,26 @@ jest.mock('expo-image', () => ({ Image: () => null }));
         expect(root.props.style.writingDirection).toBe('ltr');
     });
 });
+
+(Platform.OS === 'web' ? describe.skip : describe)('Deep breadcrumb', () => {
+    it('folds the head of a long path into an ellipsis, keeps the last two folders, and keeps the up button and Show hidden chip', async () => {
+        const client = fileBrowserScene('deep');
+        const wrapper = ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <GaiaClientProvider client={client}>
+                    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 320, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                        <ThemeProvider>{children}</ThemeProvider>
+                    </SafeAreaProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>
+        );
+        await render(<FileBrowserScreen chatId="chat-1" onClose={() => {}} initial={FILE_BROWSER_START.deep} />, { wrapper });
+        expect(await screen.findByText('2026')).toBeTruthy();
+        expect(screen.getAllByText('Reports').length).toBeGreaterThan(0);
+        expect(screen.getByText('…')).toBeTruthy();
+        expect(screen.queryByText('Users')).toBeNull();
+        expect(screen.queryByText('Projects')).toBeNull();
+        expect(screen.getByTestId('file-show-hidden')).toBeTruthy();
+        expect(await screen.findByLabelText('Go up')).toBeTruthy();
+    });
+});
