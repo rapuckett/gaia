@@ -49,7 +49,10 @@ jest.mock('@/ui', () => {
     };
 });
 jest.mock('./model/ModelList', () => ({ ModelList: () => null }));
-jest.mock('./model/AgentChoice', () => ({ AgentChoice: () => null }));
+jest.mock('./model/AgentChoice', () => {
+    const { Text: RNText } = jest.requireActual('react-native');
+    return { AgentChoice: () => <RNText>Agent card</RNText> };
+});
 jest.mock('./model/ProviderKey', () => ({ ProviderKey: () => null }));
 jest.mock('./model/CloudSpending', () => ({ CloudSpending: () => null }));
 jest.mock('./model/CloudPrices', () => ({ CloudPrices: () => null }));
@@ -155,5 +158,33 @@ describe('Model pane provider notice', () => {
     it('shows a remote provider\'s notice, and none when the PC sends it blank', async () => {
         expect(await render(onFireworks(cloud('Chat history is sent to Fireworks AI.')))).toContain('"role":"note"');
         expect(await render(onFireworks(cloud('  ')))).not.toContain('"role":"note"');
+    });
+});
+
+describe('Model pane top', () => {
+    const cloud: ProviderSummaryList = {
+        providers: [local, { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: '', configured: false, blocked: false }],
+        lemonade_error: null,
+    };
+    const data = (): FakeClientData => ({
+        providers: cloud,
+        activeModel: { ...active, display_name: 'Gemma' },
+        providerModels: {
+            local: { provider: 'local', models: [model('Gemma-4-E4B-it-GGUF', 'Gemma 4 E4B')] },
+            fireworks: { provider: 'fireworks', models: [] },
+        },
+        contexts: {},
+    });
+
+    it("puts Model in use after the Agent card, as the PC's pane does", async () => {
+        const shown = await render(data());
+        expect(shown.indexOf('Agent card')).toBeGreaterThan(-1);
+        expect(shown.indexOf('Model in use')).toBeGreaterThan(shown.indexOf('Agent card'));
+    });
+
+    it('names the in-use model by the Local list display name, not the short active name', async () => {
+        const shown = await render({ ...data(), providerModels: { ...data().providerModels, local: { provider: 'local', models: [model('Gemma-4-E4B-it-GGUF', 'Gemma 4 E4B')] } }, activeModel: { ...active, display_name: 'Gemma', provider: 'fireworks' } });
+        expect(shown).toContain('Gemma 4 E4B');
+        expect(shown).not.toContain('"Gemma"');
     });
 });
