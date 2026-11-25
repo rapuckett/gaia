@@ -4793,6 +4793,7 @@ const messages: Messages = {
     'mobileApp.settings.privacy.stays': 'تبقى المحادثات والمستندات والذاكرة على الكمبيوتر لديك.',
     'mobileApp.settings.privacy.local': 'تُنشأ الإجابات الآن على الكمبيوتر لديك أيضًا.',
     'mobileApp.readAloud.unsupported': 'تحتاج القراءة بصوت عالٍ إلى إصدار أحدث من GAIA على الكمبيوتر لديك. حدّثه ثم حاول مرة أخرى.',
+    'mobileApp.readAloud.dismissError': 'إغلاق خطأ القراءة بصوت عالٍ',
     'mobileApp.answer.place.thisPc': 'على الكمبيوتر لديك',
     'mobileApp.rail.preview': 'معاينة',
     'mobileApp.rail.errorShort': 'تعذّر تجميع مصادر هذا الدور وتفاصيله.',

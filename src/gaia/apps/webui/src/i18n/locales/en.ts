@@ -4794,6 +4794,7 @@ export const enMessages = {
     'mobileApp.settings.privacy.stays': 'Chats, documents and memory stay on your PC.',
     'mobileApp.settings.privacy.local': 'Right now answers are generated on your PC too.',
     'mobileApp.readAloud.unsupported': 'Reading aloud needs a newer GAIA on your PC. Update it, then try again.',
+    'mobileApp.readAloud.dismissError': 'Close the read-aloud error',
     'mobileApp.answer.place.thisPc': 'on your PC',
     'mobileApp.rail.preview': 'Preview',
     'mobileApp.rail.errorShort': 'Couldn\'t put together this turn\'s sources and details.',
