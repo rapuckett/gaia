@@ -14,6 +14,8 @@ import { dueLabel, MemoryDashboardAboutYou } from '../MemoryDashboardAboutYou';
 import * as memoryApi from '../../services/memoryApi';
 
 vi.mock('../../services/memoryApi');
+vi.mock('../LiveAnnouncer', () => import('../../test/announcerMock'));
+import { announce } from '../../test/announcerMock';
 
 const mockedApi = vi.mocked(memoryApi);
 
@@ -114,8 +116,11 @@ describe('What GAIA knows about you', () => {
         fireEvent.click(within(itemRow('Lives in Calgary')).getByRole('button', { name: /Forget/ }));
 
         await waitFor(() => expect(mockedApi.deleteKnowledge).toHaveBeenCalledWith('k2'));
-        const forgotten = (await screen.findByText(/Forgotten:/)).closest('[role="status"]')!;
+        const forgotten = (await screen.findByText(/Forgotten:/)).closest('.mem-about-forgotten')!;
         expect(forgotten).toHaveTextContent('Lives in Calgary');
+        expect(forgotten).not.toHaveAttribute('role');
+        expect(announce).toHaveBeenCalledWith('Memory forgotten. Undo is next to it.');
+        expect(vi.mocked(announce).mock.calls.flat().join(' ')).not.toMatch(/Calgary/);
         expect(screen.queryByRole('button', { name: /Forget: Lives in Calgary/ })).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: /Undo/ }));

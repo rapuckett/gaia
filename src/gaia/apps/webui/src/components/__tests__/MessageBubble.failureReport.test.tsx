@@ -11,6 +11,8 @@ import * as api from '../../services/api';
 import type { Message } from '../../types';
 import { classifyChatError } from '../../utils/streamErrors';
 
+import { announce } from '../../test/announcerMock';
+vi.mock('../../components/LiveAnnouncer', () => import('../../test/announcerMock'));
 vi.mock('../../services/api', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../services/api')>();
     return { ...actual, createSetupReport: vi.fn(), fetchSetupReport: vi.fn() };
@@ -32,6 +34,7 @@ const base: Message = {
 
 describe('failure report on a message', () => {
     beforeEach(() => {
+        announce.mockClear();
         vi.clearAllMocks();
         URL.createObjectURL = vi.fn(() => 'blob:report');
         URL.revokeObjectURL = vi.fn();
@@ -72,7 +75,8 @@ describe('failure report on a message', () => {
         });
         expect(mocked.fetchSetupReport).toHaveBeenCalledWith('diagnostics-20261104-192300.tgz');
         expect(click).toHaveBeenCalled();
-        expect(screen.getByRole('status')).toHaveTextContent('/home/you/.gaia/diagnostics-20261104-192300.tgz');
+        expect(screen.getByText(/diagnostics-20261104-192300\.tgz/)).toBeInTheDocument();
+        expect(announce).toHaveBeenCalledWith(expect.stringContaining('Saved'));
     });
 
     it('says why when the report could not be saved', async () => {

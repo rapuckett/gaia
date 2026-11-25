@@ -4,6 +4,7 @@
 import { AlertCircle, Check, ChevronRight, Copy, FolderOpen } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useT } from '../../i18n/useT';
+import { useAnnounce } from '../LiveAnnouncer';
 import * as api from '../../services/api';
 import type { PreflightReport, SetupPlan } from '../../types';
 import { deviceText, facts, installed, JOB_KEYS, specText } from './detected';
@@ -33,6 +34,7 @@ export function DetectedSummary({ plan, hardware, onChangeMemory }: { plan: Setu
     const f = facts(plan, hardware);
     const [open, setOpen] = useState(false);
     const [copied, setCopied] = useState<'done' | 'failed' | null>(null);
+    useAnnounce(copied ? t(copied === 'done' ? 'setup.found.copied' : 'setup.found.copyFailed') : null);
     const [openError, setOpenError] = useState<string | null>(null);
     // The folder itself, in the PC's file browser; the full path is in the link's tooltip and the copy.
     const openFolder = async (path: string) => {
@@ -72,7 +74,7 @@ export function DetectedSummary({ plan, hardware, onChangeMemory }: { plan: Setu
                 <button type="button" className="found-copy" onClick={copy} aria-label={t('setup.found.copy')} title={t('setup.found.copy')}>
                     {copied === 'done' ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
                 </button>
-                {copied && <span className="found-copied" role="status">{t(copied === 'done' ? 'setup.found.copied' : 'setup.found.copyFailed')}</span>}
+                {copied && <span className="found-copied">{t(copied === 'done' ? 'setup.found.copied' : 'setup.found.copyFailed')}</span>}
             </div>
 
             <dl className="found-glance">

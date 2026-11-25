@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 import * as api from '../../services/api';
 import { useT } from '../../i18n/useT';
+import { useAnnounce } from '../LiveAnnouncer';
 import { scopedStatus, useSetupDownloads } from '../../stores/setupDownloadsStore';
 import { useModelStore } from '../../stores/modelStore';
 import type { GpuMemoryStatus, SetupCatalogEntry, SetupModelProgress, SetupPlan } from '../../types';
@@ -51,6 +52,7 @@ export function LocalModelsSections({ downloadsSlot }: { downloadsSlot?: HTMLEle
     const [sheet, setSheet] = useState<Sheet | null>(null);
     const [busy, setBusy] = useState(false);
     const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+    useAnnounce(notice?.ok ? notice.text : null);
     const [noFitAcked, setNoFitAcked] = useState(false);
     const [gpu, setGpu] = useState<GpuMemoryStatus | null>(null);
     const [gpuError, setGpuError] = useState<string | null>(null);
@@ -273,7 +275,7 @@ export function LocalModelsSections({ downloadsSlot }: { downloadsSlot?: HTMLEle
                             </div>
                         </>
                     )}
-                    {notice?.ok && <p className="settings-ok" role="status">{notice.text}</p>}
+                    {notice?.ok && <p className="settings-ok">{notice.text}</p>}
                     {notice && !notice.ok && <ErrorNotice message={notice.text} />}
                 </section>
             </SettingsDisclosure>

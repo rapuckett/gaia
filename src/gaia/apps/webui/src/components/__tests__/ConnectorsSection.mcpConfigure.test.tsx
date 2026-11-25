@@ -24,7 +24,10 @@ vi.mock('../../hooks/useConnectorsSSE', () => ({
     useConnectorsSSE: () => {},
 }));
 
+vi.mock('../LiveAnnouncer', () => import('../../test/announcerMock'));
+
 import * as api from '../../services/api';
+import { announce } from '../../test/announcerMock';
 import { useChatStore } from '../../stores/chatStore';
 import { ConnectorsSection } from '../ConnectorsSection';
 
@@ -303,6 +306,7 @@ describe('MCP connector configure panel', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
         expect(await screen.findByText('GitHub started without errors.')).toBeInTheDocument();
+        expect(announce).toHaveBeenCalledWith('GitHub started without errors.');
         expect(mocked.testConnector).toHaveBeenCalledWith('mcp-github');
     });
 
@@ -321,6 +325,8 @@ describe('MCP connector configure panel', () => {
             await screen.findByText("Slack didn't start. Check the token, then save it again."),
         ).toBeInTheDocument();
         expect(screen.getByText('Authentication failed - check your Slack tokens')).toBeInTheDocument();
+        expect(screen.getByText("Slack didn't start. Check the token, then save it again.").closest('[role="alert"]')).not.toBeNull();
+        expect(announce).not.toHaveBeenCalledWith(expect.stringContaining("didn't start"));
         // The header must not go on saying Connected above the failure.
         const tile = document.querySelector('[data-connector-id="mcp-slack"]') as HTMLElement;
         expect(within(tile).getByText('Not working')).toBeInTheDocument();

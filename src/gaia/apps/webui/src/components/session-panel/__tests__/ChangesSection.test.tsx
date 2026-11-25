@@ -16,6 +16,8 @@ import { untrackedWarning } from '../../../utils/untrackedWork';
 import { readsAs } from '../../../test/readsAs';
 import { NO_CHANGES, resetPanelState, SID, stubPanelApi } from './testUtils';
 
+import { announce } from '../../../test/announcerMock';
+vi.mock('../../../components/LiveAnnouncer', () => import('../../../test/announcerMock'));
 vi.mock('../../../services/api');
 
 let mocked: ReturnType<typeof stubPanelApi>;
@@ -72,6 +74,8 @@ function conflictError(detail: string) {
 }
 
 beforeEach(() => {
+
+    announce.mockClear();
     vi.clearAllMocks();
     mocked = stubPanelApi();
     resetPanelState();
@@ -154,7 +158,7 @@ describe('ChangesSection', () => {
         mocked.getSessionChanges.mockResolvedValue(NO_CHANGES);
         act(() => { window.dispatchEvent(new CustomEvent('gaia:changes-undone', { detail: SID })); });
         await waitFor(() => expect(screen.queryByText('app.py')).not.toBeInTheDocument());
-        expect(screen.getByRole('status')).toHaveTextContent(tEn('mobileApp.changes.done.restored.other', { n: 2 }));
+        expect(announce).toHaveBeenCalledWith(expect.stringContaining(tEn('mobileApp.changes.done.restored.other', { n: 2 })));
     });
 
     it('cancelling Undo all runs nothing', async () => {
