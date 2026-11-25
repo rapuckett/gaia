@@ -6,6 +6,7 @@ import { ChevronDown, Loader2 } from 'lucide-react';
 import * as api from '../../services/api';
 import { ref } from '../../i18n/registry';
 import { useT } from '../../i18n/useT';
+import { useAnnounce } from '../LiveAnnouncer';
 import { ctxLabel } from '../modelMeta';
 import { isServerDown } from './ErrorNotice';
 import type { ContextChoice } from '../../types';
@@ -19,6 +20,7 @@ export function ModelContextSize({ model }: { model: string }) {
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
+    useAnnounce(notice);
 
     useEffect(() => {
         setView(null);
@@ -93,7 +95,7 @@ export function ModelContextSize({ model }: { model: string }) {
             )}
             {loadedDiffers && <span className="settings-hint">{t('settings.ctx.loadedAt', { size: ctxLabel(view.loaded_ctx) })}</span>}
             {busy && <span className="settings-hint"><Loader2 size={13} className="spin" /> {t('settings.ctx.applying')}</span>}
-            {notice && <p className="settings-ok" role="status">{notice}</p>}
+            {notice && <p className="settings-ok">{notice}</p>}
             {error && <p className="settings-error" role="alert">{error}</p>}
         </>
     );

@@ -9,6 +9,8 @@ import * as api from '../../services/api';
 import type { Document } from '../../types';
 import { stripIsolates } from '../../i18n/registry';
 
+import { announce } from '../../test/announcerMock';
+vi.mock('../../components/LiveAnnouncer', () => import('../../test/announcerMock'));
 vi.mock('../../services/api');
 
 const mockedApi = vi.mocked(api);
@@ -26,6 +28,8 @@ const NOTES: Document = {
 };
 
 beforeEach(() => {
+
+    announce.mockClear();
     vi.clearAllMocks();
     mockedApi.listDocuments.mockResolvedValue({ documents: [NOTES], total: 1, total_size_bytes: 7270, total_chunks: 7 });
     mockedApi.deleteDocument.mockResolvedValue(undefined as never);
@@ -50,7 +54,7 @@ describe('removing a document', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Remove garden-notes.txt' }));
 
-        expect(screen.getByRole('status')).toHaveTextContent('Removed garden-notes.txt from your library. The file on your PC is untouched.');
+        expect(announce).toHaveBeenCalledWith('Removed garden-notes.txt from your library. The file on your PC is untouched.');
         expect(screen.queryByText('garden-notes.txt')).toBeNull();
         expect(mockedApi.deleteDocument).not.toHaveBeenCalled();
 

@@ -6,6 +6,7 @@ import { ChevronDown } from 'lucide-react';
 import * as api from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
 import { useT } from '../../i18n/useT';
+import { useAnnounce } from '../LiveAnnouncer';
 import type { PermissionMode, SessionPermissions } from '../../types';
 import { announcePermissionMode } from '../../utils/permissionModeEvents';
 import { SettingsDisclosure } from './SettingsDisclosure';
@@ -19,6 +20,7 @@ export function PermissionsSettings() {
     const [confirming, setConfirming] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [revokedAll, setRevokedAll] = useState(false);
+    useAnnounce(revokedAll ? t('settings.permissions.revokedAll') : null);
     const revokedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => () => { if (revokedTimer.current) clearTimeout(revokedTimer.current); }, []);
 
@@ -156,7 +158,7 @@ export function PermissionsSettings() {
                 ))}
                 </SettingsDisclosure>
             )}
-            {revokedAll && <div className="toast app-restore-toast" role="status">{t('settings.permissions.revokedAll')}</div>}
+            {revokedAll && <div className="toast app-restore-toast">{t('settings.permissions.revokedAll')}</div>}
         </div>
     );
 }

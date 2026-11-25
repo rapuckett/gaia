@@ -15,6 +15,8 @@ import * as api from '../../../services/api';
 import { mockSetupApis } from '../../../test/setupApiMocks';
 import type { ActiveModel, CustomModelReport, ProviderInfo, ProviderModel } from '../../../types';
 
+import { announce } from '../../../test/announcerMock';
+vi.mock('../../../components/LiveAnnouncer', () => import('../../../test/announcerMock'));
 vi.mock('../../../services/api');
 
 const mockedApi = vi.mocked(api);
@@ -74,6 +76,8 @@ const UNSUPPORTED: CustomModelReport = {
 let models: ProviderModel[];
 
 beforeEach(() => {
+
+    announce.mockClear();
     vi.clearAllMocks();
     mockSetupApis(mockedApi);
     models = [local(GEMMA, { display_name: 'Gemma 4 E4B' })];
@@ -120,7 +124,7 @@ describe('ModelSettings custom models', () => {
         expect(within(row).getByRole('button', { name: /Download/ })).toBeInTheDocument();
         // A new model lands in a group that starts closed; the user must see it.
         expect((row.closest('details') as HTMLDetailsElement).open).toBe(true);
-        expect(screen.getByRole('status')).toHaveTextContent('Added Qwen3-4B-Instruct-2507 Q4_K_M');
+        expect(announce).toHaveBeenCalledWith(expect.stringContaining('Added Qwen3-4B-Instruct-2507 Q4_K_M'));
     });
 
     it('re-checks with the quantization picked', async () => {

@@ -1,12 +1,14 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AddSkillsFromLink } from '../AddSkillsFromLink';
 import * as api from '../../../services/api';
 import type { LinkSkill } from '../../../types';
 
+import { announce } from '../../../test/announcerMock';
+vi.mock('../../../components/LiveAnnouncer', () => import('../../../test/announcerMock'));
 vi.mock('../../../services/api');
 
 const mockedApi = vi.mocked(api);
@@ -17,6 +19,8 @@ function found(name: string, extra: Partial<LinkSkill> = {}): LinkSkill {
 }
 
 beforeEach(() => {
+
+    announce.mockClear();
     vi.clearAllMocks();
     mockedApi.previewSkillLink.mockResolvedValue({
         link: LINK,
@@ -94,7 +98,7 @@ describe('AddSkillsFromLink', () => {
         fireEvent.click(screen.getByLabelText('Include skills with code'));
         fireEvent.click(screen.getByLabelText('Add babysit'));
         fireEvent.click(screen.getByRole('button', { name: 'Add 3' }));
-        await screen.findByRole('status');
+        await waitFor(() => expect(announce).toHaveBeenCalled());
         expect(mockedApi.addSkillsFromLink).toHaveBeenCalledWith(LINK, ['deslop', 'tdd', 'babysit'], true, 'commit:abc');
     });
 
@@ -105,7 +109,7 @@ describe('AddSkillsFromLink', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Read' }));
         fireEvent.click(await screen.findByLabelText('Add tdd'));
         fireEvent.click(await screen.findByRole('button', { name: 'Add 1' }));
-        expect(await screen.findByRole('status')).toHaveTextContent('Added deslop.');
+        await waitFor(() => expect(announce).toHaveBeenCalledWith('Added deslop.'));
         expect(mockedApi.addSkillsFromLink).toHaveBeenCalledWith(LINK, ['deslop'], false, 'commit:abc');
         expect(onAdded).toHaveBeenCalledOnce();
     });

@@ -28,6 +28,7 @@ import { isCodeFile } from './sessionFocus';
 import type { ChatFileChange, GitRepo, SessionChanges, SessionGit } from '../../types/sessionPanel';
 import { isolate, ref, type MessageKey, type Param } from '../../i18n/registry';
 import { tEn, useT, type Translate } from '../../i18n/useT';
+import { useAnnounce } from '../LiveAnnouncer';
 import { visibleName } from '../CalendarApproval';
 
 function baseName(path: string): string {
@@ -65,6 +66,7 @@ export function ChangesSection({ sessionId, busy, onJumpToMessage }: ChangesSect
     const [error, setError] = useState<Param | null>(null);
     // Kept here: after Undo all the list empties, and the result must stay readable.
     const [undone, setUndone] = useState<string | null>(null);
+    useAnnounce(undone);
 
     const load = useCallback(() => {
         Promise.resolve()
@@ -109,7 +111,7 @@ export function ChangesSection({ sessionId, busy, onJumpToMessage }: ChangesSect
                     onJumpToMessage={onJumpToMessage}
                 />
             )}
-            {empty && undone && <p className="sp-ok" role="status">{undone}</p>}
+            {empty && undone && <p className="sp-ok">{undone}</p>}
         </PanelSection>
     );
 }
@@ -285,6 +287,7 @@ function GitActions({ sessionId, busy, onCommitted }: { sessionId: string; busy:
     const [error, setError] = useState<Param | null>(null);
     const [dialog, setDialog] = useState<{ kind: 'commit' | 'pr'; repo: GitRepo } | null>(null);
     const [done, setDone] = useState<string | null>(null);
+    useAnnounce(done);
 
     const load = useCallback(() => {
         Promise.resolve()
@@ -332,7 +335,7 @@ function GitActions({ sessionId, busy, onCommitted }: { sessionId: string; busy:
                     {repo.pr_blocked && <span className="sp-meta">{repo.pr_blocked}</span>}
                 </div>
             ))}
-            {done && <p className="sp-ok" role="status">{done}</p>}
+            {done && <p className="sp-ok">{done}</p>}
             {dialog && (
                 <GitDialog
                     sessionId={sessionId}

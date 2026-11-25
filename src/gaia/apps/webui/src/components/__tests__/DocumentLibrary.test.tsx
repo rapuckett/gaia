@@ -11,6 +11,8 @@ import { stripIsolates } from '../../i18n/registry';
 import { tEn } from '../../i18n/translator';
 import { ARABIC_MONTH, ENGLISH_MONTH, resetUiLocale, setUiLocale } from '../../test/dates';
 
+import { announce } from '../../test/announcerMock';
+vi.mock('../../components/LiveAnnouncer', () => import('../../test/announcerMock'));
 vi.mock('../../services/api');
 
 const mockedApi = vi.mocked(api);
@@ -41,6 +43,8 @@ const COMPLETE_DOC: Document = {
 };
 
 beforeEach(() => {
+
+    announce.mockClear();
     vi.clearAllMocks();
 
     mockedApi.listDocuments.mockResolvedValue({
@@ -211,7 +215,7 @@ describe('DocumentLibrary says where documents go', () => {
         expect(screen.getByRole('option', { name: 'This chat: “Budget review”' })).toBeInTheDocument();
         indexPath();
 
-        expect(await screen.findByRole('status')).toHaveTextContent('Added good.pdf to “Budget review”.');
+        await waitFor(() => expect(announce).toHaveBeenCalledWith('Added good.pdf to “Budget review”.'));
     });
 
     it('holds documents for the next new chat when chosen, leaving the open chat alone', async () => {
@@ -222,7 +226,7 @@ describe('DocumentLibrary says where documents go', () => {
 
         await waitFor(() => expect(useChatStore.getState().draftDocumentIds).toEqual(['doc-ok-1']));
         expect(mockedApi.attachDocument).not.toHaveBeenCalled();
-        expect(screen.getByRole('status')).toHaveTextContent('good.pdf will be added to your next new chat.');
+        expect(announce).toHaveBeenCalledWith('good.pdf will be added to your next new chat.');
     });
 
     it('drops the "will be attached" line when that document is removed', async () => {
@@ -231,7 +235,7 @@ describe('DocumentLibrary says where documents go', () => {
         render(<DocumentLibrary />);
         fireEvent.change(screen.getByRole('combobox', { name: 'Add documents to' }), { target: { value: 'next' } });
         indexPath();
-        expect(await screen.findByRole('status')).toHaveTextContent('good.pdf will be added to your next new chat.');
+        await waitFor(() => expect(announce).toHaveBeenCalledWith('good.pdf will be added to your next new chat.'));
 
         fireEvent.click(await screen.findByRole('button', { name: 'Remove good.pdf' }));
 
@@ -416,9 +420,8 @@ describe('DocumentLibrary path box', () => {
 
         submitPath('C:\\Users\\me\\.gaia\\documents');
 
-        const notice = await screen.findByRole('status');
-        expect(notice.textContent).toContain('Added 2 files from "documents".');
-        expect(notice.textContent).toContain("Skipped 1 file of a type GAIA can't add.");
+        await waitFor(() => expect(announce).toHaveBeenCalledWith(expect.stringContaining('Added 2 files from "documents".')));
+        expect(announce.mock.calls[announce.mock.calls.length - 1][0]).toContain("Skipped 1 file of a type GAIA can't add.");
         expect(mockedApi.indexFolder).toHaveBeenCalledWith('C:\\Users\\me\\.gaia\\documents', false, null);
         expect(useChatStore.getState().draftDocumentIds).toEqual(['doc-ok-1', 'doc-ok-2']);
         expect(screen.queryByRole('alert')).toBeNull();
@@ -436,9 +439,8 @@ describe('DocumentLibrary path box', () => {
 
         submitPath('/home/me/scan');
 
-        const notice = await screen.findByRole('status');
-        expect(notice.textContent).toContain('Left out 2 images: add them one at a time and GAIA will read them.');
-        expect(notice.textContent).not.toContain('Skipped');
+        await waitFor(() => expect(announce).toHaveBeenCalledWith(expect.stringContaining('Left out 2 images: add them one at a time and GAIA will read them.')));
+        expect(announce.mock.calls[announce.mock.calls.length - 1][0]).not.toContain('Skipped');
     });
 
     it('reports a folder with nothing indexable plainly', async () => {
@@ -451,9 +453,8 @@ describe('DocumentLibrary path box', () => {
 
         submitPath('/home/me/pictures');
 
-        const notice = await screen.findByRole('status');
-        expect(notice.textContent).toContain('"pictures" has no documents GAIA can index.');
-        expect(notice.textContent).toContain('Skipped 3 files');
+        await waitFor(() => expect(announce).toHaveBeenCalledWith(expect.stringContaining('"pictures" has no documents GAIA can index.')));
+        expect(announce.mock.calls[announce.mock.calls.length - 1][0]).toContain('Skipped 3 files');
     });
 
     it('says a missing file does not exist instead of offering a bug report', async () => {
@@ -486,8 +487,7 @@ describe('DocumentLibrary path box', () => {
 
         submitPath('C:\\Users\\me\\notes.v2\\');
 
-        const notice = await screen.findByRole('status');
-        expect(notice.textContent).toContain('Added 1 file from "notes.v2".');
+        await waitFor(() => expect(announce).toHaveBeenCalledWith(expect.stringContaining('Added 1 file from "notes.v2".')));
         expect(mockedApi.uploadDocumentByPath).toHaveBeenCalledWith('C:\\Users\\me\\notes.v2\\', null);
         expect(screen.queryByRole('alert')).toBeNull();
     });
@@ -613,7 +613,8 @@ describe('DocumentLibrary notices follow the interface language', () => {
 
         submitPath(container, '/home/me/trip');
 
-        const text = stripIsolates((await screen.findByRole('status')).textContent ?? '');
+        await waitFor(() => expect(announce).toHaveBeenCalled());
+        const text = stripIsolates(announce.mock.calls[announce.mock.calls.length - 1][0]);
         expect(text).toContain('الملفات المضافة من «trip»: 2.');
         expect(text).toContain('الملفات المتخطّاة لأن GAIA لا يستطيع إضافة نوعها: 1.');
         expect(text).toContain('لا تُضمَّن المجلدات الفرعية.');
@@ -633,7 +634,8 @@ describe('DocumentLibrary notices follow the interface language', () => {
 
         submitPath(container, '/home/me/scan');
 
-        const text = stripIsolates((await screen.findByRole('status')).textContent ?? '');
+        await waitFor(() => expect(announce).toHaveBeenCalled());
+        const text = stripIsolates(announce.mock.calls[announce.mock.calls.length - 1][0]);
         expect(text).toContain('الصور المستبعدة: 2. أضِف كل صورة وحدها ليقرأها GAIA.');
     });
 

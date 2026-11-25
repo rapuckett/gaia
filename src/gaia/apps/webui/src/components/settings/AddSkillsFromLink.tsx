@@ -6,6 +6,7 @@ import { AlertTriangle, Loader2 } from 'lucide-react';
 import * as api from '../../services/api';
 import { isMessageKey, ref } from '../../i18n/registry';
 import { useT, type Translate } from '../../i18n/useT';
+import { useAnnounce } from '../LiveAnnouncer';
 import { requestErrorText } from '../../utils/requestErrors';
 import type { FeaturedLibrary, LinkAddResult, LinkPreview, LinkSkill } from '../../types';
 
@@ -33,6 +34,7 @@ export function AddSkillsFromLink({ onAdded }: { onAdded: () => void }) {
     const [picked, setPicked] = useState<Set<string>>(new Set());
     const [allowCode, setAllowCode] = useState(false);
     const [result, setResult] = useState<LinkAddResult | null>(null);
+    useAnnounce(result ? (result.added.length > 0 ? summarize(result, t) : t('settings.skills.link.notAdded', { n: Object.keys(result.failed).length })) : null);
     const [featured, setFeatured] = useState<FeaturedLibrary[]>([]);
 
     useEffect(() => {
@@ -239,7 +241,7 @@ export function AddSkillsFromLink({ onAdded }: { onAdded: () => void }) {
             )}
 
             {result && (
-                <div className="skill-link-result" role="status">
+                <div className="skill-link-result">
                     {result.added.length > 0 && <p>{summarize(result, t)}</p>}
                     {Object.keys(result.failed).length > 0 && (
                         <details>

@@ -8,7 +8,10 @@ import * as api from '../../../services/api';
 import { useChatStore } from '../../../stores/chatStore';
 import type { ModelServerInfo } from '../../../types/api.gen';
 
+import { announce } from '../../../test/announcerMock';
+
 vi.mock('../../../services/api');
+vi.mock('../../../components/LiveAnnouncer', () => import('../../../test/announcerMock'));
 const mockedApi = vi.mocked(api);
 
 function info(overrides: Partial<ModelServerInfo> = {}): ModelServerInfo {
@@ -33,6 +36,7 @@ function info(overrides: Partial<ModelServerInfo> = {}): ModelServerInfo {
 }
 
 beforeEach(() => {
+    announce.mockClear();
     vi.clearAllMocks();
 });
 
@@ -124,6 +128,7 @@ describe('ModelServerPanel', () => {
         fireEvent.click(screen.getByRole('radio', { name: 'Vulkan' }));
 
         await screen.findByText(/applies the next time the chat model loads/);
+        expect(announce).toHaveBeenCalledWith(expect.stringMatching(/applies the next time the chat model loads/));
         expect(mockedApi.setModelServerBackend).toHaveBeenCalledWith('vulkan');
         expect(screen.getByRole('radio', { name: 'Vulkan' })).toHaveAttribute('aria-checked', 'true');
     });
