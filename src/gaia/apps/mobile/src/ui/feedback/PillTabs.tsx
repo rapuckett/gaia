@@ -39,6 +39,7 @@ export function PillTabs({ tabs, value, onChange, accessibilityLabel, testID }: 
     const xs = useRef<Record<string, number>>({});
     const [box, setBox] = useState({ view: 0, content: 0 });
     const [offset, setOffset] = useState(0);
+    const awayFromStart = box.content > box.view + 1 && Math.abs(offset) > 1;
     const more = box.content > box.view + 1 && Math.abs(offset) < box.content - box.view - 1;
     const reveal = () => {
         const x = xs.current[value];
@@ -105,6 +106,13 @@ export function PillTabs({ tabs, value, onChange, accessibilityLabel, testID }: 
                 );
             })}
         </ScrollView>
+        {awayFromStart ? (
+            <View pointerEvents="none" testID={testID ? `${testID}-fade-start` : undefined} style={{ position: 'absolute', start: 0, top: 0, bottom: 0, flexDirection: 'row' }}>
+                {(dir === 'ltr' ? [...FADE_STEPS].reverse() : FADE_STEPS).map((o, i) => (
+                    <View key={i} style={{ width: 6, backgroundColor: colors.bgPrimary, opacity: o }} />
+                ))}
+            </View>
+        ) : null}
         {more ? (
             <View pointerEvents="none" testID={testID ? `${testID}-fade` : undefined} style={{ position: 'absolute', end: 0, top: 0, bottom: 0, flexDirection: 'row' }}>
                 {(dir === 'ltr' ? FADE_STEPS : [...FADE_STEPS].reverse()).map((o, i) => (
