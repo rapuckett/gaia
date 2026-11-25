@@ -236,7 +236,7 @@ function Preferences({ applied }: { applied: PreScanPayload['preferences_applied
     ];
     return (
         <View style={{ borderTopWidth: 1, borderTopColor: colors.border, borderStyle: 'dashed', paddingTop: 8 }}>
-            <Stack gap="xs" accessibilityLabel={`${t('mobileApp.emailPreScan.prefs')} ${chips.join(', ')}`}>
+            <Stack gap="xs" accessible accessibilityLabel={`${t('mobileApp.emailPreScan.prefs')} ${chips.join(', ')}`}>
                 <Text role="caption" weight="medium" tone="muted">
                     {t('mobileApp.emailPreScan.prefs')}
                 </Text>

@@ -206,7 +206,7 @@ function FolderRow({ entry, t, canRemove, busy, confirming, onAsk, onCancel, onC
                 ) : null
             }
         >
-            <Stack accessibilityLabel={`${name}. ${source} · ${entry.path}`}>
+            <Stack accessible accessibilityLabel={`${name}. ${source} · ${entry.path}`}>
                 <Row gap="sm">
                     <Text role="label" weight="medium" numberOfLines={1}>
                         {isolate(name, 'ltr')}

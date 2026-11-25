@@ -90,7 +90,7 @@ export function PlanSection({ plan }: { plan: LivePlan | null }) {
                     {plan.steps.map((step, i) => {
                         const status = plan.statuses[i] ?? 'pending';
                         return (
-                            <Stack key={`${i}-${step}`} accessibilityLabel={`${t(PLAN_LABEL[status])}: ${step}`}>
+                            <Stack key={`${i}-${step}`} accessible accessibilityLabel={`${t(PLAN_LABEL[status])}: ${step}`}>
                                 <Row gap="sm" align="start">
                                     <PlanMark status={status} />
                                     <Stack flex={1}>
@@ -258,7 +258,7 @@ export function CommandsSection({ commands, close }: { commands: RanCommand[]; c
                                 {line}
                             </Pressable>
                         ) : (
-                            <Stack key={c.key} minHeight={ROW_MIN} justify="center" accessibilityLabel={label}>
+                            <Stack key={c.key} minHeight={ROW_MIN} justify="center" accessible accessibilityLabel={label}>
                                 {line}
                             </Stack>
                         );
