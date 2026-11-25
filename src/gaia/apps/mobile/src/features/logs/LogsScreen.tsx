@@ -60,12 +60,14 @@ export function LogsScreen({ onBack, active = true, initialSource = 'model_serve
                     icon={Archive}
                     note={t('mobileApp.logs.reportNote')}
                     detail={t('mobileApp.logs.saveAllOnPc')}
+                    full={false}
                     testID="logs-save-all"
                 />
                 <PcOnlyAction
                     label={t('setup.logs.report')}
                     icon={FileText}
                     detail={t('setup.logs.reportOnPc')}
+                    full={false}
                     testID="logs-report"
                 />
             </Stack>

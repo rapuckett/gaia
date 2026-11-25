@@ -36,6 +36,7 @@ export function LogsCard() {
                             icon={Archive}
                             note={t('setup.logs.reportNote')}
                             detail={t('mobileApp.logs.saveAllOnPc')}
+                            full={false}
                             testID="advanced-save-all-logs"
                         />
                     </>
