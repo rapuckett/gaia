@@ -59,4 +59,23 @@ afterEach(() => act(() => sheetStore.reset()));
         ]);
         expect(screen.getByTestId('automation-b2')).toBeTruthy();
     });
+
+    it('shows the icon, title and hint when there are no automations', async () => {
+        const client = createFakeClient({ automations: { automations: [], delivers: true } });
+        await render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <GaiaClientProvider client={client}>
+                    <ThemeProvider>
+                        <SheetHost>
+                            <Automations />
+                        </SheetHost>
+                    </ThemeProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>,
+        );
+        expect(await screen.findByTestId('automations-empty')).toBeTruthy();
+        expect(screen.getByText(t('mobileApp.settings.automations.emptyTitle'))).toBeTruthy();
+        expect(screen.getByText(t('mobileApp.settings.automations.emptyHint'))).toBeTruthy();
+        expect(screen.queryByText(t('settings.automations.empty'))).toBeNull();
+    });
 });

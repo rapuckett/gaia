@@ -4774,6 +4774,8 @@ export const enMessages = {
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
     'mobileApp.settings.automations.actionFailed': 'That didn’t work. The details are below.',
     'mobileApp.settings.automations.loadFailed': 'Could not load your automations.',
+    'mobileApp.settings.automations.emptyTitle': 'No automations yet',
+    'mobileApp.settings.automations.emptyHint': 'Ask GAIA in chat, like “remind me at 5pm to call Sam” or “tell me when CI on main breaks”.',
     'mobileApp.settings.alerts.bannersHint': 'Banners appear at the top of the app while GAIA is open on this phone.',
     'mobileApp.settings.alerts.keepAwakePc': 'Keeping your PC awake while GAIA works is set in the GAIA desktop app on your PC.',
     'mobileApp.settings.loadAnyway': 'Chats are answering right now. Loading {name} now can slow or stop their answers. Load it anyway?',

@@ -187,8 +187,11 @@ export default function Automations() {
                 {list && items.length === 0 ? (
                     <Stack align="center" gap="md" padding="xl" testID="automations-empty">
                         <Icon icon={Bell} size="lg" tone="muted" />
+                        <Text role="title" weight="semibold" align="center">
+                            {t('mobileApp.settings.automations.emptyTitle')}
+                        </Text>
                         <Text tone="secondary" align="center">
-                            {t('settings.automations.empty')}
+                            {t('mobileApp.settings.automations.emptyHint')}
                         </Text>
                     </Stack>
                 ) : null}

@@ -4773,6 +4773,8 @@ const messages: Messages = {
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.automations.actionFailed': 'لم تنجح العملية. التفاصيل أدناه.',
     'mobileApp.settings.automations.loadFailed': 'تعذّر تحميل مهامك التلقائية.',
+    'mobileApp.settings.automations.emptyTitle': 'لا توجد مهام تلقائية بعد',
+    'mobileApp.settings.automations.emptyHint': 'اطلب من GAIA في المحادثة، مثل «ذكّرني الساعة 5 مساءً بالاتصال بسام» أو «أخبرني عندما يتعطل CI على main».',
     'mobileApp.settings.alerts.bannersHint': 'تظهر اللافتات أعلى التطبيق أثناء فتح GAIA على هذا الهاتف.',
     'mobileApp.settings.alerts.keepAwakePc': 'يُضبط إبقاء الكمبيوتر مستيقظًا أثناء عمل GAIA من تطبيق GAIA لسطح المكتب على الكمبيوتر.',
     'mobileApp.settings.loadAnyway': 'هناك محادثات تُكتب إجاباتها الآن. قد يؤدي تحميل {name} الآن إلى إبطاء هذه الإجابات أو إيقافها. هل تريد التحميل على أي حال؟',
