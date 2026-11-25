@@ -9,7 +9,10 @@ import * as api from '../../../services/api';
 import { usePermissionModeEvents } from '../../../utils/permissionModeEvents';
 import type { Session, SessionPermissions } from '../../../types';
 
+import { announce } from '../../../test/announcerMock';
+
 vi.mock('../../../services/api');
+vi.mock('../../../components/LiveAnnouncer', () => import('../../../test/announcerMock'));
 
 const mockedApi = vi.mocked(api);
 
@@ -31,6 +34,7 @@ const ROWS: SessionPermissions[] = [
 ];
 
 beforeEach(() => {
+    announce.mockClear();
     vi.clearAllMocks();
     useChatStore.setState({ sessions: [CHAT] });
     mockedApi.listAllPermissions.mockResolvedValue({ default_mode: 'ask', sessions: ROWS });
@@ -66,8 +70,19 @@ describe('PermissionsSettings', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Revoke git status' }));
         await waitFor(() => expect(mockedApi.listAllPermissions).toHaveBeenCalledTimes(2));
         expect(screen.queryByText("Removed this chat's extra permissions.")).not.toBeInTheDocument();
+        expect(announce).not.toHaveBeenCalled();
         fireEvent.click(await screen.findByRole('button', { name: 'Revoke all in this chat' }));
         expect(await screen.findByText("Removed this chat's extra permissions.")).toBeInTheDocument();
+        expect(announce).toHaveBeenCalledExactlyOnceWith("Removed this chat's extra permissions.");
+        expect(screen.getByText("Removed this chat's extra permissions.")).not.toHaveAttribute('role');
+    });
+
+    it('announces a second revoke-all made while the first toast still shows', async () => {
+        render(<PermissionsSettings />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Revoke all in this chat' }));
+        await waitFor(() => expect(announce).toHaveBeenCalledTimes(1));
+        fireEvent.click(await screen.findByRole('button', { name: 'Revoke all in this chat' }));
+        await waitFor(() => expect(announce).toHaveBeenCalledTimes(2));
     });
 
     it('shows no success toast when revoke-all fails', async () => {

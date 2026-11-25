@@ -8,6 +8,8 @@ import { useChatStore } from '../../../stores/chatStore';
 import * as api from '../../../services/api';
 import type { Session } from '../../../types';
 
+import { announce } from '../../../test/announcerMock';
+vi.mock('../../../components/LiveAnnouncer', () => import('../../../test/announcerMock'));
 vi.mock('../../../services/api');
 vi.mock('../UndoHistorySettings', () => ({ UndoHistorySettings: () => null }));
 
@@ -24,6 +26,8 @@ const TRIP = chat('trip', 'Trip plan');
 const TAXES = chat('taxes', 'Taxes');
 
 beforeEach(() => {
+
+    announce.mockClear();
     vi.clearAllMocks();
     mockedApi.deleteSession.mockResolvedValue(undefined);
     mockedApi.getSettings.mockResolvedValue({ network_policy: 'cloud_allowed' } as never);
@@ -285,6 +289,7 @@ describe('PrivacySettings troubleshooting report', () => {
             fireEvent.click(screen.getByRole('button', { name: 'Save a troubleshooting report' }));
         });
         expect(mockedApi.createSetupReport).toHaveBeenCalledTimes(1);
-        await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('diagnostics-20261104-192300.tgz'));
+        expect(screen.getByText(/diagnostics-20261104-192300\.tgz/)).toBeInTheDocument();
+        expect(announce).toHaveBeenCalledWith(expect.stringContaining('Saved'));
     });
 });

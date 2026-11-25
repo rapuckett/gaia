@@ -21,6 +21,7 @@ import { UploadErrorToast } from './UnsupportedFeature';
 import { fileExtension, unsupportedTypeMessage } from '../utils/uploadErrors.core';
 import type { Document } from '../types';
 import { useT } from '../i18n/useT';
+import { useAnnounce } from './LiveAnnouncer';
 import { IndexingProgress } from './IndexingProgress';
 import { needsRetry, serverFailureText, serverNotAddedText, waitsForServerReturn } from '../utils/documentFailure';
 import { setVisibleInterval } from '../utils/visibleInterval';
@@ -80,6 +81,7 @@ export function DocumentLibrary() {
     const targetSessionId = target === 'chat' ? currentSessionId : null;
     const targetChatName = `“${currentSession?.title || t('docs.untitledChat')}”`;
     const [notice, setNotice] = useState('');
+    useAnnounce(notice);
     const [filter, setFilter] = useState('');
     const filterText = filterNeedle(filter, documents.length);
     const matchesFilter = (doc: Document) => matchesName(doc.filename, filterText);
@@ -103,6 +105,8 @@ export function DocumentLibrary() {
     const [actionError, setActionError] = useState<string | null>(null);
     // A removed document stays on the server until its Undo runs out
     const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null);
+    useAnnounce(pendingRemoval ? t('docs.removed', { name: pendingRemoval.name }) : null);
+    useAnnounce(folderNotice);
     const pendingRemovalRef = useRef<PendingRemoval | null>(null);
     const removalTimer = useRef<number | null>(null);
     // The library couldn't be listed: an empty list would look like the documents are gone
@@ -779,7 +783,7 @@ export function DocumentLibrary() {
                     </form>
                     <p className="doc-path-hint">{t('docs.pathSubfolders')}</p>
 
-                    {notice && <p className="doc-target-notice" role="status">{notice}</p>}
+                    {notice && <p className="doc-target-notice">{notice}</p>}
 
                     {/* Upload error toast */}
                     {uploadError && (
@@ -813,7 +817,7 @@ export function DocumentLibrary() {
                     )}
 
                     {pendingRemoval && (
-                        <div key={pendingRemoval.id} className="doc-folder-notice doc-removed-notice" role="status">
+                        <div key={pendingRemoval.id} className="doc-folder-notice doc-removed-notice">
                             <Trash2 size={14} />
                             <span>{t('docs.removed', { name: pendingRemoval.name })}</span>
                             {/* The Remove button just left with its row; keep keyboard focus in the dialog. */}
@@ -824,7 +828,7 @@ export function DocumentLibrary() {
                     )}
 
                     {folderNotice && (
-                        <div className="doc-folder-notice" role="status">
+                        <div className="doc-folder-notice">
                             <CheckCircle size={14} />
                             <span>{folderNotice}</span>
                             <button className="btn-icon-sm" onClick={() => setFolderNotice(null)} aria-label={t('docs.dismissFolder')}>

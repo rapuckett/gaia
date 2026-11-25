@@ -12,6 +12,8 @@ import { ApiError } from '../../../services/apiErrors';
 import { mockSetupApis, SETTINGS } from '../../../test/setupApiMocks';
 import type { ActiveModel, ProviderInfo, ProviderModel } from '../../../types';
 
+import { announce } from '../../../test/announcerMock';
+vi.mock('../../../components/LiveAnnouncer', () => import('../../../test/announcerMock'));
 vi.mock('../../../services/api');
 
 const mockedApi = vi.mocked(api);
@@ -39,6 +41,8 @@ async function openFireworks() {
 }
 
 beforeEach(() => {
+
+    announce.mockClear();
     vi.clearAllMocks();
     mockSetupApis(mockedApi);
     useModelStore.setState({ active: LOCAL_ACTIVE, error: null, restoreNotice: null });
@@ -191,7 +195,7 @@ describe('ModelSettings provider keys', () => {
         const field = within(card).getByLabelText('Fireworks AI API key');
         fireEvent.change(field, { target: { value: 'fw-secret' } });
         fireEvent.click(within(card).getByRole('button', { name: 'Connect' }));
-        expect(await within(card).findByRole('status')).toHaveTextContent('The key is kept for next time.');
+        await waitFor(() => expect(announce).toHaveBeenCalledWith(expect.stringContaining('The key is kept for next time.')));
         expect(field).toHaveValue('');
         await waitFor(() => expect(within(card).getByRole('button', { name: 'Connect' }).querySelector('.spin')).toBeNull());
     });
@@ -278,7 +282,7 @@ describe('ModelSettings provider keys', () => {
         fireEvent.click(within(card).getByRole('button', { name: 'Connect' }));
 
         await waitFor(() => expect(mockedApi.connectProviderWaitingForOs).toHaveBeenCalledWith('fireworks', { api_key: 'fw-secret' }, expect.any(Function), expect.any(Function)));
-        expect(await within(card).findByRole('status')).toHaveTextContent('The key is kept for next time.');
+        await waitFor(() => expect(announce).toHaveBeenCalledWith(expect.stringContaining('The key is kept for next time.')));
         expect(field).toHaveValue('');
     });
 
@@ -320,7 +324,7 @@ describe('ModelSettings provider keys', () => {
         expect(within(ask).getByRole('button', { name: 'Keep' })).toHaveFocus();
         fireEvent.click(within(ask).getByRole('button', { name: 'Remove key' }));
         await waitFor(() => expect(mockedApi.forgetProviderKey).toHaveBeenCalledWith('fireworks'));
-        expect(await within(card).findByRole('status')).toHaveTextContent('Key cleared');
+        await waitFor(() => expect(announce).toHaveBeenCalledWith(expect.stringContaining('Key cleared')));
     });
 });
 
@@ -377,7 +381,7 @@ describe('ModelSettings model list', () => {
         expect(other).toBeInTheDocument();
         fireEvent.click(other);
         await waitFor(() => expect(mockedApi.selectModel).toHaveBeenCalledWith('fireworks.other'));
-        expect(await within(card).findByRole('status')).toHaveTextContent('New messages use other.');
+        await waitFor(() => expect(announce).toHaveBeenCalledWith(expect.stringContaining('New messages use other.')));
     });
 
     it('searches unranked Fireworks models while expanded, then restores list controls when cleared', async () => {

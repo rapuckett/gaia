@@ -4076,6 +4076,7 @@ const messages: Messages = {
     'mem.about.add': 'إضافة',
     'mem.about.forgotten': 'نُسي: «{content}»، ولن يتعلّمه GAIA مجددًا من المحادثات القديمة.',
     'mem.about.forgottenSensitive': 'نُسيت ذكرى حساسة، ولن يتعلّمها GAIA مجددًا من المحادثات القديمة.',
+    'mem.about.forgotAnnounce': 'نُسيت الذكرى. زر التراجع بجانبها.',
     'mem.about.undo': 'تراجع',
     'mem.about.loadFailed': 'تعذّر تحميل ذكرياتك: {error}',
     'mem.about.retry': 'حاول مجددًا',

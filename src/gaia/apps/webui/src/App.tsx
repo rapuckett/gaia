@@ -57,6 +57,7 @@ import { RETRY_INITIAL_MS, retryUntilOk, type Retrier } from './utils/retry';
 import { shouldShowStartupScreen } from './utils/startupGate';
 import { StartupFailed, StartupWaiting } from './components/StartupScreen';
 import { getT, useT } from './i18n/useT';
+import { LiveAnnouncer, useAnnounce } from './components/LiveAnnouncer';
 import type { SetupCheck, StartCard } from './types';
 
 // Heavy, occasional screens load on first use.
@@ -166,6 +167,7 @@ function App() {
     const syncSystemTheme = useChatStore((s) => s.syncSystemTheme);
     const restoreNotice = useModelStore((s) => s.restoreNotice);
     const dismissRestoreNotice = useModelStore((s) => s.dismissRestoreNotice);
+    useAnnounce(restoreNotice?.ok ? t('model.restore.done') : null);
     const showNotificationPanel = useNotificationStore((s) => s.showPanel);
     const initialized = useChatStore((s) => s.systemStatus?.initialized === true);
     const mainUiShownRef = useRef(false);
@@ -947,6 +949,7 @@ function App() {
 
     return (
         <div className="app">
+            <LiveAnnouncer />
             {!sidebarOpen && (
                 <button className="sidebar-toggle" onClick={() => setSidebarOpen(true)} aria-label={t('sidebar.open')}>
                     <Menu size={18} />
@@ -1000,7 +1003,7 @@ function App() {
                 {flagshipMissing && <FlagshipAgentNotice onInstalled={loadAgents} noBuild={noAgentBuild} />}
                 {/* A restore that worked is passing news: a toast, so the page doesn't shift twice. */}
                 {restoreNotice?.ok && (
-                    <div className="toast app-restore-toast" role="status">{t('model.restore.done')}</div>
+                    <div className="toast app-restore-toast">{t('model.restore.done')}</div>
                 )}
                 {restoreNotice && !restoreNotice.ok && (
                     <div className="app-notice is-warning" role="status">

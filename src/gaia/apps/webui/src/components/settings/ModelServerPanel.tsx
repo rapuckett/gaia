@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, ScrollText } from 'lucide-react';
 import * as api from '../../services/api';
 import { useT } from '../../i18n/useT';
+import { useAnnounce } from '../LiveAnnouncer';
 import { useChatStore } from '../../stores/chatStore';
 import { useLogsStore } from '../../stores/logsStore';
 import { displayModelName } from '../../stores/modelStore';
@@ -31,6 +32,7 @@ export function ModelServerPanel() {
     const [loadError, setLoadError] = useState<string | null>(null);
     const [saving, setSaving] = useState<string | null>(null);
     const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+    useAnnounce(notice?.ok ? notice.text : null);
     const [reloading, setReloading] = useState(false);
 
     useEffect(() => {
@@ -181,7 +183,7 @@ export function ModelServerPanel() {
                         </span>
                     </>
                 )}
-                {notice?.ok && <p className="settings-ok" role="status">{notice.text}</p>}
+                {notice?.ok && <p className="settings-ok">{notice.text}</p>}
                 {notice && !notice.ok && <ErrorNotice message={notice.text} />}
             </div>
 

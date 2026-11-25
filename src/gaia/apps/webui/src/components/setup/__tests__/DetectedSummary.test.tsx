@@ -8,6 +8,8 @@ import type { PreflightReport, SetupPlan } from '../../../types';
 import { DetectedSummary, specText } from '../DetectedSummary';
 import { COLD_BIG } from './fixtures';
 
+import { announce } from '../../../test/announcerMock';
+vi.mock('../../../components/LiveAnnouncer', () => import('../../../test/announcerMock'));
 vi.mock('../../../services/api', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../../services/api')>();
     return { ...actual, openFileOrFolder: vi.fn() };
@@ -112,7 +114,7 @@ describe('what setup found', () => {
             fireEvent.click(screen.getByRole('button', { name: 'Copy these details' }));
         });
         expect(writeText).toHaveBeenCalledWith(specText(PLAN(), null));
-        expect(screen.getByRole('status')).toHaveTextContent('Copied');
+        expect(announce).toHaveBeenCalledWith('Copied');
         const text = writeText.mock.calls[0][0] as string;
         expect(text).toContain("Model server: GAIA's own Lemonade 2026.44.1 at http://127.0.0.1:13305/api/v1");
         expect(text).toContain('llama.cpp: vulkan b11393 (installed)');
@@ -131,7 +133,7 @@ describe('what setup found', () => {
         // A second copy starts the two seconds again.
         await act(async () => { fireEvent.click(copy); });
         await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
-        expect(screen.getByRole('status')).toHaveTextContent('Copied');
+        expect(screen.getByText('Copied')).toBeInTheDocument();
         await act(async () => { await vi.advanceTimersByTimeAsync(600); });
         expect(screen.queryByRole('status')).toBeNull();
     });
@@ -178,6 +180,6 @@ describe('what setup found', () => {
         await act(async () => {
             fireEvent.click(screen.getByRole('button', { name: 'Copy these details' }));
         });
-        expect(screen.getByRole('status')).toHaveTextContent("Couldn't copy");
+        expect(announce).toHaveBeenCalledWith("Couldn't copy");
     });
 });

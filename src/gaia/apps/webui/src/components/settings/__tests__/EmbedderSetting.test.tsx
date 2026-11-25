@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EmbedderSetting } from '../EmbedderSetting';
 import * as memoryApi from '../../../services/memoryApi';
 
+import { announce } from '../../../test/announcerMock';
+vi.mock('../../../components/LiveAnnouncer', () => import('../../../test/announcerMock'));
 vi.mock('../../../services/memoryApi');
 
 const mockedApi = vi.mocked(memoryApi);
@@ -28,6 +30,8 @@ function view(
 }
 
 beforeEach(() => {
+
+    announce.mockClear();
     vi.clearAllMocks();
 });
 
@@ -54,7 +58,7 @@ describe('EmbedderSetting', () => {
         render(<EmbedderSetting />);
         fireEvent.change(await screen.findByRole('combobox', { name: 'Embedding model' }), { target: { value: 'profile' } });
         await waitFor(() => expect(mockedApi.setEmbedder).toHaveBeenCalledExactlyOnceWith(null));
-        expect(await screen.findByRole('status')).toHaveTextContent(/Changed/);
+        await waitFor(() => expect(announce).toHaveBeenCalledWith(expect.stringMatching(/Changed/)));
         expect(screen.getByRole('combobox', { name: 'Embedding model' })).toHaveValue('profile');
     });
 

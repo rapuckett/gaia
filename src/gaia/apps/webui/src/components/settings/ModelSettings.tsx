@@ -10,6 +10,7 @@ import { isolate } from '../../i18n/registry';
 import { useModelStore, displayModelName, distinctModelLabels, sameModelId, syncModelAfterSettingChange } from '../../stores/modelStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useT, type Translate } from '../../i18n/useT';
+import { useAnnounce } from '../LiveAnnouncer';
 import { keyStoreOf } from '../../utils/keyStore';
 import { providerName, providerNotice } from '../../utils/providerText';
 import { setVisibleInterval } from '../../utils/visibleInterval';
@@ -61,6 +62,7 @@ export function ModelSettings() {
     const [busy, setBusy] = useState<string | null>(null);
     const [memory, setMemory] = useState<string | null>(null);
     const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+    useAnnounce(notice?.ok ? notice.text : null);
     const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
     const [justAdded, setJustAdded] = useState(false);
     const [inUseRow, setInUseRow] = useState<ProviderModel | null>(null);
@@ -491,7 +493,7 @@ export function ModelSettings() {
                         </form>
                     )}
 
-                    {notice?.ok && <p className="settings-ok" role="status">{notice.text}</p>}
+                    {notice?.ok && <p className="settings-ok">{notice.text}</p>}
                     {notice && !notice.ok && <ErrorNotice message={notice.text} />}
 
                     {provider.known_models && (

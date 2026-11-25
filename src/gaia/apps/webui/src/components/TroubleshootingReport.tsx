@@ -4,6 +4,7 @@
 import { useCallback, useState } from 'react';
 import { FileDown, Loader2 } from 'lucide-react';
 import { useT } from '../i18n/useT';
+import { useAnnounce } from './LiveAnnouncer';
 import * as api from '../services/api';
 import { formatBytes } from './setup/format';
 import { failureRecordId } from '../utils/streamErrors';
@@ -33,6 +34,7 @@ export function TroubleshootingReport({ classes, note }: { classes: ReportClasse
     const t = useT();
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState<api.SetupReport | null>(null);
+    useAnnounce(saved ? t('setup.logs.reportSaved', { size: formatBytes(saved.size_bytes) }) : null);
     const [error, setError] = useState<string | null>(null);
 
     const save = useCallback(async () => {
@@ -65,7 +67,7 @@ export function TroubleshootingReport({ classes, note }: { classes: ReportClasse
             </button>
             {note && <span className={classes.hint}>{note}</span>}
             {saved && (
-                <p className={classes.hint} role="status">
+                <p className={classes.hint}>
                     {t('setup.logs.reportSaved', { size: formatBytes(saved.size_bytes) })} <bdi dir="ltr">{saved.path}</bdi>
                 </p>
             )}
