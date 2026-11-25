@@ -9,6 +9,9 @@ import { MessagingSettings, formatPairingCode } from '../MessagingSettings';
 import { useChatStore } from '../../../stores/chatStore';
 import type { DiscordStatus } from '../../../services/messagingApi';
 import { readsAs } from '../../../test/readsAs';
+import { announce } from '../../../test/announcerMock';
+
+vi.mock('../../LiveAnnouncer', () => import('../../../test/announcerMock'));
 
 const BASE: DiscordStatus = {
     connected: false, paired: false, running: false, state: 'stopped', detail: '',
@@ -134,6 +137,7 @@ describe('MessagingSettings', () => {
         await act(async () => { await vi.advanceTimersByTimeAsync(3100); });
 
         expect(await screen.findByText('Paired. GAIA answers you on Discord now.')).toBeInTheDocument();
+        expect(announce).toHaveBeenCalledWith('Paired. GAIA answers you on Discord now.');
         expect(screen.getByText(/Answering .*kalin.* as .*GAIA/)).toBeInTheDocument();
     });
 
