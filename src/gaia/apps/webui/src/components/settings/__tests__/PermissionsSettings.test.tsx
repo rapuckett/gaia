@@ -61,6 +61,23 @@ describe('PermissionsSettings', () => {
         await waitFor(() => expect(mockedApi.revokeGrants).toHaveBeenCalledExactlyOnceWith('chat-1'));
     });
 
+    it('confirms a revoke-all with a toast, and a single revoke with none', async () => {
+        render(<PermissionsSettings />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Revoke git status' }));
+        await waitFor(() => expect(mockedApi.listAllPermissions).toHaveBeenCalledTimes(2));
+        expect(screen.queryByText("Removed this chat's extra permissions.")).not.toBeInTheDocument();
+        fireEvent.click(await screen.findByRole('button', { name: 'Revoke all in this chat' }));
+        expect(await screen.findByText("Removed this chat's extra permissions.")).toBeInTheDocument();
+    });
+
+    it('shows no success toast when revoke-all fails', async () => {
+        mockedApi.revokeGrants.mockRejectedValue(new Error('Chat is gone'));
+        render(<PermissionsSettings />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Revoke all in this chat' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Chat is gone');
+        expect(screen.queryByText("Removed this chat's extra permissions.")).not.toBeInTheDocument();
+    });
+
     it('turns off full access for a chat', async () => {
         render(<PermissionsSettings />);
         fireEvent.click(await screen.findByRole('button', { name: 'Turn off full access' }));
