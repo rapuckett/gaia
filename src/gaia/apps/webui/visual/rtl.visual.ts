@@ -3981,6 +3981,29 @@ for (const locale of ['ar', 'en']) {
     }
 }
 
+test('Revoke all confirms with a toast above the Settings dialog (en, dark)', async ({ page }) => {
+    await open(page, '', 'en', async (p) => {
+        await withSettingsPanes(p);
+        await p.route(`**/api/chat/permissions/${ANSWER_SESSION}/grants`, (route) =>
+            route.fulfill({ json: { session_id: ANSWER_SESSION, mode: 'full_access', grants: [] } }));
+    }, 'dark');
+    await page.getByRole('button', { name: /Settings/ }).first().click();
+    await page.getByRole('dialog').locator('[data-section="permissions"]').click();
+    await expect(page.locator('.settings-pane-title')).toBeVisible();
+    await page.locator('.permission-chat').first().getByRole('button', { name: 'Revoke all in this chat' }).click();
+    const toast = page.locator('.toast');
+    await expect(toast).toHaveText("Removed this chat's extra permissions.");
+    const box = await toast.boundingBox();
+    expect(box && box.y >= 0 && box.y + box.height <= page.viewportSize()!.height).toBe(true);
+    const topmost = await toast.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return !!hit && (el === hit || el.contains(hit));
+    });
+    expect(topmost, 'the toast is covered by the dialog').toBe(true);
+    await shot(page, 'revoke-all-toast-en-dark');
+});
+
 // Opening and switching ease in on purpose; with reduced motion asked for, nothing moves.
 test.describe('arrivals ease in (en)', () => {
     const openSkills = async (page: Page, motion: 'no-preference' | 'reduce') => {
