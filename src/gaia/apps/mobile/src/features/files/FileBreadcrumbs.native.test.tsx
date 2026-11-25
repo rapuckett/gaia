@@ -97,3 +97,33 @@ jest.mock('expo-image', () => ({ Image: () => null }));
         expect(chip).toHaveProp('accessibilityLabel', 'Show hidden');
     });
 });
+
+(Platform.OS === 'web' ? describe.skip : describe)('Not indexable badge by window width', () => {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+            <GaiaClientProvider client={fileBrowserScene('deep')}>
+                <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                    <ThemeProvider>{children}</ThemeProvider>
+                </SafeAreaProvider>
+            </GaiaClientProvider>
+        </QueryClientProvider>
+    );
+    const at = async (width: number) => {
+        Dimensions.set({ window: { width, height: 800, scale: 2, fontScale: 1 } });
+        await render(<FileBrowserScreen chatId="chat-1" onClose={() => {}} initial={FILE_BROWSER_START.deep} />, { wrapper });
+        await screen.findByText('holiday.mov');
+    };
+    afterEach(() => Dimensions.set({ window: { width: 390, height: 844, scale: 2, fontScale: 1 } }));
+
+    it('below 360 pt the label moves onto the meta line under the name', async () => {
+        await at(320);
+        expect(screen.getByText("Not indexable · This file type can't be added")).toBeTruthy();
+        expect(screen.queryByLabelText('Not indexable')).toBeNull();
+    });
+
+    it('at 390 pt it stays a badge beside the name', async () => {
+        await at(390);
+        expect(screen.getByText("This file type can't be added")).toBeTruthy();
+        expect(screen.getByLabelText('Not indexable')).toBeTruthy();
+    });
+});

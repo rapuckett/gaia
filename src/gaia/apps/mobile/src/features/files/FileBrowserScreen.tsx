@@ -327,7 +327,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                         return (
                             <ListRow
                                 title={item.name}
-                                subtitle={unsupported ? t('fileBrowser.notIndexableTitle') : subtitle}
+                                subtitle={unsupported ? (narrow ? `${t.bare('fileBrowser.notIndexable')} · ${t('fileBrowser.notIndexableTitle')}` : t('fileBrowser.notIndexableTitle')) : subtitle}
                                 subtitleLines={unsupported ? 3 : 1}
                                 selected={picked}
                                 accessibilityLabel={isFolder ? item.name : t('fileBrowser.selectAria', { name: item.name })}
@@ -347,7 +347,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                                         <Icon icon={ChevronRight} size="sm" tone="muted" />
                                     ) : (
                                         <Row gap="xs">
-                                            {unsupported ? <Badge label={t.bare('fileBrowser.notIndexable')} accessibilityLabel={t('fileBrowser.notIndexable')} tone="warning" /> : null}
+                                            {unsupported && !narrow ? <Badge label={t.bare('fileBrowser.notIndexable')} accessibilityLabel={t('fileBrowser.notIndexable')} tone="warning" /> : null}
                                             {onPreview ? <IconButton icon={Eye} label={t('fileBrowser.previewAria', { name: item.name })} onPress={() => onPreview(item.path)} /> : null}
                                         </Row>
                                     )
